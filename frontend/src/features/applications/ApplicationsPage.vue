@@ -4,7 +4,7 @@
     <form v-if="isAdmin && periodEditor" class="panel stack" @submit.prevent="createPeriod">
       <h2 class="section-title">Configure an application period</h2>
       <div class="grid grid-3">
-        <div class="field"><label class="label" for="period-year">School year</label><select id="period-year" v-model="periodForm.schoolYear" class="select" required><option v-for="year in years" :key="year" :value="year">{{ year }}</option></select></div>
+        <div class="field"><label class="label" for="period-year">School year</label><select id="period-year" v-model="periodForm.schoolYear" class="select" required><option value="">Choose a school year…</option><option v-for="year in years" :key="year" :value="year">{{ year }}</option></select></div>
         <div class="field"><label class="label" for="opens">Opens at</label><input id="opens" v-model="periodForm.opensAt" class="input" type="datetime-local" required /></div>
         <div class="field"><label class="label" for="closes">Closes at</label><input id="closes" v-model="periodForm.closesAt" class="input" type="datetime-local" required /></div>
       </div>
@@ -13,8 +13,11 @@
         <label v-for="idea in acceptedIdeas" :key="idea.id" class="choice-item"><span><strong>{{ idea.title }}</strong><small class="muted"> · {{ idea.schoolYear }}</small></span><input v-model="periodForm.projectIds" type="checkbox" :value="idea.id" /></label>
         <p v-if="!acceptedIdeas.length" class="empty">No accepted projects were returned. Teacher acceptance and a confirmed supervisor are required first.</p>
       </div>
+      <ul v-if="periodValidationMessages.length" class="notice" role="status" aria-live="polite" aria-label="Application period requirements">
+        <li v-for="message in periodValidationMessages" :key="message">{{ message }}</li>
+      </ul>
       <div v-if="task.error.value" class="error-box" role="alert">{{ task.error.value }}</div>
-      <div class="actions"><button class="button" :disabled="task.loading.value || periodForm.projectIds.length < 3">Create period</button><button class="button button-secondary" type="button" @click="periodEditor = false">Cancel</button></div>
+      <div class="actions"><button class="button" type="submit" :disabled="task.loading.value || periodValidationMessages.length > 0">Create period</button><button class="button button-secondary" type="button" @click="periodEditor = false">Cancel</button></div>
     </form>
 
     <div class="page-heading">
@@ -100,6 +103,28 @@ const projectToAdd = ref('')
 const applicationSummary = ref<Page<Application> | null>(null)
 const summaryPeriod = ref('')
 const periodForm = reactive({ schoolYear: '', opensAt: '', closesAt: '', projectIds: [] as string[] })
+const periodValidationMessages = computed(() => {
+  const messages: string[] = []
+  if (!periodForm.schoolYear) messages.push('Choose a school year.')
+  else if (!years.value.includes(periodForm.schoolYear)) messages.push('Choose a school year from the available options.')
+
+  const opensAt = periodForm.opensAt ? new Date(periodForm.opensAt) : undefined
+  const closesAt = periodForm.closesAt ? new Date(periodForm.closesAt) : undefined
+  if (!opensAt || !Number.isFinite(opensAt.getTime())) messages.push('Enter a valid opening date and time.')
+  if (!closesAt || !Number.isFinite(closesAt.getTime())) messages.push('Enter a valid closing date and time.')
+  if (opensAt && closesAt && Number.isFinite(opensAt.getTime()) && Number.isFinite(closesAt.getTime())
+      && closesAt <= opensAt) {
+    messages.push('The closing date and time must be later than the opening date and time.')
+  }
+
+  const eligibleProjectIds = new Set(acceptedIdeas.value.flatMap((idea) => idea.id ? [idea.id] : []))
+  const selectedEligibleProjects = new Set(periodForm.projectIds.filter((id) => eligibleProjectIds.has(id)))
+  if (periodForm.projectIds.some((id) => !eligibleProjectIds.has(id))) {
+    messages.push('Remove projects that are not in the accepted project catalogue.')
+  }
+  if (selectedEligibleProjects.size < 3) messages.push('Select at least three accepted projects.')
+  return messages
+})
 
 function readable(value?: string): string {
   return (value ?? 'Unknown').replaceAll('_', ' ').toLowerCase().replace(/^./, (char) => char.toUpperCase())
@@ -162,6 +187,7 @@ async function load(page = 0): Promise<void> {
   })
 }
 async function createPeriod(): Promise<void> {
+  if (periodValidationMessages.value.length) return
   const payload: components['schemas']['ApplicationPeriodRequest'] = {
     schoolYear: periodForm.schoolYear,
     opensAt: new Date(periodForm.opensAt).toISOString(),
