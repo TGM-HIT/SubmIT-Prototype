@@ -4,7 +4,7 @@
 
 | Ticket | Status |
 |--------|--------|
-| Bug-01  | to-do |
+| Bug-01  | done |
 | FL-T2 | done |
 
 ### Bug-01. Create Application Period doesn't work
