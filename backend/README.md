@@ -1,4 +1,4 @@
-# FlightLog Backend
+# Project Ideas Backend
 
 Requires JDK 23. The development datasource is an in-memory H2 database.
 
@@ -11,7 +11,7 @@ export JWT_SECRET='replace-with-a-random-secret-of-at-least-32-bytes'
 ./gradlew bootRun
 ```
 
-The administrator is created only when both administrator variables are set. User registration always creates a `VIEWER` account.
+The administrator is created only when both administrator variables are set. Public registration always creates a `STUDENT` account; a client-supplied role is ignored. User role changes require an administrator.
 
 Run backend checks from this directory:
 

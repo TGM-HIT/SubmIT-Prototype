@@ -1,0 +1,60 @@
+<template>
+  <div class="stack">
+    <div class="field"><label class="label" :for="`${prefix}-criterion`">Rubric category and criterion</label>
+      <select :id="`${prefix}-criterion`" :value="modelValue.criterionId" class="select" required @change="update('criterionId', ($event.target as HTMLSelectElement).value)">
+        <option value="">Select a configured criterion…</option>
+        <optgroup v-for="category in categories" :key="String(category.id)" :label="String(category.name)">
+          <option v-for="criterion in criteriaFor(category)" :key="String(criterion.id)" :value="criterion.id">{{ criterion.name }} · {{ criterion.subject }}<span v-if="criterion.evidenceRequired"> · evidence required</span></option>
+        </optgroup>
+      </select>
+    </div>
+    <p v-if="selected" class="notice">{{ selected.description || selected.name }} · range {{ scaleObject(selected.scale).min }} to {{ scaleObject(selected.scale).max }} by {{ scaleObject(selected.scale).step }}<span v-if="selected.evidenceRequired"> · written evidence required</span></p>
+    <div class="grid grid-2">
+      <div class="field"><label class="label" :for="`${prefix}-grade`">Grade</label><select :id="`${prefix}-grade`" :value="modelValue.grade" class="select" required @change="update('grade', ($event.target as HTMLSelectElement).value)"><option value="">Select a value…</option><option v-for="value in scaleOptions" :key="value" :value="value">{{ value }}{{ label(value) }}</option></select></div>
+      <div class="field"><label class="label" :for="`${prefix}-date`">Assessment date</label><input :id="`${prefix}-date`" :value="modelValue.assessedOn" class="input" type="date" required @input="update('assessedOn', ($event.target as HTMLInputElement).value)" /></div>
+    </div>
+    <div class="field"><label class="label" :for="`${prefix}-evidence`">Evidence</label><textarea :id="`${prefix}-evidence`" :value="modelValue.evidence" class="textarea" maxlength="4000" :required="Boolean(selected?.evidenceRequired)" @input="update('evidence', ($event.target as HTMLTextAreaElement).value)" /></div>
+    <div class="field"><label class="label" :for="`${prefix}-comments`">Teacher comments</label><textarea :id="`${prefix}-comments`" :value="modelValue.comments" class="textarea" maxlength="4000" @input="update('comments', ($event.target as HTMLTextAreaElement).value)" /></div>
+    <p v-if="selected?.evidenceRequired" class="muted">This criterion requires evidence. Assessment entries retain the rubric version and history.</p>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { computed } from 'vue'
+
+type Data = Record<string, unknown>
+type GradeDraft = { criterionId: string; grade: string; assessedOn: string; evidence: string; comments: string }
+const props = withDefaults(defineProps<{ modelValue: GradeDraft; rubric: Data; prefix?: string }>(), { prefix: 'grade' })
+const emit = defineEmits<{ 'update:modelValue': [value: GradeDraft] }>()
+const categories = computed(() => Array.isArray(props.rubric.categories)
+  ? props.rubric.categories.filter((item): item is Data => typeof item === 'object' && item !== null) : [])
+const criteria = computed(() => categories.value.flatMap((category) => criteriaFor(category)))
+const selected = computed(() => criteria.value.find((criterion) => criterion.id === props.modelValue.criterionId))
+const scaleOptions = computed(() => {
+  if (!selected.value || typeof selected.value.scale !== 'object' || selected.value.scale === null) return []
+  const scale = selected.value.scale as Data
+  const min = Number(scale.min)
+  const max = Number(scale.max)
+  const step = Number(scale.step ?? 1)
+  if (step <= 0 || max < min || (max - min) / step > 200) return []
+  return Array.from({ length: Math.floor((max - min) / step) + 1 }, (_, index) => min + index * step)
+})
+
+function criteriaFor(category: Data): Data[] {
+  return Array.isArray(category.criteria)
+    ? category.criteria.filter((item): item is Data => typeof item === 'object' && item !== null) : []
+}
+function scaleObject(value: unknown): Data {
+  return typeof value === 'object' && value !== null ? value as Data : {}
+}
+function label(value: number): string {
+  if (!selected.value || typeof selected.value.scale !== 'object' || selected.value.scale === null) return ''
+  const labels = (selected.value.scale as Data).labels
+  if (typeof labels !== 'object' || labels === null) return ''
+  const text = (labels as Data)[String(value)]
+  return typeof text === 'string' ? ` · ${text}` : ''
+}
+function update(key: keyof GradeDraft, value: string): void {
+  emit('update:modelValue', { ...props.modelValue, [key]: value })
+}
+</script>
