@@ -1,0 +1,23 @@
+# Build, test and run the complete application:
+#   cp .env.example .env && docker compose up --build
+# Tests, typecheck and checkstyle run as part of the image builds.
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    environment:
+      FLIGHTLOG_BOOTSTRAPADMIN_USERNAME: ${FLIGHTLOG_BOOTSTRAPADMIN_USERNAME}
+      FLIGHTLOG_BOOTSTRAPADMIN_PASSWORD: ${FLIGHTLOG_BOOTSTRAPADMIN_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: frontend
+    ports:
+      - "${FLIGHTLOG_PORT:-8081}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped

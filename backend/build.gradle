@@ -1,0 +1,89 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '4.1.0'
+    id 'io.spring.dependency-management' version '1.1.7'
+}
+
+group = 'com.flightlog'
+version = '0.1.0'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(23)
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.compilerArgs.add('-parameters')
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-webmvc'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-security'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-api:3.0.0'
+    runtimeOnly 'com.h2database:h2'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation 'org.springframework.boot:spring-boot-starter-webmvc-test'
+    testImplementation 'org.springframework.security:spring-security-test'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+}
+
+tasks.register('checkstyleMain', JavaExec) {
+    group = 'verification'
+    description = 'Runs the repository Checkstyle configuration against production code.'
+    classpath = configurations.detachedConfiguration(
+        dependencies.create('com.puppycrawl.tools:checkstyle:10.21.2')
+    )
+    mainClass = 'com.puppycrawl.tools.checkstyle.Main'
+    args '-c', '../checkstyle.xml', 'src/main/java'
+}
+
+tasks.register('generateOpenApi') {
+    group = 'documentation'
+    description = 'Generates the OpenAPI document from the running application annotations.'
+    dependsOn tasks.named('bootJar')
+    doLast {
+        int port = 19000 + new Random().nextInt(1000)
+        File logFile = layout.buildDirectory.file('openapi-server.log').get().asFile
+        File outputFile = file('../contracts/openapi.yaml')
+        String javaExecutable = new File(System.getProperty('java.home'), 'bin/java').absolutePath
+        String bootJarPath = tasks.named('bootJar').get().archiveFile.get().asFile.absolutePath
+        Process process = new ProcessBuilder(javaExecutable, '-jar', bootJarPath,
+                "--server.port=${port}", '--spring.main.banner-mode=off')
+                .redirectErrorStream(true).redirectOutput(logFile).start()
+        boolean generated = false
+        long deadline = System.nanoTime() + 60_000_000_000L
+        try {
+            while (!generated && System.nanoTime() < deadline) {
+                try {
+                    URLConnection connection = new URL("http://127.0.0.1:${port}/v3/api-docs.yaml").openConnection()
+                    connection.connectTimeout = 1000
+                    connection.readTimeout = 3000
+                    outputFile.setText(connection.inputStream.getText('UTF-8'), 'UTF-8')
+                    generated = true
+                } catch (Exception ignored) {
+                    if (!process.isAlive()) {
+                        throw new GradleException("Application exited before OpenAPI export:\n${logFile.text}")
+                    }
+                    Thread.sleep(500)
+                }
+            }
+        } finally {
+            process.destroyForcibly()
+        }
+        if (!generated) {
+            throw new GradleException("Timed out waiting for OpenAPI export:\n${logFile.text}")
+        }
+        logger.lifecycle("Generated ${outputFile}")
+    }
+}
