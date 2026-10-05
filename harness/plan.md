@@ -4,44 +4,34 @@
 
 | Ticket | Status |
 |--------|--------|
-| FL-T1  | done |
+| Bug-01  | to-do |
 | FL-T2 | done |
 
-### FL-T1. Airfield location as geolocation (GPS)
+### Bug-01. Create Application Period doesn't work
 
 #### Intent
 
-Replace the airfield's free-text `location` with required GPS coordinates: `latitude` and `longitude`, expressed as decimal degrees. Store the coordinates as numeric values, not as a formatted string.
+In the frontend under "Applications" when I try to configure a period ("+configure period"), the "create peroid" button stays disabled regardless of the inputs (year, opens, closes, selected projects). Fix it so that it displays what's missing / wrong or enables the button when all necessary data exists.
 
 #### Scope and contract
 
-- Replace `location` with numeric `latitude` and `longitude` fields in airfield create/update requests and airfield responses. This applies to create, update, get, and list API operations; flight references to an airfield do not change.
-- Both coordinates are required. Latitude is in the inclusive range -90 through 90; longitude is in the inclusive range -180 through 180.
-- Do not attempt to geocode existing free-text values. The application uses an in-memory H2 database, so no durable production data migration or preservation of existing location strings is in scope.
+
 - Update generated API types/contracts through the documented generation workflow; do not edit generated files by hand.
-- In the frontend, provide separate required numeric inputs for latitude and longitude when creating and editing an airfield. Display both coordinates in airfield list and detail views. Submit JSON numbers, not strings.
 
 #### Mechanical checks (the Evaluator re-runs)
 
 Durable automated tests (join the build):
 
-- Backend API tests cover valid coordinates on create and update, and verify coordinates in get/list responses.
-- Backend API tests cover missing coordinates and values outside each inclusive range. Out-of-range values return HTTP 400 through the existing request-validation handler and retain the existing error response shape; do not introduce a new status or error format.
-- Frontend tests cover the two numeric create/edit fields and verify that valid values are sent as JSON numbers.
 - Backend checks pass: from `backend/`, run `./gradlew test` and `./gradlew checkstyleMain`.
 - Frontend checks pass: from `frontend/`, run `npm run typecheck`, `npm test`, and `npm run build`.
 - When backend API annotations change, run `./gradlew generateOpenApi` from `backend/`, review the generated contract, then run `npm run api:types` from `frontend/` and review the generated TypeScript types.
 
 One-time manual verification (in addition to automated tests):
 
-- Confirm the create/edit UI shows separate latitude and longitude inputs and the list/detail views display both values.
+- Confirm the shows an active "create period" button or indicates what is missing to be able to create a period.
 
 #### Acceptance criteria (the Evaluator judges)
 
-- The API and persisted airfield entity use required numeric `latitude` and `longitude` fields; the old free-text `location` field is no longer part of the airfield API.
-- Both values are constrained to the stated inclusive ranges. Invalid coordinates return HTTP 400 through the existing validation path and preserve the current error shape.
-- The create/edit forms accept and submit valid coordinates as numbers, and airfield list/detail views display both coordinates.
-- Generated API artifacts match the backend request/response annotations.
 
 ### FL-T2. Add model type and image
 
