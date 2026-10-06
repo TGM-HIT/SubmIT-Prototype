@@ -20,9 +20,11 @@ Require `harness/plan.md` and the ticket's section to exist. If the plan or tick
 1. After preflight passes, create a run ID in the form `<ticket-id>-<yyyymmdd-hhmm>` and a folder under `harness/runs/`. Keep a truthful run log on disk as the work proceeds, with a heartbeat line recording the timestamp and latest completed step.
 2. Mark the ticket in progress in `harness/plan.md` before dispatching the Implementor.
 3. Dispatch the Implementor with the ticket ID and plan context. Read the handoff note and verify its required headings: `What was done`, `What was verified`, and `What's uncertain`.
-4. Before evaluation, run `java harness/gates/handoff-complete.java <handoff-note>`. Capture the Implementor commit's changed paths with `git diff --name-only <commit>^ <commit>` into a file under the run folder, then run `java harness/gates/commit-scope.java <changed-paths-file>`. The commit-scope gate permits backend/frontend source paths, `frontend/index.html`; the changed paths must also stay within the ticket's stated scope. A non-zero exit from either gate must be corrected before evaluation; if it cannot be corrected, record the reason and proceed to failed closeout without dispatching the Evaluator.
+4. Before evaluation, run `java harness/gates/handoff-complete.java <handoff-note>`. Capture the Implementor commit's changed paths with `git diff --name-only <commit>^ <commit>` into a file under the run folder, then run `java harness/gates/commit-scope.java <changed-paths-file>`. The commit-scope gate permits backend/frontend source paths, `frontend/index.html`, and the three SPEC.md files (`docs/`, `backend/`, `frontend/`), printing `FLAG: spec change: <path>` for each spec file; a flag is not a failure, but tell the Evaluator about it and record it in the run log; the changed paths must also stay within the ticket's stated scope. A non-zero exit from either gate must be corrected before evaluation; if it cannot be corrected, record the reason and proceed to failed closeout without dispatching the Evaluator.
 5. With gates clear, dispatch the Evaluator with the ticket, diff, handoff note, and completion checks. On `revise`, send actionable reasons to a fresh Implementor pass, then repeat the gates and evaluation. Stop after three revise cycles without a pass and close the ticket as failed.
 6. Close out by recording the outcome in the run log, updating the ticket to `done` or `failed`, and committing run artifacts and ledger changes separately from the Implementor's deliverable. If a failure occurs after the run folder exists, preserve the partial log and relevant handoffs/verdicts and complete failed closeout.
+
+If any commit in the run changed a SPEC.md file, flag it prominently: add a "SPEC CHANGE" section to the run log and the top of your closing prose listing each file, the reason from the handoff, and the Evaluator's verdict on it. This applies to failed runs too.
 
 Do not fabricate ticket requirements, gate results, test results, commit IDs, or repository state. If an expected harness action is unavailable, state that limitation in the log and follow the stop or failed-closeout rules above.
 
@@ -34,5 +36,6 @@ End every return with this exact machine-readable block, using `none` when prefl
     Ledger: <done|failed|unchanged>
     Terminal commit: <full commit sha>
     Tree: <clean|dirty>
+    Spec changes: <none|comma-separated SPEC.md paths, each with a one-line reason>
 
 Derive the block from the repository after closeout. Use the strongest available Copilot model for orchestration and set high reasoning effort when supported.

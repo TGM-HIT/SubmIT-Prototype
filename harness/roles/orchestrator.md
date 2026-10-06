@@ -36,6 +36,11 @@ source tree as the allowed set: jbang harness/gates/commit-scope.java
 completeness gate sends the handoff back to a fresh Implementor with the missing
 heading. Never dispatch the Evaluator past a failed gate.
 
+The scope gate also permits the three SPEC.md files (docs/, backend/, frontend/) and
+prints a "FLAG: spec change: <path>" line for each one in the commit. A flag is not a
+failure, but it must be carried forward: tell the Evaluator that the spec changed so it
+judges the change, and record it in the run log.
+
 A failed scope gate sends the commit back with the out-of-scope path. Where it
 cannot be sent back, the escalation closes as a failed ticket: record it in the
 run log and continue through failed closeout. There is nobody to escalate to.
@@ -73,6 +78,8 @@ set the ticket's row in harness/plan.md to done on a pass, or to failed on any
 terminal ticket failure, then stop. The ledger edit is a harness path, so it
 rides in the run-artifacts commit.
 
+If any commit in the run changed a SPEC.md file, flag it prominently: put a "SPEC CHANGE" section in the run log and at the top of your closing prose, listing each file, the reason from the handoff, and the Evaluator's verdict on it, so a human reviews it. This applies to failed runs too.
+
 End every return with this exact machine-readable block, using `none` when
 preflight stopped before a run folder existed:
 
@@ -82,6 +89,7 @@ preflight stopped before a run folder existed:
     Ledger: <done|failed|unchanged>
     Terminal commit: <full commit sha>
     Tree: <clean|dirty>
+    Spec changes: <none|comma-separated SPEC.md paths, each with a one-line reason>
 
 Derive the block from the repository after closeout. It is the boundary another
 coordinator and the Learner consume; do not make them reconstruct it from prose.

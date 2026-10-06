@@ -4,8 +4,9 @@
 
 | Ticket | Status |
 |--------|--------|
-| Bug-01  | done |
-| FL-T2 | done |
+| Bug-01 | done |
+| Bug-02 | to-do |
+| Dev-01 | to-do |
 
 ### Bug-01. Create Application Period doesn't work
 
@@ -14,7 +15,6 @@
 In the frontend under "Applications" when I try to configure a period ("+configure period"), the "create peroid" button stays disabled regardless of the inputs (year, opens, closes, selected projects). Fix it so that it displays what's missing / wrong or enables the button when all necessary data exists.
 
 #### Scope and contract
-
 
 - Update generated API types/contracts through the documented generation workflow; do not edit generated files by hand.
 
@@ -32,50 +32,74 @@ One-time manual verification (in addition to automated tests):
 
 #### Acceptance criteria (the Evaluator judges)
 
-
-### FL-T2. Add model type and image
+### Bug-02. Prevent removal of the last administrator
 
 #### Intent
 
-Add a required aircraft type and an optional uploaded image for each model. Show the image in model and flight lists and on model detail pages. If no custom image is uploaded, show a type-specific default.
+When changing the role of an administrator it should be checked that there is still another administrator account avaliable. At the moment it is possible to remove the last remaining administrator so that the system is not accessible anymore.
 
 #### Scope and contract
 
-- Define `ModelType` as the fixed enum `PLANE`, `HELICOPTER`, `DRONE`, and `OTHER`. The model create/update JSON requests require `type`. Reject missing or unknown values through the existing API error response format.
-- Existing models without a type are assigned `OTHER`.
-- Keep model create/update as JSON. Add `PUT /api/models/{id}/image` for multipart image upload, `GET /api/models/{id}/image` to serve the current image, and `DELETE /api/models/{id}/image` to remove a custom image and restore the default for the model's current type.
-- Model responses include an `imageUrl`, not encoded image bytes. The image URL returns the custom image when present, otherwise the bundled default image for the model type.
-- Image upload and deletion use the same authorization as model update. Image retrieval uses the same authorization as model retrieval.
-- Accept JPEG and PNG uploads up to 5 MiB, with each source dimension at most 4096 pixels and at most 16 megapixels total. Reject unsupported, corrupt, or oversized images using the existing API error response format.
-- Normalize accepted uploads to PNG, fitting within 512 by 512 pixels while preserving aspect ratio and not upscaling. Store only the normalized image bytes in the existing H2 database; do not add an image-processing dependency.
-- Bundle a distinct default image for each `ModelType`. A model without a custom image uses the default matching its type. Changing type updates that default; changing other model fields preserves a custom image.
-- In the frontend, add a required type selector and optional image file input to create and edit forms. On create, submit the model before uploading its optional image. On edit, keep the existing image unless a replacement is uploaded; provide a way to remove the custom image and restore the default.
-- Display the model type and image in model list/detail views and display the model image in the flights list. Use `imageUrl`; do not include image bytes in model or flight JSON responses.
-- Regenerate OpenAPI and frontend API types through the documented workflow. Review generated artifacts; do not edit them by hand or add generated `contracts/openapi.yaml` to version control.
+- In the backend, check if there will be at least one administrator account available after changing the role.
+- In the frontend, display an error if it was not possible to change the role.
+- If endpoint annotations change to document the rejection response, regenerate OpenAPI and frontend API types through the documented workflow and review the generated artifacts; do not edit generated files by hand or add generated `contracts/openapi.yaml` to version control.
 
 #### Mechanical checks (the Evaluator re-runs)
 
 Durable automated tests (join the build):
 
-- Backend API tests cover all supported types, missing and unknown types, and type plus `imageUrl` in create/update/get/list responses.
-- Backend upload tests cover JPEG and PNG success, unsupported and corrupt files, uploads over 5 MiB, source dimensions over 4096 pixels, and images over 16 megapixels.
-- Backend image tests verify normalized output is PNG, fits within 512 by 512 pixels, preserves aspect ratio, and is not upscaled.
-- Backend tests verify each type gets its distinct default image, changing type selects the corresponding default when no custom image exists, metadata updates preserve a custom image, and deleting a custom image restores the current type's default.
-- Authorization tests verify upload and delete permissions match model update permissions, and image retrieval permissions match model retrieval permissions.
-- Frontend tests cover type selection and image upload on create and edit, retaining or replacing an image, restoring the default, and displaying images in model list/detail and flight list views.
 - Backend checks pass: from `backend/`, run `./gradlew test` and `./gradlew checkstyleMain`.
 - Frontend checks pass: from `frontend/`, run `npm run typecheck`, `npm test`, and `npm run build`.
 - When backend API annotations change, run `./gradlew generateOpenApi` from `backend/`, review the generated contract, then run `npm run api:types` from `frontend/` and review the generated TypeScript types.
+- Test the role change with and without enough additional accounts with administrator role.
 
 One-time manual verification (in addition to automated tests):
 
-- Confirm image previews, fallback images, replacement, and reset work in the forms; confirm images render in model list/detail and flight list views.
+- Confirm the UI shows an error if it was not possible to change the role.
 
 #### Acceptance criteria (the Evaluator judges)
 
-- Models have a required `ModelType` and responses expose `imageUrl`; existing models without a type resolve to `OTHER`.
-- Uploads follow the documented format, size, dimension, and normalization rules and are stored as normalized image bytes.
-- Each model type has a distinct default image. Custom images persist through metadata updates, and removing one restores the default for the current type.
-- Upload, retrieval, and deletion follow the specified authorization rules.
-- The create/edit UI supports type and image controls, and model list/detail and flight list views display the correct image.
-- Generated API artifacts match backend annotations. The generated OpenAPI file is reviewed but not committed.
+- An administrator cannot change the role of the only remaining administrator to a non-administrator role. This includes changing their own role.
+- The backend enforces this invariant when processing the role-change request and rejects the change with a documented conflict/error response using the shared API error shape.
+- A rejected change leaves the account role unchanged and is not reported as a successful role update.
+- An administrator can still be demoted when at least one other administrator remains; promotions and role changes for non-administrator accounts continue to work.
+- When the server rejects a role change, the administration UI displays the server error and preserves the selected role so the administrator can correct or retry the action.
+- Backend tests exercise the public role-change API for the final-administrator rejection, a permitted demotion when another administrator remains, and unaffected role changes. Frontend tests verify the rejection message and retained selection.
+- Generated API artifacts match backend annotations. If the endpoint's documented response contract changes, regenerate and review OpenAPI and frontend API types through the documented workflow; do not edit generated files by hand or commit generated `contracts/openapi.yaml`.
+
+### Dev-01. Seed student and teacher accounts for testing
+
+#### Intent
+
+Make it easy to exercise student and teacher workflows locally by creating predictable test accounts when the application is explicitly started with its testing profile. The accounts should share a documented default password, while remaining isolated from normal and production runs.
+
+#### Scope and contract
+
+- Add at least five accounts with the `STUDENT` role and five with the `TEACHER` role when the dedicated testing profile is active.
+- Give the seeded accounts stable, documented usernames and the same testing-only default password so they can be used for manual workflow verification.
+- Store passwords using the existing password encoder; never persist or log plaintext passwords.
+- Do not create these accounts when the testing profile is inactive. Do not change the existing bootstrap-admin behavior.
+- Make seeding safe to repeat: application restarts must not create duplicate accounts or fail because the seeded usernames already exist.
+- Document the test-profile activation and seeded login credentials in the backend's existing developer documentation. Clearly state that these credentials are for local/testing use only.
+
+#### Mechanical checks (the Evaluator re-runs)
+
+Durable automated tests (join the build):
+
+- Backend checks pass: from `backend/`, run `./gradlew test` and `./gradlew checkstyleMain`.
+- Tests verify that the testing profile creates usable `STUDENT` and `TEACHER` accounts with the shared password, that seeding is idempotent, and that accounts are not seeded when the testing profile is inactive.
+
+One-time manual verification (in addition to automated tests):
+
+- Start the backend with the documented testing profile and sign in using each seeded account; confirm the resulting roles are `STUDENT` and `TEACHER`.
+- Start the backend without the testing profile and confirm the test accounts are not created.
+
+#### Acceptance criteria (the Evaluator judges)
+
+- Starting the application with its explicitly activated testing profile makes at least one deterministic `STUDENT` account and one deterministic `TEACHER` account available for login.
+- Both accounts authenticate with the documented shared testing password, and passwords are stored only as encoded values.
+- Starting or restarting the application repeatedly does not create duplicate accounts or fail when seeded accounts already exist.
+- With the testing profile inactive, no test accounts or testing-only default credentials are created or applied.
+- Existing bootstrap administrator behavior remains unchanged.
+- Backend automated tests cover profile isolation, successful login/roles, encoded password storage, and repeatable seeding; backend tests and Checkstyle pass.
+- The backend developer documentation explains how to activate the testing profile and lists the test-only usernames and shared password, with a clear warning not to use them outside local/testing environments.
