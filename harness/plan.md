@@ -6,6 +6,7 @@
 |--------|--------|
 | Bug-01 | done |
 | Bug-02 | done |
+| Bug-03 | to-do |
 | Dev-01 | to-do |
 
 ### Bug-01. Create Application Period doesn't work
@@ -66,6 +67,40 @@ One-time manual verification (in addition to automated tests):
 - When the server rejects a role change, the administration UI displays the server error and preserves the selected role so the administrator can correct or retry the action.
 - Backend tests exercise the public role-change API for the final-administrator rejection, a permitted demotion when another administrator remains, and unaffected role changes. Frontend tests verify the rejection message and retained selection.
 - Generated API artifacts match backend annotations. If the endpoint's documented response contract changes, regenerate and review OpenAPI and frontend API types through the documented workflow; do not edit generated files by hand or commit generated `contracts/openapi.yaml`.
+
+### Bug-03. Make dropdown selectors visually consistent
+
+#### Intent
+
+Make dropdown selectors across the frontend match the application's shared visual style. They currently look inconsistent with the other form controls and the rest of the UI.
+
+#### Scope and contract
+
+- Update the styling of native dropdown selectors throughout the frontend, including selectors in ideas, applications, allocation, formal applications, archive, grading, and administration views.
+- Use the existing shared form-control styling and design conventions rather than introducing feature-specific dropdown styles.
+- Preserve each selector's current options, labels, selected value, disabled state, validation, and interaction behavior.
+- Keep selectors semantic, keyboard accessible, responsive, and consistent with the existing visible focus treatment.
+- This is a frontend presentation change; do not change backend behavior or API contracts.
+
+#### Mechanical checks (the Evaluator re-runs)
+
+Durable automated tests (join the build):
+
+- Frontend checks pass: from `frontend/`, run `npm run typecheck`, `npm test`, and `npm run build`.
+- Frontend tests cover rendering and selection behavior for any shared dropdown control or interaction changed as part of the fix.
+
+One-time manual verification (in addition to automated tests):
+
+- Compare dropdowns with the other form controls in the listed views and confirm they use a consistent appearance at desktop and mobile widths.
+- Confirm labels, options, selected values, disabled states, and keyboard focus remain usable.
+
+#### Acceptance criteria (the Evaluator judges)
+
+- Native dropdown selectors throughout the frontend use a consistent appearance aligned with the existing shared form controls and design system, rather than varying by view.
+- The shared styling works responsively and retains a visible keyboard focus state.
+- Selector labels, available options, value binding, disabled behavior, and form submission behavior remain unchanged.
+- No backend/API contract changes are needed.
+- Frontend automated checks pass, with tests covering any changed shared selector rendering or interaction.
 
 ### Dev-01. Seed student and teacher accounts for testing
 
