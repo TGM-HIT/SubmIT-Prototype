@@ -41,6 +41,8 @@ public class UserController {
 
     @PatchMapping("/{id}/role")
     @Operation(summary = "Change an account role. At least one administrator account must remain.")
+    @ApiResponse(responseCode = "200", description = "The account role was changed.",
+            content = @Content(schema = @Schema(implementation = UserResponse.class)))
     @ApiResponse(responseCode = "409", description = "The role change would remove the last administrator.",
             content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
     public UserResponse changeRole(@AuthenticationPrincipal AuthenticatedUser caller,

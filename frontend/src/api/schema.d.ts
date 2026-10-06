@@ -2697,6 +2697,15 @@ export interface operations {
             };
         };
         responses: {
+            /** @description The account role was changed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["UserResponse"];
+                };
+            };
             /** @description The role change would remove the last administrator. */
             409: {
                 headers: {
