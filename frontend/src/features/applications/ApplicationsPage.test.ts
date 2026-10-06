@@ -116,4 +116,20 @@ describe('application period configuration', () => {
     })
     expect(page.find('form').exists()).toBe(false)
   })
+
+  it('renders the native school-year selector with shared styling and binds its selection', async () => {
+    const page = await openForm()
+    const selector = page.get<HTMLSelectElement>('#period-year')
+
+    expect(selector.element.tagName).toBe('SELECT')
+    expect(selector.classes()).toContain('select')
+    expect(selector.findAll('option').map((option) => option.text())).toEqual([
+      'Choose a school year…',
+      '2026/2027',
+    ])
+
+    await selector.setValue('2026/2027')
+
+    expect((selector.element as HTMLSelectElement).value).toBe('2026/2027')
+  })
 })

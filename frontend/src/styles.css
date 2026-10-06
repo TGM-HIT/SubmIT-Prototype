@@ -53,9 +53,13 @@ a { color: inherit; }
 .label { display: block; color: #354156; font-size: 12px; font-weight: 700; margin: 0 0 6px; }
 .field { min-width: 0; display: grid; gap: 6px; }
 .field + .field { margin-top: 14px; }
-.input, .select, .textarea { width: 100%; border: 1px solid #d8dfeb; color: #1c2738; background: #fff; border-radius: 8px; padding: 10px 12px; font-size: 13px; }
+.input, .select, .textarea { width: 100%; border: 1px solid #d8dfeb; color: #1c2738; background-color: #fff; border-radius: 8px; padding: 10px 12px; font-size: 13px; line-height: 1.4; }
+.select { appearance: none; padding-right: 36px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none'%3E%3Cpath d='m1 1.5 5 5 5-5' stroke='%235d6a7e' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; background-size: 12px 8px; cursor: pointer; }
 .textarea { min-height: 96px; resize: vertical; line-height: 1.5; }
-.input:disabled, .select:disabled, .textarea:disabled { color: #727f91; background: #f2f4f8; }
+.input:disabled, .select:disabled, .textarea:disabled { color: #727f91; background-color: #f2f4f8; }
+@media (forced-colors: active) {
+  .select { appearance: auto; background-image: none; }
+}
 .button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; border: 1px solid transparent; border-radius: 8px; background: #244f9b; color: white; font-size: 12px; font-weight: 700; padding: 10px 14px; cursor: pointer; text-decoration: none; }
 .button:hover { background: #1d417e; }
 .button:disabled { opacity: .5; cursor: not-allowed; }
