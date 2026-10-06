@@ -5,7 +5,7 @@
 | Ticket | Status |
 |--------|--------|
 | Bug-01 | done |
-| Bug-02 | to-do |
+| Bug-02 | done |
 | Dev-01 | to-do |
 
 ### Bug-01. Create Application Period doesn't work

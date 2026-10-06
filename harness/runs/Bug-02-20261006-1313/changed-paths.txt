@@ -1,0 +1,8 @@
+backend/src/main/java/com/flightlog/user/UserAccountRepository.java
+backend/src/main/java/com/flightlog/user/UserController.java
+backend/src/main/java/com/flightlog/user/UserService.java
+backend/src/main/java/com/flightlog/web/ApiDtos.java
+backend/src/test/java/com/flightlog/user/UserRoleControllerTest.java
+frontend/src/api/schema.d.ts
+frontend/src/features/admin/AdminPage.test.ts
+frontend/src/features/admin/AdminPage.vue
