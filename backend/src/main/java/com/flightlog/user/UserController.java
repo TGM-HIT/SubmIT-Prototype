@@ -2,9 +2,14 @@ package com.flightlog.user;
 
 import com.flightlog.security.AuthenticatedUser;
 import com.flightlog.security.Role;
+import com.flightlog.web.ApiDtos.ApiErrorResponse;
 import com.flightlog.web.ApiDtos.PageResponse;
 import com.flightlog.web.ApiDtos.RoleRequest;
 import com.flightlog.web.ApiDtos.UserResponse;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -35,6 +40,9 @@ public class UserController {
     }
 
     @PatchMapping("/{id}/role")
+    @Operation(summary = "Change an account role. At least one administrator account must remain.")
+    @ApiResponse(responseCode = "409", description = "The role change would remove the last administrator.",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
     public UserResponse changeRole(@AuthenticationPrincipal AuthenticatedUser caller,
             @PathVariable UUID id, @Valid @RequestBody RoleRequest request) {
         Role role = request.role();

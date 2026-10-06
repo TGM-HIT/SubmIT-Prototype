@@ -12,9 +12,10 @@
           <article v-for="user in users.content" :key="user.id" class="data-row">
             <div class="row-main"><h3>{{ user.username }}</h3><p>Account {{ user.id }}</p><span class="status-badge">{{ user.role }}</span></div>
             <form class="toolbar" @submit.prevent="changeRole(user.id ?? '')">
-              <div class="field"><label class="label" :for="`role-${user.id}`">Role</label><select :id="`role-${user.id}`" v-model="roleSelections[user.id ?? '']" class="select"><option value="STUDENT">Student</option><option value="TEACHER">Teacher</option><option value="ADMIN">Administrator</option></select></div>
+              <div class="field"><label class="label" :for="`role-${user.id}`">Role</label><select :id="`role-${user.id}`" v-model="roleSelections[user.id ?? '']" class="select" @change="clearRoleError(user.id ?? '')"><option value="STUDENT">Student</option><option value="TEACHER">Teacher</option><option value="ADMIN">Administrator</option></select></div>
               <button class="button button-secondary button-small" :disabled="roleSelections[user.id ?? ''] === user.role">Update role</button>
             </form>
+            <p v-if="roleErrors[user.id ?? '']" class="error-box" role="alert">{{ roleErrors[user.id ?? ''] }}</p>
           </article>
         </div>
         <p v-else class="empty">No accounts are visible.</p>
@@ -48,11 +49,16 @@ import Pager from './Pager.vue'
 
 type Data = Record<string, unknown>
 const task = useTask()
+const roleTask = useTask()
 const activeTab = ref<'users' | 'audit'>('users')
 const users = ref<Page<components['schemas']['UserResponse']>>(emptyPage())
 const audit = ref<Page<Data>>(emptyPage())
 const roleSelections = reactive<Record<string, components['schemas']['UserResponse']['role']>>({})
+const roleErrors = reactive<Record<string, string>>({})
 function emptyPage<T>(): Page<T> { return { content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 } }
+function clearRoleError(id: string): void {
+  delete roleErrors[id]
+}
 async function loadUsers(page = 0): Promise<void> {
   await task.run(async () => {
     users.value = await adminApi.users(page)
@@ -67,8 +73,13 @@ async function loadAudit(page = 0): Promise<void> {
 async function changeRole(id: string): Promise<void> {
   const role = roleSelections[id]
   if (!role || !confirm(`Change this account's role to ${role}?`)) return
-  const result = await task.run(() => adminApi.role(id, role), 'Account role updated.')
-  if (result) await loadUsers(users.value.page)
+  clearRoleError(id)
+  const result = await roleTask.run(() => adminApi.role(id, role), 'Account role updated.')
+  if (result) {
+    await loadUsers(users.value.page)
+  } else {
+    roleErrors[id] = roleTask.error.value
+  }
 }
 onMounted(() => void loadUsers())
 </script>

@@ -35,6 +35,9 @@ public final class ApiDtos {
     public record RoleRequest(@NotNull Role role) {
     }
 
+    public record ApiErrorResponse(@NotNull int status, @NotNull String error, @NotNull String message) {
+    }
+
     public record IdeaRequest(
             @NotBlank @Size(max = 200) String title,
             @NotBlank @Size(max = 5000) String description,

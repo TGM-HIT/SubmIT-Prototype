@@ -537,6 +537,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
+        /** Change an account role. At least one administrator account must remain. */
         patch: operations["changeRole"];
         trace?: never;
     };
@@ -761,7 +762,121 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
-        JsonNode: unknown;
+        /** @description Final grade decision: either a configured ruleId, or a manual grade with an explicit rationale. */
+        Decision: {
+            /** @description Configured aggregation rule; omit for a manual decision. */
+            ruleId?: string;
+            /** @description Manual grade (required without ruleId); with ruleId it must equal the computed result. */
+            grade?: number;
+            /** @description Rationale; required when no configured rule is used. */
+            rationale?: string;
+        };
+        /** @description Records project and/or individual final grades; earlier ones are retained as superseded. */
+        FinalGradesRequest: {
+            /** Format: uuid */
+            rubricId: string;
+            versionTransition?: components["schemas"]["VersionTransition"];
+            project?: components["schemas"]["Decision"];
+            students?: components["schemas"]["StudentDecision"][];
+        };
+        /** @description Final grade decision for one student. */
+        StudentDecision: {
+            /** Format: uuid */
+            studentId: string;
+            ruleId?: string;
+            grade?: number;
+            rationale?: string;
+        };
+        /** @description Explicit, recorded switch to another rubric version for a project that is already bound. */
+        VersionTransition: {
+            /** @description Why the project moves to another rubric version. */
+            reason: string;
+        };
+        /** @description Stored final grade with its method, rationale and input snapshot. */
+        FinalGradeResponse: {
+            /** Format: uuid */
+            id?: string;
+            status?: string;
+            createdAt?: string;
+            /** Format: uuid */
+            projectId?: string;
+            /** Format: uuid */
+            rubricId?: string;
+            rubricVersion?: string;
+            scope?: string;
+            /** Format: uuid */
+            studentId?: string;
+            grade?: number;
+            method?: string;
+            ruleId?: string;
+            /** Format: int32 */
+            ruleVersion?: number;
+            rationale?: string;
+            inputs?: components["schemas"]["Inputs"];
+            /** Format: uuid */
+            decidedBy?: string;
+            decidedAt?: string;
+        };
+        /** @description Result of recording final grades. */
+        FinalGradesResponse: {
+            project?: components["schemas"]["FinalGradeResponse"];
+            students?: components["schemas"]["FinalGradeResponse"][];
+        };
+        /** @description Stored grade entry bound to an immutable rubric version and criterion. */
+        GradeResponse: {
+            /** Format: uuid */
+            id?: string;
+            status?: string;
+            createdAt?: string;
+            /** Format: uuid */
+            projectId?: string;
+            /** Format: uuid */
+            studentId?: string;
+            /** Format: uuid */
+            rubricId?: string;
+            rubricVersion?: string;
+            criterionId?: string;
+            categoryId?: string;
+            grade?: number;
+            assessedOn?: string;
+            evidence?: string;
+            comments?: string;
+            /** Format: uuid */
+            teacherId?: string;
+            recordedAt?: string;
+            /** Format: uuid */
+            supersedesId?: string;
+            /** Format: uuid */
+            supersededById?: string;
+            reason?: string;
+        };
+        /** @description Grades and observations that were considered when the final grade was decided. */
+        Inputs: {
+            studentGrades?: components["schemas"]["GradeResponse"][];
+            groupGrades?: components["schemas"]["GradeResponse"][];
+            metrics?: components["schemas"]["MetricResponse"][];
+        };
+        /** @description Stored metric observation referencing the metric definition version. */
+        MetricResponse: {
+            /** Format: uuid */
+            id?: string;
+            status?: string;
+            createdAt?: string;
+            /** Format: uuid */
+            projectId?: string;
+            /** Format: uuid */
+            rubricId?: string;
+            rubricVersion?: string;
+            metricId?: string;
+            /** Format: int32 */
+            metricVersion?: number;
+            value?: number;
+            measuredAt?: string;
+            note?: string;
+            /** Format: uuid */
+            recordedBy?: string;
+            recordedAt?: string;
+        };
         IdeaRequest: {
             title: string;
             description: string;
@@ -950,6 +1065,50 @@ export interface components {
             status?: string;
             projectIds?: string[];
         };
+        /** @description Teacher assessment of one student against one criterion of a rubric version. */
+        StudentGradeRequest: {
+            /** Format: uuid */
+            rubricId: string;
+            versionTransition?: components["schemas"]["VersionTransition"];
+            /** Format: uuid */
+            studentId: string;
+            criterionId: string;
+            grade: number;
+            /** @description Assessment date; defaults to today. */
+            assessedOn?: string;
+            evidence?: string;
+            comments?: string;
+        };
+        /** @description Reassessment; the original entry is retained as superseded on its original rubric version. */
+        GradeRevisionRequest: {
+            reason: string;
+            grade: number;
+            assessedOn?: string;
+            evidence?: string;
+            comments?: string;
+        };
+        /** @description Records one observation of a metric defined in the rubric version. */
+        MetricRequest: {
+            /** Format: uuid */
+            rubricId: string;
+            versionTransition?: components["schemas"]["VersionTransition"];
+            metricId: string;
+            value: number;
+            /** @description ISO instant of the measurement; defaults to now. */
+            measuredAt?: string;
+            note?: string;
+        };
+        /** @description Teacher assessment of the whole group against one criterion of a rubric version. */
+        GroupGradeRequest: {
+            /** Format: uuid */
+            rubricId: string;
+            versionTransition?: components["schemas"]["VersionTransition"];
+            criterionId: string;
+            grade: number;
+            assessedOn?: string;
+            evidence?: string;
+            comments?: string;
+        };
         CompletionResponse: {
             /** Format: uuid */
             projectId?: string;
@@ -1015,6 +1174,107 @@ export interface components {
             riskAndDependencies?: number;
             recommendation?: string;
         };
+        /** @description Explicitly configured weighted-average rule; no formula exists unless configured here. */
+        AggregationRuleDto: {
+            id: string;
+            /** Format: int32 */
+            version: number;
+            scope: string;
+            type: string;
+            /**
+             * Format: int32
+             * @description Decimal places of the computed grade (0 to 6).
+             */
+            decimals?: number;
+            /** @description Weight per criterion id. */
+            criterionWeights?: {
+                [key: string]: number;
+            };
+            /** @description Weight per metric id. */
+            metricWeights?: {
+                [key: string]: number;
+            };
+        };
+        /** @description Rubric category grouping criteria. */
+        CategoryDto: {
+            id: string;
+            name: string;
+            description?: string;
+            criteria: components["schemas"]["CriterionDto"][];
+        };
+        /** @description Assessable criterion of a rubric category. */
+        CriterionDto: {
+            id: string;
+            name: string;
+            description?: string;
+            /** @description Who may be assessed: STUDENT, GROUP or BOTH. */
+            subject: string;
+            /** @description Optional project stage the criterion belongs to. */
+            stage?: string;
+            /** @description Whether a grade needs written evidence. */
+            evidenceRequired?: boolean;
+            scale: components["schemas"]["ScaleDto"];
+        };
+        /** @description Versioned project metric definition with optional bounds. */
+        MetricDefinitionDto: {
+            id: string;
+            name: string;
+            /** Format: int32 */
+            version: number;
+            description?: string;
+            unit?: string;
+            min?: number;
+            max?: number;
+        };
+        /** @description Request to publish a new immutable rubric version. */
+        PublishRubricRequest: {
+            /**
+             * @description Unique version label.
+             * @example 2026-1
+             */
+            version: string;
+            name: string;
+            schoolYear?: string;
+            /** @example 2026-09-01 */
+            effectiveFrom: string;
+            effectiveTo?: string;
+            finalGradeScale: components["schemas"]["ScaleDto"];
+            categories: components["schemas"]["CategoryDto"][];
+            metricDefinitions?: components["schemas"]["MetricDefinitionDto"][];
+            aggregationRules?: components["schemas"]["AggregationRuleDto"][];
+        };
+        /** @description Configured numeric scale; values must lie within min and max and be a multiple of step from min. */
+        ScaleDto: {
+            /** @description Lowest value. */
+            min: number;
+            /** @description Highest value. */
+            max: number;
+            /** @description Step size from min; defaults to 1. */
+            step?: number;
+            /** @description Optional display label per scale value. */
+            labels?: {
+                [key: string]: string;
+            };
+        };
+        /** @description Published immutable rubric version. */
+        RubricResponse: {
+            /** Format: uuid */
+            id?: string;
+            status?: string;
+            createdAt?: string;
+            version?: string;
+            name?: string;
+            schoolYear?: string;
+            effectiveFrom?: string;
+            effectiveTo?: string;
+            finalGradeScale?: components["schemas"]["ScaleDto"];
+            categories?: components["schemas"]["CategoryDto"][];
+            metricDefinitions?: components["schemas"]["MetricDefinitionDto"][];
+            aggregationRules?: components["schemas"]["AggregationRuleDto"][];
+            /** Format: uuid */
+            publishedBy?: string;
+            publishedAt?: string;
+        };
         RegisterRequest: {
             username: string;
             password: string;
@@ -1050,6 +1310,12 @@ export interface components {
         RoleRequest: {
             /** @enum {string} */
             role: "STUDENT" | "TEACHER" | "ADMIN";
+        };
+        ApiErrorResponse: {
+            /** Format: int32 */
+            status: number;
+            error: string;
+            message: string;
         };
         PageResponseUserResponse: {
             content?: components["schemas"]["UserResponse"][];
@@ -1093,8 +1359,24 @@ export interface components {
             /** Format: int64 */
             size?: number;
         };
-        PageResponseObjectNode: {
-            content?: Record<string, never>[];
+        /** @description Current final grade plus the preserved history, newest first. */
+        FinalGradeHistory: {
+            current?: components["schemas"]["FinalGradeResponse"];
+            history?: components["schemas"]["FinalGradeResponse"][];
+        };
+        PageResponseGradeResponse: {
+            content?: components["schemas"]["GradeResponse"][];
+            /** Format: int32 */
+            page?: number;
+            /** Format: int32 */
+            size?: number;
+            /** Format: int64 */
+            totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
+        };
+        PageResponseMetricResponse: {
+            content?: components["schemas"]["MetricResponse"][];
             /** Format: int32 */
             page?: number;
             /** Format: int32 */
@@ -1117,6 +1399,39 @@ export interface components {
         };
         PageResponseIdeaResponse: {
             content?: components["schemas"]["IdeaResponse"][];
+            /** Format: int32 */
+            page?: number;
+            /** Format: int32 */
+            size?: number;
+            /** Format: int64 */
+            totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
+        };
+        PageResponseRubricSummary: {
+            content?: components["schemas"]["RubricSummary"][];
+            /** Format: int32 */
+            page?: number;
+            /** Format: int32 */
+            size?: number;
+            /** Format: int64 */
+            totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
+        };
+        /** @description Compact rubric list entry. */
+        RubricSummary: {
+            /** Format: uuid */
+            id?: string;
+            version?: string;
+            name?: string;
+            schoolYear?: string;
+            effectiveFrom?: string;
+            effectiveTo?: string;
+            publishedAt?: string;
+        };
+        PageResponseObjectNode: {
+            content?: Record<string, never>[];
             /** Format: int32 */
             page?: number;
             /** Format: int32 */
@@ -1175,7 +1490,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": Record<string, never>;
+                    "*/*": components["schemas"]["FinalGradeHistory"];
                 };
             };
         };
@@ -1192,7 +1507,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["JsonNode"];
+                "application/json": components["schemas"]["FinalGradesRequest"];
             };
         };
         responses: {
@@ -1202,7 +1517,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": Record<string, never>;
+                    "*/*": components["schemas"]["FinalGradesResponse"];
                 };
             };
             /** @description A configured rule lacks required inputs. */
@@ -1211,7 +1526,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": Record<string, never>;
+                    "*/*": components["schemas"]["FinalGradesResponse"];
                 };
             };
         };
@@ -1487,7 +1802,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["PageResponseObjectNode"];
+                    "*/*": components["schemas"]["PageResponseGradeResponse"];
                 };
             };
         };
@@ -1504,7 +1819,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["JsonNode"];
+                "application/json": components["schemas"]["StudentGradeRequest"];
             };
         };
         responses: {
@@ -1514,7 +1829,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": Record<string, never>;
+                    "*/*": components["schemas"]["GradeResponse"];
                 };
             };
             /** @description Grade outside the criterion scale or invalid input. */
@@ -1523,7 +1838,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": Record<string, never>;
+                    "*/*": components["schemas"]["GradeResponse"];
                 };
             };
             /** @description Caller lacks the required role or project access. */
@@ -1532,7 +1847,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": Record<string, never>;
+                    "*/*": components["schemas"]["GradeResponse"];
                 };
             };
             /** @description Rubric version differs from the project's bound version. */
@@ -1541,7 +1856,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": Record<string, never>;
+                    "*/*": components["schemas"]["GradeResponse"];
                 };
             };
         };
@@ -1560,7 +1875,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["JsonNode"];
+                "application/json": components["schemas"]["GradeRevisionRequest"];
             };
         };
         responses: {
@@ -1570,7 +1885,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": Record<string, never>;
+                    "*/*": components["schemas"]["GradeResponse"];
                 };
             };
             /** @description The entry has already been superseded. */
@@ -1579,7 +1894,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": Record<string, never>;
+                    "*/*": components["schemas"]["GradeResponse"];
                 };
             };
         };
@@ -1607,7 +1922,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["PageResponseObjectNode"];
+                    "*/*": components["schemas"]["PageResponseMetricResponse"];
                 };
             };
         };
@@ -1624,7 +1939,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["JsonNode"];
+                "application/json": components["schemas"]["MetricRequest"];
             };
         };
         responses: {
@@ -1634,7 +1949,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": Record<string, never>;
+                    "*/*": components["schemas"]["MetricResponse"];
                 };
             };
             /** @description Caller lacks the required role or project access. */
@@ -1643,7 +1958,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": Record<string, never>;
+                    "*/*": components["schemas"]["MetricResponse"];
                 };
             };
         };
@@ -1671,7 +1986,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["PageResponseObjectNode"];
+                    "*/*": components["schemas"]["PageResponseGradeResponse"];
                 };
             };
         };
@@ -1688,7 +2003,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["JsonNode"];
+                "application/json": components["schemas"]["GroupGradeRequest"];
             };
         };
         responses: {
@@ -1698,7 +2013,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": Record<string, never>;
+                    "*/*": components["schemas"]["GradeResponse"];
                 };
             };
             /** @description Caller lacks the required role or project access. */
@@ -1707,7 +2022,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": Record<string, never>;
+                    "*/*": components["schemas"]["GradeResponse"];
                 };
             };
         };
@@ -2022,7 +2337,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["PageResponseObjectNode"];
+                    "*/*": components["schemas"]["PageResponseRubricSummary"];
                 };
             };
         };
@@ -2036,7 +2351,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["JsonNode"];
+                "application/json": components["schemas"]["PublishRubricRequest"];
             };
         };
         responses: {
@@ -2046,7 +2361,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": Record<string, never>;
+                    "*/*": components["schemas"]["RubricResponse"];
                 };
             };
             /** @description Invalid rubric structure, scale, metric, or rule. */
@@ -2055,7 +2370,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": Record<string, never>;
+                    "*/*": components["schemas"]["RubricResponse"];
                 };
             };
             /** @description Caller is not an administrator. */
@@ -2064,7 +2379,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": Record<string, never>;
+                    "*/*": components["schemas"]["RubricResponse"];
                 };
             };
             /** @description The rubric version label already exists. */
@@ -2073,7 +2388,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": Record<string, never>;
+                    "*/*": components["schemas"]["RubricResponse"];
                 };
             };
         };
@@ -2382,13 +2697,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description OK */
-            200: {
+            /** @description The role change would remove the last administrator. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["UserResponse"];
+                    "*/*": components["schemas"]["ApiErrorResponse"];
                 };
             };
         };
@@ -2508,7 +2823,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": Record<string, never>;
+                    "*/*": components["schemas"]["FinalGradeHistory"];
                 };
             };
             /** @description No final grade has been recorded. */
@@ -2517,7 +2832,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": Record<string, never>;
+                    "*/*": components["schemas"]["FinalGradeHistory"];
                 };
             };
         };
@@ -2540,7 +2855,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": Record<string, never>;
+                    "*/*": components["schemas"]["RubricResponse"];
                 };
             };
         };
@@ -2560,7 +2875,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": Record<string, never>;
+                    "*/*": components["schemas"]["RubricResponse"];
                 };
             };
         };

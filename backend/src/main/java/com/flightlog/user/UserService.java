@@ -38,6 +38,10 @@ public class UserService {
         requireRole(caller, Role.ADMIN);
         UserAccount user = users.findById(id)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "User was not found."));
+        if (user.getRole() == Role.ADMIN && role != Role.ADMIN
+                && users.findAllByRoleForUpdate(Role.ADMIN).size() <= 1) {
+            throw new ApiException(HttpStatus.CONFLICT, "At least one administrator account must remain.");
+        }
         user.setRole(role);
         audit.record(caller, "USER_ROLE_CHANGED", "user", id);
         return authService.toResponse(user);
