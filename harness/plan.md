@@ -6,7 +6,7 @@
 |--------|--------|
 | Bug-01 | done |
 | Bug-02 | done |
-| Bug-03 | failed |
+| Bug-03 | to-do |
 | Dev-01 | to-do |
 
 ### Bug-01. Create Application Period doesn't work
@@ -72,15 +72,18 @@ One-time manual verification (in addition to automated tests):
 
 #### Intent
 
-Make dropdown selectors across the frontend match the application's shared visual style. They currently look inconsistent with the other form controls and the rest of the UI.
+Make dropdown selectors across the frontend match the application's shared visual style, and fix related form-layout inconsistencies on Overview and New idea. Dropdowns currently look inconsistent with other form controls; some Overview elements and New idea fields also fail to align with their neighboring controls.
 
 #### Scope and contract
 
 - Update the styling of native dropdown selectors throughout the frontend, including selectors in ideas, applications, allocation, formal applications, archive, grading, and administration views.
 - Use the existing shared form-control styling and design conventions rather than introducing feature-specific dropdown styles.
+- Match the rendered height, alignment, typography, spacing, borders, and focus treatment of adjacent form controls in every layout. In particular, fix the Applications "Configure period" year selector, which was observed at 47px high beside 40px date inputs at desktop width.
+- On Overview, align "current school year" with "application periods" and "ideas in view", and align "application timeline" with "your next actions".
+- In Ideas and reviews > New idea, align the title and school year inputs on the same line, and align the initial scope and learning scope inputs on the same line.
 - Preserve each selector's current options, labels, selected value, disabled state, validation, and interaction behavior.
 - Keep selectors semantic, keyboard accessible, responsive, and consistent with the existing visible focus treatment.
-- This is a frontend presentation change; do not change backend behavior or API contracts.
+- These are frontend presentation changes; do not change backend behavior or API contracts.
 
 #### Mechanical checks (the Evaluator re-runs)
 
@@ -88,19 +91,28 @@ Durable automated tests (join the build):
 
 - Frontend checks pass: from `frontend/`, run `npm run typecheck`, `npm test`, and `npm run build`.
 - Frontend tests cover rendering and selection behavior for any shared dropdown control or interaction changed as part of the fix.
+- Regression coverage verifies shared select sizing and styling, selection/value binding, and the Applications "Configure period" selector against its neighboring controls.
+- Frontend regression coverage verifies the Overview groups and New idea input pairs remain aligned at desktop and mobile widths.
 
 One-time manual verification (in addition to automated tests):
 
-- Compare dropdowns with the other form controls in the listed views and confirm they use a consistent appearance at desktop and mobile widths.
-- Confirm labels, options, selected values, disabled states, and keyboard focus remain usable.
+- Verify the actual Ideas, Applications (including "Configure period"), Allocation, Formal Applications, Archive, Grading, and Administration views at desktop and narrow mobile widths. Prepare representative projects/applications and use the required student/teacher/admin roles so selectors that only render for specific data or roles are present; do not substitute an isolated static page or stylesheet-only inspection for these views.
+- Verify Overview's two specified pairs/groups and Ideas and reviews > New idea's title/school-year and initial-scope/learning-scope pairs at desktop and narrow mobile widths.
+- In every listed view, compare select height and alignment to adjacent inputs and other form controls, confirm consistent appearance and no horizontal overflow, and confirm visible keyboard focus with Tab plus usable keyboard option selection where the platform supports it.
+- Confirm the Overview and New idea layout remains readable and correctly aligned at desktop and mobile widths without clipping or unintended wrapping.
+- Confirm labels, options, selected values, disabled states where present, and form submission behavior remain usable and unchanged. Record any selector state that cannot occur in the application rather than claiming it was exercised.
 
 #### Acceptance criteria (the Evaluator judges)
 
 - Native dropdown selectors throughout the frontend use a consistent appearance aligned with the existing shared form controls and design system, rather than varying by view.
-- The shared styling works responsively and retains a visible keyboard focus state.
+- Every selector matches adjacent form-control sizing and alignment at desktop and mobile widths, including the Applications "Configure period" year selector; no 47px-vs-40px mismatch remains.
+- The shared styling works responsively without horizontal overflow and retains a visible keyboard focus state.
+- Overview's current-school-year, application-periods, and ideas-in-view elements align with one another; application-timeline aligns with your-next-actions.
+- On New idea, title aligns with school year, and initial scope aligns with learning scope, at desktop and mobile widths.
 - Selector labels, available options, value binding, disabled behavior, and form submission behavior remain unchanged.
 - No backend/API contract changes are needed.
 - Frontend automated checks pass, with tests covering any changed shared selector rendering or interaction.
+- Manual verification records actual results for each named view and layout at desktop and narrow mobile widths, using sufficient data and roles to render selectors; keyboard reachability and selection are verified on a real platform where native popup behavior is supported.
 
 ### Dev-01. Seed student and teacher accounts for testing
 
