@@ -28,7 +28,7 @@ The following intermediate events occurred in sequence after preflight and befor
 - Deliverable commits: `a1046a573d2067a441251b74c4c728bd4024d007` and `c4f68a684254b0fff5069c2b29566f5c61591bb7`.
 - Gates: both handoff-completeness and commit-scope gates passed for each deliverable commit.
 - SPEC changes: none.
-- Ledger: ticket row set to `done`; run artifact and ledger closeout commit is pending.
+- Ledger: ticket row set to `done`; run artifacts and ledger committed separately from deliverables in `40aed22c5db57c8e87d2b395f224dd77e143ba32`. Finalized this heartbeat/log record in the subsequent run-artifact commit.
 
 ## Metrics
 
