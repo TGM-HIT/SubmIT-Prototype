@@ -11,7 +11,7 @@
 | Bug-03b | to-do |
 | Bug-03c | to-do |
 | Bug-03d | to-do |
-| Dev-01 | to-do |
+| Dev-01 | done |
 | Dev-02 | to-do |
 
 ### Bug-01. Create Application Period doesn't work
