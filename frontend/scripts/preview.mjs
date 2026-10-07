@@ -18,7 +18,19 @@ const defaults = {
 }
 
 export function parseArgs(args) {
-  const options = { ...defaults, start: true, auth: false, fill: [], click: [], waitFor: [], expandSelect: [] }
+  const options = {
+    ...defaults,
+    start: true,
+    headed: false,
+    auth: false,
+    fill: [],
+    click: [],
+    waitFor: [],
+    openSelect: [],
+    tabTo: [],
+    selectByKey: [],
+    expandSelect: [],
+  }
   const valueOptions = new Map([
     ['--url', 'url'],
     ['--path', 'pagePath'],
@@ -36,6 +48,9 @@ export function parseArgs(args) {
     ['--fill', 'fill'],
     ['--click', 'click'],
     ['--wait-for', 'waitFor'],
+    ['--open-select', 'openSelect'],
+    ['--tab-to', 'tabTo'],
+    ['--select-by-key', 'selectByKey'],
     ['--expand-select', 'expandSelect'],
   ])
   for (let index = 0; index < args.length; index += 1) {
@@ -44,6 +59,8 @@ export function parseArgs(args) {
       options.help = true
     } else if (flag === '--no-start') {
       options.start = false
+    } else if (flag === '--headed') {
+      options.headed = true
     } else if (flag === '--auth') {
       options.auth = true
     } else if (valueOptions.has(flag)) {
@@ -54,8 +71,12 @@ export function parseArgs(args) {
         const separator = value.indexOf('=')
         if (separator < 1) throw new Error('--fill must use SELECTOR=VALUE.')
         options.fill.push({ selector: value.slice(0, separator), value: value.slice(separator + 1) })
-      } else if (name === 'click' || name === 'waitFor' || name === 'expandSelect') {
+      } else if (name === 'click' || name === 'waitFor' || name === 'openSelect' || name === 'tabTo' || name === 'expandSelect') {
         options[name].push(value)
+      } else if (name === 'selectByKey') {
+        const separator = value.indexOf('=')
+        if (separator < 1) throw new Error('--select-by-key must use SELECTOR=VALUE.')
+        options.selectByKey.push({ selector: value.slice(0, separator), value: value.slice(separator + 1) })
       } else {
         options[name] = value
       }
@@ -386,6 +407,84 @@ export async function applyPageInteractions(client, options) {
     const count = await evaluatePage(client, `(${expression})(${JSON.stringify(selector)})`, `expand options for ${selector}`)
     console.log(`Expanded ${selector} to show ${count} options.`)
   }
+  for (const selector of options.tabTo ?? []) {
+    const expression = `(selector) => {
+      const target = document.querySelector(selector);
+      if (!target || !(target instanceof HTMLElement)) throw new Error('No focusable element matches ' + selector);
+      return true;
+    }`
+    await evaluatePage(client, `(${expression})(${JSON.stringify(selector)})`, `locate ${selector}`)
+    for (let index = 0; index < 80; index += 1) {
+      const focused = await evaluatePage(client, `document.activeElement?.matches(${JSON.stringify(selector)}) === true`, `check Tab focus on ${selector}`)
+      if (focused) break
+      await client.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 })
+      await client.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 })
+      if (index === 79) throw new Error(`Could not reach ${selector} by pressing Tab.`)
+    }
+    console.log(`Tabbed to ${selector}.`)
+  }
+  for (const selector of options.openSelect ?? []) {
+    const bounds = await evaluatePage(client, `(() => {
+      const element = document.querySelector(${JSON.stringify(selector)});
+      if (!(element instanceof HTMLSelectElement)) throw new Error('Element is not a select: ' + ${JSON.stringify(selector)});
+      if (element.disabled) throw new Error('Select is disabled: ' + ${JSON.stringify(selector)});
+      const rect = element.getBoundingClientRect();
+      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+    })()`, `locate native select ${selector}`)
+    await client.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: bounds.x, y: bounds.y })
+    await client.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: bounds.x, y: bounds.y, button: 'left', clickCount: 1 })
+    await client.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: bounds.x, y: bounds.y, button: 'left', clickCount: 1 })
+    console.log(`Sent a browser mouse click to native selector ${selector}.`)
+  }
+  for (const { selector, value } of options.selectByKey ?? []) {
+    const expression = `(selector, value) => {
+      const select = document.querySelector(selector);
+      if (!(select instanceof HTMLSelectElement)) throw new Error('Element is not a select: ' + selector);
+      if (document.activeElement !== select) throw new Error('Select is not focused; use --tab-to first: ' + selector);
+      const option = Array.from(select.options).find((candidate) => candidate.value === value && !candidate.disabled);
+      if (!option) throw new Error('No enabled option with value ' + value + ' in ' + selector);
+      return {
+        target: Array.from(select.options).indexOf(option),
+        current: select.selectedIndex,
+        expanded: select.size > 1,
+      };
+    }`
+    const indices = await evaluatePage(client, `(${expression})(${JSON.stringify(selector)}, ${JSON.stringify(value)})`, `find enabled option in ${selector}`)
+    if (indices.target === indices.current) {
+      throw new Error(`The enabled option ${JSON.stringify(value)} (index ${indices.target}) is already selected in ${selector}; choose a different value to verify keyboard selection.`)
+    }
+    const key = async (name, code, keyCode) => {
+      await client.send('Input.dispatchKeyEvent', {
+        type: 'keyDown',
+        key: name,
+        code,
+        windowsVirtualKeyCode: keyCode,
+      })
+      await client.send('Input.dispatchKeyEvent', {
+        type: 'keyUp',
+        key: name,
+        code,
+        windowsVirtualKeyCode: keyCode,
+      })
+    }
+    const direction = indices.target >= indices.current ? 1 : -1
+    const arrow = direction > 0 ? ['ArrowDown', 'ArrowDown', 40] : ['ArrowUp', 'ArrowUp', 38]
+    let steps = Math.abs(indices.target - indices.current)
+    if (steps === 0) steps = 1
+    if (!indices.expanded && !(options.openSelect ?? []).includes(selector)) await key(' ', 'Space', 32)
+    for (let index = 0; index < steps; index += 1) {
+      await key(arrow[0], arrow[1], arrow[2])
+    }
+    await evaluatePage(client, 'new Promise((resolve) => setTimeout(resolve, 20))', `wait for keyboard selection in ${selector}`)
+    let selected = await evaluatePage(client, `document.querySelector(${JSON.stringify(selector)})?.value`, `read selected value from ${selector}`)
+    if (selected !== value) {
+      await key('Enter', 'Enter', 13)
+      await evaluatePage(client, 'new Promise((resolve) => setTimeout(resolve, 20))', `wait for keyboard selection in ${selector}`)
+      selected = await evaluatePage(client, `document.querySelector(${JSON.stringify(selector)})?.value`, `read selected value from ${selector}`)
+    }
+    if (selected !== value) throw new Error(`Keyboard selection in ${selector} produced ${JSON.stringify(selected)}, expected ${JSON.stringify(value)}.`)
+    console.log(`Selected ${JSON.stringify(value)} in ${selector} with the keyboard.`)
+  }
 }
 
 async function navigate(client, url, signal) {
@@ -453,7 +552,7 @@ async function launchBrowser(options, url, { signal, onBrowser, onClient, env })
   const profile = await mkdtemp(path.join(tmpdir(), 'flightlog-preview-'))
   const port = await unusedPort()
   const browser = startChild(executable, [
-    '--headless=new',
+    ...(options.headed ? [] : ['--headless=new']),
     '--no-first-run',
     '--no-default-browser-check',
     '--disable-gpu',
@@ -521,6 +620,7 @@ Use Ctrl-C to stop during startup or inspection. Generated default screenshots a
 
 Options:
   --viewport desktop|mobile       Default desktop (1440x1000) or narrow mobile (390x844)
+  --headed                         Use the native browser window instead of headless mode
   --width N --height N            Optional custom viewport, supplied together
   --output-dir DIR                Screenshot directory (default frontend/.preview)
   --screenshot FILE               Screenshot filename (default preview.png)
@@ -529,6 +629,9 @@ Options:
   --fill SELECTOR=VALUE           Fill an input, textarea, or select; may be repeated
   --click SELECTOR                Click an element; may be repeated
   --wait-for SELECTOR             Wait for an element after interactions; may be repeated
+  --open-select SELECTOR          Send a browser mouse click to a native selector
+  --tab-to SELECTOR               Reach an element using Tab; may be repeated
+  --select-by-key SELECTOR=VALUE  Select an enabled native option using keyboard input; may be repeated
   --expand-select SELECTOR        Show all native select options inline for screenshot inspection
   --password-env NAME             Environment variable containing its password (default PREVIEW_PASSWORD)
   --frontend-port N               Vite port (default 5173)
@@ -541,7 +644,8 @@ Options:
 For authenticated inspection, set PREVIEW_PASSWORD using the password documented in
 backend/DEV-GUIDELINES.md and pass --username student01 (or another documented account).
 Use --fill, --click, --wait-for, and --expand-select to perform reusable preview interactions after authentication,
-for example to load a form that requires a project ID before its details are shown.
+for example to load a form that requires a project ID before its details are shown. Use --tab-to and
+--select-by-key to verify native keyboard focus and selection; use --headed when a native popup is required.
 `
 }
 

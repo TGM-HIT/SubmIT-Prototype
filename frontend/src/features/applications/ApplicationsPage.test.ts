@@ -1,4 +1,6 @@
 import { flushPromises, mount } from '@vue/test-utils'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import ApplicationsPage from './ApplicationsPage.vue'
 
@@ -140,7 +142,11 @@ describe('application period configuration', () => {
 
     expect(controls?.classList.contains('grid-3')).toBe(true)
     expect(controls?.querySelectorAll('.field')).toHaveLength(3)
+    expect(year.classes()).toContain('select')
     expect(controls?.querySelector('#opens')?.classList.contains('input')).toBe(true)
     expect(controls?.querySelector('#closes')?.classList.contains('input')).toBe(true)
+
+    const sharedStyles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8')
+    expect(sharedStyles).toMatch(/\.input,\s*\.select\s*\{\s*height:\s*40px;/)
   })
 })

@@ -18,14 +18,26 @@ import {
 
 test('parses preview options and rejects incomplete or invalid invocations', () => {
   assert.equal(parseArgs([]).start, true)
+  assert.equal(parseArgs(['--headed']).headed, true)
   assert.equal(parseArgs(['--viewport', 'mobile', '--output-dir', '/tmp/previews']).viewport, 'mobile')
   assert.equal(parseArgs(['--no-start', '--url', 'http://localhost:5173']).start, false)
   assert.deepEqual(parseArgs([
     '--fill', '#project-id=fixture=id',
     '--click', 'form button[type="submit"]',
     '--wait-for', '#formal-decision',
+    '--open-select', '#formal-decision',
+    '--tab-to', '#formal-decision',
+    '--select-by-key', '#formal-decision=APPROVED',
     '--expand-select', '#formal-decision',
   ]).fill, [{ selector: '#project-id', value: 'fixture=id' }])
+  const keyboardOptions = parseArgs([
+    '--open-select', '#formal-decision',
+    '--tab-to', '#formal-decision',
+    '--select-by-key', '#formal-decision=APPROVED',
+  ])
+  assert.deepEqual(keyboardOptions.openSelect, ['#formal-decision'])
+  assert.deepEqual(keyboardOptions.tabTo, ['#formal-decision'])
+  assert.deepEqual(keyboardOptions.selectByKey, [{ selector: '#formal-decision', value: 'APPROVED' }])
   assert.throws(() => parseArgs(['--fill', 'missing-separator']), /SELECTOR=VALUE/)
   assert.throws(() => parseArgs(['--wat']), /Unknown argument/)
   assert.throws(() => parseArgs(['--no-start']), /requires --url/)
@@ -38,27 +50,99 @@ test('parses preview options and rejects incomplete or invalid invocations', () 
   )
 })
 
-test('performs requested page interactions in fill, click, wait, then expand order', async () => {
+test('performs requested page interactions in fill, click, wait, expand, then keyboard order', async () => {
   const expressions = []
+  const keyboardEvents = []
+  let hasTabbed = false
   await applyPageInteractions({
     async send(method, params) {
+      if (method === 'Input.dispatchKeyEvent') {
+        keyboardEvents.push(params)
+        if (params.key === 'Tab' && params.type === 'keyDown') hasTabbed = true
+        return {}
+      }
       assert.equal(method, 'Runtime.evaluate')
       expressions.push(params.expression)
+      if (params.expression.includes('document.activeElement?.matches')) return { result: { value: hasTabbed } }
+      if (params.expression.includes('target: Array.from(select.options)')) {
+        return { result: { value: { target: 1, current: 0, expanded: true } } }
+      }
+      if (params.expression.includes(')?.value')) return { result: { value: 'APPROVED' } }
       return { result: { value: params.expression.includes('element.options.length;') ? 3 : true } }
     },
   }, {
     fill: [{ selector: '#project-id', value: 'fixture" value' }],
     click: ['form button[type="submit"]'],
     waitFor: ['#formal-decision'],
+    tabTo: ['#formal-decision'],
+    selectByKey: [{ selector: '#formal-decision', value: 'APPROVED' }],
     expandSelect: ['#formal-decision'],
   })
-  assert.equal(expressions.length, 4)
+  assert.equal(expressions.length, 10)
   assert.match(expressions[0], /#project-id/)
   assert.match(expressions[0], /fixture\\" value/)
   assert.match(expressions[1], /form button\[type=\\"submit\\"\]/)
   assert.match(expressions[2], /#formal-decision/)
   assert.match(expressions[3], /element\.size = element\.options\.length/)
   assert.match(expressions[3], /element\.style\.height/)
+  assert.match(expressions[4], /No focusable element matches/)
+  assert.match(expressions[5], /document\.activeElement/)
+  assert.match(expressions[6], /document\.activeElement/)
+  assert.match(expressions[7], /target: Array\.from\(select\.options\)/)
+  assert.match(expressions[9], /document\.querySelector/)
+  assert.match(expressions[9], /value/)
+  assert.deepEqual(keyboardEvents.map(({ key, type }) => [key, type]), [
+    ['Tab', 'keyDown'], ['Tab', 'keyUp'],
+    ['ArrowDown', 'keyDown'], ['ArrowDown', 'keyUp'],
+  ])
+})
+
+test('opens a collapsed native selector before keyboard navigation', async () => {
+  const keyboardEvents = []
+  let hasTabbed = false
+  await applyPageInteractions({
+    async send(method, params) {
+      if (method === 'Input.dispatchKeyEvent') {
+        keyboardEvents.push(params)
+        if (params.key === 'Tab' && params.type === 'keyDown') hasTabbed = true
+        return {}
+      }
+      if (params.expression.includes('document.activeElement?.matches')) return { result: { value: hasTabbed } }
+      if (params.expression.includes('target: Array.from(select.options)')) {
+        return { result: { value: { target: 1, current: 0, expanded: false } } }
+      }
+      if (params.expression.includes(')?.value')) return { result: { value: 'POSTER' } }
+      return { result: { value: true } }
+    },
+  }, {
+    tabTo: ['#artifact-type'],
+    selectByKey: [{ selector: '#artifact-type', value: 'POSTER' }],
+  })
+  assert.deepEqual(keyboardEvents.map(({ key, type }) => [key, type]), [
+    ['Tab', 'keyDown'], ['Tab', 'keyUp'],
+    [' ', 'keyDown'], [' ', 'keyUp'],
+    ['ArrowDown', 'keyDown'], ['ArrowDown', 'keyUp'],
+  ])
+})
+
+test('sends trusted browser pointer events to a native selector', async () => {
+  const events = []
+  await applyPageInteractions({
+    async send(method, params) {
+      events.push([method, params])
+      if (method === 'Runtime.evaluate') return { result: { value: { x: 12, y: 24 } } }
+      return {}
+    },
+  }, { openSelect: ['#formal-decision'] })
+  assert.deepEqual(events.map(([method, params]) => [method, params.type]), [
+    ['Runtime.evaluate', undefined],
+    ['Input.dispatchMouseEvent', 'mouseMoved'],
+    ['Input.dispatchMouseEvent', 'mousePressed'],
+    ['Input.dispatchMouseEvent', 'mouseReleased'],
+  ])
+  assert.deepEqual(events.slice(1).map(([, params]) => [params.x, params.y]), [
+    [12, 24], [12, 24], [12, 24],
+  ])
 })
 
 test('selects repeatable desktop and narrow-mobile viewport dimensions', () => {
