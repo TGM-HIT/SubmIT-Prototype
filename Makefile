@@ -13,7 +13,7 @@ BACKEND  := backend
 FRONTEND := frontend
 
 .PHONY: help env install build build-backend build-frontend test test-backend test-frontend \
-        check run run-backend run-frontend openapi clean
+        check run run-testing run-backend run-backend-testing run-frontend openapi clean
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z_-]+:.*##/ {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -50,9 +50,18 @@ run: env ## Start backend and frontend dev server (Ctrl+C stops both)
 	$(MAKE) --no-print-directory run-frontend & \
 	wait
 
+run-testing: env ## Start backend (Spring profile "testing") and frontend dev server (Ctrl+C stops both)
+	@trap 'kill 0' INT TERM EXIT; \
+	$(MAKE) --no-print-directory run-backend-testing & \
+	$(MAKE) --no-print-directory run-frontend & \
+	wait
+
 run-backend: ## Start the backend on :8080
 	@test -n "$(FLIGHTLOG_ADMIN_USERNAME)" || echo "Note: no initial admin configured (see .env.example)"
 	cd $(BACKEND) && ./gradlew bootRun
+
+run-backend-testing: ## Start the backend on :8080 with the testing profile (seeded accounts)
+	cd $(BACKEND) && ./gradlew bootRun --args='--spring.profiles.active=testing'
 
 run-frontend: install ## Start the Vite dev server
 	cd $(FRONTEND) && npm run dev

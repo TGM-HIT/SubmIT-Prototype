@@ -23,3 +23,4 @@ Create new ticket specifications from [`templates/ticket.md`](templates/ticket.m
 | [Bug-03d](tickets/Bug-03d.md) | done | Align New idea form fields |
 | [Dev-01](tickets/Dev-01.md) | done | Seed student and teacher accounts for testing |
 | [Dev-02](tickets/Dev-02.md) | done | Add reusable browser preview tooling |
+| [Bug-04](tickets/Bug-04.md) | to-do | Open idea details and review forms as modals |
