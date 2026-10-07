@@ -3,11 +3,19 @@ import java.util.List;
 
 class CommitScope {
 
-    static final String[] ALLOWED_PREFIXES = { "backend/src/", "frontend/src/" };
+    static final String[] ALLOWED_PREFIXES = {
+        "backend/src/",
+        "frontend/src/",
+        "frontend/scripts/"
+    };
     static final String[] ALLOWED_FILES = {
+        ".gitignore",
         "frontend/index.html",
+        "frontend/package.json",
         "frontend/DEV-GUIDELINES.md",
-        "backend/DEV-GUIDELINES.md"
+        "backend/DEV-GUIDELINES.md",
+        "frontend/public/favicon.ico",
+        "harness/gates/commit-scope.java"
     };
     static final String[] SPEC_FILES = { "docs/SPEC.md", "backend/SPEC.md", "frontend/SPEC.md" };
 

@@ -5,6 +5,7 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
+import { fileURLToPath } from 'node:url'
 import {
   collectBrowserErrors,
   parseArgs,
@@ -39,6 +40,16 @@ test('selects repeatable desktop and narrow-mobile viewport dimensions', () => {
   assert.deepEqual(viewportFor({ viewport: 'mobile', width: 430, height: 932 }), {
     width: 430, height: 932, deviceScaleFactor: 1, mobile: true,
   })
+})
+
+test('ships a valid ICO favicon referenced by the frontend shell', async () => {
+  const frontendDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
+  const html = await readFile(path.join(frontendDir, 'index.html'), 'utf8')
+  const icon = await readFile(path.join(frontendDir, 'public', 'favicon.ico'))
+  assert.match(html, /<link rel="icon" href="\/favicon\.ico" type="image\/x-icon"/)
+  assert.equal(icon.readUInt16LE(0), 0)
+  assert.equal(icon.readUInt16LE(2), 1)
+  assert.ok(icon.readUInt16LE(4) >= 1)
 })
 
 test('waits for HTTP readiness and reports an actionable readiness timeout', async (context) => {
