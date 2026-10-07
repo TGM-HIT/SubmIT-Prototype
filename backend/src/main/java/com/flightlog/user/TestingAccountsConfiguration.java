@@ -7,6 +7,7 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
+import org.springframework.core.annotation.Order;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 @Configuration
@@ -27,6 +28,7 @@ public class TestingAccountsConfiguration {
             new SeedAccount("teacher05", Role.TEACHER));
 
     @Bean
+    @Order(1)
     ApplicationRunner seedTestingAccounts(UserAccountRepository users, PasswordEncoder encoder) {
         return args -> ACCOUNTS.stream()
                 .filter(account -> users.findByUsername(account.username()).isEmpty())

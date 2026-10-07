@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.flightlog.data.StoredRecordRepository;
+import com.flightlog.formal.TestingFormalApplicationFixtureConfiguration;
 import com.flightlog.security.Role;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -26,10 +28,17 @@ class TestingAccountsInactiveProfileTest {
     private PasswordEncoder passwordEncoder;
     @Autowired
     private ApplicationContext applicationContext;
+    @Autowired
+    private StoredRecordRepository records;
 
     @Test
     void doesNotSeedWorkflowAccountsAndRetainsBootstrapAdminBehaviorWhenTestingProfileIsInactive() {
         assertFalse(applicationContext.containsBean("seedTestingAccounts"));
+        assertFalse(applicationContext.containsBean("seedTestingFormalApplicationFixture"));
+        assertTrue(records.findByTypeAndParentId("project_group",
+                TestingFormalApplicationFixtureConfiguration.PROJECT_ID.toString()).isEmpty());
+        assertTrue(records.findByTypeAndParentId("formal_application",
+                TestingFormalApplicationFixtureConfiguration.PROJECT_ID.toString()).isEmpty());
         assertEquals(1, users.count());
         assertTrue(users.findByUsername("existing-bootstrap-admin").isPresent());
         UserAccount bootstrapAdmin = users.findByUsername("existing-bootstrap-admin").orElseThrow();

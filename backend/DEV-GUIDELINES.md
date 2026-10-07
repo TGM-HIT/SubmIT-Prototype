@@ -59,3 +59,5 @@ All seeded accounts use the testing-only password `testing-password`:
 | `TEACHER` | `teacher01`, `teacher02`, `teacher03`, `teacher04`, `teacher05` |
 
 These credentials are for local/testing use only. Never use them in production or expose them to a public environment. The accounts are not seeded unless the `testing` profile is active.
+
+With the same explicit `testing` profile, the backend also seeds a synthetic allocated group and submitted Formal Application for local teacher-page verification. In the Formal Application page, load project ID `03a00000-0000-4000-8000-000000000001` as `teacher01`. The fixture uses the seeded `student01`–`student03` accounts, contains only invented project text, and is not created in normal runs. It is safe to rerun; the seeded group/application are retained rather than duplicated.
