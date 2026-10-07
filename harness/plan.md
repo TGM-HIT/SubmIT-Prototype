@@ -24,4 +24,4 @@ Create new ticket specifications from [`templates/ticket.md`](templates/ticket.m
 | [Dev-01](tickets/Dev-01.md) | done | Seed student and teacher accounts for testing |
 | [Dev-02](tickets/Dev-02.md) | done | Add reusable browser preview tooling |
 | [Bug-04](tickets/Bug-04.md) | done | Open idea details and review forms as modals |
-| [Feature-01](tickets/Feature-01.md) | failed | Allow unrated idea reviews and show ratings in history |
+| [Feature-01](tickets/Feature-01.md) | awaiting-human | Allow unrated idea reviews and show ratings in history |
