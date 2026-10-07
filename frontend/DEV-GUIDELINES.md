@@ -46,4 +46,19 @@ For authenticated previews, use a testing-profile account already documented in 
 PREVIEW_PASSWORD=testing-password npm run preview -- --auth --username teacher01 --path /formal-application --fill '#project-id=03a00000-0000-4000-8000-000000000001' --click 'form.toolbar button' --wait-for '#formal-decision' --expand-select '#formal-decision' --viewport desktop --output-dir /tmp/bug03-preview --screenshot formal-applications.png
 ```
 
-Interactions run after authentication in the order fill, click, wait, then expand, Tab navigation, and keyboard selection. Expanding changes only the preview page's rendered select size, not application data or production code. For an actual collapsed native popup on macOS, run headed Google Chrome with `--tab-to SELECTOR --native-select-by-key SELECTOR=VALUE`; this uses macOS System Events to click the selector and send arrow/Return key events, then confirms the changed DOM value before capturing the screenshot. macOS may require Accessibility permission for the terminal running the preview. Unlike `--select-by-key`, this option is restricted to headed macOS Chrome and does not use CDP key events to simulate selection. The screenshot is saved after the selected value changes. Use `npm run preview:test` for the no-dependency preview-tool smoke tests.
+Interactions run after authentication in the order fill, click, wait, then expand, Tab navigation, and keyboard selection. Expanding changes only the preview page's rendered select size, not application data or production code.
+
+For an actual collapsed native popup on macOS, use headed Google Chrome with `--tab-to SELECTOR --native-select-by-key SELECTOR=VALUE`. This uses macOS System Events input; it is restricted to headed macOS Chrome, does not fall back to CDP key events, and verifies the selected DOM value before saving a screenshot. If macOS reports that `osascript` is not permitted to send keystrokes:
+
+1. Open **System Settings → Privacy & Security → Accessibility**.
+2. Enable the app that launched the preview command. Use **Terminal** if you ran `npm` in Terminal; use **Visual Studio Code** if you ran it in VS Code's integrated terminal. Grant permission to that host app, not Google Chrome. If the app is not listed, add it with **+** (Terminal is in `/Applications/Utilities/Terminal.app`; VS Code is normally in `/Applications/Visual Studio Code.app`), then enable it.
+3. Quit and reopen that host app so it starts with the updated permission. Return to `frontend/` and rerun the preview command. For example, with the local testing profile and an enabled Ideas status option different from the current selection:
+
+   ```sh
+   PREVIEW_PASSWORD=testing-password npm run preview -- --headed --auth --username student01 --path /ideas --tab-to '#status-filter' --native-select-by-key '#status-filter=IDEA_SUBMITTED' --viewport desktop --output-dir /tmp/bug03b-native --screenshot ideas-native-selected.png
+   ```
+
+   If `IDEA_SUBMITTED` is already selected or unavailable, use another enabled `#status-filter` value that is different from its current value.
+4. Count this as successful evidence only when the real command reports that the macOS native-popup keyboard selected the requested value, completes the screenshot, and the saved screenshot at `/tmp/bug03b-native/ideas-native-selected.png` shows the selector displaying the changed value. The preview also checks the live DOM value before taking the screenshot. Record that screenshot path and the reported value. A permission error, mock/smoke-test result, or screenshot without a confirmed changed value is not proof that the native popup interaction succeeded; do not substitute `--select-by-key` or `--expand-select` for this check.
+
+Use `npm run preview:test` for the no-dependency preview-tool smoke tests.
