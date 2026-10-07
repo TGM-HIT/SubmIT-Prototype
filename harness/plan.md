@@ -6,7 +6,7 @@
 - `in progress`: implementation/evaluation is active.
 - `awaiting-human`: implementation is complete, but one or more acceptance checks need human verification or disposition. This is nonterminal: do not treat it as done or failed.
 - `done`: accepted by an Evaluator pass or by an explicit authorized human acceptance recorded in the run artifacts.
-- `failed`: explicitly stopped or terminally failed. If the only remaining gap is human-exercisable verification, use `awaiting-human` until the human path is completed or declined.
+- `failed`: explicitly stopped or terminally failed. If the only remaining gap is human-exercisable verification, use `awaiting-human` until the human path is completed or declined. A failed ticket can be continued (revised ticket, new run building on the earlier commits) rather than restarted; the row returns to `in progress` for the continuation run. See "Continuing a failed ticket" in `roles/orchestrator.md`.
 
 ## Tickets
 

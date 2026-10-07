@@ -130,6 +130,63 @@ and each check that remains unverified in `human-acceptance.md`; preserve all
 Evaluator verdicts unchanged. Only then set the ledger to done. A statement
 that the change appears fixed, without explicit acceptance, is not enough.
 
+## Continuing a failed ticket
+
+A ticket whose ledger row is `failed` may be continued instead of restarted when
+the coordinator asks to continue it (optionally naming the failed run folder;
+default is the most recent failed run of that ticket). A continuation is a new
+run that builds on the failed run's commits already on the target branch. It is
+not a restart: do not revert, rebase, or discard the earlier deliverable.
+
+Preconditions, checked before any role is dispatched:
+
+- The plan row is `failed` and the named (or latest) run folder for that ticket
+  ends with `Outcome: failed`. A `done` ticket, an `awaiting-human` pause (use
+  the verification-only continuation above), or a ticket that never ran is not
+  eligible; stop and say so.
+- Run preflight as usual. The tree must be clean, so any revision of the ticket
+  or contracts must already be committed. If the ticket file is unchanged since
+  the failed run's baseline, ask the coordinator to confirm that the cause was
+  not the ticket before continuing; a continuation normally follows a ticket
+  revision, a human decision, or a removed external blocker.
+- Identify the prior deliverable: baseline SHA (parent of the failed run's first
+  deliverable commit), prior head SHA (the last deliverable commit), and the
+  commit that last revised the ticket. Take them from the failed run's log and
+  changed-path files, and verify them with git; never guess a SHA.
+- Stop if two consecutive continuations of this ticket already failed. Report
+  that the ticket should be split or re-planned instead.
+
+Procedure:
+
+1. Mint a new run id `<ticket-id>-<yyyymmdd-hhmm>`; the failed run folder stays
+   unchanged. Write `continuation.md` in the new folder with: the failed run id,
+   baseline SHA, prior head SHA, ticket-revision commit, and the unresolved
+   findings carried over (quoted from the failed run's last evaluation) with a
+   note on which the revised ticket changed, dropped, or made explicit.
+2. Set the plan row `failed` -> `in progress`, record the link in the run log and
+   heartbeat, and number passes from 1 in the new folder. The continuation gets
+   its own budget of three revise cycles.
+3. Dispatch the Implementor with the revised ticket, the path of
+   `continuation.md`, and the failed run's handoffs and evaluations as read-only
+   context. Instruct it to follow the ticket's "Current-state triage" section
+   when present: inspect HEAD against each requirement, change only what is
+   unmet or untested, and report a no-op for what is already met. The revised
+   ticket, not the failed run's evaluations, defines the requirements.
+4. Run both gates on each pass as usual (own-commit changed paths; handoff
+   headings).
+5. Dispatch a fresh Evaluator with the cumulative diff from the baseline SHA, the
+   revised ticket, all handoffs, and the prior evaluations as context only.
+   Prior verdicts and prior SPEC-change acceptances do not carry over: the
+   Evaluator re-judges every criterion and every SPEC change in the cumulative
+   diff against the revised ticket and re-runs all checks. Manual verification
+   from the failed run counts only for behavior unchanged since it was
+   performed.
+6. Handle verdicts exactly as in the normal loop. Close out as done, failed, or
+   awaiting-human, with the `## Continuation` link and the usual `## Metrics` and
+   SPEC CHANGE sections in the new run log. Commit artifacts separately from the
+   deliverable. Leave the failed run folder untouched; the ledger moves only
+   to the new run's outcome.
+
 If the human declines to verify or accept, or explicitly requests stopping,
 close as failed and record that decision. Do not turn an unresolved pause into
 a failure solely because three revise cycles elapsed.

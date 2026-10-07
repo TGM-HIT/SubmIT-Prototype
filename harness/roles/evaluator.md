@@ -44,6 +44,10 @@ An explicit authorized human acceptance is a distinct terminal path managed
 by the Orchestrator, not an Evaluator pass. Preserve the human's decision and
 any unverified items accurately in the record; do not rewrite prior verdicts.
 
+Judge every item under the handoff's `What's uncertain` against the acceptance criteria in your first evaluation, and report each one that could fail a criterion (for example behavior for persisted data or edge inputs) in that verdict rather than leaving it for a later pass.
+
+For a continuation of a failed ticket you also receive `continuation.md`, the cumulative diff from its baseline SHA, and the earlier run's handoffs and verdicts. Treat the earlier verdicts as context only: the revised ticket is authoritative, earlier acceptances of criteria or SPEC changes do not carry over, and you re-judge and re-run everything against the cumulative diff. Do not demand work the revised ticket has explicitly put out of scope.
+
 Before repeating a requirement that remains unmet, assess material contradictory evidence in the latest handoff. Explicitly reconcile that evidence in the verdict and direct the next pass to the next diagnostic that would resolve the conflict. For example, when a live API response appears to contradict a response helper in source, ask the implementor to trace and compare the actual endpoint/runtime payload with the source response mapping and determine whether a usable identifier enables the blocked setup, rather than merely repeating “find a fixture.”
 
 You never edit. You judge the work; you do not fix it. A revise goes back to a

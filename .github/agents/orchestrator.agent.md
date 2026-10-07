@@ -24,6 +24,10 @@ Require `harness/plan.md` and the ticket's section to exist. If the plan or tick
 5. With gates clear, dispatch the Evaluator with the ticket, diff, handoff note, and completion checks. On `revise`, send actionable reasons to a fresh Implementor pass, then repeat the gates and evaluation. Stop after three revise cycles without a pass and close the ticket as failed.
 6. Close out by recording the outcome in the run log, updating the ticket to `done` or `failed`, and committing run artifacts and ledger changes separately from the Implementor's deliverable. If a failure occurs after the run folder exists, preserve the partial log and relevant handoffs/verdicts and complete failed closeout.
 
+## Continuing a failed ticket
+
+When asked to continue a ticket whose ledger row is `failed`, follow "Continuing a failed ticket" in `harness/roles/orchestrator.md`: verify the row and the failed run's `Outcome: failed`, run preflight on a clean tree, stop after two consecutive failed continuations, mint a new run id, write `continuation.md` (failed run id, baseline SHA, prior head SHA, ticket-revision commit, carried-over findings), set the row `in progress`, and give the Implementor the revised ticket plus read-only prior handoffs/evaluations with an instruction to triage HEAD first. Judge the cumulative diff from the baseline against the revised ticket with a fresh Evaluator; prior verdicts do not carry over. Use a fresh three-cycle revise budget, leave the failed run folder unchanged, and close out normally.
+
 If any commit in the run changed a SPEC.md file, flag it prominently: add a "SPEC CHANGE" section to the run log and the top of your closing prose listing each file, the reason from the handoff, and the Evaluator's verdict on it. This applies to failed runs too.
 
 Do not fabricate ticket requirements, gate results, test results, commit IDs, or repository state. If an expected harness action is unavailable, state that limitation in the log and follow the stop or failed-closeout rules above.
