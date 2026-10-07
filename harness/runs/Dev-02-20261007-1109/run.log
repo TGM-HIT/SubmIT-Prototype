@@ -15,5 +15,15 @@
 - SPEC CHANGE: none.
 - Latest completed step: commit-scope failure could not be corrected without rewriting the implementation commit; marking the ticket failed for terminal closeout without evaluator dispatch
 - Heartbeat: 2026-10-07 11:11 +02:00 — recording failed closeout and preserving handoff and gate evidence
-- Outcome: failed before evaluation because commit-scope gate failed.
+- Outcome at original closeout: failed before evaluation because commit-scope gate failed.
 - Final implementation commit: `6c058d296b75dd60bba5bdd8f71a865dc4efb78e` (`Add reusable local browser preview workflow`).
+- Follow-up requested: diagnose the failed run, accept the implementation commit, update necessary gates, and support `/favicon.ico`.
+- Diagnosis: the ticket explicitly required package commands, a reusable `frontend/scripts/` workflow, and ignored generated output, but the gate did not allow `frontend/package.json`, `frontend/scripts/`, or `.gitignore`. Thus the implementor was blocked despite delivering ticket-scoped files. Separately, Chrome's default favicon request returned 404, correctly surfaced by the preview tool and causing a normal real-app capture to exit nonzero.
+- Follow-up changes: extended the scope allowlist for those ticket-required paths, the specific public favicon asset, and the scope-gate file; added a valid 32x32 ICO, linked it from the frontend shell, and asserted the icon/header in preview smoke tests.
+- Follow-up verification: original implementation paths and follow-up paths both pass commit-scope. `npm run preview:test` passes (7 tests); frontend typecheck, tests (13), and build pass; backend `./gradlew test` and `./gradlew checkstyleMain` pass. Vite serves `/favicon.ico` with HTTP 200 and `image/x-icon`. Real preview completed successfully, saving a non-empty desktop screenshot; ports 5173 and 8080 were clear afterward. See `evaluation-2.md`.
+- Evaluator follow-up: pass — original Dev-02 implementation commit accepted; prior failure attributed to stale gate allowlist. The authenticated narrow-mobile capture reported in the original handoff was not repeated during follow-up.
+- SPEC CHANGE: none.
+- Follow-up implementation commit: `408ef0924a8b228bcab2ff3b712b125ea8ed6857` (`Allow Dev-02 tooling paths and serve favicon`).
+- Latest completed step: corrective implementation committed; recording successful closeout artifacts
+- Heartbeat: 2026-10-07 11:31 +02:00 — closing out accepted Dev-02 after corrective gate and favicon changes
+- Final outcome: done.
