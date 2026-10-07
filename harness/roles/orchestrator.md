@@ -41,9 +41,19 @@ prints a "FLAG: spec change: <path>" line for each one in the commit. A flag is 
 failure, but it must be carried forward: tell the Evaluator that the spec changed so it
 judges the change, and record it in the run log.
 
-A failed scope gate sends the commit back with the out-of-scope path. Where it
-cannot be sent back, the escalation closes as a failed ticket: record it in the
-run log and continue through failed closeout. There is nobody to escalate to.
+A failed scope gate sends the commit back with the out-of-scope path. Before
+deciding the failure cannot be corrected, compare each rejected path with the
+ticket's explicit scope and required deliverables. If a path is necessary to
+satisfy the ticket, make only a narrow, explicit allowlist change for that path
+in `harness/gates/commit-scope.java`; do not add broad directory exemptions or
+allow unrelated files. The gate must permit its own change path when needed.
+Then rerun the gate against the complete deliverable changed-path list and the
+gate-change path list. Record the original failure, the ticket requirement
+supporting each allowance, and both rerun results in the log. Dispatch the
+Evaluator only after the corrected gate passes. If a rejected path is not
+required by the ticket, or a narrow correction cannot make the gate pass,
+close as failed: record the reason and continue through failed closeout. There
+is nobody to escalate to.
 
 With both gates clean, dispatch the Evaluator with the diff, the ticket, and that
 handoff note, and read its verdict.
