@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url'
 import {
   applyPageInteractions,
   collectBrowserErrors,
+  formatNativeInputFailure,
   parseArgs,
   saveScreenshot,
   stopChild,
@@ -196,6 +197,26 @@ test('does not substitute DevTools keys when native popup selection leaves the v
   assert.deepEqual(keyboardEvents.map(({ key, type }) => [key, type]), [
     ['Tab', 'keyDown'], ['Tab', 'keyUp'],
   ])
+})
+
+test('explains how to recover from macOS Accessibility permission denial', () => {
+  const message = formatNativeInputFailure(
+    1,
+    'execution error: System Events: osascript ist nicht berechtigt, Tastatureingaben zu senden. (1002)',
+  )
+  assert.match(message, /System Settings → Privacy & Security → Accessibility/)
+  assert.match(message, /Terminal when run from Terminal/)
+  assert.match(message, /Visual Studio Code when run from its integrated terminal/)
+  assert.match(message, /not Google Chrome/)
+  assert.match(message, /Quit and reopen that host app/)
+  assert.match(message, /Original osascript error \(1\):.*\(1002\)/)
+})
+
+test('preserves diagnostic output for other native-input failures', () => {
+  assert.equal(
+    formatNativeInputFailure(2, 'application not found'),
+    'macOS native selector input failed (2): application not found',
+  )
 })
 
 test('sends trusted browser pointer events to a native selector', async () => {

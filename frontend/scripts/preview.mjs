@@ -538,9 +538,23 @@ function sendMacNativeSelectKeys({ x, y }, arrowKeyCode, steps) {
     process.once('error', reject)
     process.once('close', (code) => {
       if (code === 0) resolve()
-      else reject(new Error(`macOS native selector input failed (${code}): ${output.trim() || 'no details'}`))
+      else reject(new Error(formatNativeInputFailure(code, output)))
     })
   })
+}
+
+export function formatNativeInputFailure(code, output) {
+  const details = output.trim() || 'no details'
+  if (/1002|not permitted to send keystrokes|not authorized to send keystrokes/i.test(details)) {
+    return [
+      'macOS denied native keyboard input because the preview host app needs Accessibility permission.',
+      'Open System Settings → Privacy & Security → Accessibility and enable the app that launched this preview command:',
+      'Terminal when run from Terminal, or Visual Studio Code when run from its integrated terminal (not Google Chrome).',
+      'If the app is not listed, add it with +. Quit and reopen that host app, then rerun the preview command.',
+      `Original osascript error (${code}): ${details}`,
+    ].join(' ')
+  }
+  return `macOS native selector input failed (${code}): ${details}`
 }
 
 async function navigate(client, url, signal) {
