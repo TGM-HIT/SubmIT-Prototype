@@ -33,6 +33,7 @@ build/
 .gradle/
 frontend/node_modules/
 frontend/dist/
+frontend/.preview/
 frontend/.env.*
 !frontend/.env.example
 !**/src/main/**/build/

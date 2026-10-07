@@ -35,3 +35,9 @@ Run the scripts defined in `frontend/package.json` after frontend code changes:
 - `npm run build`
 
 The production build includes Vue/TypeScript checking. Run all three checks before integrating frontend behavior changes. Documentation-only changes do not require these commands.
+
+## Local browser preview
+
+From `frontend/`, run `npm run preview:help` for the reusable Chrome/CDP preview command and options. `npm run preview -- --viewport mobile --output-dir /tmp/previews --screenshot ideas-mobile.png` starts the frontend and backend, waits for readiness, captures the real page, and shuts down its child processes. Chrome/Chromium and Node.js 22+ are required; `CHROME_BIN` or `--chrome` selects a nonstandard browser path. Default screenshots go to the ignored `frontend/.preview/` directory.
+
+For authenticated previews, use a testing-profile account already documented in `backend/DEV-GUIDELINES.md`; the preview tool does not define credentials or seed additional data. For example, set `PREVIEW_PASSWORD` to that documented testing password and run `npm run preview -- --auth --username student01 --path /ideas`. The testing profile provides accounts, not a project-domain data fixture. Use `npm run preview:test` for the no-dependency preview-tool smoke tests.
