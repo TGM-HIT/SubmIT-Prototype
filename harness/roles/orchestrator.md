@@ -19,6 +19,10 @@ At each step of your loop, overwrite harness/runs/<run-id>/heartbeat with one
 line: the current timestamp and the step you just completed. Preflight clean,
 Implementor dispatched, each gate result, Evaluator dispatched, the verdict,
 closeout.
+Take every timestamp in the heartbeat, run log, and `## Metrics` footer (start,
+pause, resume, end) from the system clock at the moment of the step (for example
+`date +%Y-%m-%dT%H:%M%z`); never estimate, round forward, or back-fill one. Only
+the token figure may be an estimate.
 
 Take the ticket ID you are given and read the corresponding
 `harness/tickets/<ticket-id>.md` specification. Confirm the ticket exists in the

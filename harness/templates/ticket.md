@@ -28,6 +28,7 @@ Standard project checks (keep only the blocks matching the ticket's scope; all m
 
 ## One-time manual verification (in addition to automated tests)
 
+- <Label each manual item **Implementor-performed** (reachable with the preview tooling and testing profile; name the fixtures or preview extension that create any needed data through the UI) or **human-only** (needs a real device, second browser, or a judgement a script cannot make). Human-only items go straight to the awaiting-human checklist and do not count against the Implementor's pass. Do not expect a multi-actor, multi-viewport walkthrough from the Implementor unless the ticket names what makes it feasible.>
 - <Give reproducible steps using supported tools, roles, profiles, fixtures, and data.>
 - <Specify what must be observed and what evidence to retain, preferably outside version control.>
 - <State how to handle errors or unavailable states; never claim checks that were not performed.>

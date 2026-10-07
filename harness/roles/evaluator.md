@@ -57,3 +57,5 @@ implementation gap remains, return `revise` and let the Orchestrator close the
 run as failed rather than dispatching a fourth Implementor.
 
 Run this seat on the most-capable model tier at a high thinking level: judging whether a change is done is judgment work, and it gets the judgment model.
+
+Manual items the ticket labels **human-only** are reported as human-pending items; they do not count against the Implementor's pass, and alone they justify `awaiting-human`, not `revise`.
