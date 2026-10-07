@@ -15,11 +15,16 @@
 
 Durable automated tests (join the build):
 
-- <List exact commands, with working directories, required for this ticket.>
 - <Name required automated regression scenarios and observable outcomes.>
-- <If API annotations/contracts/types change, state the repository's generation and review workflow.>
 
-<Delete this subsection if no new automated tests or application checks apply, and explain why below.>
+Standard project checks (keep only the blocks matching the ticket's scope; all must pass, and the Evaluator re-runs them):
+
+- Backend changes (backend-only or full-stack), from `backend/`: `./gradlew test` and `./gradlew checkstyleMain`.
+- Frontend changes (frontend-only or full-stack), from `frontend/`: `npm run typecheck`, `npm test`, and `npm run build`.
+- Backend API annotation, request/response model, or validation changes: from `backend/` run `./gradlew generateOpenApi`, review the `contracts/openapi.yaml` diff, then from `frontend/` run `npm run api:types` if the frontend consumes the change.
+- Documentation-only or harness-only changes: no checks required; say so explicitly.
+
+<Backend-only tickets omit the frontend block; frontend-only tickets omit the backend and API-generation blocks. Delete this section's tests only if no automated tests apply, and explain why.>
 
 #### One-time manual verification (in addition to automated tests)
 
@@ -27,7 +32,15 @@ Durable automated tests (join the build):
 - <Specify what must be observed and what evidence to retain, preferably outside version control.>
 - <State how to handle errors or unavailable states; never claim checks that were not performed.>
 
-<Delete this subsection only if the ticket has no manual verification requirement.>
+For UI-visible work, use the local browser preview documented in `frontend/DEV-GUIDELINES.md` (not one-off scripts):
+
+- Authenticate with the testing accounts and profile documented in `backend/DEV-GUIDELINES.md`; do not hard-code credentials.
+- Capture desktop and mobile viewports for every affected state; store screenshots outside version control.
+- Investigate any console or failed-request errors and report them.
+- If a state cannot be reached, make a minimal reusable extension to the preview tooling rather than a one-off workaround.
+- Keep fixtures and test data isolated to the testing profile.
+
+<Backend-only tickets replace the preview block with API-level verification (tests or documented requests). Delete this subsection only if the ticket has no manual verification requirement.>
 
 #### Acceptance criteria (the Evaluator judges)
 
@@ -35,6 +48,8 @@ Durable automated tests (join the build):
 - <Cover relevant success, failure, authorization, validation, and boundary cases.>
 - <State required regression checks and any constraints that must remain unchanged.>
 - <For presentation work, identify target viewports and measurable/observable layout outcomes.>
+- Standard (all tickets): the standard project checks pass; existing behavior outside the stated scope is unchanged; no unrelated cleanups; generated files (such as `contracts/openapi.yaml`) are not hand-edited or committed; no check is claimed that was not performed.
+- Standard (presentation-only tickets): no backend or API changes.
 
 #### Optional: Current-state triage
 
@@ -42,4 +57,4 @@ Durable automated tests (join the build):
 
 #### Optional: Specification changes
 
-<If product/API specification changes may be required, state which specifications can change and what must be regenerated/reviewed. Otherwise omit.>
+<If product/API specification changes may be required, state which `SPEC.md` files can change and what must be regenerated/reviewed. Any specification change must be declared in the handoff. Edit `DEV-GUIDELINES.md` files only when the change requires it. Otherwise omit.>
