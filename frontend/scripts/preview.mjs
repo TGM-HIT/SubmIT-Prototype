@@ -18,7 +18,7 @@ const defaults = {
 }
 
 export function parseArgs(args) {
-  const options = { ...defaults, start: true, auth: false }
+  const options = { ...defaults, start: true, auth: false, fill: [], click: [], waitFor: [], expandSelect: [] }
   const valueOptions = new Map([
     ['--url', 'url'],
     ['--path', 'pagePath'],
@@ -33,6 +33,10 @@ export function parseArgs(args) {
     ['--password-env', 'passwordEnv'],
     ['--chrome', 'chrome'],
     ['--startup-timeout', 'startupTimeout'],
+    ['--fill', 'fill'],
+    ['--click', 'click'],
+    ['--wait-for', 'waitFor'],
+    ['--expand-select', 'expandSelect'],
   ])
   for (let index = 0; index < args.length; index += 1) {
     const flag = args[index]
@@ -45,7 +49,16 @@ export function parseArgs(args) {
     } else if (valueOptions.has(flag)) {
       const value = args[index + 1]
       if (!value || value.startsWith('--')) throw new Error(`${flag} requires a value.`)
-      options[valueOptions.get(flag)] = value
+      const name = valueOptions.get(flag)
+      if (name === 'fill') {
+        const separator = value.indexOf('=')
+        if (separator < 1) throw new Error('--fill must use SELECTOR=VALUE.')
+        options.fill.push({ selector: value.slice(0, separator), value: value.slice(separator + 1) })
+      } else if (name === 'click' || name === 'waitFor' || name === 'expandSelect') {
+        options[name].push(value)
+      } else {
+        options[name] = value
+      }
       index += 1
     } else {
       throw new Error(`Unknown argument: ${flag}`)
@@ -302,6 +315,79 @@ export function collectBrowserErrors(client) {
   return errors
 }
 
+async function evaluatePage(client, expression, description) {
+  const evaluation = await client.send('Runtime.evaluate', {
+    expression,
+    awaitPromise: true,
+    returnByValue: true,
+  })
+  if (evaluation.exceptionDetails) {
+    throw new Error(`Could not ${description}: ${evaluation.exceptionDetails.exception?.description ?? evaluation.exceptionDetails.text}`)
+  }
+  return evaluation.result?.value
+}
+
+export async function applyPageInteractions(client, options) {
+  for (const { selector, value } of options.fill ?? []) {
+    const expression = `(selector, value) => {
+      const element = document.querySelector(selector);
+      if (!element) throw new Error('No element matches ' + selector);
+      let prototype;
+      if (element instanceof HTMLInputElement) prototype = HTMLInputElement.prototype;
+      else if (element instanceof HTMLTextAreaElement) prototype = HTMLTextAreaElement.prototype;
+      else if (element instanceof HTMLSelectElement) prototype = HTMLSelectElement.prototype;
+      else throw new Error('Element is not a fillable input, textarea, or select: ' + selector);
+      Object.getOwnPropertyDescriptor(prototype, 'value').set.call(element, value);
+      element.dispatchEvent(new Event('input', { bubbles: true }));
+      element.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    }`
+    await evaluatePage(client, `(${expression})(${JSON.stringify(selector)}, ${JSON.stringify(value)})`, `fill ${selector}`)
+    console.log(`Filled ${selector}.`)
+  }
+  for (const selector of options.click ?? []) {
+    const expression = `(selector) => {
+      const element = document.querySelector(selector);
+      if (!element) throw new Error('No element matches ' + selector);
+      if (!(element instanceof HTMLElement)) throw new Error('Element is not clickable: ' + selector);
+      element.click();
+      return true;
+    }`
+    await evaluatePage(client, `(${expression})(${JSON.stringify(selector)})`, `click ${selector}`)
+    console.log(`Clicked ${selector}.`)
+  }
+  for (const selector of options.waitFor ?? []) {
+    const expression = `(selector) => new Promise((resolve, reject) => {
+      const deadline = Date.now() + 10000;
+      const check = () => {
+        try {
+          if (document.querySelector(selector)) return resolve(true);
+        } catch (error) {
+          return reject(error);
+        }
+        if (Date.now() >= deadline) return reject(new Error('Timed out waiting for ' + selector));
+        setTimeout(check, 100);
+      };
+      check();
+    })`
+    await evaluatePage(client, `(${expression})(${JSON.stringify(selector)})`, `wait for ${selector}`)
+    console.log(`Found ${selector}.`)
+  }
+  for (const selector of options.expandSelect ?? []) {
+    const expression = `(selector) => {
+      const element = document.querySelector(selector);
+      if (!element) throw new Error('No element matches ' + selector);
+      if (!(element instanceof HTMLSelectElement)) throw new Error('Element is not a select: ' + selector);
+      if (!element.options.length) throw new Error('Select has no options: ' + selector);
+      element.size = element.options.length;
+      element.style.height = (element.options.length * 2.5) + 'em';
+      return element.options.length;
+    }`
+    const count = await evaluatePage(client, `(${expression})(${JSON.stringify(selector)})`, `expand options for ${selector}`)
+    console.log(`Expanded ${selector} to show ${count} options.`)
+  }
+}
+
 async function navigate(client, url, signal) {
   if (signal?.aborted) throw new Error('Preview interrupted.')
   let loadHandler
@@ -402,6 +488,7 @@ async function launchBrowser(options, url, { signal, onBrowser, onClient, env })
       await login(client, options.username, password)
       await navigate(client, url, signal)
     }
+    await applyPageInteractions(client, options)
     await new Promise((resolve) => setTimeout(resolve, 250))
     const evaluation = await client.send('Runtime.evaluate', {
       expression: '({ title: document.title, url: location.href })',
@@ -439,6 +526,10 @@ Options:
   --screenshot FILE               Screenshot filename (default preview.png)
   --path PATH                     Page path to inspect, e.g. /login or /ideas
   --auth --username USER          Authenticate using the local testing account
+  --fill SELECTOR=VALUE           Fill an input, textarea, or select; may be repeated
+  --click SELECTOR                Click an element; may be repeated
+  --wait-for SELECTOR             Wait for an element after interactions; may be repeated
+  --expand-select SELECTOR        Show all native select options inline for screenshot inspection
   --password-env NAME             Environment variable containing its password (default PREVIEW_PASSWORD)
   --frontend-port N               Vite port (default 5173)
   --backend-port N                Backend port (default 8080)
@@ -449,6 +540,8 @@ Options:
 
 For authenticated inspection, set PREVIEW_PASSWORD using the password documented in
 backend/DEV-GUIDELINES.md and pass --username student01 (or another documented account).
+Use --fill, --click, --wait-for, and --expand-select to perform reusable preview interactions after authentication,
+for example to load a form that requires a project ID before its details are shown.
 `
 }
 

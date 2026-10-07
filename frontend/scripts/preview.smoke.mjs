@@ -7,6 +7,7 @@ import path from 'node:path'
 import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 import {
+  applyPageInteractions,
   collectBrowserErrors,
   parseArgs,
   saveScreenshot,
@@ -19,6 +20,13 @@ test('parses preview options and rejects incomplete or invalid invocations', () 
   assert.equal(parseArgs([]).start, true)
   assert.equal(parseArgs(['--viewport', 'mobile', '--output-dir', '/tmp/previews']).viewport, 'mobile')
   assert.equal(parseArgs(['--no-start', '--url', 'http://localhost:5173']).start, false)
+  assert.deepEqual(parseArgs([
+    '--fill', '#project-id=fixture=id',
+    '--click', 'form button[type="submit"]',
+    '--wait-for', '#formal-decision',
+    '--expand-select', '#formal-decision',
+  ]).fill, [{ selector: '#project-id', value: 'fixture=id' }])
+  assert.throws(() => parseArgs(['--fill', 'missing-separator']), /SELECTOR=VALUE/)
   assert.throws(() => parseArgs(['--wat']), /Unknown argument/)
   assert.throws(() => parseArgs(['--no-start']), /requires --url/)
   assert.throws(() => parseArgs(['--viewport', 'tablet']), /desktop or mobile/)
@@ -28,6 +36,29 @@ test('parses preview options and rejects incomplete or invalid invocations', () 
     () => parseArgs(['--auth', '--username', 'student01', '--no-start', '--url', 'https://example.com']),
     /restricted to localhost/,
   )
+})
+
+test('performs requested page interactions in fill, click, wait, then expand order', async () => {
+  const expressions = []
+  await applyPageInteractions({
+    async send(method, params) {
+      assert.equal(method, 'Runtime.evaluate')
+      expressions.push(params.expression)
+      return { result: { value: params.expression.includes('element.options.length;') ? 3 : true } }
+    },
+  }, {
+    fill: [{ selector: '#project-id', value: 'fixture" value' }],
+    click: ['form button[type="submit"]'],
+    waitFor: ['#formal-decision'],
+    expandSelect: ['#formal-decision'],
+  })
+  assert.equal(expressions.length, 4)
+  assert.match(expressions[0], /#project-id/)
+  assert.match(expressions[0], /fixture\\" value/)
+  assert.match(expressions[1], /form button\[type=\\"submit\\"\]/)
+  assert.match(expressions[2], /#formal-decision/)
+  assert.match(expressions[3], /element\.size = element\.options\.length/)
+  assert.match(expressions[3], /element\.style\.height/)
 })
 
 test('selects repeatable desktop and narrow-mobile viewport dimensions', () => {
