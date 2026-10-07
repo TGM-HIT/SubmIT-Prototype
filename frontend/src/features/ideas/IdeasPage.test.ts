@@ -147,6 +147,58 @@ describe('IdeasPage review and details dialogs', () => {
     page.unmount()
   })
 
+  it('keeps full-specification review completion and history display unchanged from Details & history', async () => {
+    state.role = 'TEACHER'
+    const updatedIdea = {
+      ...idea('ACCEPTED_FOR_APPLICATIONS'),
+      id: 'idea-SPECIFICATION_SUBMITTED',
+      reviews: [{
+        id: 'spec-review-1',
+        reviewType: 'SPECIFICATION',
+        decision: 'ACCEPT_FOR_APPLICATIONS',
+        feedback: 'The specification is ready.',
+        teacherId: 'teacher-1',
+        workSize: 4,
+      }],
+    }
+    api.list.mockResolvedValueOnce(pageIdeas('SPECIFICATION_SUBMITTED'))
+      .mockResolvedValueOnce(pageIdeas('ACCEPTED_FOR_APPLICATIONS'))
+    api.get.mockResolvedValueOnce({
+      ...idea('SPECIFICATION_SUBMITTED'),
+      reviews: [{
+        id: 'spec-review-1',
+        reviewType: 'SPECIFICATION',
+        decision: 'REQUEST_REVISION',
+        feedback: 'Revise the full specification.',
+        teacherId: 'teacher-1',
+        workSize: 4,
+      }],
+    }).mockResolvedValueOnce(updatedIdea)
+    const page = mountPage()
+    await flushPromises()
+
+    await page.get('#details-button-idea-SPECIFICATION_SUBMITTED').trigger('click')
+    await flushPromises()
+    await page.get('#review-from-details').trigger('click')
+    await flushPromises()
+    await page.get('#feedback').setValue('The specification is ready.')
+    await page.get('[role="dialog"] form').trigger('submit')
+    await flushPromises()
+
+    expect(api.review).toHaveBeenCalledWith('idea-SPECIFICATION_SUBMITTED', expect.objectContaining({
+      decision: 'ACCEPT_FOR_APPLICATIONS',
+      feedback: 'The specification is ready.',
+    }), true)
+    expect(document.body.querySelectorAll('[role="dialog"]')).toHaveLength(1)
+    const detailsDialog = page.get('[role="dialog"]')
+    expect(detailsDialog.text()).toContain('Idea details & history')
+    expect(detailsDialog.text()).toContain('The specification is ready.')
+    expect(detailsDialog.text()).toContain('Teacher teacher-1 · ratings reflect professional judgement')
+    expect(detailsDialog.text()).not.toContain('Ratings:')
+    expect(document.activeElement).not.toBe(document.getElementById('details-button-idea-SPECIFICATION_SUBMITTED'))
+    page.unmount()
+  })
+
   it('closes a nested review flow, refreshes history, and focuses Details & history', async () => {
     state.role = 'TEACHER'
     const reviewedList = pageIdeas('IDEA_APPROVED_FOR_SPECIFICATION')

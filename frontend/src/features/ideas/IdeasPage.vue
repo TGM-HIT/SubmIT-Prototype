@@ -76,7 +76,7 @@
         <div><p class="eyebrow">LIFECYCLE</p><p><span class="status-badge">{{ readable(selectedIdea.status) }}</span></p><p class="notice">{{ lifecycleMessage(selectedIdea.status) }}</p><div v-if="selectedIdea.specification"><strong>Specification</strong><p class="muted">Objectives: {{ selectedIdea.specification.objectives?.join(' · ') }}</p><p class="muted">Scope: {{ selectedIdea.specification.scope }}</p></div></div>
       </div>
       <h3 class="form-section-title">Teacher decision history</h3>
-      <div v-if="selectedIdea.reviews?.length" class="data-list"><article v-for="review in selectedIdea.reviews" :key="review.id" class="data-row"><div class="row-main"><h3>{{ readable(review.decision) }}</h3><p>{{ review.feedback }}</p><p class="muted">Teacher {{ review.teacherId }}</p><p v-if="recordedRatings(review).length" class="muted">Ratings: {{ recordedRatings(review).join(' · ') }}</p></div></article></div>
+      <div v-if="selectedIdea.reviews?.length" class="data-list"><article v-for="review in selectedIdea.reviews" :key="review.id" class="data-row"><div class="row-main"><h3>{{ readable(review.decision) }}</h3><p>{{ review.feedback }}</p><p class="muted">Teacher {{ review.teacherId }}<template v-if="review.reviewType === 'SPECIFICATION'"> · ratings reflect professional judgement</template></p><p v-if="recordedRatings(review).length" class="muted">Ratings: {{ recordedRatings(review).join(' · ') }}</p></div></article></div>
       <p v-else class="muted">No teacher decisions have been recorded.</p>
       <h3 v-if="selectedIdea.supervisionPreferences?.length" class="form-section-title">Recorded supervision preferences</h3>
       <div v-for="entry in selectedIdea.supervisionPreferences ?? []" :key="entry.id" class="choice-item"><span>{{ entry.teacherId }} · {{ readable(entry.preference) }}</span><span class="muted">{{ entry.note }}</span></div>
@@ -326,6 +326,13 @@ async function submitReview(): Promise<void> {
   if (result) {
     const idea = selectedIdea.value!
     await selectIdea(idea)
+    if (isSpecReview.value) {
+      await load(page.value.page)
+      reviewOpen.value = false
+      if (!detailsOpen.value) selectedIdea.value = null
+      return
+    }
+
     const updatedStatus = selectedIdea.value?.status
     if (statusFilter.value && updatedStatus && statusFilter.value !== updatedStatus) {
       // Follow the idea to its new status so it stays in the list and keeps its focus target.

@@ -91,12 +91,19 @@ class IdeaReviewControllerTest {
                 .andExpect(jsonPath("$.reviews[0].technicalComplexity").doesNotExist());
 
         String missingFeedbackIdea = submitIdea("Missing decline feedback");
+        String missingRevisionFeedbackIdea = submitIdea("Missing revision feedback");
         String blankFeedbackIdea = submitIdea("Blank revision feedback");
         review(missingFeedbackIdea, Map.of("decision", "DECLINE"), teacherToken)
+                .andExpect(status().isBadRequest());
+        review(missingRevisionFeedbackIdea, Map.of("decision", "REQUEST_REVISION"), teacherToken)
                 .andExpect(status().isBadRequest());
         review(blankFeedbackIdea, Map.of("decision", "REQUEST_REVISION", "feedback", "  "), teacherToken)
                 .andExpect(status().isBadRequest());
         getIdea(missingFeedbackIdea, studentToken)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("IDEA_SUBMITTED"))
+                .andExpect(jsonPath("$.reviews.length()").value(0));
+        getIdea(missingRevisionFeedbackIdea, studentToken)
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("IDEA_SUBMITTED"))
                 .andExpect(jsonPath("$.reviews.length()").value(0));
