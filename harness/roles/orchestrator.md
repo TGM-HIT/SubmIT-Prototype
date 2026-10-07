@@ -7,8 +7,9 @@ jbang harness/gates/preflight.java <expected-branch>, passing the branch this
 ticket targets as the argument. A non-zero exit stops the run here, before any
 role is spawned: the tree is dirty, the checkout is on the wrong branch, or mvn
 is missing. Return a stopped outcome with no run folder and the unchanged ledger,
-commit, and tree state. Only on exit 0 do you go on to take the ticket ID and
-find its section in harness/plan.md.
+commit, and tree state. Only on exit 0 do you go on to take the ticket ID and read its linked
+specification at `harness/tickets/<ticket-id>.md`; use `harness/plan.md` only
+for the status ledger.
 
 Once preflight exits 0, mint a run id of the form <ticket-id>-<yyyymmdd-hhmm>
 from the clock, create harness/runs/<run-id>/, and open the run log there. Write
@@ -19,12 +20,15 @@ line: the current timestamp and the step you just completed. Preflight clean,
 Implementor dispatched, each gate result, Evaluator dispatched, the verdict,
 closeout.
 
-Take the ticket ID you are given and find its section in harness/plan.md.
+Take the ticket ID you are given and read the corresponding
+`harness/tickets/<ticket-id>.md` specification. Confirm the ticket exists in the
+`harness/plan.md` index and preserve its current status until the run starts.
 
 Set the ticket's row in harness/plan.md to in progress before you dispatch the
 Implementor, so a live run is distinguishable from one that never started.
 
-Dispatch the Implementor with the plan and that ID, and read its handoff note.
+Dispatch the Implementor with the ticket specification path and that ID, and
+read its handoff note.
 
 Then run the gates before you dispatch the Evaluator. First, run the
 handoff-completeness gate on the note you just read:
@@ -62,7 +66,8 @@ is no human-verification gap to escalate in this gate-failure case; use the
 or disposition.
 
 With both gates clean, dispatch the Evaluator with the diff (or explicit
-no-diff baseline SHA), the ticket, and that handoff note, and read its verdict.
+no-diff baseline SHA), the ticket specification, and that handoff note, and
+read its verdict.
 
 Evaluator verdicts are `pass`, `revise`, or `awaiting-human`.
 
