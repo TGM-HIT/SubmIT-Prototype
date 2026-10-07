@@ -7,7 +7,7 @@
 | Bug-01 | done |
 | Bug-02 | done |
 | Bug-03 | failed |
-| Bug-03a | to-do |
+| Bug-03a | done |
 | Bug-03b | to-do |
 | Bug-03c | to-do |
 | Bug-03d | to-do |

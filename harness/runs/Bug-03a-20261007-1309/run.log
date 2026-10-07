@@ -1,0 +1,35 @@
+# Bug-03a run log
+
+- Ticket: Bug-03a — Provide a local fixture for conditional selector verification.
+- Run ID: Bug-03a-20261007-1309.
+- Expected branch: `main`.
+- Preflight: `java harness/gates/preflight.java main` passed at 2026-10-07 13:09 +02:00; output: `OK: preflight clean; backend and frontend toolchains available`.
+- Initial repository commit reported by caller: `c22ec612a6f061a8e55e27aa82bf59c589cd4d28`.
+- Plan context inspected: ticket scope, mechanics, and acceptance criteria; Dev-01 credentials and Dev-02 preview requirements; `CLAUDE.md` workflow checks; available handoff and commit-scope gates.
+- Ticket status set to `in progress` before Implementor dispatch.
+- SPEC changes: none known at run start.
+
+## Progress
+
+2026-10-07 13:09 +02:00 — Preflight passed; plan and applicable gates inspected; run folder created; ticket marked in progress.
+
+The following intermediate events occurred in sequence after preflight and before closeout. Their exact times were not recorded contemporaneously; this log records their order and results rather than assigning invented timestamps:
+
+- Implementor dispatched; handoff received for commit `a1046a573d2067a441251b74c4c728bd4024d007`. Implementor reported backend tests and Checkstyle passed and the initial Dev-02 teacher preview screenshot captured, but the decision selector was not visually verified because the page required an interaction the workflow did not yet support. Handoff-completeness gate passed.
+- Captured that commit's changed paths in `changed-paths.txt`; commit-scope gate passed, no SPEC flags.
+- Evaluator-1 returned **revise**. It independently reran backend tests, Checkstyle, and `git diff --check` successfully, and confirmed the authenticated route was shown but the application/decision selector was not loaded. It required route evidence showing the actual selector/options using reusable Dev-02 tooling, not a one-off script.
+- Fresh Implementor revision handoff received for `c4f68a684254b0fff5069c2b29566f5c61591bb7`. The revision extends the reusable preview workflow and docs/smoke tests. Handoff-completeness gate passed. Implementor reports applicable backend/frontend checks passed and that the fixture was loaded and screenshot showed all three options.
+- Captured revision commit paths in `changed-paths-revise-1.txt`; revision commit-scope gate passed, no SPEC flags.
+- Evaluator-2 returned **pass** after independently reviewing both commits and handoffs, rerunning backend/frontend/preview checks, and inspecting the screenshot with the submitted synthetic fixture and **Approve**, **Request revisions**, and **Decline** options visible. It found the change remained reusable tooling, not one-off tooling; no production API/behavior or SPEC changes. Evaluator reported no preview listeners/processes remained; an unrelated pre-existing Chrome renderer was left untouched.
+
+## Closeout
+
+- Outcome: done; acceptance criteria passed after one revise cycle.
+- Deliverable commits: `a1046a573d2067a441251b74c4c728bd4024d007` and `c4f68a684254b0fff5069c2b29566f5c61591bb7`.
+- Gates: both handoff-completeness and commit-scope gates passed for each deliverable commit.
+- SPEC changes: none.
+- Ledger: ticket row set to `done`; run artifact and ledger closeout commit is pending.
+
+## Metrics
+
+- Token usage: estimate unavailable; no launcher usage report was available to the orchestrator at closeout.
