@@ -180,6 +180,36 @@ describe('IdeasPage review and details dialogs', () => {
     page.unmount()
   })
 
+  it('keeps the reviewed idea listed and focuses Details & history when a status filter is active', async () => {
+    state.role = 'TEACHER'
+    const reviewed = { ...idea('IDEA_APPROVED_FOR_SPECIFICATION'), id: 'idea-IDEA_SUBMITTED' }
+    api.list.mockImplementation(async (_index: number, status?: string) => {
+      if (status === 'IDEA_SUBMITTED') return pageIdeas('IDEA_SUBMITTED')
+      if (status === 'IDEA_APPROVED_FOR_SPECIFICATION') return { ...pageIdeas(), content: [reviewed], totalElements: 1 }
+      return pageIdeas('IDEA_SUBMITTED')
+    })
+    api.get.mockImplementation(async (id: string) => (api.review.mock.calls.length
+      ? reviewed
+      : { ...idea('IDEA_SUBMITTED'), id }))
+    const page = mountPage()
+    await flushPromises()
+    await page.get('#status-filter').setValue('IDEA_SUBMITTED')
+    await flushPromises()
+    api.list.mockClear()
+
+    await page.get('#review-button-idea-IDEA_SUBMITTED').trigger('click')
+    await flushPromises()
+    await page.get('#feedback').setValue('Please continue.')
+    await page.get('[role="dialog"] form').trigger('submit')
+    await flushPromises()
+
+    expect(api.list).toHaveBeenCalledTimes(1)
+    expect(api.list).toHaveBeenCalledWith(0, 'IDEA_APPROVED_FOR_SPECIFICATION')
+    expect((page.get('#status-filter').element as HTMLSelectElement).value).toBe('IDEA_APPROVED_FOR_SPECIFICATION')
+    expect(document.activeElement).toBe(document.getElementById('details-button-idea-IDEA_SUBMITTED'))
+    page.unmount()
+  })
+
   it.each(['REQUEST_REVISION', 'DECLINE'])(
     'allows an idea %s with feedback and no ratings',
     async (decision) => {

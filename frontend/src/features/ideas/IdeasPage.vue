@@ -307,7 +307,15 @@ async function submitReview(): Promise<void> {
   if (result) {
     const idea = selectedIdea.value!
     await selectIdea(idea)
-    await load(page.value.page)
+    const updatedStatus = selectedIdea.value?.status
+    if (statusFilter.value && updatedStatus && statusFilter.value !== updatedStatus) {
+      // Follow the idea to its new status so it stays in the list and keeps its focus target.
+      skipFilterReload = true
+      statusFilter.value = updatedStatus
+      await load(0)
+    } else {
+      await load(page.value.page)
+    }
     reviewOpen.value = false
     detailsOpen.value = false
     selectedIdea.value = null
@@ -326,7 +334,14 @@ async function assignSupervisor(): Promise<void> {
   teacherId.value = ''
   await selectIdea(selectedIdea.value)
 }
-watch(statusFilter, () => void load(0))
+let skipFilterReload = false
+watch(statusFilter, () => {
+  if (skipFilterReload) {
+    skipFilterReload = false
+    return
+  }
+  void load(0)
+})
 onMounted(async () => {
   const [years] = await Promise.all([
     task.run(() => periodsApi.years()),
