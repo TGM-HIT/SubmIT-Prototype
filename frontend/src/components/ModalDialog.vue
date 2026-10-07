@@ -40,7 +40,7 @@ function closeModal(): void {
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref, useId } from 'vue'
 
-const props = defineProps<{ title: string; returnFocus?: HTMLElement | null }>()
+const props = defineProps<{ title: string; returnFocus?: HTMLElement | null; fallbackFocus?: HTMLElement | null }>()
 const emit = defineEmits<{ close: [] }>()
 
 const titleId = useId()
@@ -63,7 +63,18 @@ onBeforeUnmount(() => {
       : previousFocus?.id
         ? document.getElementById(previousFocus.id)
         : null
-    target?.focus()
+    if (target?.isConnected) {
+      target.focus()
+      return
+    }
+
+    const remainingDialogs = [...document.querySelectorAll<HTMLElement>('[role="dialog"]')]
+    const activeDialog = remainingDialogs.sort((left, right) =>
+      Number(right.parentElement?.style.zIndex ?? 0) - Number(left.parentElement?.style.zIndex ?? 0))[0]
+    const fallback = activeDialog?.querySelector<HTMLElement>(focusableSelector)
+      ?? activeDialog
+      ?? (props.fallbackFocus?.isConnected ? props.fallbackFocus : null)
+    fallback?.focus()
   })
 })
 

@@ -23,7 +23,7 @@
       <div class="actions"><button class="button" :disabled="task.loading.value">{{ task.loading.value ? 'Saving…' : 'Save draft' }}</button><button class="button button-secondary" type="button" @click="editorOpen = false">Cancel</button></div>
     </form>
 
-    <ModalDialog v-if="reviewOpen && selectedIdea" :title="isSpecReview ? 'Review full specification' : 'Review idea'" :return-focus="reviewReturnFocus" @close="closeReview">
+    <ModalDialog v-if="reviewOpen && selectedIdea" :title="isSpecReview ? 'Review full specification' : 'Review idea'" :return-focus="reviewReturnFocus" :fallback-focus="reviewFallbackFocus" @close="closeReview">
       <form class="stack" @submit.prevent="submitReview">
         <p class="muted">Ratings inform discussion and do not automatically determine the decision.</p>
         <div class="grid grid-2">
@@ -55,7 +55,7 @@
               <span class="status-badge" :class="`status-${idea.status?.toLowerCase()}`">{{ readable(idea.status) }}</span>
             </div>
             <div class="actions">
-              <button :id="`details-button-${idea.id}`" class="button button-secondary button-small" type="button" @click="openDetails(idea, $event)">Details &amp; history</button>
+              <button :id="`details-button-${idea.id}`" data-review-focus-fallback class="button button-secondary button-small" type="button" @click="openDetails(idea, $event)">Details &amp; history</button>
               <button v-if="isTeacher && canReview(idea)" :id="`review-button-${idea.id}`" class="button button-small" type="button" @click="startReview(idea, $event)">Review</button>
               <button v-if="isStudent && editable(idea)" class="button button-secondary button-small" type="button" @click="editIdea(idea)">Edit</button>
               <button v-if="isStudent && editable(idea)" class="button button-small" type="button" @click="submitIdea(idea)">Submit</button>
@@ -143,6 +143,7 @@ const editorOpen = ref(false)
 const specEditorOpen = ref(false)
 const reviewOpen = ref(false)
 const reviewReturnFocus = ref<HTMLElement | null>(null)
+const reviewFallbackFocus = ref<HTMLElement | null>(null)
 const editingId = ref('')
 const isSpecReview = ref(false)
 const preference = ref('WILLING_TO_SUPERVISE')
@@ -202,6 +203,7 @@ function closeDetails(): void {
 }
 async function startReview(idea: Idea, event: MouseEvent): Promise<void> {
   reviewReturnFocus.value = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+  reviewFallbackFocus.value = reviewReturnFocus.value?.closest('.data-row')?.querySelector<HTMLElement>('[data-review-focus-fallback]') ?? null
   selectedIdea.value = null
   await selectIdea(idea)
   if (selectedIdea.value && canReview(selectedIdea.value)) openReview()
@@ -263,7 +265,10 @@ async function submitSpecification(): Promise<void> {
 }
 function openReview(event?: MouseEvent): void {
   if (!selectedIdea.value) return
-  if (event) reviewReturnFocus.value = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+  if (event) {
+    reviewReturnFocus.value = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+    reviewFallbackFocus.value = null
+  }
   isSpecReview.value = selectedIdea.value?.status === 'SPECIFICATION_SUBMITTED'
   reviewForm.decision = isSpecReview.value ? 'ACCEPT_FOR_APPLICATIONS' : 'APPROVE_FOR_SPECIFICATION'
   reviewOpen.value = true
@@ -281,10 +286,10 @@ async function submitReview(): Promise<void> {
   }
   const result = await task.run(() => ideasApi.review(selectedIdea.value!.id!, body, isSpecReview.value), 'Teacher decision recorded.')
   if (result) {
-    reviewOpen.value = false
     const idea = selectedIdea.value!
     await selectIdea(idea)
     await load(page.value.page)
+    reviewOpen.value = false
     if (!detailsOpen.value) selectedIdea.value = null
   }
 }

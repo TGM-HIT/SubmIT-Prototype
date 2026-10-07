@@ -87,8 +87,14 @@ describe('IdeasPage review and details dialogs', () => {
 
   it('opens review directly and submits the existing decision request before closing', async () => {
     state.role = 'TEACHER'
-    api.list.mockResolvedValue(pageIdeas('IDEA_SUBMITTED'))
-    api.get.mockResolvedValue(idea('IDEA_SUBMITTED'))
+    const reviewedList = pageIdeas('IDEA_APPROVED_FOR_SPECIFICATION')
+    reviewedList.content[0].id = 'idea-IDEA_SUBMITTED'
+    api.list.mockResolvedValueOnce(pageIdeas('IDEA_SUBMITTED')).mockResolvedValueOnce(reviewedList)
+    api.get.mockResolvedValueOnce(idea('IDEA_SUBMITTED')).mockResolvedValueOnce({
+      ...idea('IDEA_APPROVED_FOR_SPECIFICATION'),
+      id: 'idea-IDEA_SUBMITTED',
+      reviews: [{ id: 'review-1', decision: 'APPROVE_FOR_SPECIFICATION', feedback: 'Please continue.', teacherId: 'teacher-1' }],
+    })
     const page = mountPage()
     await flushPromises()
 
@@ -112,6 +118,8 @@ describe('IdeasPage review and details dialogs', () => {
     expect(api.review.mock.calls[0][1]).toMatchObject({ workSize: 3, riskAndDependencies: 3 })
     expect(document.body.querySelector('[role="dialog"]')).toBeNull()
     expect(api.list).toHaveBeenCalledTimes(2)
+    expect(document.activeElement).toBe(document.getElementById('details-button-idea-IDEA_SUBMITTED'))
+    expect(page.text()).toContain('Idea approved for specification')
     page.unmount()
   })
 
@@ -136,6 +144,54 @@ describe('IdeasPage review and details dialogs', () => {
       feedback: 'The specification is ready.',
     }), true)
     expect(document.body.querySelector('[role="dialog"]')).toBeNull()
+    page.unmount()
+  })
+
+  it('keeps focus inside details after a successful nested review and refreshes its history', async () => {
+    state.role = 'TEACHER'
+    const reviewedList = pageIdeas('IDEA_APPROVED_FOR_SPECIFICATION')
+    reviewedList.content[0].id = 'idea-IDEA_SUBMITTED'
+    api.list.mockResolvedValueOnce(pageIdeas('IDEA_SUBMITTED')).mockResolvedValueOnce(reviewedList)
+    api.get.mockResolvedValueOnce(idea('IDEA_SUBMITTED')).mockResolvedValueOnce({
+      ...idea('IDEA_APPROVED_FOR_SPECIFICATION'),
+      id: 'idea-IDEA_SUBMITTED',
+      reviews: [{ id: 'review-1', decision: 'APPROVE_FOR_SPECIFICATION', feedback: 'Please continue.', teacherId: 'teacher-1' }],
+    })
+    const page = mountPage()
+    await flushPromises()
+
+    await page.get('#details-button-idea-IDEA_SUBMITTED').trigger('click')
+    await flushPromises()
+    await page.get('#review-from-details').trigger('click')
+    await flushPromises()
+    await page.get('#feedback').setValue('Please continue.')
+    await page.get('[role="dialog"] form').trigger('submit')
+    await flushPromises()
+
+    expect(api.review).toHaveBeenCalledWith('idea-IDEA_SUBMITTED', expect.objectContaining({
+      decision: 'APPROVE_FOR_SPECIFICATION',
+      feedback: 'Please continue.',
+    }), false)
+    expect(document.body.querySelectorAll('[role="dialog"]')).toHaveLength(1)
+    const detailsDialog = document.querySelector<HTMLElement>('[role="dialog"]')
+    if (!detailsDialog) throw new Error('The details dialog was not rendered after review.')
+    expect(detailsDialog.textContent).toContain('Idea approved for specification')
+    expect(detailsDialog.textContent).toContain('Please continue.')
+    expect(page.text()).toContain('Idea approved for specification')
+    expect(detailsDialog.contains(document.activeElement)).toBe(true)
+
+    const focusable = [...detailsDialog.querySelectorAll<HTMLElement>(
+      'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
+    )]
+    for (const element of focusable) {
+      Object.defineProperty(element, 'getClientRects', { configurable: true, value: () => ({ length: 1 }) })
+    }
+    const first = focusable[0]
+    const last = focusable[focusable.length - 1]
+    expect(first).toBe(detailsDialog.querySelector('[aria-label="Close dialog"]'))
+    last.focus()
+    await page.get('[role="dialog"]').trigger('keydown', { key: 'Tab' })
+    expect(document.activeElement).toBe(first)
     page.unmount()
   })
 
