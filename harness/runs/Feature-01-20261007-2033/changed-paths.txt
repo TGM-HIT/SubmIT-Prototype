@@ -1,0 +1,11 @@
+backend/SPEC.md
+backend/src/main/java/com/flightlog/idea/IdeaResponseMapper.java
+backend/src/main/java/com/flightlog/idea/IdeaRules.java
+backend/src/main/java/com/flightlog/idea/IdeaService.java
+backend/src/main/java/com/flightlog/web/ApiDtos.java
+backend/src/test/java/com/flightlog/idea/IdeaReviewControllerTest.java
+docs/SPEC.md
+frontend/SPEC.md
+frontend/src/api/schema.d.ts
+frontend/src/features/ideas/IdeasPage.test.ts
+frontend/src/features/ideas/IdeasPage.vue
