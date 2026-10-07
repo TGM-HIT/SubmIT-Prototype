@@ -1,0 +1,4 @@
+frontend/scripts/preview.mjs
+frontend/scripts/preview.smoke.mjs
+frontend/src/features/applications/ApplicationsPage.test.ts
+frontend/src/styles.layout.test.ts

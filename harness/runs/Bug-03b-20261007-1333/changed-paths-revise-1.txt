@@ -1,0 +1,3 @@
+frontend/DEV-GUIDELINES.md
+frontend/scripts/preview.mjs
+frontend/scripts/preview.smoke.mjs

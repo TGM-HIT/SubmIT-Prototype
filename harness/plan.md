@@ -8,7 +8,7 @@
 | Bug-02 | done |
 | Bug-03 | failed |
 | Bug-03a | done |
-| Bug-03b | to-do |
+| Bug-03b | failed |
 | Bug-03c | to-do |
 | Bug-03d | to-do |
 | Dev-01 | done |
