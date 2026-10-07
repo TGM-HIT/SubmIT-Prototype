@@ -85,10 +85,11 @@ Provide a deterministic, supported local setup that allows a tester to render an
 
 #### Scope and contract
 
-- Prerequisite: complete Dev-01 first and reuse its test-profile teacher account; do not create duplicate fixture accounts.
-- Use the existing local/testing profile conventions; do not create a public production endpoint or enable test data outside an explicitly activated local/testing profile.
+- Reuse the documented Dev-01 `teacher01` testing account; do not create duplicate fixture accounts.
+- Seed the synthetic domain data under the existing `testing` profile, which Dev-02's preview command activates when it starts the backend. Do not create a public production endpoint or enable test data outside an explicitly activated local/testing profile.
 - Provide synthetic, repeatable data containing an allocated project group and a submitted Formal Application that the real frontend route can load as a teacher.
 - Keep the fixture isolated from non-testing runs, safe to initialize repeatedly, and free of real student or teacher data.
+- Use Dev-02's reusable browser preview workflow for authenticated route verification and screenshots; do not add one-off browser scripts or duplicate startup/authentication tooling.
 - Do not change production allocation or formal-application behavior merely to make test data easier to create. If the public workflow itself is found to be defective, report that separately rather than expanding this fixture ticket.
 
 #### Mechanical checks (the Evaluator re-runs)
@@ -99,14 +100,14 @@ Provide a deterministic, supported local setup that allows a tester to render an
 
 #### One-time manual verification (in addition to automated tests)
 
-- Activate the documented local/testing profile and log in as the seeded teacher.
-- Load the actual Formal Applications route and confirm the submitted application's decision selector is rendered with its real options.
+- From `frontend/`, use `npm run preview -- --auth --username teacher01 --path /formal-application --viewport desktop --output-dir /tmp/bug03-preview --screenshot formal-applications.png`, setting `PREVIEW_PASSWORD` to the testing password documented in `backend/DEV-GUIDELINES.md`. The preview command starts the backend with the `testing` profile. Confirm the submitted application's decision selector is rendered with its real options and inspect the saved screenshot.
+- Confirm Dev-02's preview cleanup leaves no frontend, backend, or browser child processes running.
 - Confirm the fixture does not appear when the local/testing profile is inactive.
 
 #### Acceptance criteria (the Evaluator judges)
 
 - A documented, explicit local/testing setup deterministically makes a submitted Formal Application and allocated group available through the real frontend route.
-- The real teacher route displays the conditional decision selector for this fixture.
+- The real teacher route displays the conditional decision selector for this fixture when reached through Dev-02's authenticated preview workflow using the Dev-01 teacher account.
 - Fixture data is synthetic, isolated from normal runs, repeatable, and creates no public endpoint or production behavior change.
 - Backend tests and Checkstyle pass; relevant frontend checks pass if frontend files changed.
 
@@ -131,9 +132,10 @@ Make native dropdowns across feature views match the shared styling of adjacent 
 
 #### One-time manual verification (in addition to automated tests)
 
-- Verify the actual Ideas, Applications (including "Configure period"), Allocation, Formal Applications, Archive, Grading, and Administration views at desktop and narrow mobile widths. Use appropriate roles and representative data; use the Bug-03a fixture for the submitted Formal Applications state.
+- Use Dev-02's `npm run preview` workflow to inspect the actual Ideas, Applications (including "Configure period"), Allocation, Formal Applications, Archive, Grading, and Administration views at desktop and narrow mobile widths; select each with `--viewport desktop` or `--viewport mobile` (see `npm run preview:help`). Authenticate with the documented Dev-01 student or teacher account appropriate to each view; use the Bug-03a fixture for the submitted Formal Applications state. Save screenshots outside version control and inspect each rendered view.
 - In every view, compare select dimensions/alignment with adjacent controls, confirm no horizontal overflow, and verify visible Tab focus plus keyboard option selection on a platform that supports native popup interaction.
 - Confirm labels, options, selected values, disabled states where present, and form submission behavior remain usable and unchanged. Record any state that cannot be exercised; do not claim unperformed checks.
+- If the preview workflow reports browser-console or failed-request errors, investigate and record them rather than treating screenshot creation alone as a passing verification.
 
 #### Acceptance criteria (the Evaluator judges)
 
@@ -162,7 +164,8 @@ Align related summary cards and workflow panels on Overview without changing the
 
 #### One-time manual verification (in addition to automated tests)
 
-- Verify the actual Overview route at desktop and narrow mobile widths. Confirm both specified groups align, remain readable, and do not clip or cause horizontal overflow.
+- Use Dev-02's `npm run preview` workflow to verify the actual Overview route at desktop and narrow mobile widths, selecting `--viewport desktop` or `--viewport mobile` (see `npm run preview:help`) and authenticating with the appropriate documented Dev-01 account when required. Save and inspect screenshots; confirm both specified groups align, remain readable, and do not clip or cause horizontal overflow.
+- If the preview workflow reports browser-console or failed-request errors, investigate and record them rather than treating screenshot creation alone as a passing verification.
 
 #### Acceptance criteria (the Evaluator judges)
 
@@ -190,8 +193,9 @@ Align related fields on the New idea form while preserving the existing form beh
 
 #### One-time manual verification (in addition to automated tests)
 
-- Verify Ideas and reviews > New idea at desktop and narrow mobile widths. Confirm both field pairs align as intended without clipping, unintended wrapping, or horizontal overflow.
+- Use Dev-02's `npm run preview` workflow to verify Ideas and reviews > New idea at desktop and narrow mobile widths, selecting `--viewport desktop` or `--viewport mobile` (see `npm run preview:help`) and authenticating with the documented Dev-01 student account if required. Save and inspect screenshots; confirm both field pairs align as intended without clipping, unintended wrapping, or horizontal overflow.
 - Confirm labels, validation, value binding, and form submission behavior remain usable and unchanged.
+- If the preview workflow reports browser-console or failed-request errors, investigate and record them rather than treating screenshot creation alone as a passing verification.
 
 #### Acceptance criteria (the Evaluator judges)
 
