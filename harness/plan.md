@@ -10,6 +10,8 @@
 
 ## Tickets
 
+Create new ticket specifications from [`templates/ticket.md`](templates/ticket.md), save them as `tickets/<ticket-id>.md`, and add one status row here. Keep requirements in the ticket file; this index is only for status and navigation.
+
 | Ticket | Status | Specification |
 |--------|--------|---------------|
 | [Bug-01](tickets/Bug-01.md) | done | Create Application Period doesn't work |
