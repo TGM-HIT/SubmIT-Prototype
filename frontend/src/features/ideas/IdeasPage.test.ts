@@ -180,12 +180,35 @@ describe('IdeasPage review and details dialogs', () => {
     page.unmount()
   })
 
-  it('keeps the reviewed idea listed and focuses Details & history when a status filter is active', async () => {
+  it('loads a later filtered page to keep the reviewed idea listed and focus Details & history', async () => {
     state.role = 'TEACHER'
-    const reviewed = { ...idea('IDEA_APPROVED_FOR_SPECIFICATION'), id: 'idea-IDEA_SUBMITTED' }
-    api.list.mockImplementation(async (_index: number, status?: string) => {
+    const reviewed = {
+      ...idea('IDEA_APPROVED_FOR_SPECIFICATION'),
+      id: 'idea-IDEA_SUBMITTED',
+      reviews: [{
+        id: 'review-after-refresh',
+        decision: 'APPROVE_FOR_SPECIFICATION',
+        feedback: 'Please continue.',
+        teacherId: 'teacher-1',
+      }],
+    }
+    const laterPage = {
+      ...pageIdeas(),
+      content: [reviewed],
+      page: 1,
+      totalElements: 21,
+      totalPages: 2,
+    }
+    api.list.mockImplementation(async (index: number, status?: string) => {
       if (status === 'IDEA_SUBMITTED') return pageIdeas('IDEA_SUBMITTED')
-      if (status === 'IDEA_APPROVED_FOR_SPECIFICATION') return { ...pageIdeas(), content: [reviewed], totalElements: 1 }
+      if (status === 'IDEA_APPROVED_FOR_SPECIFICATION') {
+        if (index === 1) return laterPage
+        const firstPage = pageIdeas(...Array.from({ length: 20 }, (_, itemIndex) => `IDEA_APPROVED_FOR_SPECIFICATION-${itemIndex}`))
+        firstPage.content.forEach((entry, itemIndex) => { entry.id = `other-idea-${itemIndex}` })
+        firstPage.totalElements = 21
+        firstPage.totalPages = 2
+        return firstPage
+      }
       return pageIdeas('IDEA_SUBMITTED')
     })
     api.get.mockImplementation(async (id: string) => (api.review.mock.calls.length
@@ -203,10 +226,20 @@ describe('IdeasPage review and details dialogs', () => {
     await page.get('[role="dialog"] form').trigger('submit')
     await flushPromises()
 
-    expect(api.list).toHaveBeenCalledTimes(1)
-    expect(api.list).toHaveBeenCalledWith(0, 'IDEA_APPROVED_FOR_SPECIFICATION')
+    expect(api.list.mock.calls).toEqual([
+      [0, 'IDEA_APPROVED_FOR_SPECIFICATION'],
+      [1, 'IDEA_APPROVED_FOR_SPECIFICATION'],
+    ])
     expect((page.get('#status-filter').element as HTMLSelectElement).value).toBe('IDEA_APPROVED_FOR_SPECIFICATION')
-    expect(document.activeElement).toBe(document.getElementById('details-button-idea-IDEA_SUBMITTED'))
+    expect(page.text()).toContain('Idea approved for specification')
+    expect(page.text()).toContain('Page 2 of 2')
+    const detailsButton = document.getElementById('details-button-idea-IDEA_SUBMITTED')
+    expect(detailsButton).not.toBeNull()
+    expect(document.activeElement).toBe(detailsButton)
+    await page.get('#details-button-idea-IDEA_SUBMITTED').trigger('click')
+    await flushPromises()
+    expect(page.get('[role="dialog"]').text()).toContain('Idea approved for specification')
+    expect(page.get('[role="dialog"]').text()).toContain('Please continue.')
     page.unmount()
   })
 

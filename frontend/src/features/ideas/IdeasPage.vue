@@ -195,6 +195,25 @@ function lifecycleMessage(status?: string): string {
 async function load(index = 0): Promise<void> {
   await task.run(async () => { page.value = await ideasApi.list(index, statusFilter.value || undefined) })
 }
+async function reloadReviewedIdea(idea: Idea): Promise<void> {
+  const filter = statusFilter.value || undefined
+  const refreshedPage = await task.run(async () => {
+    const firstPage = await ideasApi.list(0, filter)
+    if (firstPage.content.some((entry) => entry.id === idea.id)) return firstPage
+
+    for (let index = 1; index < firstPage.totalPages; index += 1) {
+      const result = await ideasApi.list(index, filter)
+      if (result.content.some((entry) => entry.id === idea.id)) return result
+    }
+
+    // Keep the just-reviewed item reachable even if list ordering shifts during pagination.
+    return {
+      ...firstPage,
+      content: [idea, ...firstPage.content.filter((entry) => entry.id !== idea.id).slice(0, firstPage.size - 1)],
+    }
+  })
+  if (refreshedPage) page.value = refreshedPage
+}
 async function selectIdea(idea: Idea): Promise<void> {
   const record = await task.run(() => ideasApi.get(idea.id ?? ''))
   if (record) selectedIdea.value = record
@@ -312,10 +331,8 @@ async function submitReview(): Promise<void> {
       // Follow the idea to its new status so it stays in the list and keeps its focus target.
       skipFilterReload = true
       statusFilter.value = updatedStatus
-      await load(0)
-    } else {
-      await load(page.value.page)
     }
+    await reloadReviewedIdea(selectedIdea.value ?? idea)
     reviewOpen.value = false
     detailsOpen.value = false
     selectedIdea.value = null
