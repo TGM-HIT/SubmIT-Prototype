@@ -9,7 +9,7 @@
 - <Define what must change and where.>
 - <State required behavior, constraints, compatibility, and explicit exclusions.>
 - <List real prerequisites, dependencies, or setup/data needed. Remove this bullet if none.>
-- <For UI work, define relevant roles, routes, states, and responsive expectations. For API work, identify behavior/contracts and generation requirements.>
+- <For UI work, define relevant roles, routes, states, and responsive expectations. For API work, identify behavior/contracts and generation requirements. For interactive UI, also state the success-path end state: visible result, refreshed data, and keyboard focus.>
 
 ## Mechanical checks (the Evaluator re-runs)
 
@@ -48,6 +48,7 @@ For UI-visible work, use the local browser preview documented in `frontend/DEV-G
 - <Cover relevant success, failure, authorization, validation, and boundary cases.>
 - <State required regression checks and any constraints that must remain unchanged.>
 - <For presentation work, identify target viewports and measurable/observable layout outcomes.>
+- <For interactive UI (modals, forms, state changes), state the end state after a successful action as well as after cancel: what is visible, what refreshes, and where keyboard focus lands, especially when the triggering control disappears.>
 - Standard (all tickets): the standard project checks pass; existing behavior outside the stated scope is unchanged; no unrelated cleanups; generated files (such as `contracts/openapi.yaml`) are not hand-edited or committed; no check is claimed that was not performed.
 - Standard (presentation-only tickets): no backend or API changes.
 

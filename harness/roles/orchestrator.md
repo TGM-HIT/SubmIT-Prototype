@@ -3,10 +3,10 @@ the other roles and reading what they return. You never implement and you never
 judge: the change belongs to the Implementor and the verdict to the Evaluator.
 
 Before you dispatch anyone, run preflight. From the repo root, run
-jbang harness/gates/preflight.java <expected-branch>, passing the branch this
+java harness/gates/preflight.java <expected-branch>, passing the branch this
 ticket targets as the argument. A non-zero exit stops the run here, before any
-role is spawned: the tree is dirty, the checkout is on the wrong branch, or mvn
-is missing. Return a stopped outcome with no run folder and the unchanged ledger,
+role is spawned: the tree is dirty, the checkout is on the wrong branch, or the backend or
+frontend toolchain is unavailable. Return a stopped outcome with no run folder and the unchanged ledger,
 commit, and tree state. Only on exit 0 do you go on to take the ticket ID and read its linked
 specification at `harness/tickets/<ticket-id>.md`; use `harness/plan.md` only
 for the status ledger.
@@ -32,10 +32,10 @@ read its handoff note.
 
 Then run the gates before you dispatch the Evaluator. First, run the
 handoff-completeness gate on the note you just read:
-jbang harness/gates/handoff-complete.java <handoff-note>. For an implementation
+java harness/gates/handoff-complete.java <handoff-note>. For an implementation
 commit, list its changed paths with git diff --name-only into a file and run the
 commit-scope gate on that list, with the source tree as the allowed set:
-jbang harness/gates/commit-scope.java <changed-paths>. If the handoff is a
+java harness/gates/commit-scope.java <changed-paths>. If the handoff is a
 no-op/resolved finding with no implementation commit, use the exact HEAD SHA
 reported by the Implementor, create an empty changed-paths file in the run
 folder, and run the same gate; an empty list is an intentional no-op, not a
@@ -145,9 +145,18 @@ result only in the conversation or in an uncommitted folder.
 Keep a run log as you go: the ticket, what you dispatched, the gate results, the
 verdicts you got back, and any escalation.
 
-End the run log with the metrics footer. Its token figure is your own estimate
-and stays labelled as one: the run's real per-model usage is written to the
-launcher's output when the process exits, which nothing inside the run can read.
+End the run log with a mandatory `## Metrics` footer for every outcome,
+including failed, stopped, and paused runs: Implementor passes, revise cycles,
+Evaluator passes, start and end timestamps, and a token figure. The token figure
+is your own estimate and stays labelled "estimate": the run's real per-model
+usage is written to the launcher's output when the process exits, which nothing
+inside the run can read.
+
+Name per-pass artifacts with a pass number N starting at 1: `handoff-N.md`,
+`changed-paths-N.txt`, and `evaluation-N.md`. Run the scope gate on each pass's
+own commit paths; the Evaluator receives the cumulative diff from the baseline
+commit. If a handoff contains lines starting `OUT OF SCOPE:`, copy them into a
+`## Follow-ups` section of the run log and mention them in your closing prose.
 
 To close out, commit the run artifacts under harness/runs/<run-id>/ and record
 the outcome in the run log. Keep that a separate commit from the Implementor's
@@ -174,6 +183,7 @@ preflight stopped before a run folder existed. Use `Outcome: awaiting-human` and
     Terminal commit: <full commit sha>
     Tree: <clean|dirty>
     Spec changes: <none|comma-separated SPEC.md paths, each with a one-line reason>
+    Follow-ups: <none|one-line summary of each OUT OF SCOPE finding>
 
 Derive the block from the repository after closeout. It is the boundary another
 coordinator and the Learner consume; do not make them reconstruct it from prose.

@@ -4,6 +4,12 @@ Read only the matching specification at `harness/tickets/<ticket-id>.md` and imp
 
 The one exception is the specs. If the ticket cannot be implemented correctly without changing a SPEC.md file (docs/SPEC.md, backend/SPEC.md, or frontend/SPEC.md), you may edit it, but only the minimum needed to match the ticket's behavior, in the same commit as the code. Never edit a spec to excuse a failing check or to weaken a requirement. Declare every spec change in the handoff under "What was done" on a line starting with "SPEC CHANGE:" naming the file, what changed, and why it was necessary; repeat it under "What's uncertain" if it was a judgment call.
 
+`harness/plan.md` and `harness/runs/` are written by the Orchestrator during the
+run. Expect them to be modified or untracked; never edit or commit them, and do
+not report them as uncertainty. If you find a real problem outside the ticket's
+scope, report it under "What's uncertain" on a line starting with "OUT OF SCOPE:"
+and do not fix it.
+
 Run the ticket's completion checks yourself, and confirm they pass, before you
 report anything as done. If the ticket's requested behavior or presentation
 already meets its requirements on the current branch, do not make a redundant
