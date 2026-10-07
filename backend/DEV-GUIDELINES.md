@@ -42,3 +42,20 @@ Use unit, slice, integration, and limited end-to-end tests at the appropriate bo
 - Pagination, consistent API errors, transactions, and audit history for significant state changes.
 
 From `backend/`, run `./gradlew test` and `./gradlew checkstyleMain` after backend code changes. Run `./gradlew generateOpenApi` whenever endpoint annotations, models, or validation rules change, and review `contracts/openapi.yaml`.
+
+### Local workflow accounts
+
+To seed local workflow accounts, explicitly activate the `testing` Spring profile when starting the backend, for example from `backend/`:
+
+```sh
+./gradlew bootRun --args='--spring.profiles.active=testing'
+```
+
+All seeded accounts use the testing-only password `testing-password`:
+
+| Role | Usernames |
+| --- | --- |
+| `STUDENT` | `student01`, `student02`, `student03`, `student04`, `student05` |
+| `TEACHER` | `teacher01`, `teacher02`, `teacher03`, `teacher04`, `teacher05` |
+
+These credentials are for local/testing use only. Never use them in production or expose them to a public environment. The accounts are not seeded unless the `testing` profile is active.
