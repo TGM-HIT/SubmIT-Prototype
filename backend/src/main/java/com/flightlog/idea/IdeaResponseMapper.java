@@ -59,12 +59,25 @@ class IdeaResponseMapper {
 
     ReviewResponse reviewResponse(StoredRecord record) {
         ObjectNode payload = store.parse(record);
-        return new ReviewResponse(record.getId(), UUID.fromString(record.getOwnerId()), record.getStatus(),
-                payload.path("feedback").asText(), integer(payload, "workSize"),
+        return new ReviewResponse(record.getId(), UUID.fromString(record.getOwnerId()),
+                reviewType(record, payload), record.getStatus(), payload.path("feedback").asText(),
+                integer(payload, "workSize"),
                 integer(payload, "curriculumRelevance"), integer(payload, "technicalComplexity"),
                 integer(payload, "feasibility"), integer(payload, "learningValue"),
                 integer(payload, "resourceNeeds"), integer(payload, "riskAndDependencies"),
                 payload.path("recommendation").asText(null));
+    }
+
+    private String reviewType(StoredRecord record, ObjectNode payload) {
+        String reviewType = payload.path("reviewType").asText(null);
+        if (reviewType != null) {
+            return reviewType;
+        }
+        return switch (record.getStatus()) {
+            case "APPROVE_FOR_SPECIFICATION" -> "IDEA";
+            case "ACCEPT_FOR_APPLICATIONS" -> "SPECIFICATION";
+            default -> "UNKNOWN";
+        };
     }
 
     SupervisionPreferenceResponse supervisionResponse(StoredRecord record) {

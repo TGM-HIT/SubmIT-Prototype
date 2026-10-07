@@ -51,6 +51,17 @@ class IdeaRules {
         }
     }
 
+    void optionalIdeaRatings(ObjectNode payload) {
+        for (String field : List.of("workSize", "curriculumRelevance", "technicalComplexity", "feasibility",
+                "learningValue", "resourceNeeds", "riskAndDependencies")) {
+            JsonNode rating = payload.get(field);
+            if (rating != null && !rating.isNull() && (!rating.isIntegralNumber() || rating.asInt() < 1
+                    || rating.asInt() > MAX_RATING)) {
+                throw new ApiException(HttpStatus.BAD_REQUEST, field + " must be an integer from 1 to 5.");
+            }
+        }
+    }
+
     void status(StoredRecord record, String... allowed) {
         if (!List.of(allowed).contains(record.getStatus())) {
             throw conflict("The operation is not valid while the resource is " + record.getStatus() + ".");

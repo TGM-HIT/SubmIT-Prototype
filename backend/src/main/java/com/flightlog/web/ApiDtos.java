@@ -126,6 +126,7 @@ public final class ApiDtos {
     public record ReviewResponse(
             UUID id,
             UUID teacherId,
+            String reviewType,
             String decision,
             String feedback,
             Integer workSize,

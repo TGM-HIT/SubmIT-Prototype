@@ -30,7 +30,7 @@
           <div class="field"><label class="label" for="decision">Decision</label><select id="decision" v-model="reviewForm.decision" class="select"><option v-if="isSpecReview" value="ACCEPT_FOR_APPLICATIONS">Accept for student applications</option><option v-else value="APPROVE_FOR_SPECIFICATION">Approve full specification work</option><option value="REQUEST_REVISION">Request revision</option><option value="DECLINE">Decline</option></select></div>
           <div class="field"><label class="label" for="recommendation">Overall recommendation</label><input id="recommendation" v-model="reviewForm.recommendation" class="input" maxlength="2000" /></div>
         </div>
-        <div class="field"><label class="label" for="feedback">Written feedback · required</label><textarea id="feedback" v-model="reviewForm.feedback" class="textarea" maxlength="5000" required /></div>
+        <div class="field"><label class="label" for="feedback">Written feedback · required</label><textarea id="feedback" v-model="reviewForm.feedback" class="textarea" maxlength="5000" required @input="feedbackError = ''" /><span v-if="feedbackError" class="field-error" role="alert">{{ feedbackError }}</span></div>
         <div class="grid grid-3">
           <div v-for="rating in ratings" :key="rating.key" class="field"><label class="label" :for="rating.key">{{ rating.label }} (1–5)</label><select :id="rating.key" v-model="reviewForm[rating.key]" class="select"><option value="">Not rated</option><option v-for="value in 5" :key="value" :value="value">{{ value }}</option></select></div>
         </div>
@@ -76,7 +76,7 @@
         <div><p class="eyebrow">LIFECYCLE</p><p><span class="status-badge">{{ readable(selectedIdea.status) }}</span></p><p class="notice">{{ lifecycleMessage(selectedIdea.status) }}</p><div v-if="selectedIdea.specification"><strong>Specification</strong><p class="muted">Objectives: {{ selectedIdea.specification.objectives?.join(' · ') }}</p><p class="muted">Scope: {{ selectedIdea.specification.scope }}</p></div></div>
       </div>
       <h3 class="form-section-title">Teacher decision history</h3>
-      <div v-if="selectedIdea.reviews?.length" class="data-list"><article v-for="review in selectedIdea.reviews" :key="review.id" class="data-row"><div class="row-main"><h3>{{ readable(review.decision) }}</h3><p>{{ review.feedback }}</p><p class="muted">Teacher {{ review.teacherId }} · ratings reflect professional judgement</p></div></article></div>
+      <div v-if="selectedIdea.reviews?.length" class="data-list"><article v-for="review in selectedIdea.reviews" :key="review.id" class="data-row"><div class="row-main"><h3>{{ readable(review.decision) }}</h3><p>{{ review.feedback }}</p><p class="muted">Teacher {{ review.teacherId }}</p><p v-if="recordedRatings(review).length" class="muted">Ratings: {{ recordedRatings(review).join(' · ') }}</p></div></article></div>
       <p v-else class="muted">No teacher decisions have been recorded.</p>
       <h3 v-if="selectedIdea.supervisionPreferences?.length" class="form-section-title">Recorded supervision preferences</h3>
       <div v-for="entry in selectedIdea.supervisionPreferences ?? []" :key="entry.id" class="choice-item"><span>{{ entry.teacherId }} · {{ readable(entry.preference) }}</span><span class="muted">{{ entry.note }}</span></div>
@@ -106,7 +106,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import type { components } from '../../api/schema'
 import { ideasApi, periodsApi } from '../../api/services'
 import type { Page } from '../../api/client'
@@ -118,6 +118,7 @@ import TextListField from './TextListField.vue'
 
 type Idea = components['schemas']['IdeaResponse']
 type IdeaInput = components['schemas']['IdeaRequest']
+type Review = components['schemas']['ReviewResponse']
 type RatingKey = 'workSize' | 'curriculumRelevance' | 'technicalComplexity' | 'feasibility' | 'learningValue' | 'resourceNeeds' | 'riskAndDependencies'
 const ratings: { key: RatingKey; label: string }[] = [
   { key: 'workSize', label: 'Work size' }, { key: 'curriculumRelevance', label: 'Curriculum relevance' },
@@ -142,6 +143,7 @@ const detailsReturnFocus = ref<HTMLElement | null>(null)
 const editorOpen = ref(false)
 const specEditorOpen = ref(false)
 const reviewOpen = ref(false)
+const feedbackError = ref('')
 const reviewReturnFocus = ref<HTMLElement | null>(null)
 const reviewFallbackFocus = ref<HTMLElement | null>(null)
 const editingId = ref('')
@@ -164,6 +166,13 @@ const eligibleTeachers = computed(() => (selectedIdea.value?.supervisionPreferen
 
 function readable(value?: string): string {
   return (value ?? 'Unknown').replaceAll('_', ' ').toLowerCase().replace(/^./, (char) => char.toUpperCase())
+}
+function recordedRatings(review: Review): string[] {
+  if (review.reviewType !== 'IDEA') return []
+  return ratings.flatMap(({ key, label }) => {
+    const value = review[key]
+    return typeof value === 'number' && Number.isInteger(value) ? [`${label}: ${value}/5`] : []
+  })
 }
 function editable(idea: Idea): boolean {
   return ['IDEA_DRAFT','IDEA_NEEDS_REVISION'].includes(idea.status ?? '')
@@ -202,8 +211,9 @@ function closeDetails(): void {
   specEditorOpen.value = false
 }
 async function startReview(idea: Idea, event: MouseEvent): Promise<void> {
-  reviewReturnFocus.value = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
-  reviewFallbackFocus.value = reviewReturnFocus.value?.closest('.data-row')?.querySelector<HTMLElement>('[data-review-focus-fallback]') ?? null
+  const trigger = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+  reviewReturnFocus.value = trigger?.closest('.data-row')?.querySelector<HTMLElement>('[data-review-focus-fallback]') ?? null
+  reviewFallbackFocus.value = reviewReturnFocus.value
   selectedIdea.value = null
   await selectIdea(idea)
   if (selectedIdea.value && canReview(selectedIdea.value)) openReview()
@@ -271,13 +281,22 @@ function openReview(event?: MouseEvent): void {
   }
   isSpecReview.value = selectedIdea.value?.status === 'SPECIFICATION_SUBMITTED'
   reviewForm.decision = isSpecReview.value ? 'ACCEPT_FOR_APPLICATIONS' : 'APPROVE_FOR_SPECIFICATION'
+  reviewForm.feedback = ''
+  reviewForm.recommendation = ''
+  for (const { key } of ratings) reviewForm[key] = ''
+  feedbackError.value = ''
   reviewOpen.value = true
 }
 async function submitReview(): Promise<void> {
   if (!selectedIdea.value?.id) return
+  const feedback = String(reviewForm.feedback).trim()
+  if (!feedback) {
+    feedbackError.value = 'Written feedback is required.'
+    return
+  }
   const body: components['schemas']['ReviewRequest'] = {
     decision: String(reviewForm.decision),
-    feedback: String(reviewForm.feedback),
+    feedback,
     recommendation: String(reviewForm.recommendation),
   }
   for (const { key } of ratings) {
@@ -290,7 +309,10 @@ async function submitReview(): Promise<void> {
     await selectIdea(idea)
     await load(page.value.page)
     reviewOpen.value = false
-    if (!detailsOpen.value) selectedIdea.value = null
+    detailsOpen.value = false
+    selectedIdea.value = null
+    await nextTick()
+    document.getElementById(`details-button-${idea.id}`)?.focus()
   }
 }
 async function savePreference(): Promise<void> {

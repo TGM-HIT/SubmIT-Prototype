@@ -147,7 +147,7 @@ describe('IdeasPage review and details dialogs', () => {
     page.unmount()
   })
 
-  it('keeps focus inside details after a successful nested review and refreshes its history', async () => {
+  it('closes a nested review flow, refreshes history, and focuses Details & history', async () => {
     state.role = 'TEACHER'
     const reviewedList = pageIdeas('IDEA_APPROVED_FOR_SPECIFICATION')
     reviewedList.content[0].id = 'idea-IDEA_SUBMITTED'
@@ -172,27 +172,122 @@ describe('IdeasPage review and details dialogs', () => {
       decision: 'APPROVE_FOR_SPECIFICATION',
       feedback: 'Please continue.',
     }), false)
-    expect(document.body.querySelectorAll('[role="dialog"]')).toHaveLength(1)
-    const detailsDialog = document.querySelector<HTMLElement>('[role="dialog"]')
-    if (!detailsDialog) throw new Error('The details dialog was not rendered after review.')
-    expect(detailsDialog.textContent).toContain('Idea approved for specification')
-    expect(detailsDialog.textContent).toContain('Please continue.')
+    expect(document.body.querySelectorAll('[role="dialog"]')).toHaveLength(0)
     expect(page.text()).toContain('Idea approved for specification')
-    expect(detailsDialog.contains(document.activeElement)).toBe(true)
-
-    const focusable = [...detailsDialog.querySelectorAll<HTMLElement>(
-      'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',
-    )]
-    for (const element of focusable) {
-      Object.defineProperty(element, 'getClientRects', { configurable: true, value: () => ({ length: 1 }) })
-    }
-    const first = focusable[0]
-    const last = focusable[focusable.length - 1]
-    expect(first).toBe(detailsDialog.querySelector('[aria-label="Close dialog"]'))
-    last.focus()
-    await page.get('[role="dialog"]').trigger('keydown', { key: 'Tab' })
-    expect(document.activeElement).toBe(first)
+    expect(document.activeElement).toBe(document.getElementById('details-button-idea-IDEA_SUBMITTED'))
+    expect(api.get).toHaveBeenCalledTimes(2)
+    expect(api.list).toHaveBeenCalledTimes(2)
     page.unmount()
+  })
+
+  it.each(['REQUEST_REVISION', 'DECLINE'])(
+    'allows an idea %s with feedback and no ratings',
+    async (decision) => {
+      state.role = 'TEACHER'
+      api.list.mockResolvedValue(pageIdeas('IDEA_SUBMITTED'))
+      api.get.mockResolvedValue(idea('IDEA_SUBMITTED'))
+      const page = mountPage()
+      await flushPromises()
+
+      await page.get('#review-button-idea-IDEA_SUBMITTED').trigger('click')
+      await flushPromises()
+      await page.get('#decision').setValue(decision)
+      await page.get('#feedback').setValue('Please make this change.')
+      await page.get('[role="dialog"] form').trigger('submit')
+      await flushPromises()
+
+      expect(api.review).toHaveBeenCalledWith('idea-IDEA_SUBMITTED', expect.objectContaining({
+        decision,
+        feedback: 'Please make this change.',
+      }), false)
+      for (const key of ['workSize', 'curriculumRelevance', 'technicalComplexity', 'feasibility', 'learningValue', 'resourceNeeds', 'riskAndDependencies']) {
+        expect(api.review.mock.calls[0][1]).not.toHaveProperty(key)
+      }
+      expect(document.activeElement).toBe(document.getElementById('details-button-idea-IDEA_SUBMITTED'))
+      page.unmount()
+    },
+  )
+
+  it('requires non-empty feedback and displays only ratings recorded in their history entries', async () => {
+    api.list.mockResolvedValue(pageIdeas('IDEA_NEEDS_REVISION'))
+    api.get.mockResolvedValue({
+      ...idea('IDEA_NEEDS_REVISION'),
+      reviews: [
+        {
+          id: 'review-rated',
+          reviewType: 'IDEA',
+          decision: 'REQUEST_REVISION',
+          feedback: 'Clarify the scope.',
+          teacherId: 'teacher-1',
+          workSize: 4,
+          learningValue: 2,
+          curriculumRelevance: null,
+          technicalComplexity: null,
+          feasibility: null,
+          resourceNeeds: null,
+          riskAndDependencies: null,
+        },
+        {
+          id: 'review-unrated',
+          reviewType: 'IDEA',
+          decision: 'DECLINE',
+          feedback: 'The idea cannot proceed.',
+          teacherId: 'teacher-2',
+          workSize: null,
+          curriculumRelevance: null,
+          technicalComplexity: null,
+          feasibility: null,
+          learningValue: null,
+          resourceNeeds: null,
+          riskAndDependencies: null,
+        },
+        {
+          id: 'spec-review-rated',
+          reviewType: 'SPECIFICATION',
+          decision: 'REQUEST_REVISION',
+          feedback: 'Revise the full specification.',
+          teacherId: 'teacher-3',
+          workSize: 5,
+          curriculumRelevance: 4,
+          technicalComplexity: 4,
+          feasibility: 2,
+          learningValue: 3,
+          resourceNeeds: 1,
+          riskAndDependencies: 2,
+        },
+      ],
+    })
+    const page = mountPage()
+    await flushPromises()
+    await page.get('#details-button-idea-IDEA_NEEDS_REVISION').trigger('click')
+    await flushPromises()
+
+    const history = document.querySelector('[role="dialog"] .data-list')
+    expect(history?.textContent).toContain('Work size: 4/5')
+    expect(history?.textContent).toContain('Learning value: 2/5')
+    expect(history?.textContent).not.toContain('Curriculum relevance:')
+    expect(history?.textContent).not.toContain('Risk & dependencies:')
+    const entries = history?.querySelectorAll('article')
+    expect(entries).toHaveLength(3)
+    expect(entries?.[1].textContent).not.toContain('Ratings:')
+    expect(entries?.[2].textContent).not.toContain('Ratings:')
+
+    page.unmount()
+    state.role = 'TEACHER'
+    api.list.mockResolvedValue(pageIdeas('IDEA_SUBMITTED'))
+    api.get.mockResolvedValue(idea('IDEA_SUBMITTED'))
+    const teacherPage = mountPage()
+    await flushPromises()
+    await teacherPage.get('#review-button-idea-IDEA_SUBMITTED').trigger('click')
+    await flushPromises()
+    await teacherPage.get('#decision').setValue('DECLINE')
+    await teacherPage.get('#feedback').setValue('   ')
+    await teacherPage.get('[role="dialog"] form').trigger('submit')
+    await flushPromises()
+
+    expect(api.review).not.toHaveBeenCalled()
+    expect(teacherPage.text()).toContain('Written feedback is required.')
+    teacherPage.unmount()
   })
 
   it('opens details in a modal and opens review above it, returning to details when closed', async () => {

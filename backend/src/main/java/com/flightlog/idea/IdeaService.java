@@ -147,7 +147,12 @@ public class IdeaService {
         ObjectNode payload = rules.object(request);
         String decision = rules.text(payload, "decision");
         rules.text(payload, "feedback");
-        rules.ratings(payload);
+        if (specificationReview) {
+            rules.ratings(payload);
+        } else {
+            rules.optionalIdeaRatings(payload);
+        }
+        payload.put("reviewType", specificationReview ? "SPECIFICATION" : "IDEA");
         String expectedStatus = specificationReview ? SPEC_SUBMITTED : IDEA_SUBMITTED;
         if (!expectedStatus.equals(idea.getStatus())) {
             throw rules.conflict("The requested decision is not valid at this lifecycle stage.");

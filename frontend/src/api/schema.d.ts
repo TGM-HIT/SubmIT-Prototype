@@ -906,6 +906,7 @@ export interface components {
             id?: string;
             /** Format: uuid */
             teacherId?: string;
+            reviewType?: string;
             decision?: string;
             feedback?: string;
             /** Format: int32 */

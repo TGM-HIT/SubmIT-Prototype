@@ -47,6 +47,8 @@ The full specification expands the idea with objectives, intended users, functio
 
 An idea has one submitting student. An accepted project may be joined by students through the application process; submitting an idea does not reserve a place in its eventual group.
 
+For a submitted idea, teachers may approve specification work, request a revision, or decline it. A revision request or decline requires non-empty written feedback; ratings are optional, and any ratings supplied use the existing 1-to-5 scale. Decisions and feedback are retained in the authorized idea history, with only ratings actually recorded for each idea-review entry shown.
+
 ## 5. Formal Project Application
 
 After allocation forms a group, the group collaborates on one formal project application. It is distinct from students' ranked project preferences and is submitted against the group's allocated project. The official form contains:
