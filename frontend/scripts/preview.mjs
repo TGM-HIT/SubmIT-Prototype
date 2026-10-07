@@ -29,6 +29,7 @@ export function parseArgs(args) {
     openSelect: [],
     tabTo: [],
     selectByKey: [],
+    nativeSelectByKey: [],
     expandSelect: [],
   }
   const valueOptions = new Map([
@@ -51,6 +52,7 @@ export function parseArgs(args) {
     ['--open-select', 'openSelect'],
     ['--tab-to', 'tabTo'],
     ['--select-by-key', 'selectByKey'],
+    ['--native-select-by-key', 'nativeSelectByKey'],
     ['--expand-select', 'expandSelect'],
   ])
   for (let index = 0; index < args.length; index += 1) {
@@ -73,10 +75,12 @@ export function parseArgs(args) {
         options.fill.push({ selector: value.slice(0, separator), value: value.slice(separator + 1) })
       } else if (name === 'click' || name === 'waitFor' || name === 'openSelect' || name === 'tabTo' || name === 'expandSelect') {
         options[name].push(value)
-      } else if (name === 'selectByKey') {
+      } else if (name === 'selectByKey' || name === 'nativeSelectByKey') {
         const separator = value.indexOf('=')
-        if (separator < 1) throw new Error('--select-by-key must use SELECTOR=VALUE.')
-        options.selectByKey.push({ selector: value.slice(0, separator), value: value.slice(separator + 1) })
+        if (separator < 1) throw new Error(`${flag} must use SELECTOR=VALUE.`)
+        const interaction = { selector: value.slice(0, separator), value: value.slice(separator + 1) }
+        options.selectByKey.push(interaction)
+        if (name === 'nativeSelectByKey') options.nativeSelectByKey.push(interaction)
       } else {
         options[name] = value
       }
@@ -108,6 +112,12 @@ export function parseArgs(args) {
     throw new Error('--screenshot must be a filename, not a path.')
   }
   if (options.auth && !options.username) throw new Error('--auth requires --username.')
+  if (options.nativeSelectByKey.length && !options.headed) {
+    throw new Error('--native-select-by-key requires --headed so macOS can operate the native popup.')
+  }
+  if (options.nativeSelectByKey.length && process.platform !== 'darwin') {
+    throw new Error('--native-select-by-key is supported only on macOS.')
+  }
   if (options.auth && options.start && options.url) {
     throw new Error('Use --no-start with --url when inspecting an existing server.')
   }
@@ -348,7 +358,10 @@ async function evaluatePage(client, expression, description) {
   return evaluation.result?.value
 }
 
-export async function applyPageInteractions(client, options) {
+export async function applyPageInteractions(client, options, {
+  nativeInput = sendMacNativeSelectKeys,
+  log = console.log,
+} = {}) {
   for (const { selector, value } of options.fill ?? []) {
     const expression = `(selector, value) => {
       const element = document.querySelector(selector);
@@ -437,16 +450,24 @@ export async function applyPageInteractions(client, options) {
     console.log(`Sent a browser mouse click to native selector ${selector}.`)
   }
   for (const { selector, value } of options.selectByKey ?? []) {
+    const useNativeMacKeys = (options.nativeSelectByKey ?? []).some((interaction) =>
+      interaction.selector === selector && interaction.value === value)
     const expression = `(selector, value) => {
       const select = document.querySelector(selector);
       if (!(select instanceof HTMLSelectElement)) throw new Error('Element is not a select: ' + selector);
       if (document.activeElement !== select) throw new Error('Select is not focused; use --tab-to first: ' + selector);
       const option = Array.from(select.options).find((candidate) => candidate.value === value && !candidate.disabled);
       if (!option) throw new Error('No enabled option with value ' + value + ' in ' + selector);
+      const enabled = Array.from(select.options).filter((candidate) => !candidate.disabled);
+      const rect = select.getBoundingClientRect();
       return {
-        target: Array.from(select.options).indexOf(option),
-        current: select.selectedIndex,
+        target: enabled.indexOf(option),
+        current: enabled.findIndex((candidate) => candidate.value === select.value),
         expanded: select.size > 1,
+        bounds: {
+          x: window.screenX + rect.left + rect.width / 2,
+          y: window.screenY + window.outerHeight - window.innerHeight + rect.top + rect.height / 2,
+        },
       };
     }`
     const indices = await evaluatePage(client, `(${expression})(${JSON.stringify(selector)}, ${JSON.stringify(value)})`, `find enabled option in ${selector}`)
@@ -471,20 +492,55 @@ export async function applyPageInteractions(client, options) {
     const arrow = direction > 0 ? ['ArrowDown', 'ArrowDown', 40] : ['ArrowUp', 'ArrowUp', 38]
     let steps = Math.abs(indices.target - indices.current)
     if (steps === 0) steps = 1
-    if (!indices.expanded && !(options.openSelect ?? []).includes(selector)) await key(' ', 'Space', 32)
-    for (let index = 0; index < steps; index += 1) {
-      await key(arrow[0], arrow[1], arrow[2])
+    if (useNativeMacKeys) {
+      if (indices.expanded) throw new Error(`Native popup verification requires a collapsed selector: ${selector}.`)
+      await nativeInput(indices.bounds, arrow[2], steps)
+    } else {
+      if (!indices.expanded && !(options.openSelect ?? []).includes(selector)) await key(' ', 'Space', 32)
+      for (let index = 0; index < steps; index += 1) {
+        await key(arrow[0], arrow[1], arrow[2])
+      }
     }
     await evaluatePage(client, 'new Promise((resolve) => setTimeout(resolve, 20))', `wait for keyboard selection in ${selector}`)
     let selected = await evaluatePage(client, `document.querySelector(${JSON.stringify(selector)})?.value`, `read selected value from ${selector}`)
-    if (selected !== value) {
+    if (selected !== value && !useNativeMacKeys) {
       await key('Enter', 'Enter', 13)
       await evaluatePage(client, 'new Promise((resolve) => setTimeout(resolve, 20))', `wait for keyboard selection in ${selector}`)
       selected = await evaluatePage(client, `document.querySelector(${JSON.stringify(selector)})?.value`, `read selected value from ${selector}`)
     }
     if (selected !== value) throw new Error(`Keyboard selection in ${selector} produced ${JSON.stringify(selected)}, expected ${JSON.stringify(value)}.`)
-    console.log(`Selected ${JSON.stringify(value)} in ${selector} with the keyboard.`)
+    log(`Selected ${JSON.stringify(value)} in ${selector} with ${useNativeMacKeys ? 'the macOS native popup keyboard' : 'the keyboard'}.`)
   }
+}
+
+function sendMacNativeSelectKeys({ x, y }, arrowKeyCode, steps) {
+  const script = [
+    'tell application "Google Chrome" to activate',
+    'delay 0.2',
+    'tell application "System Events"',
+    'tell process "Google Chrome"',
+    'set frontmost to true',
+    `click at {${Math.round(x)}, ${Math.round(y)}}`,
+    'delay 0.25',
+    `repeat ${steps} times`,
+    `key code ${arrowKeyCode}`,
+    'delay 0.1',
+    'end repeat',
+    'key code 36',
+    'end tell',
+    'end tell',
+  ].join('\n')
+  return new Promise((resolve, reject) => {
+    const process = spawn('osascript', ['-e', script], { stdio: ['ignore', 'pipe', 'pipe'] })
+    let output = ''
+    process.stdout.setEncoding('utf8').on('data', (chunk) => { output += chunk })
+    process.stderr.setEncoding('utf8').on('data', (chunk) => { output += chunk })
+    process.once('error', reject)
+    process.once('close', (code) => {
+      if (code === 0) resolve()
+      else reject(new Error(`macOS native selector input failed (${code}): ${output.trim() || 'no details'}`))
+    })
+  })
 }
 
 async function navigate(client, url, signal) {
@@ -632,6 +688,7 @@ Options:
   --open-select SELECTOR          Send a browser mouse click to a native selector
   --tab-to SELECTOR               Reach an element using Tab; may be repeated
   --select-by-key SELECTOR=VALUE  Select an enabled native option using keyboard input; may be repeated
+  --native-select-by-key SELECTOR=VALUE  Use macOS keyboard input on a headed collapsed popup
   --expand-select SELECTOR        Show all native select options inline for screenshot inspection
   --password-env NAME             Environment variable containing its password (default PREVIEW_PASSWORD)
   --frontend-port N               Vite port (default 5173)
@@ -645,7 +702,8 @@ For authenticated inspection, set PREVIEW_PASSWORD using the password documented
 backend/DEV-GUIDELINES.md and pass --username student01 (or another documented account).
 Use --fill, --click, --wait-for, and --expand-select to perform reusable preview interactions after authentication,
 for example to load a form that requires a project ID before its details are shown. Use --tab-to and
---select-by-key to verify native keyboard focus and selection; use --headed when a native popup is required.
+--select-by-key for browser keyboard navigation. On macOS, use --headed and --native-select-by-key for GUI
+keyboard input to a collapsed popup (Terminal may require Accessibility permission).
 `
 }
 

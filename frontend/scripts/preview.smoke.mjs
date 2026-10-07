@@ -22,12 +22,14 @@ test('parses preview options and rejects incomplete or invalid invocations', () 
   assert.equal(parseArgs(['--viewport', 'mobile', '--output-dir', '/tmp/previews']).viewport, 'mobile')
   assert.equal(parseArgs(['--no-start', '--url', 'http://localhost:5173']).start, false)
   assert.deepEqual(parseArgs([
+    '--headed',
     '--fill', '#project-id=fixture=id',
     '--click', 'form button[type="submit"]',
     '--wait-for', '#formal-decision',
     '--open-select', '#formal-decision',
     '--tab-to', '#formal-decision',
     '--select-by-key', '#formal-decision=APPROVED',
+    '--native-select-by-key', '#formal-decision=APPROVED',
     '--expand-select', '#formal-decision',
   ]).fill, [{ selector: '#project-id', value: 'fixture=id' }])
   const keyboardOptions = parseArgs([
@@ -38,6 +40,13 @@ test('parses preview options and rejects incomplete or invalid invocations', () 
   assert.deepEqual(keyboardOptions.openSelect, ['#formal-decision'])
   assert.deepEqual(keyboardOptions.tabTo, ['#formal-decision'])
   assert.deepEqual(keyboardOptions.selectByKey, [{ selector: '#formal-decision', value: 'APPROVED' }])
+  const nativeOptions = ['--headed', '--native-select-by-key', '#artifact-type=POSTER']
+  if (process.platform === 'darwin') {
+    assert.deepEqual(parseArgs(nativeOptions).nativeSelectByKey, [{ selector: '#artifact-type', value: 'POSTER' }])
+  } else {
+    assert.throws(() => parseArgs(nativeOptions), /supported only on macOS/)
+  }
+  assert.throws(() => parseArgs(['--native-select-by-key', '#artifact-type=POSTER']), /requires --headed/)
   assert.throws(() => parseArgs(['--fill', 'missing-separator']), /SELECTOR=VALUE/)
   assert.throws(() => parseArgs(['--wat']), /Unknown argument/)
   assert.throws(() => parseArgs(['--no-start']), /requires --url/)
@@ -64,8 +73,8 @@ test('performs requested page interactions in fill, click, wait, expand, then ke
       assert.equal(method, 'Runtime.evaluate')
       expressions.push(params.expression)
       if (params.expression.includes('document.activeElement?.matches')) return { result: { value: hasTabbed } }
-      if (params.expression.includes('target: Array.from(select.options)')) {
-        return { result: { value: { target: 1, current: 0, expanded: true } } }
+      if (params.expression.includes('target: enabled.indexOf(option)')) {
+        return { result: { value: { target: 1, current: 0, expanded: true, bounds: { x: 10, y: 20 } } } }
       }
       if (params.expression.includes(')?.value')) return { result: { value: 'APPROVED' } }
       return { result: { value: params.expression.includes('element.options.length;') ? 3 : true } }
@@ -88,7 +97,7 @@ test('performs requested page interactions in fill, click, wait, expand, then ke
   assert.match(expressions[4], /No focusable element matches/)
   assert.match(expressions[5], /document\.activeElement/)
   assert.match(expressions[6], /document\.activeElement/)
-  assert.match(expressions[7], /target: Array\.from\(select\.options\)/)
+  assert.match(expressions[7], /target: enabled\.indexOf\(option\)/)
   assert.match(expressions[9], /document\.querySelector/)
   assert.match(expressions[9], /value/)
   assert.deepEqual(keyboardEvents.map(({ key, type }) => [key, type]), [
@@ -108,8 +117,8 @@ test('opens a collapsed native selector before keyboard navigation', async () =>
         return {}
       }
       if (params.expression.includes('document.activeElement?.matches')) return { result: { value: hasTabbed } }
-      if (params.expression.includes('target: Array.from(select.options)')) {
-        return { result: { value: { target: 1, current: 0, expanded: false } } }
+      if (params.expression.includes('target: enabled.indexOf(option)')) {
+        return { result: { value: { target: 1, current: 0, expanded: false, bounds: { x: 10, y: 20 } } } }
       }
       if (params.expression.includes(')?.value')) return { result: { value: 'POSTER' } }
       return { result: { value: true } }
@@ -122,6 +131,70 @@ test('opens a collapsed native selector before keyboard navigation', async () =>
     ['Tab', 'keyDown'], ['Tab', 'keyUp'],
     [' ', 'keyDown'], [' ', 'keyUp'],
     ['ArrowDown', 'keyDown'], ['ArrowDown', 'keyUp'],
+  ])
+})
+
+test('routes a collapsed native select through the native-input adapter and verifies the resulting value', async () => {
+  const keyboardEvents = []
+  let hasTabbed = false
+  let nativeInput
+  await applyPageInteractions({
+    async send(method, params) {
+      if (method === 'Input.dispatchKeyEvent') {
+        keyboardEvents.push(params)
+        if (params.key === 'Tab' && params.type === 'keyDown') hasTabbed = true
+        return {}
+      }
+      if (params.expression.includes('document.activeElement?.matches')) return { result: { value: hasTabbed } }
+      if (params.expression.includes('target: enabled.indexOf(option)')) {
+        return { result: { value: { target: 2, current: 0, expanded: false, bounds: { x: 120, y: 240 } } } }
+      }
+      if (params.expression.includes(')?.value')) return { result: { value: 'SOURCE_DATA' } }
+      return { result: { value: true } }
+    },
+  }, {
+    tabTo: ['#artifact-type'],
+    selectByKey: [{ selector: '#artifact-type', value: 'SOURCE_DATA' }],
+    nativeSelectByKey: [{ selector: '#artifact-type', value: 'SOURCE_DATA' }],
+  }, {
+    async nativeInput(bounds, keyCode, steps) {
+      nativeInput = { bounds, keyCode, steps }
+    },
+    log() {},
+  })
+  assert.deepEqual(nativeInput, { bounds: { x: 120, y: 240 }, keyCode: 40, steps: 2 })
+  assert.deepEqual(keyboardEvents.map(({ key, type }) => [key, type]), [
+    ['Tab', 'keyDown'], ['Tab', 'keyUp'],
+  ])
+})
+
+test('does not substitute DevTools keys when native popup selection leaves the value unchanged', async () => {
+  const keyboardEvents = []
+  let hasTabbed = false
+  await assert.rejects(applyPageInteractions({
+    async send(method, params) {
+      if (method === 'Input.dispatchKeyEvent') {
+        keyboardEvents.push(params)
+        if (params.key === 'Tab' && params.type === 'keyDown') hasTabbed = true
+        return {}
+      }
+      if (params.expression.includes('document.activeElement?.matches')) return { result: { value: hasTabbed } }
+      if (params.expression.includes('target: enabled.indexOf(option)')) {
+        return { result: { value: { target: 1, current: 0, expanded: false, bounds: { x: 20, y: 40 } } } }
+      }
+      if (params.expression.includes(')?.value')) return { result: { value: 'INITIAL' } }
+      return { result: { value: true } }
+    },
+  }, {
+    tabTo: ['#status-filter'],
+    selectByKey: [{ selector: '#status-filter', value: 'IDEA_SUBMITTED' }],
+    nativeSelectByKey: [{ selector: '#status-filter', value: 'IDEA_SUBMITTED' }],
+  }, {
+    async nativeInput() {},
+    log() {},
+  }), /Keyboard selection in #status-filter produced "INITIAL"/)
+  assert.deepEqual(keyboardEvents.map(({ key, type }) => [key, type]), [
+    ['Tab', 'keyDown'], ['Tab', 'keyUp'],
   ])
 })
 
