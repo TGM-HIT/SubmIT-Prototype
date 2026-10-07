@@ -53,23 +53,85 @@ supporting each allowance, and both rerun results in the log. Dispatch the
 Evaluator only after the corrected gate passes. If a rejected path is not
 required by the ticket, or a narrow correction cannot make the gate pass,
 close as failed: record the reason and continue through failed closeout. There
-is nobody to escalate to.
+is no human-verification gap to escalate in this gate-failure case; use the
+`awaiting-human` path only for unresolved acceptance checks a human can verify
+or disposition.
 
 With both gates clean, dispatch the Evaluator with the diff, the ticket, and that
 handoff note, and read its verdict.
 
-On a pass, close out. On a revise, dispatch a fresh Implementor with the
-Evaluator's reasons and re-judge the new change, running both gates again on the
-new handoff and commit before the Evaluator sees it. Stop after three revise
-cycles without a pass: close the ticket as failed so the calling coordinator can
-route it to the human.
+Evaluator verdicts are `pass`, `revise`, or `awaiting-human`.
+
+- On `pass`, close out as done.
+- On `revise`, dispatch a fresh Implementor with the Evaluator's actionable
+  reasons and re-judge the new change, running both gates again on the new
+  handoff and commit before the Evaluator sees it. A revise cycle counts only
+  when an Implementor revision is dispatched. After three revise cycles, do
+  not dispatch a fourth Implementor: close as failed if an actionable
+  implementation gap remains, or pause as `awaiting-human` if only
+  human-exercisable acceptance checks remain.
+- On `awaiting-human`, or after three revise cycles when the remaining gap is a
+  human-exercisable acceptance check and there is no genuinely new code change
+  for an Implementor, pause rather than fail. Do not use this state to defer a
+  code defect that an Implementor can fix. In the active run:
+  1. Preserve every handoff and evaluator verdict unchanged. Record the exact
+     unmet acceptance criteria and why a human can exercise or disposition
+     them.
+  2. Copy `harness/templates/human-acceptance.md` to
+     `harness/runs/<run-id>/human-acceptance.md`. Fill its ticket ID, original
+     run ID, current implementation commit SHA, and one checklist row per
+     unresolved or not-yet-human-verified acceptance item. For each row,
+     prefill the specific view/state, steps, suitable data or role, and evidence
+     requested from the latest Evaluator verdict and run record. Leave human
+     result, evidence, and decision fields blank. Never mark a check passed on
+     the human's behalf.
+  3. Set the plan row to `awaiting-human`, record that the run is paused and the
+     exact path of the prepared template in the run log/heartbeat, and commit
+     the log, template, and ledger together. This is nonterminal; do not write
+     a terminal outcome or report `failed`.
+  4. Stop and return the pause details to the calling coordinator. Do not keep
+     polling, dispatch an Implementor, or start another evaluation until the
+     human/coordinator resumes the ticket.
+
+When the human returns a completed `human-acceptance.md`, preserve it in the
+paused run folder and record its receipt in the run log. Commit this human
+record to the paused run before continuation preflight; this keeps the
+attestation auditable and leaves a clean tree for the normal preflight gate.
+Do not alter the human's observations or turn unchecked items into verified
+ones. Then start a new verification-only continuation run; link it to the
+paused run ID and implementation SHA. Keep the paused run, its original
+verdicts, and its completed attestation unchanged after that intake commit.
+Set the ticket to `in progress` while the continuation is active. Do not
+dispatch an Implementor or alter the accepted implementation in this
+continuation. Give a fresh Evaluator the original ticket, accepted diff and
+handoffs, complete prior verdict history, and the human record. Run only the
+applicable independent checks and this evaluator review. A pass closes the
+ticket as done; an `awaiting-human` verdict returns it to `awaiting-human` with
+a newly prepared checklist. If the Evaluator identifies a concrete code change,
+resume the normal Implementor/gate/Evaluator loop, subject to the three-cycle
+limit. Record and commit continuation artifacts and the ledger together at
+closeout.
+
+An authorized user may instead explicitly accept the current implementation
+after manual inspection, even if some checks remain unverified. This is a
+separate human-acceptance outcome, not an Evaluator pass. Require an
+unambiguous acceptance instruction naming or clearly identifying the current
+implementation. Record the accepted commit SHA, the human's scope/decision,
+and each check that remains unverified in `human-acceptance.md`; preserve all
+Evaluator verdicts unchanged. Only then set the ledger to done. A statement
+that the change appears fixed, without explicit acceptance, is not enough.
+
+If the human declines to verify or accept, or explicitly requests stopping,
+close as failed and record that decision. Do not turn an unresolved pause into
+a failure solely because three revise cycles elapsed.
 
 After the run folder exists, any role failure, denied required action, failed
 gate that cannot be corrected, or exhausted revise cycle must still go through
-failed closeout. Preserve the truthful partial log, handoffs, and verdict or stop
-reason; set the row to failed; commit those run artifacts and the ledger. Do not
-leave a terminal ticket result only in the conversation or in an uncommitted
-folder.
+failed closeout, except that a human-exercisable verification gap follows the
+`awaiting-human` pause above. Preserve the truthful partial log, handoffs, and
+verdict or stop reason; set the row to failed only for a terminal failure;
+commit those run artifacts and the ledger. Do not leave a terminal ticket
+result only in the conversation or in an uncommitted folder.
 
 Keep a run log as you go: the ticket, what you dispatched, the gate results, the
 verdicts you got back, and any escalation.
@@ -84,19 +146,22 @@ deliverable, so the commit-scope gate, which runs on the deliverable, never sees
 the harness paths the closeout adds — including the run folder, which now exists
 from run start rather than appearing at closeout.
 Closing out is commit-the-artifacts, record-the-outcome, and update the ledger:
-set the ticket's row in harness/plan.md to done on a pass, or to failed on any
-terminal ticket failure, then stop. The ledger edit is a harness path, so it
-rides in the run-artifacts commit.
+set the ticket's row in harness/plan.md to done on an Evaluator pass or explicit
+authorized human acceptance, failed on a terminal ticket failure, or leave it
+awaiting-human for a paused run. The ledger edit is a harness path, so it rides
+in the run-artifacts commit. A paused run is not terminal; retain its continuation
+pointer and template for the next coordinator.
 
 If any commit in the run changed a SPEC.md file, flag it prominently: put a "SPEC CHANGE" section in the run log and at the top of your closing prose, listing each file, the reason from the handoff, and the Evaluator's verdict on it, so a human reviews it. This applies to failed runs too.
 
 End every return with this exact machine-readable block, using `none` when
-preflight stopped before a run folder existed:
+preflight stopped before a run folder existed. Use `Outcome: awaiting-human` and
+`Ledger: awaiting-human` for a paused run:
 
     Ticket: <ticket-id>
     Run folder: <exact harness/runs/... path or none>
-    Outcome: <done|failed|stopped>
-    Ledger: <done|failed|unchanged>
+    Outcome: <done|failed|stopped|awaiting-human>
+    Ledger: <done|failed|awaiting-human|unchanged>
     Terminal commit: <full commit sha>
     Tree: <clean|dirty>
     Spec changes: <none|comma-separated SPEC.md paths, each with a one-line reason>

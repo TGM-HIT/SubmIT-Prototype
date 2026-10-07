@@ -1,5 +1,13 @@
 # Plan
 
+## Ticket status
+
+- `to-do`: not started.
+- `in progress`: implementation/evaluation is active.
+- `awaiting-human`: implementation is complete, but one or more acceptance checks need human verification or disposition. This is nonterminal: do not treat it as done or failed.
+- `done`: accepted by an Evaluator pass or by an explicit authorized human acceptance recorded in the run artifacts.
+- `failed`: explicitly stopped or terminally failed. If the only remaining gap is human-exercisable verification, use `awaiting-human` until the human path is completed or declined.
+
 ## Tickets
 
 | Ticket | Status |
