@@ -124,6 +124,7 @@ Make native dropdowns across feature views match the shared styling of adjacent 
 - Preserve selector semantics, labels, options, selected values, disabled states, validation, and interaction behavior. Keep selectors responsive and keyboard accessible.
 - Frontend presentation only; do not change backend behavior or API contracts.
 - The full manual verification of the conditional Formal Applications selector depends on Bug-03a. Do not close this ticket as fully verified until its fixture is available and used.
+- If Dev-02's existing preview workflow cannot reach a UI state required for this ticket's manual checks, a minimal reusable extension to that workflow is in scope. Do not use one-off browser scripts or duplicate its startup or authentication tooling.
 
 #### Mechanical checks (the Evaluator re-runs)
 
@@ -135,6 +136,7 @@ Make native dropdowns across feature views match the shared styling of adjacent 
 - Use Dev-02's `npm run preview` workflow to inspect the actual Ideas, Applications (including "Configure period"), Allocation, Formal Applications, Archive, Grading, and Administration views at desktop and narrow mobile widths; select each with `--viewport desktop` or `--viewport mobile` (see `npm run preview:help`). Authenticate with the documented Dev-01 student or teacher account appropriate to each view; use the Bug-03a fixture for the submitted Formal Applications state. Save screenshots outside version control and inspect each rendered view.
 - In every view, compare select dimensions/alignment with adjacent controls, confirm no horizontal overflow, and verify visible Tab focus plus keyboard option selection on a platform that supports native popup interaction.
 - Confirm labels, options, selected values, disabled states where present, and form submission behavior remain usable and unchanged. Record any state that cannot be exercised; do not claim unperformed checks.
+- Use Dev-02's reusable interactions to reach any required state that is not visible on initial navigation. If a required interaction is unsupported, extend the reusable workflow minimally, document its use, and add or update its smoke coverage before relying on it for verification.
 - If the preview workflow reports browser-console or failed-request errors, investigate and record them rather than treating screenshot creation alone as a passing verification.
 
 #### Acceptance criteria (the Evaluator judges)
@@ -156,6 +158,7 @@ Align related summary cards and workflow panels on Overview without changing the
 - Align "current school year", "application periods", and "ideas in view".
 - Align "application timeline" with "your next actions".
 - Preserve existing dashboard content, responsive behavior, and interactions; do not change backend behavior or API contracts.
+- If Dev-02's existing preview workflow cannot reach a dashboard state required for manual verification, a minimal reusable extension to that workflow is in scope. Do not use one-off browser scripts or duplicate its startup or authentication tooling.
 
 #### Mechanical checks (the Evaluator re-runs)
 
@@ -165,6 +168,7 @@ Align related summary cards and workflow panels on Overview without changing the
 #### One-time manual verification (in addition to automated tests)
 
 - Use Dev-02's `npm run preview` workflow to verify the actual Overview route at desktop and narrow mobile widths, selecting `--viewport desktop` or `--viewport mobile` (see `npm run preview:help`) and authenticating with the appropriate documented Dev-01 account when required. Save and inspect screenshots; confirm both specified groups align, remain readable, and do not clip or cause horizontal overflow.
+- Use Dev-02's reusable interactions to reach any required dashboard state that is not visible on initial navigation. If a required interaction is unsupported, extend the reusable workflow minimally, document its use, and add or update its smoke coverage before relying on it for verification.
 - If the preview workflow reports browser-console or failed-request errors, investigate and record them rather than treating screenshot creation alone as a passing verification.
 
 #### Acceptance criteria (the Evaluator judges)
@@ -185,6 +189,7 @@ Align related fields on the New idea form while preserving the existing form beh
 - Align the initial-scope and learning-scope controls on the same row at desktop widths.
 - Keep the pairs readable and responsive at narrow mobile widths; preserve labels, validation, value binding, and submission behavior.
 - Frontend presentation only; do not change backend behavior or API contracts.
+- If Dev-02's existing preview workflow cannot reach a form state required for manual verification, a minimal reusable extension to that workflow is in scope. Do not use one-off browser scripts or duplicate its startup or authentication tooling.
 
 #### Mechanical checks (the Evaluator re-runs)
 
@@ -195,6 +200,7 @@ Align related fields on the New idea form while preserving the existing form beh
 
 - Use Dev-02's `npm run preview` workflow to verify Ideas and reviews > New idea at desktop and narrow mobile widths, selecting `--viewport desktop` or `--viewport mobile` (see `npm run preview:help`) and authenticating with the documented Dev-01 student account if required. Save and inspect screenshots; confirm both field pairs align as intended without clipping, unintended wrapping, or horizontal overflow.
 - Confirm labels, validation, value binding, and form submission behavior remain usable and unchanged.
+- Use Dev-02's reusable interactions to reach any required form state that is not visible on initial navigation. If a required interaction is unsupported, extend the reusable workflow minimally, document its use, and add or update its smoke coverage before relying on it for verification.
 - If the preview workflow reports browser-console or failed-request errors, investigate and record them rather than treating screenshot creation alone as a passing verification.
 
 #### Acceptance criteria (the Evaluator judges)
