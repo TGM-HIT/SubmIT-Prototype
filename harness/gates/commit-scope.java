@@ -4,7 +4,11 @@ import java.util.List;
 class CommitScope {
 
     static final String[] ALLOWED_PREFIXES = { "backend/src/", "frontend/src/" };
-    static final String[] ALLOWED_FILES = { "frontend/index.html" };
+    static final String[] ALLOWED_FILES = {
+        "frontend/index.html",
+        "frontend/DEV-GUIDELINES.md",
+        "backend/DEV-GUIDELINES.md"
+    };
     static final String[] SPEC_FILES = { "docs/SPEC.md", "backend/SPEC.md", "frontend/SPEC.md" };
 
     public static void main(String[] args) throws Exception {
