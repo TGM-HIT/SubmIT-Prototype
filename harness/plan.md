@@ -18,7 +18,7 @@
 | Bug-03a | done |
 | Bug-03b | done |
 | Bug-03c | done |
-| Bug-03d | to-do |
+| Bug-03d | done |
 | Dev-01 | done |
 | Dev-02 | done |
 
