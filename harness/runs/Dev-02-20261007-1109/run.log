@@ -1,0 +1,19 @@
+# Dev-02 Run Log
+
+- Run ID: Dev-02-20261007-1109
+- Ticket: Dev-02
+- Expected branch: main
+- Started: 2026-10-07 11:09 +02:00
+- Preflight: passed (`java harness/gates/preflight.java main`)
+- Implementor commit: `6c058d296b75dd60bba5bdd8f71a865dc4efb78e` (`Add reusable local browser preview workflow`)
+- Changed paths: captured in `changed-paths.txt`
+- Handoff: `handoff.md`; required headings present.
+- Handoff-complete gate: passed.
+- Commit-scope gate: failed — `java harness/gates/commit-scope.java harness/runs/Dev-02-20261007-1109/changed-paths.txt` rejected `.gitignore`, `frontend/package.json`, `frontend/scripts/preview.mjs`, and `frontend/scripts/preview.smoke.mjs`. The gate only allows files under `frontend/src/`, selected exact files, and SPEC.md files; it does not allow the root ignore file, package scripts, or `frontend/scripts/`.
+- Evaluation: not dispatched, as required by the failed commit-scope gate.
+- Limitation: the out-of-scope paths are already part of the Implementor commit. Correcting them would require rewriting/amending that commit or creating a new commit that still includes forbidden paths in its diff; this run's no-amendment constraint does not permit a gate-passing correction. No gate or code-scope rules were altered to bypass the failure.
+- SPEC CHANGE: none.
+- Latest completed step: commit-scope failure could not be corrected without rewriting the implementation commit; marking the ticket failed for terminal closeout without evaluator dispatch
+- Heartbeat: 2026-10-07 11:11 +02:00 — recording failed closeout and preserving handoff and gate evidence
+- Outcome: failed before evaluation because commit-scope gate failed.
+- Final implementation commit: `6c058d296b75dd60bba5bdd8f71a865dc4efb78e` (`Add reusable local browser preview workflow`).
