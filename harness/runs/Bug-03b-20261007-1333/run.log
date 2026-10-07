@@ -30,11 +30,12 @@
 
 ## Closeout
 
-- Outcome: failed because acceptance requires actual collapsed native-popup keyboard selection, but macOS Accessibility authorization was unavailable and no changed value/screenshot could be verified. Allocation and Grading populated-option checks also remain unavailable in the testing profile.
+- Original automated outcome: failed because the evaluator could not verify actual collapsed native-popup keyboard selection; macOS Accessibility authorization was unavailable and no changed value/screenshot could be verified. Allocation and Grading populated-option checks also remained unavailable in the testing profile.
 - Deliverable commits: `0b5666ec4fa6fe8d54f726d82fae8e90f7cf2ffa`, `1a5f9ef23c6da426af97977e1926660df1247e9e`, `087226feeeff1795b4c52a4c100b59aa9b75ea2a`, `8e6d124952d57a3bbd3408b86d5b8d6afda00813`.
 - Handoff-completeness and commit-scope gates passed for each implementor commit; changed paths remained within frontend files, with no SPEC flags.
 - SPEC changes: none.
-- Ledger: ticket row set to `failed`; run artifacts and ledger will be committed separately from the deliverable commits.
+- 2026-10-07 15:05 +02:00 — User reported: “After manual inspection Bug-03b can be seen as fixed” and explicitly asked to accept the latest Bug-03b commit. This human acceptance supersedes the exhausted evaluator result for the ticket's final status; it does not alter the recorded evaluator findings or claim additional checks/screenshots that were not supplied.
+- Final outcome: done by explicit human acceptance after evaluator exhaustion. Ledger set to `done`; implementor commits and evaluator results remain unchanged.
 
 ## Metrics
 
