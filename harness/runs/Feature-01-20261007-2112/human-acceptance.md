@@ -51,3 +51,23 @@ Scope or rationale for my decision:
 Human name/identifier:
 
 Date/time and time zone:
+
+---
+
+## Orchestrator record of human acceptance (appended; human entries above unaltered)
+
+Recorded 2026-10-07 by the Orchestrator after intake commit ee0e8083ccb67e1878bf1064288d2bbe7ff5c050.
+
+- Outcome type: explicit human acceptance. This is NOT an Evaluator pass. The latest Evaluator verdict (`awaiting-human`, evaluation-2.md) and evaluation-1.md (`revise`) are preserved unchanged.
+- Accepted commit SHA: `263ae82b3ec2b31503f2ddde2f9304cfae2340a6`.
+- Acceptance instruction: the "Explicitly accept this implementation" box is checked by the named human verifier, Markus Schabel (2026-10-07 21:38 Europe/Vienna; macOS, Safari; STUDENT and TEACHER). The checked box refers to the commit SHA listed under "Run and implementation", so it is unambiguous. The "Human name/identifier", "Date/time and time zone" disposition fields, and "Scope or rationale" are blank; identity and time are taken from the verifier and date/time fields in the "Run and implementation" section.
+- Scope/decision as recorded: accept the whole implementation at the SHA above despite unverified checks; no narrower scope or rationale was stated.
+- Status prefill caveat: all five checklist rows carry the prefilled Status "verified", but "What I observed" and "Evidence path or why none" are blank in every row. The prefilled Status is not read as an attestation. The Orchestrator treats no row as human-verified.
+
+Unverified checks accepted by the human (all five; no observations or evidence recorded):
+
+1. Teacher request-revisions / decline / rate-and-record on submitted ideas, with correct status and refreshed history (acceptance 1, 3, 5).
+2. Student submitter sees decisions, feedback and ratings only where recorded (acceptance 4).
+3. Review form and history usable at desktop and mobile widths.
+4. Post-decision form close, refresh and keyboard focus on the Details & history control, unfiltered and with the pre-decision status filter (acceptance 5).
+5. No browser-console or failed-request errors during the above.
