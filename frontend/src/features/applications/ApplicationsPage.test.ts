@@ -132,4 +132,15 @@ describe('application period configuration', () => {
 
     expect((selector.element as HTMLSelectElement).value).toBe('2026/2027')
   })
+
+  it('keeps the year selector and both date controls in the same aligned form row', async () => {
+    const page = await openForm()
+    const year = page.get('#period-year')
+    const controls = year.element.parentElement?.parentElement
+
+    expect(controls?.classList.contains('grid-3')).toBe(true)
+    expect(controls?.querySelectorAll('.field')).toHaveLength(3)
+    expect(controls?.querySelector('#opens')?.classList.contains('input')).toBe(true)
+    expect(controls?.querySelector('#closes')?.classList.contains('input')).toBe(true)
+  })
 })

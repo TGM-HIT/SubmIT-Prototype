@@ -2,7 +2,7 @@
   <section class="page">
     <p class="page-intro">A quick view of your project lifecycle, upcoming dates and actions that need your attention.</p>
     <AsyncPanel :loading="task.loading.value" :error="task.error.value" @retry="load">
-      <div class="grid grid-3">
+      <div class="grid grid-3 overview-stats">
         <article class="panel stat-card">
           <p class="eyebrow">CURRENT SCHOOL YEAR</p>
           <p class="stat-value">{{ years[0] ?? 'Not available' }}</p>
@@ -19,7 +19,7 @@
           <p class="muted">{{ roleHint }}</p>
         </article>
       </div>
-      <div class="grid grid-2 stack">
+      <div class="grid grid-2 stack overview-workflow">
         <article class="panel">
           <h2 class="section-title">Application timeline</h2>
           <p v-if="!periods.content?.length" class="empty">Application periods will appear here when configured.</p>
