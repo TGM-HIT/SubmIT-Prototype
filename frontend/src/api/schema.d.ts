@@ -1175,6 +1175,25 @@ export interface components {
             riskAndDependencies?: number;
             recommendation?: string;
         };
+        IdeaReviewRequest: {
+            decision: string;
+            feedback: string;
+            /** Format: int32 */
+            workSize?: number;
+            /** Format: int32 */
+            curriculumRelevance?: number;
+            /** Format: int32 */
+            technicalComplexity?: number;
+            /** Format: int32 */
+            feasibility?: number;
+            /** Format: int32 */
+            learningValue?: number;
+            /** Format: int32 */
+            resourceNeeds?: number;
+            /** Format: int32 */
+            riskAndDependencies?: number;
+            recommendation?: string;
+        };
         /** @description Explicitly configured weighted-average rule; no formula exists unless configured here. */
         AggregationRuleDto: {
             id: string;
@@ -2303,7 +2322,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["ReviewRequest"];
+                "application/json": components["schemas"]["IdeaReviewRequest"];
             };
         };
         responses: {

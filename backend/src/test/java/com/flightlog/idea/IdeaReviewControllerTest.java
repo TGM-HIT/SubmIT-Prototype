@@ -110,6 +110,34 @@ class IdeaReviewControllerTest {
                 .andExpect(status().isForbidden());
     }
 
+    @Test
+    void explicitNullOrInvalidIdeaRatingIsRejectedWithoutChangesWhileOmittedRatingIsAccepted() throws Exception {
+        String ideaId = submitIdea("Explicit null rating");
+
+        Map<String, Object> nullRating = new LinkedHashMap<>();
+        nullRating.put("decision", "REQUEST_REVISION");
+        nullRating.put("feedback", "Please clarify.");
+        nullRating.put("workSize", null);
+        review(ideaId, nullRating, teacherToken).andExpect(status().isBadRequest());
+
+        Map<String, Object> outOfRange = new LinkedHashMap<>();
+        outOfRange.put("decision", "DECLINE");
+        outOfRange.put("feedback", "No.");
+        outOfRange.put("feasibility", 6);
+        review(ideaId, outOfRange, teacherToken).andExpect(status().isBadRequest());
+
+        getIdea(ideaId, studentToken)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("IDEA_SUBMITTED"))
+                .andExpect(jsonPath("$.reviews.length()").value(0));
+
+        review(ideaId, Map.of("decision", "REQUEST_REVISION", "feedback", "Please clarify."), teacherToken)
+                .andExpect(status().isCreated());
+        getIdea(ideaId, studentToken)
+                .andExpect(jsonPath("$.status").value("IDEA_NEEDS_REVISION"))
+                .andExpect(jsonPath("$.reviews.length()").value(1));
+    }
+
     private String submitIdea(String title) throws Exception {
         Map<String, Object> request = Map.of(
                 "title", title,

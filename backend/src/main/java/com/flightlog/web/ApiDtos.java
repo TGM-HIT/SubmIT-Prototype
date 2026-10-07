@@ -1,5 +1,8 @@
 package com.flightlog.web;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonSetter;
+import com.fasterxml.jackson.annotation.Nulls;
 import com.flightlog.security.Role;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -67,6 +70,129 @@ public final class ApiDtos {
             @Min(1) @Max(5) Integer resourceNeeds,
             @Min(1) @Max(5) Integer riskAndDependencies,
             @Size(max = 2000) String recommendation) {
+    }
+
+    /**
+     * Idea review request: ratings may be omitted, but a rating that is present as an explicit JSON null is
+     * rejected. Bean properties are used because Jackson only applies the null check to supplied properties.
+     */
+    @JsonInclude(JsonInclude.Include.NON_NULL)
+    public static class IdeaReviewRequest {
+        @NotBlank
+        private String decision;
+        @NotBlank
+        @Size(max = 5000)
+        private String feedback;
+        @Min(1)
+        @Max(5)
+        private Integer workSize;
+        @Min(1)
+        @Max(5)
+        private Integer curriculumRelevance;
+        @Min(1)
+        @Max(5)
+        private Integer technicalComplexity;
+        @Min(1)
+        @Max(5)
+        private Integer feasibility;
+        @Min(1)
+        @Max(5)
+        private Integer learningValue;
+        @Min(1)
+        @Max(5)
+        private Integer resourceNeeds;
+        @Min(1)
+        @Max(5)
+        private Integer riskAndDependencies;
+        @Size(max = 2000)
+        private String recommendation;
+
+        public String getDecision() {
+            return decision;
+        }
+
+        public void setDecision(String decision) {
+            this.decision = decision;
+        }
+
+        public String getFeedback() {
+            return feedback;
+        }
+
+        public void setFeedback(String feedback) {
+            this.feedback = feedback;
+        }
+
+        public Integer getWorkSize() {
+            return workSize;
+        }
+
+        @JsonSetter(nulls = Nulls.FAIL)
+        public void setWorkSize(Integer workSize) {
+            this.workSize = workSize;
+        }
+
+        public Integer getCurriculumRelevance() {
+            return curriculumRelevance;
+        }
+
+        @JsonSetter(nulls = Nulls.FAIL)
+        public void setCurriculumRelevance(Integer curriculumRelevance) {
+            this.curriculumRelevance = curriculumRelevance;
+        }
+
+        public Integer getTechnicalComplexity() {
+            return technicalComplexity;
+        }
+
+        @JsonSetter(nulls = Nulls.FAIL)
+        public void setTechnicalComplexity(Integer technicalComplexity) {
+            this.technicalComplexity = technicalComplexity;
+        }
+
+        public Integer getFeasibility() {
+            return feasibility;
+        }
+
+        @JsonSetter(nulls = Nulls.FAIL)
+        public void setFeasibility(Integer feasibility) {
+            this.feasibility = feasibility;
+        }
+
+        public Integer getLearningValue() {
+            return learningValue;
+        }
+
+        @JsonSetter(nulls = Nulls.FAIL)
+        public void setLearningValue(Integer learningValue) {
+            this.learningValue = learningValue;
+        }
+
+        public Integer getResourceNeeds() {
+            return resourceNeeds;
+        }
+
+        @JsonSetter(nulls = Nulls.FAIL)
+        public void setResourceNeeds(Integer resourceNeeds) {
+            this.resourceNeeds = resourceNeeds;
+        }
+
+        public Integer getRiskAndDependencies() {
+            return riskAndDependencies;
+        }
+
+        @JsonSetter(nulls = Nulls.FAIL)
+        public void setRiskAndDependencies(Integer riskAndDependencies) {
+            this.riskAndDependencies = riskAndDependencies;
+        }
+
+        public String getRecommendation() {
+            return recommendation;
+        }
+
+        public void setRecommendation(String recommendation) {
+            this.recommendation = recommendation;
+        }
     }
 
     public record SupervisionPreferenceRequest(

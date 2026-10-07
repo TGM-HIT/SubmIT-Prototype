@@ -2,7 +2,7 @@ package com.flightlog.idea;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.flightlog.security.AuthenticatedUser;
-import com.flightlog.web.ApiDtos.ReviewRequest;
+import com.flightlog.web.ApiDtos.IdeaReviewRequest;
 import com.flightlog.web.ApiDtos.ReviewResponse;
 import com.flightlog.web.ApiDtos.SupervisionPreferenceRequest;
 import com.flightlog.web.ApiDtos.SupervisionPreferenceResponse;
@@ -37,7 +37,7 @@ public class IdeaReviewController {
     @PostMapping("/{id}/reviews")
     @ResponseStatus(HttpStatus.CREATED)
     public ReviewResponse review(@AuthenticationPrincipal AuthenticatedUser caller, @PathVariable UUID id,
-            @Valid @RequestBody ReviewRequest request) {
+            @Valid @RequestBody IdeaReviewRequest request) {
         return ideaService.review(caller, id, false, objectMapper.valueToTree(request));
     }
 

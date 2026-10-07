@@ -147,11 +147,7 @@ public class IdeaService {
         ObjectNode payload = rules.object(request);
         String decision = rules.text(payload, "decision");
         rules.text(payload, "feedback");
-        if (specificationReview) {
-            rules.ratings(payload);
-        } else {
-            rules.optionalIdeaRatings(payload);
-        }
+        rules.ratings(payload);
         payload.put("reviewType", specificationReview ? "SPECIFICATION" : "IDEA");
         String expectedStatus = specificationReview ? SPEC_SUBMITTED : IDEA_SUBMITTED;
         if (!expectedStatus.equals(idea.getStatus())) {
