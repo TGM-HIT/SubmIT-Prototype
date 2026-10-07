@@ -1,16 +1,16 @@
-### Bug-02. Prevent removal of the last administrator
+# Bug-02. Prevent removal of the last administrator
 
-#### Intent
+## Intent
 
 When changing the role of an administrator it should be checked that there is still another administrator account avaliable. At the moment it is possible to remove the last remaining administrator so that the system is not accessible anymore.
 
-#### Scope and contract
+## Scope and contract
 
 - In the backend, check if there will be at least one administrator account available after changing the role.
 - In the frontend, display an error if it was not possible to change the role.
 - If endpoint annotations change to document the rejection response, regenerate OpenAPI and frontend API types through the documented workflow and review the generated artifacts; do not edit generated files by hand or add generated `contracts/openapi.yaml` to version control.
 
-#### Mechanical checks (the Evaluator re-runs)
+## Mechanical checks (the Evaluator re-runs)
 
 Durable automated tests (join the build):
 
@@ -23,7 +23,7 @@ One-time manual verification (in addition to automated tests):
 
 - Confirm the UI shows an error if it was not possible to change the role.
 
-#### Acceptance criteria (the Evaluator judges)
+## Acceptance criteria (the Evaluator judges)
 
 - An administrator cannot change the role of the only remaining administrator to a non-administrator role. This includes changing their own role.
 - The backend enforces this invariant when processing the role-change request and rejects the change with a documented conflict/error response using the shared API error shape.

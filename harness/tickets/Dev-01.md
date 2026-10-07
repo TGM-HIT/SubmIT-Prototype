@@ -1,10 +1,10 @@
-### Dev-01. Seed student and teacher accounts for testing
+# Dev-01. Seed student and teacher accounts for testing
 
-#### Intent
+## Intent
 
 Make it easy to exercise student and teacher workflows locally by creating predictable test accounts when the application is explicitly started with its testing profile. The accounts should share a documented default password, while remaining isolated from normal and production runs.
 
-#### Scope and contract
+## Scope and contract
 
 - Add at least five accounts with the `STUDENT` role and five with the `TEACHER` role when the dedicated testing profile is active.
 - Give the seeded accounts stable, documented usernames and the same testing-only default password so they can be used for manual workflow verification.
@@ -13,7 +13,7 @@ Make it easy to exercise student and teacher workflows locally by creating predi
 - Make seeding safe to repeat: application restarts must not create duplicate accounts or fail because the seeded usernames already exist.
 - Document the test-profile activation and seeded login credentials in the backend's existing developer documentation. Clearly state that these credentials are for local/testing use only.
 
-#### Mechanical checks (the Evaluator re-runs)
+## Mechanical checks (the Evaluator re-runs)
 
 Durable automated tests (join the build):
 
@@ -25,7 +25,7 @@ One-time manual verification (in addition to automated tests):
 - Start the backend with the documented testing profile and sign in using each seeded account; confirm the resulting roles are `STUDENT` and `TEACHER`.
 - Start the backend without the testing profile and confirm the test accounts are not created.
 
-#### Acceptance criteria (the Evaluator judges)
+## Acceptance criteria (the Evaluator judges)
 
 - Starting the application with its explicitly activated testing profile makes at least one deterministic `STUDENT` account and one deterministic `TEACHER` account available for login.
 - Both accounts authenticate with the documented shared testing password, and passwords are stored only as encoded values.
