@@ -31,6 +31,7 @@ export function parseArgs(args) {
     selectByKey: [],
     nativeSelectByKey: [],
     expandSelect: [],
+    steps: [],
   }
   const valueOptions = new Map([
     ['--url', 'url'],
@@ -54,6 +55,7 @@ export function parseArgs(args) {
     ['--select-by-key', 'selectByKey'],
     ['--native-select-by-key', 'nativeSelectByKey'],
     ['--expand-select', 'expandSelect'],
+    ['--step', 'steps'],
   ])
   for (let index = 0; index < args.length; index += 1) {
     const flag = args[index]
@@ -81,6 +83,27 @@ export function parseArgs(args) {
         const interaction = { selector: value.slice(0, separator), value: value.slice(separator + 1) }
         options.selectByKey.push(interaction)
         if (name === 'nativeSelectByKey') options.nativeSelectByKey.push(interaction)
+      } else if (name === 'steps') {
+        const separator = value.indexOf(':')
+        const action = separator < 0 ? value : value.slice(0, separator)
+        const argument = separator < 0 ? '' : value.slice(separator + 1)
+        if (action === 'fill') {
+          const assignment = argument.indexOf('=')
+          if (assignment < 1) throw new Error('--step fill must use fill:SELECTOR=VALUE.')
+          options.steps.push({ action, selector: argument.slice(0, assignment), value: argument.slice(assignment + 1) })
+        } else if (['click', 'wait', 'read', 'focus', 'screenshot', 'key'].includes(action) && argument) {
+          if (action === 'screenshot' && path.basename(argument) !== argument) {
+            throw new Error('--step screenshot must use a filename, not a path.')
+          }
+          if (action === 'key' && !['Tab', 'Shift+Tab', 'Escape'].includes(argument)) {
+            throw new Error('--step key must be Tab, Shift+Tab, or Escape.')
+          }
+          options.steps.push({ action, value: argument })
+        } else if (action === 'accept-confirms' && !argument) {
+          options.steps.push({ action })
+        } else {
+          throw new Error('--step must be fill:SELECTOR=VALUE, click:SELECTOR, wait:SELECTOR, read:SELECTOR, focus:SELECTOR, screenshot:FILE, key:Tab|Shift+Tab|Escape, or accept-confirms.')
+        }
       } else {
         options[name] = value
       }
@@ -511,6 +534,104 @@ export async function applyPageInteractions(client, options, {
     if (selected !== value) throw new Error(`Keyboard selection in ${selector} produced ${JSON.stringify(selected)}, expected ${JSON.stringify(value)}.`)
     log(`Selected ${JSON.stringify(value)} in ${selector} with ${useNativeMacKeys ? 'the macOS native popup keyboard' : 'the keyboard'}.`)
   }
+  await applyPageSteps(client, options.steps ?? [], { outputDir: options.outputDir, log })
+}
+
+export async function applyPageSteps(client, steps, { outputDir, log = console.log } = {}) {
+  for (const step of steps) {
+    if (step.action === 'fill') {
+      const expression = `(selector, value) => {
+        const element = document.querySelector(selector);
+        if (!element) throw new Error('No element matches ' + selector);
+        let prototype;
+        if (element instanceof HTMLInputElement) prototype = HTMLInputElement.prototype;
+        else if (element instanceof HTMLTextAreaElement) prototype = HTMLTextAreaElement.prototype;
+        else if (element instanceof HTMLSelectElement) prototype = HTMLSelectElement.prototype;
+        else throw new Error('Element is not a fillable input, textarea, or select: ' + selector);
+        Object.getOwnPropertyDescriptor(prototype, 'value').set.call(element, value);
+        element.dispatchEvent(new Event('input', { bubbles: true }));
+        element.dispatchEvent(new Event('change', { bubbles: true }));
+        return true;
+      }`
+      await evaluatePage(client, `(${expression})(${JSON.stringify(step.selector)}, ${JSON.stringify(step.value)})`, `fill ${step.selector}`)
+      log(`Filled ${step.selector}.`)
+    } else if (step.action === 'click') {
+      const expression = `(selector) => {
+        const element = document.querySelector(selector);
+        if (!element) throw new Error('No element matches ' + selector);
+        if (!(element instanceof HTMLElement)) throw new Error('Element is not clickable: ' + selector);
+        element.focus();
+        element.click();
+        return true;
+      }`
+      await evaluatePage(client, `(${expression})(${JSON.stringify(step.value)})`, `click ${step.value}`)
+      log(`Clicked ${step.value}.`)
+    } else if (step.action === 'wait') {
+      const expression = `(selector) => new Promise((resolve, reject) => {
+        const deadline = Date.now() + 10000;
+        const check = () => {
+          try {
+            if (document.querySelector(selector)) return resolve(true);
+          } catch (error) {
+            return reject(error);
+          }
+          if (Date.now() >= deadline) return reject(new Error('Timed out waiting for ' + selector));
+          setTimeout(check, 100);
+        };
+        check();
+      })`
+      await evaluatePage(client, `(${expression})(${JSON.stringify(step.value)})`, `wait for ${step.value}`)
+      log(`Found ${step.value}.`)
+    } else if (step.action === 'read') {
+      const text = await evaluatePage(client, `((selector) => {
+        const element = document.querySelector(selector);
+        if (!element) throw new Error('No element matches ' + selector);
+        return element.textContent?.trim() ?? '';
+      })(${JSON.stringify(step.value)})`, `read text from ${step.value}`)
+      log(`Text in ${step.value}: ${text}`)
+    } else if (step.action === 'focus') {
+      const result = await evaluatePage(client, `new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => {
+        const element = document.activeElement;
+        resolve({
+          matches: element?.matches(${JSON.stringify(step.value)}) === true,
+          activeElement: element ? { tagName: element.tagName, id: element.id, text: element.textContent?.trim() } : null,
+        });
+      })))`, `verify focus on ${step.value}`)
+      if (!result.matches) throw new Error(`Expected focus to return to ${step.value}; active element is ${JSON.stringify(result.activeElement)}.`)
+      log(`Focus returned to ${step.value}.`)
+    } else if (step.action === 'accept-confirms') {
+      await evaluatePage(client, 'window.confirm = () => true', 'allow confirmation dialogs in the local preview')
+      log('Preview confirmation dialogs will be accepted.')
+    } else if (step.action === 'key') {
+      const key = step.value === 'Shift+Tab' ? 'Tab' : step.value
+      const code = key === 'Tab' ? 'Tab' : 'Escape'
+      const keyCode = key === 'Tab' ? 9 : 27
+      const modifiers = step.value === 'Shift+Tab' ? 8 : 0
+      const topDialogCount = step.value === 'Escape'
+        ? await evaluatePage(client, 'document.querySelectorAll("[role=dialog]").length', 'count open dialogs')
+        : undefined
+      await client.send('Input.dispatchKeyEvent', { type: 'keyDown', key, code, windowsVirtualKeyCode: keyCode, modifiers })
+      await client.send('Input.dispatchKeyEvent', { type: 'keyUp', key, code, windowsVirtualKeyCode: keyCode, modifiers })
+      if (key === 'Tab') {
+        const contained = await evaluatePage(client, `(() => {
+          const dialogs = [...document.querySelectorAll('[role="dialog"]')];
+          const top = dialogs.sort((left, right) => Number(getComputedStyle(right.parentElement).zIndex) - Number(getComputedStyle(left.parentElement).zIndex))[0];
+          return Boolean(top && top.contains(document.activeElement));
+        })()`, 'verify Tab focus remains inside the top dialog')
+        if (!contained) throw new Error('Tab moved focus outside the open dialog.')
+        log(`Pressed ${step.value}; focus remains inside the dialog.`)
+      } else {
+        await evaluatePage(client, 'new Promise((resolve) => setTimeout(resolve, 50))', 'wait for Escape to close the dialog')
+        const dialogCount = await evaluatePage(client, 'document.querySelectorAll("[role=dialog]").length', 'count open dialogs after Escape')
+        if (dialogCount >= topDialogCount) throw new Error('Escape did not close the top dialog.')
+        log('Pressed Escape; the top dialog closed.')
+      }
+    } else if (step.action === 'screenshot') {
+      if (!outputDir) throw new Error('A screenshot step requires an output directory.')
+      const outputPath = await saveScreenshot(client, outputDir, step.value)
+      log(`Screenshot saved: ${outputPath}`)
+    }
+  }
 }
 
 function sendMacNativeSelectKeys({ x, y }, arrowKeyCode, steps) {
@@ -704,6 +825,7 @@ Options:
   --select-by-key SELECTOR=VALUE  Select an enabled native option using keyboard input; may be repeated
   --native-select-by-key SELECTOR=VALUE  Use macOS keyboard input on a headed collapsed popup
   --expand-select SELECTOR        Show all native select options inline for screenshot inspection
+  --step ACTION:VALUE             Run ordered fill/click/wait/read/focus/key/screenshot interactions
   --password-env NAME             Environment variable containing its password (default PREVIEW_PASSWORD)
   --frontend-port N               Vite port (default 5173)
   --backend-port N                Backend port (default 8080)
@@ -715,6 +837,8 @@ Options:
 For authenticated inspection, set PREVIEW_PASSWORD using the password documented in
 backend/DEV-GUIDELINES.md and pass --username student01 (or another documented account).
 Use --fill, --click, --wait-for, and --expand-select to perform reusable preview interactions after authentication,
+or repeat --step ACTION:VALUE to sequence conditional flows. Steps support fill:SELECTOR=VALUE, click:SELECTOR,
+wait:SELECTOR, read:SELECTOR, focus:SELECTOR, key:Tab|Shift+Tab|Escape, screenshot:FILE, and accept-confirms (local preview only).
 for example to load a form that requires a project ID before its details are shown. Use --tab-to and
 --select-by-key for browser keyboard navigation. On macOS, use --headed and --native-select-by-key for GUI
 keyboard input to a collapsed popup (Terminal may require Accessibility permission).

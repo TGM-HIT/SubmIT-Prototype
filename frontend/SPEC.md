@@ -49,6 +49,7 @@ The UI must make the following behavior clear:
 - Approval allows the student to submit full specifications but does not mean the project is accepted into the application catalogue.
 - A full specification includes objectives, intended users, features or requirements, deliverables, proposed scope, and known resources or dependencies.
 - Teacher decisions and comments remain visible as review history. Clearly distinguish approval for full specification, acceptance for applications, revision requests, and declines.
+- Teachers can start a review directly from an idea-list row when an idea or specification is awaiting review. Idea details and review forms open in accessible modal dialogs; a review may also be opened from the details modal, and a successful decision refreshes the list and visible history.
 - Teacher ratings use a consistent 1-to-5 scale for work size, curriculum relevance, technical complexity, feasibility, learning value, resource needs, and risk/dependencies. Explain each category and show that the ratings inform but do not automatically determine the decision.
 - Supervision preference is separate from a confirmed supervisor. Display the teacher's stated preference, and let administrators assign a confirmed supervisor only from teachers who have said they want to supervise or are willing to supervise.
 - Students must choose at least three distinct accepted projects and rank them before an application can be submitted. Show the deadline, prevent duplicate choices, and allow reordering with accessible controls.

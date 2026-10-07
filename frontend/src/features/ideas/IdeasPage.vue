@@ -23,35 +23,21 @@
       <div class="actions"><button class="button" :disabled="task.loading.value">{{ task.loading.value ? 'Saving…' : 'Save draft' }}</button><button class="button button-secondary" type="button" @click="editorOpen = false">Cancel</button></div>
     </form>
 
-    <form v-if="specEditorOpen && selectedIdea" class="panel stack" @submit.prevent="saveSpecification">
-      <h2 class="section-title">Full specification — {{ selectedIdea.title }}</h2>
-      <div class="notice">You may develop the full specification after teacher approval of the idea. The submitted specification still needs a separate acceptance decision before students can apply.</div>
-      <div class="grid grid-2">
-        <TextListField v-model="specForm.objectives" label="Objectives" />
-        <TextListField v-model="specForm.intendedUsers" label="Intended users" />
-        <TextListField v-model="specForm.requirements" label="Features / requirements" />
-        <TextListField v-model="specForm.deliverables" label="Deliverables" />
-      </div>
-      <div class="field"><label class="label" for="spec-scope">Proposed scope</label><textarea id="spec-scope" v-model="specForm.scope" class="textarea" maxlength="5000" required /></div>
-      <TextListField v-model="specForm.dependencies" label="Resources / known dependencies" />
-      <div v-if="task.error.value" class="error-box" role="alert">{{ task.error.value }}</div>
-      <div class="actions"><button class="button" :disabled="task.loading.value">Save specification</button><button class="button button-secondary" type="button" @click="specEditorOpen = false">Cancel</button></div>
-    </form>
-
-    <form v-if="reviewOpen && selectedIdea" class="panel stack" @submit.prevent="submitReview">
-      <h2 class="section-title">{{ isSpecReview ? 'Review full specification' : 'Review idea' }}</h2>
-      <p class="muted">Ratings inform discussion and do not automatically determine the decision.</p>
-      <div class="grid grid-2">
-        <div class="field"><label class="label" for="decision">Decision</label><select id="decision" v-model="reviewForm.decision" class="select"><option v-if="isSpecReview" value="ACCEPT_FOR_APPLICATIONS">Accept for student applications</option><option v-else value="APPROVE_FOR_SPECIFICATION">Approve full specification work</option><option value="REQUEST_REVISION">Request revision</option><option value="DECLINE">Decline</option></select></div>
-        <div class="field"><label class="label" for="recommendation">Overall recommendation</label><input id="recommendation" v-model="reviewForm.recommendation" class="input" maxlength="2000" /></div>
-      </div>
-      <div class="field"><label class="label" for="feedback">Written feedback · required</label><textarea id="feedback" v-model="reviewForm.feedback" class="textarea" maxlength="5000" required /></div>
-      <div class="grid grid-3">
-        <div v-for="rating in ratings" :key="rating.key" class="field"><label class="label" :for="rating.key">{{ rating.label }} (1–5)</label><select :id="rating.key" v-model="reviewForm[rating.key]" class="select"><option value="">Not rated</option><option v-for="value in 5" :key="value" :value="value">{{ value }}</option></select></div>
-      </div>
-      <div v-if="task.error.value" class="error-box" role="alert">{{ task.error.value }}</div>
-      <div class="actions"><button class="button" :disabled="task.loading.value">Record decision</button><button class="button button-secondary" type="button" @click="reviewOpen = false">Cancel</button></div>
-    </form>
+    <ModalDialog v-if="reviewOpen && selectedIdea" :title="isSpecReview ? 'Review full specification' : 'Review idea'" :return-focus="reviewReturnFocus" @close="closeReview">
+      <form class="stack" @submit.prevent="submitReview">
+        <p class="muted">Ratings inform discussion and do not automatically determine the decision.</p>
+        <div class="grid grid-2">
+          <div class="field"><label class="label" for="decision">Decision</label><select id="decision" v-model="reviewForm.decision" class="select"><option v-if="isSpecReview" value="ACCEPT_FOR_APPLICATIONS">Accept for student applications</option><option v-else value="APPROVE_FOR_SPECIFICATION">Approve full specification work</option><option value="REQUEST_REVISION">Request revision</option><option value="DECLINE">Decline</option></select></div>
+          <div class="field"><label class="label" for="recommendation">Overall recommendation</label><input id="recommendation" v-model="reviewForm.recommendation" class="input" maxlength="2000" /></div>
+        </div>
+        <div class="field"><label class="label" for="feedback">Written feedback · required</label><textarea id="feedback" v-model="reviewForm.feedback" class="textarea" maxlength="5000" required /></div>
+        <div class="grid grid-3">
+          <div v-for="rating in ratings" :key="rating.key" class="field"><label class="label" :for="rating.key">{{ rating.label }} (1–5)</label><select :id="rating.key" v-model="reviewForm[rating.key]" class="select"><option value="">Not rated</option><option v-for="value in 5" :key="value" :value="value">{{ value }}</option></select></div>
+        </div>
+        <div v-if="task.error.value" class="error-box" role="alert">{{ task.error.value }}</div>
+        <div class="actions"><button class="button" :disabled="task.loading.value">Record decision</button><button class="button button-secondary" type="button" @click="closeReview">Cancel</button></div>
+      </form>
+    </ModalDialog>
 
     <div class="panel stack">
       <div class="toolbar">
@@ -69,7 +55,8 @@
               <span class="status-badge" :class="`status-${idea.status?.toLowerCase()}`">{{ readable(idea.status) }}</span>
             </div>
             <div class="actions">
-              <button class="button button-secondary button-small" type="button" @click="selectIdea(idea)">Details & history</button>
+              <button :id="`details-button-${idea.id}`" class="button button-secondary button-small" type="button" @click="openDetails(idea, $event)">Details &amp; history</button>
+              <button v-if="isTeacher && canReview(idea)" :id="`review-button-${idea.id}`" class="button button-small" type="button" @click="startReview(idea, $event)">Review</button>
               <button v-if="isStudent && editable(idea)" class="button button-secondary button-small" type="button" @click="editIdea(idea)">Edit</button>
               <button v-if="isStudent && editable(idea)" class="button button-small" type="button" @click="submitIdea(idea)">Submit</button>
               <button v-if="isStudent && canWithdraw(idea)" class="button button-danger button-small" type="button" @click="withdrawIdea(idea)">Withdraw</button>
@@ -81,8 +68,9 @@
       </AsyncPanel>
     </div>
 
-    <section v-if="selectedIdea" class="panel stack">
-      <div class="page-heading"><div><h2 class="section-title">{{ selectedIdea.title }} · history</h2><p class="muted">Submission and decisions remain visible as the project changes stage.</p></div><button class="button button-secondary button-small" @click="selectedIdea = null">Close details</button></div>
+    <ModalDialog v-if="detailsOpen && selectedIdea" title="Idea details &amp; history" :return-focus="detailsReturnFocus" @close="closeDetails">
+      <section class="stack">
+      <div class="page-heading"><div><h2 class="section-title">{{ selectedIdea.title }} · history</h2><p class="muted">Submission and decisions remain visible as the project changes stage.</p></div><button class="button button-secondary button-small" @click="closeDetails">Close details</button></div>
       <div class="grid grid-2">
         <div><p class="eyebrow">PROJECT DESCRIPTION</p><p class="muted">{{ selectedIdea.description }}</p><p><strong>Intended outcome</strong><br />{{ selectedIdea.intendedOutcome }}</p><p><strong>Initial scope</strong></p><ul class="muted"><li v-for="point in selectedIdea.scopePoints ?? []" :key="point">{{ point }}</li></ul></div>
         <div><p class="eyebrow">LIFECYCLE</p><p><span class="status-badge">{{ readable(selectedIdea.status) }}</span></p><p class="notice">{{ lifecycleMessage(selectedIdea.status) }}</p><div v-if="selectedIdea.specification"><strong>Specification</strong><p class="muted">Objectives: {{ selectedIdea.specification.objectives?.join(' · ') }}</p><p class="muted">Scope: {{ selectedIdea.specification.scope }}</p></div></div>
@@ -93,7 +81,7 @@
       <h3 v-if="selectedIdea.supervisionPreferences?.length" class="form-section-title">Recorded supervision preferences</h3>
       <div v-for="entry in selectedIdea.supervisionPreferences ?? []" :key="entry.id" class="choice-item"><span>{{ entry.teacherId }} · {{ readable(entry.preference) }}</span><span class="muted">{{ entry.note }}</span></div>
       <div v-if="isStudent && canSpecify(selectedIdea)" class="actions"><button class="button" @click="startSpecification">Develop full specification</button><button v-if="selectedIdea.status === 'IDEA_APPROVED_FOR_SPECIFICATION'" class="button button-secondary" @click="submitSpecification">Submit specification for acceptance review</button></div>
-      <div v-if="isTeacher && ['IDEA_SUBMITTED','SPECIFICATION_SUBMITTED'].includes(selectedIdea.status ?? '')" class="actions"><button class="button" @click="openReview">Review {{ selectedIdea.status === 'SPECIFICATION_SUBMITTED' ? 'specification' : 'idea' }}</button></div>
+      <div v-if="isTeacher && canReview(selectedIdea)" class="actions"><button id="review-from-details" class="button" type="button" @click="openReview($event)">Review {{ selectedIdea.status === 'SPECIFICATION_SUBMITTED' ? 'specification' : 'idea' }}</button></div>
       <form v-if="isTeacher && !['IDEA_DRAFT','WITHDRAWN','DECLINED'].includes(selectedIdea.status ?? '')" class="panel stack" @submit.prevent="savePreference">
         <h3 class="form-section-title">Your supervision preference</h3>
         <div class="grid grid-2"><div class="field"><label class="label" for="preference">Preference</label><select id="preference" v-model="preference" class="select"><option value="WANTS_TO_SUPERVISE">Wants to supervise</option><option value="WILLING_TO_SUPERVISE">Willing to supervise</option><option value="NOT_AVAILABLE">Not available</option></select></div><div class="field"><label class="label" for="preference-note">Optional note</label><input id="preference-note" v-model="preferenceNote" class="input" maxlength="2000" /></div></div><button class="button button-secondary" :disabled="task.loading.value">Save preference</button>
@@ -102,7 +90,17 @@
         <h3 class="form-section-title">Confirm supervisor</h3><p class="muted">Assign only a teacher who has stated they want or are willing to supervise this project.</p>
         <div class="field"><label class="label" for="teacher-id">Eligible teacher who wants or is willing to supervise</label><select id="teacher-id" v-model="teacherId" class="select" required><option value="">Select an eligible teacher…</option><option v-for="entry in eligibleTeachers" :key="entry.teacherId" :value="entry.teacherId">{{ entry.teacherId }} · {{ readable(entry.preference) }}</option></select></div><button class="button button-secondary" :disabled="!eligibleTeachers.length">Confirm supervisor</button>
       </form>
-    </section>
+      <form v-if="specEditorOpen" class="panel stack" @submit.prevent="saveSpecification">
+        <h2 class="section-title">Full specification — {{ selectedIdea.title }}</h2>
+        <div class="notice">You may develop the full specification after teacher approval of the idea. The submitted specification still needs a separate acceptance decision before students can apply.</div>
+        <div class="grid grid-2"><TextListField v-model="specForm.objectives" label="Objectives" /><TextListField v-model="specForm.intendedUsers" label="Intended users" /><TextListField v-model="specForm.requirements" label="Features / requirements" /><TextListField v-model="specForm.deliverables" label="Deliverables" /></div>
+        <div class="field"><label class="label" for="spec-scope">Proposed scope</label><textarea id="spec-scope" v-model="specForm.scope" class="textarea" maxlength="5000" required /></div>
+        <TextListField v-model="specForm.dependencies" label="Resources / known dependencies" />
+        <div v-if="task.error.value" class="error-box" role="alert">{{ task.error.value }}</div>
+        <div class="actions"><button class="button" :disabled="task.loading.value">Save specification</button><button class="button button-secondary" type="button" @click="specEditorOpen = false">Cancel</button></div>
+      </form>
+      </section>
+    </ModalDialog>
     <p v-if="task.success.value" class="success-note" role="status">{{ task.success.value }}</p>
   </section>
 </template>
@@ -114,6 +112,7 @@ import { ideasApi, periodsApi } from '../../api/services'
 import type { Page } from '../../api/client'
 import { useAuthStore } from '../../stores/auth'
 import { useTask } from '../../composables/useTask'
+import ModalDialog from '../../components/ModalDialog.vue'
 import AsyncPanel from '../../components/AsyncPanel.vue'
 import TextListField from './TextListField.vue'
 
@@ -138,9 +137,12 @@ const schoolYears = ref<string[]>([])
 const statusFilter = ref('')
 const yearFilter = ref('')
 const selectedIdea = ref<Idea | null>(null)
+const detailsOpen = ref(false)
+const detailsReturnFocus = ref<HTMLElement | null>(null)
 const editorOpen = ref(false)
 const specEditorOpen = ref(false)
 const reviewOpen = ref(false)
+const reviewReturnFocus = ref<HTMLElement | null>(null)
 const editingId = ref('')
 const isSpecReview = ref(false)
 const preference = ref('WILLING_TO_SUPERVISE')
@@ -171,6 +173,9 @@ function canWithdraw(idea: Idea): boolean {
 function canSpecify(idea: Idea): boolean {
   return ['IDEA_APPROVED_FOR_SPECIFICATION','SPECIFICATION_NEEDS_REVISION'].includes(idea.status ?? '')
 }
+function canReview(idea: Idea): boolean {
+  return ['IDEA_SUBMITTED', 'SPECIFICATION_SUBMITTED'].includes(idea.status ?? '')
+}
 function lifecycleMessage(status?: string): string {
   if (status === 'IDEA_APPROVED_FOR_SPECIFICATION') return 'Approval lets you write a full specification. It does not yet make this project available for student applications.'
   if (status === 'ACCEPTED_FOR_APPLICATIONS') return 'A teacher accepted the submitted specification. The project may be included in an application period once a supervisor is confirmed.'
@@ -183,6 +188,27 @@ async function load(index = 0): Promise<void> {
 async function selectIdea(idea: Idea): Promise<void> {
   const record = await task.run(() => ideasApi.get(idea.id ?? ''))
   if (record) selectedIdea.value = record
+}
+async function openDetails(idea: Idea, event: MouseEvent): Promise<void> {
+  detailsReturnFocus.value = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+  selectedIdea.value = null
+  await selectIdea(idea)
+  if (selectedIdea.value) detailsOpen.value = true
+}
+function closeDetails(): void {
+  detailsOpen.value = false
+  selectedIdea.value = null
+  specEditorOpen.value = false
+}
+async function startReview(idea: Idea, event: MouseEvent): Promise<void> {
+  reviewReturnFocus.value = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+  selectedIdea.value = null
+  await selectIdea(idea)
+  if (selectedIdea.value && canReview(selectedIdea.value)) openReview()
+}
+function closeReview(): void {
+  reviewOpen.value = false
+  if (!detailsOpen.value) selectedIdea.value = null
 }
 function startCreate(): void {
   editingId.value = ''
@@ -235,20 +261,32 @@ async function submitSpecification(): Promise<void> {
   const result = await task.run(() => ideasApi.submitSpecification(selectedIdea.value!.id!), 'Specification submitted.')
   if (result) await selectIdea(selectedIdea.value!)
 }
-function openReview(): void {
+function openReview(event?: MouseEvent): void {
+  if (!selectedIdea.value) return
+  if (event) reviewReturnFocus.value = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
   isSpecReview.value = selectedIdea.value?.status === 'SPECIFICATION_SUBMITTED'
   reviewForm.decision = isSpecReview.value ? 'ACCEPT_FOR_APPLICATIONS' : 'APPROVE_FOR_SPECIFICATION'
   reviewOpen.value = true
 }
 async function submitReview(): Promise<void> {
   if (!selectedIdea.value?.id) return
-  const body = { ...reviewForm }
-  for (const key of ratings.map((rating) => rating.key)) {
-    if (body[key] === '') delete body[key]
-    else body[key] = Number(body[key])
+  const body: components['schemas']['ReviewRequest'] = {
+    decision: String(reviewForm.decision),
+    feedback: String(reviewForm.feedback),
+    recommendation: String(reviewForm.recommendation),
   }
-  const result = await task.run(() => ideasApi.review(selectedIdea.value!.id!, body as components['schemas']['ReviewRequest'], isSpecReview.value), 'Teacher decision recorded.')
-  if (result) { reviewOpen.value = false; await selectIdea(selectedIdea.value!); await load(page.value.page) }
+  for (const { key } of ratings) {
+    const rating = Number(reviewForm[key])
+    if (Number.isInteger(rating) && rating >= 1 && rating <= 5) body[key] = rating
+  }
+  const result = await task.run(() => ideasApi.review(selectedIdea.value!.id!, body, isSpecReview.value), 'Teacher decision recorded.')
+  if (result) {
+    reviewOpen.value = false
+    const idea = selectedIdea.value!
+    await selectIdea(idea)
+    await load(page.value.page)
+    if (!detailsOpen.value) selectedIdea.value = null
+  }
 }
 async function savePreference(): Promise<void> {
   if (!selectedIdea.value?.id) return

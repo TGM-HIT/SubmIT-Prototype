@@ -8,6 +8,7 @@ import test from 'node:test'
 import { fileURLToPath } from 'node:url'
 import {
   applyPageInteractions,
+  applyPageSteps,
   collectBrowserErrors,
   formatNativeInputFailure,
   parseArgs,
@@ -22,6 +23,10 @@ test('parses preview options and rejects incomplete or invalid invocations', () 
   assert.equal(parseArgs(['--headed']).headed, true)
   assert.equal(parseArgs(['--viewport', 'mobile', '--output-dir', '/tmp/previews']).viewport, 'mobile')
   assert.equal(parseArgs(['--no-start', '--url', 'http://localhost:5173']).start, false)
+  assert.deepEqual(parseArgs(['--step', 'focus:#trigger', '--step', 'read:body']).steps, [
+    { action: 'focus', value: '#trigger' },
+    { action: 'read', value: 'body' },
+  ])
   assert.deepEqual(parseArgs([
     '--headed',
     '--fill', '#project-id=fixture=id',
@@ -105,6 +110,43 @@ test('performs requested page interactions in fill, click, wait, expand, then ke
     ['Tab', 'keyDown'], ['Tab', 'keyUp'],
     ['ArrowDown', 'keyDown'], ['ArrowDown', 'keyUp'],
   ])
+})
+
+test('runs ordered preview steps and captures screenshots between interactions', async (context) => {
+  const outputDir = await mkdtemp(path.join(tmpdir(), 'flightlog-preview-steps-'))
+  context.after(() => rm(outputDir, { recursive: true, force: true }))
+  const events = []
+  let dialogCount = 2
+  const logs = []
+  await applyPageSteps({
+    async send(method, params) {
+      events.push(method === 'Runtime.evaluate' ? params.expression : `${method}:${params.key}:${params.type}`)
+      if (method === 'Page.captureScreenshot') return { data: Buffer.from('png').toString('base64') }
+      if (params.expression?.includes('document.querySelectorAll("[role=dialog]").length')) {
+        dialogCount -= 1
+        return { result: { value: dialogCount } }
+      }
+      if (params.expression?.includes('requestAnimationFrame')) {
+        return { result: { value: { matches: true, activeElement: { tagName: 'BUTTON', id: 'trigger' } } } }
+      }
+      return { result: { value: true } }
+    },
+  }, [
+    { action: 'click', value: 'button.open' },
+    { action: 'key', value: 'Tab' },
+    { action: 'screenshot', value: 'modal.png' },
+    { action: 'key', value: 'Escape' },
+    { action: 'focus', value: '#trigger' },
+  ], { outputDir, log: (message) => logs.push(message) })
+  assert.match(events[0], /button\.open/)
+  assert.deepEqual(events.slice(1, 3), [
+    'Input.dispatchKeyEvent:Tab:keyDown',
+    'Input.dispatchKeyEvent:Tab:keyUp',
+  ])
+  assert.match(logs.join(' '), /focus remains inside the dialog/)
+  assert.match(logs.join(' '), /Screenshot saved:/)
+  assert.match(logs.join(' '), /top dialog closed/)
+  assert.match(logs.join(' '), /Focus returned to #trigger/)
 })
 
 test('opens a collapsed native selector before keyboard navigation', async () => {
