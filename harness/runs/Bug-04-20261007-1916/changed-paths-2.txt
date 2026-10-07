@@ -1,0 +1,3 @@
+frontend/src/components/ModalDialog.vue
+frontend/src/features/ideas/IdeasPage.test.ts
+frontend/src/features/ideas/IdeasPage.vue

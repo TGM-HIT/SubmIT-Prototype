@@ -1,0 +1,8 @@
+frontend/DEV-GUIDELINES.md
+frontend/SPEC.md
+frontend/scripts/preview.mjs
+frontend/scripts/preview.smoke.mjs
+frontend/src/components/ModalDialog.test.ts
+frontend/src/components/ModalDialog.vue
+frontend/src/features/ideas/IdeasPage.test.ts
+frontend/src/features/ideas/IdeasPage.vue
