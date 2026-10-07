@@ -4,7 +4,14 @@ Find the matching "### . <Title>" heading and read the ticket there. Implement o
 
 The one exception is the specs. If the ticket cannot be implemented correctly without changing a SPEC.md file (docs/SPEC.md, backend/SPEC.md, or frontend/SPEC.md), you may edit it, but only the minimum needed to match the ticket's behavior, in the same commit as the code. Never edit a spec to excuse a failing check or to weaken a requirement. Declare every spec change in the handoff under "What was done" on a line starting with "SPEC CHANGE:" naming the file, what changed, and why it was necessary; repeat it under "What's uncertain" if it was a judgment call.
 
-Run the ticket's completion checks yourself, and confirm they pass, before you report anything as done. Once they pass, commit your change on the current branch.
+Run the ticket's completion checks yourself, and confirm they pass, before you
+report anything as done. If the ticket's requested behavior or presentation
+already meets its requirements on the current branch, do not make a redundant
+change or commit just to create a diff. Instead, report a no-op/resolved
+finding, the exact HEAD SHA inspected, criterion-by-criterion evidence, and
+which required checks you ran or could not run. The Evaluator decides whether
+the evidence establishes acceptance. Otherwise, once the checks pass, commit
+your change on the current branch.
 
 Then report back in a handoff note: a short prose block under three fixed headings, nothing more. Use these exact headings, verbatim:
 

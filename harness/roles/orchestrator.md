@@ -28,13 +28,17 @@ Dispatch the Implementor with the plan and that ID, and read its handoff note.
 
 Then run the gates before you dispatch the Evaluator. First, run the
 handoff-completeness gate on the note you just read:
-jbang harness/gates/handoff-complete.java <handoff-note>. Then take the
-Implementor's deliverable commit, list its changed paths with git diff
---name-only into a file, and run the commit-scope gate on that list, with the
-source tree as the allowed set: jbang harness/gates/commit-scope.java
-<changed-paths>. A non-zero exit from either gate stops the run: a failed
-completeness gate sends the handoff back to a fresh Implementor with the missing
-heading. Never dispatch the Evaluator past a failed gate.
+jbang harness/gates/handoff-complete.java <handoff-note>. For an implementation
+commit, list its changed paths with git diff --name-only into a file and run the
+commit-scope gate on that list, with the source tree as the allowed set:
+jbang harness/gates/commit-scope.java <changed-paths>. If the handoff is a
+no-op/resolved finding with no implementation commit, use the exact HEAD SHA
+reported by the Implementor, create an empty changed-paths file in the run
+folder, and run the same gate; an empty list is an intentional no-op, not a
+missing gate input. Record the SHA and no-op outcome. A non-zero exit from
+either gate stops the run: a failed completeness gate sends the handoff back to
+a fresh Implementor with the missing heading. Never dispatch the Evaluator past
+a failed gate.
 
 The scope gate also permits the three SPEC.md files (docs/, backend/, frontend/) and
 prints a "FLAG: spec change: <path>" line for each one in the commit. A flag is not a
@@ -57,8 +61,8 @@ is no human-verification gap to escalate in this gate-failure case; use the
 `awaiting-human` path only for unresolved acceptance checks a human can verify
 or disposition.
 
-With both gates clean, dispatch the Evaluator with the diff, the ticket, and that
-handoff note, and read its verdict.
+With both gates clean, dispatch the Evaluator with the diff (or explicit
+no-diff baseline SHA), the ticket, and that handoff note, and read its verdict.
 
 Evaluator verdicts are `pass`, `revise`, or `awaiting-human`.
 
