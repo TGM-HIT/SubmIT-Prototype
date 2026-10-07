@@ -6,7 +6,7 @@
 |--------|--------|
 | Bug-01 | done |
 | Bug-02 | done |
-| Bug-03 | to-do |
+| Bug-03 | failed |
 | Dev-01 | to-do |
 
 ### Bug-01. Create Application Period doesn't work
