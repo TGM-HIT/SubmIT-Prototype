@@ -24,13 +24,19 @@ const account = (role: 'STUDENT' | 'TEACHER' | 'ADMIN') => ({
 })
 
 describe('authenticated shell profile and settings navigation', () => {
+  const roleNavigation = {
+    STUDENT: ['/', '/ideas', '/applications', '/formal-application', '/grading', '/archive'],
+    TEACHER: ['/', '/ideas', '/applications', '/allocation', '/formal-application', '/grading', '/archive'],
+    ADMIN: ['/', '/ideas', '/applications', '/allocation', '/grading', '/archive', '/admin'],
+  } as const
+
   afterEach(() => {
     document.body.innerHTML = ''
     api.changeName.mockReset()
     vi.restoreAllMocks()
   })
 
-  it.each(['STUDENT', 'TEACHER', 'ADMIN'] as const)('shows User Settings and identity details for %s without inline editing', (role) => {
+  it.each(['STUDENT', 'TEACHER', 'ADMIN'] as const)('shows User Settings beside Archive management for %s without inline editing', (role) => {
     setActivePinia(createPinia())
     useAuthStore().updateUser(account(role))
     const wrapper = mount(AppShell, {
@@ -44,7 +50,15 @@ describe('authenticated shell profile and settings navigation', () => {
     })
 
     expect(wrapper.get('h1').text()).toBe('User Settings')
-    expect(wrapper.get('a[href="/settings"]').text()).toContain('User Settings')
+    const mainNavigation = wrapper.get('nav[aria-label="Main navigation"]')
+    expect(mainNavigation.findAll('a').map((link) => link.attributes('href'))).toEqual(roleNavigation[role])
+    expect(mainNavigation.findAll('a[href="/settings"]')).toHaveLength(0)
+    const sidebarLinks = wrapper.get('.sidebar-bottom').findAll(':scope > a.nav-link')
+    expect(sidebarLinks.map((link) => link.text().slice(1))).toEqual(['Archive management', 'User Settings'])
+    const settingsLinks = wrapper.findAll('a[href="/settings"]')
+    expect(settingsLinks).toHaveLength(1)
+    expect(settingsLinks[0].text()).toContain('User Settings')
+    expect(settingsLinks[0].find('[aria-hidden="true"]').text()).toBe('⚙')
     expect(wrapper.get('.profile').text()).toContain('Current display name')
     expect(wrapper.get('.profile').text()).toContain(`${role.toLowerCase()}-username`)
     expect(wrapper.get('.profile').text()).toContain(role)

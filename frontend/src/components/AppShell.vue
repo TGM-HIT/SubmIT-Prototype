@@ -10,6 +10,7 @@
       </nav>
       <div class="sidebar-bottom">
         <RouterLink to="/archive" class="nav-link"><span aria-hidden="true">▣</span>Archive management</RouterLink>
+        <RouterLink v-if="auth.user" to="/settings" class="nav-link"><span aria-hidden="true">⚙</span>User Settings</RouterLink>
         <div v-if="auth.user" class="profile">
           <div class="avatar" aria-hidden="true">{{ (auth.user.displayName ?? 'A').slice(0, 1).toUpperCase() }}</div>
           <div class="profile-meta"><strong>{{ auth.user.displayName }}</strong><small>{{ auth.user.username }} · {{ auth.user.role }}</small></div>
@@ -37,7 +38,6 @@ const route = useRoute()
 const router = useRouter()
 const allItems = [
   { to: '/', label: 'Overview', icon: '⌂', roles: ['STUDENT', 'TEACHER', 'ADMIN'] },
-  { to: '/settings', label: 'User Settings', icon: '⚙', roles: ['STUDENT', 'TEACHER', 'ADMIN'] },
   { to: '/ideas', label: 'Ideas & reviews', icon: '✧', roles: ['STUDENT', 'TEACHER', 'ADMIN'] },
   { to: '/applications', label: 'Applications', icon: '☷', roles: ['STUDENT', 'TEACHER', 'ADMIN'] },
   { to: '/allocation', label: 'Allocation', icon: '⇄', roles: ['TEACHER', 'ADMIN'] },
