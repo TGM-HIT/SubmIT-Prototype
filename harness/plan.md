@@ -29,3 +29,4 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Feature-01](tickets/Feature-01.md) | done | Allow unrated idea reviews and show ratings in history |
 | [Feature-02](tickets/Feature-02.md) | done | Add editable account names |
 | [Feature-03](tickets/Feature-03.md) | done | Move personal name editing to User Settings |
+| [Feature-04](tickets/Feature-04.md) | done | Testing-profile administrator account |
