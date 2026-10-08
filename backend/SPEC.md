@@ -34,8 +34,8 @@ An application period records its school year, opening and closing timestamps, e
 ### Ideas and project specifications
 
 - `POST /api/ideas` creates an idea draft for the authenticated student.
-- `GET /api/ideas` returns a paginated list filtered by supported status, school year, and owner criteria; visibility follows role permissions.
-- `GET /api/ideas/{id}` returns an idea and its current specification, review history, ratings, and supervision preferences as visible to the caller.
+- `GET /api/ideas` returns a paginated list filtered by supported status, school year, and owner criteria; visibility follows role permissions. Each visible idea includes its owner's current account display name alongside the existing owner ID.
+- `GET /api/ideas/{id}` returns an idea and its current specification, review history, ratings, and supervision preferences as visible to the caller. The owner, each review author, and each preference teacher include their current account display name alongside their existing IDs; these names are included only in the same authorized idea responses as their corresponding user references.
 - `PUT /api/ideas/{id}` updates a student's draft or an idea returned for revision.
 - `POST /api/ideas/{id}/submit` submits a draft for teacher review.
 - `PUT /api/ideas/{id}/specification` creates or updates the full specification after idea approval.

@@ -2,6 +2,7 @@ package com.flightlog.idea;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -29,12 +30,50 @@ class IdeaReviewControllerTest {
     private ObjectMapper objectMapper;
 
     private String studentToken;
+    private String otherStudentToken;
     private String teacherToken;
+    private String otherTeacherToken;
+    private String adminToken;
 
     @BeforeEach
     void setUp() throws Exception {
         studentToken = login("student01");
+        otherStudentToken = login("student02");
         teacherToken = login("teacher01");
+        otherTeacherToken = login("teacher02");
+        adminToken = login("admin01");
+    }
+
+    @Test
+    void authorizedIdeaResponsesIncludeCurrentDisplayNamesAlongsideExistingIdentityIds() throws Exception {
+        String ideaId = submitIdea("Display names in authorized idea response");
+        review(ideaId, Map.of("decision", "REQUEST_REVISION", "feedback", "Please clarify."),
+                teacherToken).andExpect(status().isCreated());
+        preference(ideaId, otherTeacherToken).andExpect(status().isOk())
+                .andExpect(jsonPath("$.teacherDisplayName").value("Teacher 02"))
+                .andExpect(jsonPath("$.teacherId").exists());
+
+        mockMvc.perform(get("/api/ideas")
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[?(@.id == '" + ideaId + "')].ownerDisplayName")
+                        .value(org.hamcrest.Matchers.hasItem("Student 01")))
+                .andExpect(jsonPath("$.content[?(@.id == '" + ideaId + "')].ownerId")
+                        .value(org.hamcrest.Matchers.hasItem(org.hamcrest.Matchers.notNullValue())));
+
+        getIdea(ideaId, studentToken)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.ownerDisplayName").value("Student 01"))
+                .andExpect(jsonPath("$.ownerId").exists())
+                .andExpect(jsonPath("$.reviews[0].teacherDisplayName").value("Teacher 01"))
+                .andExpect(jsonPath("$.reviews[0].teacherId").exists())
+                .andExpect(jsonPath("$.supervisionPreferences[0].teacherDisplayName").value("Teacher 02"))
+                .andExpect(jsonPath("$.supervisionPreferences[0].teacherId").exists())
+                .andExpect(jsonPath("$.supervisionPreferences[0].note").value("Available for this project"));
+        getIdea(ideaId, adminToken)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.reviews[0].teacherDisplayName").value("Teacher 01"));
+        getIdea(ideaId, otherStudentToken).andExpect(status().isForbidden());
     }
 
     @Test
@@ -177,6 +216,15 @@ class IdeaReviewControllerTest {
     private org.springframework.test.web.servlet.ResultActions getIdea(String ideaId, String token) throws Exception {
         return mockMvc.perform(get("/api/ideas/{id}", ideaId)
                 .header("Authorization", "Bearer " + token));
+    }
+
+    private org.springframework.test.web.servlet.ResultActions preference(String ideaId, String token)
+            throws Exception {
+        return mockMvc.perform(put("/api/ideas/{id}/supervision-preference", ideaId)
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of(
+                        "preference", "WILLING_TO_SUPERVISE", "note", "Available for this project"))));
     }
 
     private String login(String username) throws Exception {

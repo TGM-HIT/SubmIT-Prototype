@@ -9,11 +9,18 @@ const api = vi.hoisted(() => ({
   get: vi.fn(),
   review: vi.fn(),
   supervision: vi.fn(),
+  assignSupervisor: vi.fn(),
 }))
 
 vi.mock('../../api/services', () => ({
   periodsApi: { years: api.years },
-  ideasApi: { list: api.list, get: api.get, review: api.review, supervision: api.supervision },
+  ideasApi: {
+    list: api.list,
+    get: api.get,
+    review: api.review,
+    supervision: api.supervision,
+    assignSupervisor: api.assignSupervisor,
+  },
 }))
 
 vi.mock('../../stores/auth', () => ({
@@ -28,6 +35,7 @@ const idea = (status: string) => ({
   schoolYear: '2026/2027',
   status,
   ownerId: 'student-1',
+  ownerDisplayName: 'Student One',
   scopePoints: ['A scope point'],
   learningTopics: [],
   reviews: [],
@@ -68,9 +76,26 @@ beforeEach(() => {
   api.get.mockImplementation(async (id: string) => idea(id.replace('idea-', '')))
   api.review.mockResolvedValue({ decision: 'APPROVE_FOR_SPECIFICATION' })
   api.supervision.mockResolvedValue({})
+  api.assignSupervisor.mockResolvedValue({})
 })
 
 describe('IdeasPage overview supervision preferences', () => {
+  it.each(['TEACHER', 'ADMIN'])(
+    'shows the submitter display name rather than the owner ID in the %s overview',
+    async (role) => {
+      state.role = role
+      api.list.mockResolvedValue(pageIdeas('IDEA_SUBMITTED'))
+
+      const page = mountPage()
+      await flushPromises()
+
+      const row = page.get('article.data-row').text()
+      expect(row).toContain('Submitted by Student One')
+      expect(row).not.toContain('student-1')
+      page.unmount()
+    },
+  )
+
   it.each(['WANTS_TO_SUPERVISE', 'WILLING_TO_SUPERVISE'])(
     'shows the signed-in teacher’s recorded %s preference beside its idea',
     async (preference) => {
@@ -79,7 +104,12 @@ describe('IdeasPage overview supervision preferences', () => {
       api.list.mockResolvedValue(pageIdeas('ACCEPTED_FOR_APPLICATIONS'))
       api.get.mockResolvedValue({
         ...idea('ACCEPTED_FOR_APPLICATIONS'),
-        supervisionPreferences: [{ id: 'preference-1', teacherId: 'teacher-1', preference }],
+        supervisionPreferences: [{
+          id: 'preference-1',
+          teacherId: 'teacher-1',
+          teacherDisplayName: 'Teacher One',
+          preference,
+        }],
       })
 
       const page = mountPage()
@@ -118,8 +148,20 @@ describe('IdeasPage overview supervision preferences', () => {
     api.get.mockImplementation(async () => ({
       ...idea('ACCEPTED_FOR_APPLICATIONS'),
       supervisionPreferences: [
-        { id: 'preference-1', teacherId: 'teacher-1', preference: recordedPreference, note: recordedNote },
-        { id: 'preference-2', teacherId: 'teacher-2', preference: 'WANTS_TO_SUPERVISE', note: '' },
+        {
+          id: 'preference-1',
+          teacherId: 'teacher-1',
+          teacherDisplayName: 'Teacher One',
+          preference: recordedPreference,
+          note: recordedNote,
+        },
+        {
+          id: 'preference-2',
+          teacherId: 'teacher-2',
+          teacherDisplayName: 'Teacher Two',
+          preference: 'WANTS_TO_SUPERVISE',
+          note: '',
+        },
       ],
     }))
     api.supervision.mockImplementation(async (_ideaId: string, preference: string, note: string) => {
@@ -135,19 +177,83 @@ describe('IdeasPage overview supervision preferences', () => {
 
     const dialog = page.get('[role="dialog"]')
     expect(dialog.text()).toContain('Recorded supervision preferences')
-    expect(dialog.text()).toContain('teacher-1 · Willing to supervise')
-    expect(dialog.text()).toContain('teacher-2 · Wants to supervise')
+    expect(dialog.text()).toContain('Teacher One · Willing to supervise')
+    expect(dialog.text()).toContain('Teacher Two · Wants to supervise')
+    expect(dialog.text()).not.toContain('teacher-1')
+    expect(dialog.text()).not.toContain('teacher-2')
     await dialog.get('#preference').setValue('WANTS_TO_SUPERVISE')
     await dialog.get('#preference-note').setValue('I can supervise this idea')
     await dialog.get('form.panel').trigger('submit')
     await flushPromises()
 
     expect(api.supervision).toHaveBeenCalledWith('idea-ACCEPTED_FOR_APPLICATIONS', 'WANTS_TO_SUPERVISE', 'I can supervise this idea')
-    expect(page.get('[role="dialog"]').text()).toContain('teacher-1 · Wants to supervise')
+    expect(page.get('[role="dialog"]').text()).toContain('Teacher One · Wants to supervise')
     expect(page.get('[role="dialog"]').text()).toContain('I can supervise this idea')
     await page.get('[role="dialog"] button').trigger('click')
     await flushPromises()
     expect(page.get('article.data-row').text()).toContain('Your supervision preference: Wants to supervise')
+    page.unmount()
+  })
+
+  it('shows review authors and preference teachers by display name, keeping review and preference context', async () => {
+    state.role = 'STUDENT'
+    api.list.mockResolvedValue(pageIdeas('IDEA_NEEDS_REVISION'))
+    api.get.mockResolvedValue({
+      ...idea('IDEA_NEEDS_REVISION'),
+      reviews: [{
+        id: 'review-1',
+        teacherId: 'teacher-1',
+        teacherDisplayName: 'Teacher One',
+        reviewType: 'IDEA',
+        decision: 'REQUEST_REVISION',
+        feedback: 'Clarify the scope.',
+      }],
+      supervisionPreferences: [{
+        id: 'preference-1',
+        teacherId: 'teacher-2',
+        teacherDisplayName: 'Teacher Two',
+        preference: 'WILLING_TO_SUPERVISE',
+        note: 'Available next term.',
+      }],
+    })
+
+    const page = mountPage()
+    await flushPromises()
+    await page.get('#details-button-idea-IDEA_NEEDS_REVISION').trigger('click')
+    await flushPromises()
+
+    const history = page.get('[role="dialog"]').text()
+    expect(history).toContain('Teacher One')
+    expect(history).toContain('Clarify the scope.')
+    expect(history).toContain('Teacher Two · Willing to supervise')
+    expect(history).toContain('Available next term.')
+    expect(history).not.toContain('teacher-1')
+    expect(history).not.toContain('teacher-2')
+    page.unmount()
+  })
+
+  it('shows administrator eligible supervisors by display name while retaining their ID as the option value', async () => {
+    state.role = 'ADMIN'
+    api.list.mockResolvedValue(pageIdeas('ACCEPTED_FOR_APPLICATIONS'))
+    api.get.mockResolvedValue({
+      ...idea('ACCEPTED_FOR_APPLICATIONS'),
+      supervisionPreferences: [{
+        id: 'preference-1',
+        teacherId: 'teacher-2',
+        teacherDisplayName: 'Teacher Two',
+        preference: 'WANTS_TO_SUPERVISE',
+        note: 'Interested.',
+      }],
+    })
+
+    const page = mountPage()
+    await flushPromises()
+    await page.get('#details-button-idea-ACCEPTED_FOR_APPLICATIONS').trigger('click')
+    await flushPromises()
+
+    const option = page.get('#teacher-id option[value="teacher-2"]')
+    expect(option.text()).toBe('Teacher Two · Wants to supervise')
+    expect(page.get('#teacher-id').text()).not.toContain('teacher-2')
     page.unmount()
   })
 })
@@ -178,7 +284,13 @@ describe('IdeasPage review and details dialogs', () => {
     api.get.mockResolvedValueOnce(idea('IDEA_SUBMITTED')).mockResolvedValueOnce({
       ...idea('IDEA_APPROVED_FOR_SPECIFICATION'),
       id: 'idea-IDEA_SUBMITTED',
-      reviews: [{ id: 'review-1', decision: 'APPROVE_FOR_SPECIFICATION', feedback: 'Please continue.', teacherId: 'teacher-1' }],
+      reviews: [{
+        id: 'review-1',
+        decision: 'APPROVE_FOR_SPECIFICATION',
+        feedback: 'Please continue.',
+        teacherId: 'teacher-1',
+        teacherDisplayName: 'Teacher One',
+      }],
     })
     const page = mountPage()
     await flushPromises()
@@ -243,6 +355,7 @@ describe('IdeasPage review and details dialogs', () => {
         decision: 'ACCEPT_FOR_APPLICATIONS',
         feedback: 'The specification is ready.',
         teacherId: 'teacher-1',
+        teacherDisplayName: 'Teacher One',
         workSize: 4,
       }],
     }
@@ -256,6 +369,7 @@ describe('IdeasPage review and details dialogs', () => {
         decision: 'REQUEST_REVISION',
         feedback: 'Revise the full specification.',
         teacherId: 'teacher-1',
+        teacherDisplayName: 'Teacher One',
         workSize: 4,
       }],
     }).mockResolvedValueOnce(updatedIdea)
@@ -278,7 +392,7 @@ describe('IdeasPage review and details dialogs', () => {
     const detailsDialog = page.get('[role="dialog"]')
     expect(detailsDialog.text()).toContain('Idea details & history')
     expect(detailsDialog.text()).toContain('The specification is ready.')
-    expect(detailsDialog.text()).toContain('Teacher teacher-1 · ratings reflect professional judgement')
+    expect(detailsDialog.text()).toContain('Teacher One · ratings reflect professional judgement')
     expect(detailsDialog.text()).not.toContain('Ratings:')
     expect(document.activeElement).not.toBe(document.getElementById('details-button-idea-SPECIFICATION_SUBMITTED'))
     page.unmount()
@@ -292,7 +406,13 @@ describe('IdeasPage review and details dialogs', () => {
     api.get.mockResolvedValueOnce(idea('IDEA_SUBMITTED')).mockResolvedValueOnce({
       ...idea('IDEA_APPROVED_FOR_SPECIFICATION'),
       id: 'idea-IDEA_SUBMITTED',
-      reviews: [{ id: 'review-1', decision: 'APPROVE_FOR_SPECIFICATION', feedback: 'Please continue.', teacherId: 'teacher-1' }],
+      reviews: [{
+        id: 'review-1',
+        decision: 'APPROVE_FOR_SPECIFICATION',
+        feedback: 'Please continue.',
+        teacherId: 'teacher-1',
+        teacherDisplayName: 'Teacher One',
+      }],
     })
     const page = mountPage()
     await flushPromises()

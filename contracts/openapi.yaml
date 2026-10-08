@@ -1,0 +1,3297 @@
+openapi: 3.1.0
+info:
+  title: Project Ideas API
+  version: 1.0.0
+servers:
+- url: http://127.0.0.1:19034
+  description: Generated server url
+security:
+- bearerAuth: []
+paths:
+  /api/projects/{projectId}/final-grade:
+    get:
+      tags:
+      - Final grades
+      summary: "Get the current final project grade, its basis, and history."
+      operationId: getFinalGrade
+      parameters:
+      - name: projectId
+        in: path
+        description: Project identifier.
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "404":
+          description: No final grade has been recorded.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/FinalGradeHistory"
+    put:
+      tags:
+      - Final grades
+      summary: "Record or confirm project and individual final grades, by configured\
+        \ rule or with rationale."
+      operationId: putFinalGrade
+      parameters:
+      - name: projectId
+        in: path
+        description: Project identifier.
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FinalGradesRequest"
+        required: true
+      responses:
+        "400":
+          description: "Invalid grade, missing rationale, or unknown rule."
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/FinalGradesResponse"
+        "409":
+          description: A configured rule lacks required inputs.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/FinalGradesResponse"
+  /api/ideas/{id}:
+    get:
+      tags:
+      - Ideas and reviews
+      operationId: get
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/IdeaResponse"
+    put:
+      tags:
+      - Ideas and reviews
+      operationId: update
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IdeaRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/IdeaResponse"
+  /api/ideas/{id}/supervisor:
+    put:
+      tags:
+      - idea-review-controller
+      operationId: assignSupervisor
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SupervisorRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SupervisorResponse"
+  /api/ideas/{id}/supervision-preference:
+    put:
+      tags:
+      - idea-review-controller
+      operationId: setSupervisionPreference
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SupervisionPreferenceRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SupervisionPreferenceResponse"
+  /api/ideas/{id}/specification:
+    put:
+      tags:
+      - specification-controller
+      summary: Save a full specification after teacher approval of the idea.
+      operationId: save
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SpecificationRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SpecificationResponse"
+  /api/formal-applications/{id}:
+    put:
+      tags:
+      - Formal project applications
+      operationId: update_1
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FormalApplicationRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/FormalApplicationResponse"
+  /api/applications/{id}:
+    put:
+      tags:
+      - student-application-controller
+      operationId: update_2
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StudentApplicationRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/StudentApplicationResponse"
+    delete:
+      tags:
+      - student-application-controller
+      operationId: withdraw
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "204":
+          description: No Content
+  /api/application-periods/{id}:
+    get:
+      tags:
+      - School years and applications
+      operationId: getPeriod
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApplicationPeriodResponse"
+    put:
+      tags:
+      - School years and applications
+      operationId: updatePeriod
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApplicationPeriodRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApplicationPeriodResponse"
+  /api/projects/{projectId}/student-grades:
+    get:
+      tags:
+      - Student grades
+      summary: List individual grade history; students see only their own grades.
+      operationId: listStudentGrades
+      parameters:
+      - name: projectId
+        in: path
+        description: Project identifier.
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: studentId
+        in: query
+        description: Optional student filter.
+        required: false
+        schema:
+          type: string
+      - name: page
+        in: query
+        description: Zero-based page index.
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: size
+        in: query
+        description: "Page size, at most 100."
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 20
+      responses:
+        "403":
+          description: Caller lacks the required role or project access.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PageResponseGradeResponse"
+    post:
+      tags:
+      - Student grades
+      summary: Record a teacher's assessment of one student against one rubric criterion.
+      operationId: recordStudentGrade
+      parameters:
+      - name: projectId
+        in: path
+        description: Project identifier.
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StudentGradeRequest"
+        required: true
+      responses:
+        "400":
+          description: Grade outside the criterion scale or invalid input.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/GradeResponse"
+        "403":
+          description: Caller lacks the required role or project access.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/GradeResponse"
+        "409":
+          description: Rubric version differs from the project's bound version.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/GradeResponse"
+        "201":
+          description: Created
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/GradeResponse"
+  /api/projects/{projectId}/student-grades/{gradeId}/revisions:
+    post:
+      tags:
+      - Student grade revisions
+      summary: Record a correction or reassessment; the prior entry is retained as
+        superseded.
+      operationId: reviseStudentGrade
+      parameters:
+      - name: projectId
+        in: path
+        description: Project identifier.
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: gradeId
+        in: path
+        description: Grade entry to revise.
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GradeRevisionRequest"
+        required: true
+      responses:
+        "409":
+          description: The entry has already been superseded.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/GradeResponse"
+        "201":
+          description: Created
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/GradeResponse"
+  /api/projects/{projectId}/metrics:
+    get:
+      tags:
+      - Project metrics
+      summary: List metric observations for teachers and project members.
+      operationId: listMetrics
+      parameters:
+      - name: projectId
+        in: path
+        description: Project identifier.
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: page
+        in: query
+        description: Zero-based page index.
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: size
+        in: query
+        description: "Page size, at most 100."
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 20
+      responses:
+        "403":
+          description: Caller lacks the required role or project access.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PageResponseMetricResponse"
+    post:
+      tags:
+      - Project metrics
+      summary: Record a metric observation validated against the configured metric
+        definition.
+      operationId: recordMetric
+      parameters:
+      - name: projectId
+        in: path
+        description: Project identifier.
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MetricRequest"
+        required: true
+      responses:
+        "403":
+          description: Caller lacks the required role or project access.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/MetricResponse"
+        "201":
+          description: Created
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/MetricResponse"
+  /api/projects/{projectId}/group-grades:
+    get:
+      tags:
+      - Group grades
+      summary: List group-level assessment history for teachers and group members.
+      operationId: listGroupGrades
+      parameters:
+      - name: projectId
+        in: path
+        description: Project identifier.
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: page
+        in: query
+        description: Zero-based page index.
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: size
+        in: query
+        description: "Page size, at most 100."
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 20
+      responses:
+        "403":
+          description: Caller lacks the required role or project access.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PageResponseGradeResponse"
+    post:
+      tags:
+      - Group grades
+      summary: Record a teacher's assessment for a group-level rubric criterion.
+      operationId: recordGroupGrade
+      parameters:
+      - name: projectId
+        in: path
+        description: Project identifier.
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GroupGradeRequest"
+        required: true
+      responses:
+        "403":
+          description: Caller lacks the required role or project access.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/GradeResponse"
+        "201":
+          description: Created
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/GradeResponse"
+  /api/projects/{projectId}/formal-applications:
+    get:
+      tags:
+      - Formal project applications
+      operationId: get_1
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 20
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/FormalApplicationResponse"
+    post:
+      tags:
+      - Formal project applications
+      summary: Create a draft formal application for an allocated group.
+      description: Text limits count Java UTF-16 code units; the service also enforces
+        combined per-student field limits.
+      operationId: create
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/FormalApplicationRequest"
+        required: true
+      responses:
+        "201":
+          description: Created
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/FormalApplicationResponse"
+  /api/projects/{projectId}/complete:
+    post:
+      tags:
+      - Project artefacts and archive
+      summary: Mark a project complete after final grading and all required artefact
+        types are present.
+      operationId: complete
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/CompletionResponse"
+  /api/projects/{projectId}/artifacts:
+    get:
+      tags:
+      - Project artefacts and archive
+      summary: List paginated project artefacts visible to the caller.
+      operationId: list
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 20
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PageResponseArtifactResponse"
+    post:
+      tags:
+      - Project artefacts and archive
+      summary: Upload a private project artefact; uploads never publish automatically.
+      operationId: upload
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: "#/components/schemas/ArtifactUploadRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ArtifactResponse"
+  /api/ideas:
+    get:
+      tags:
+      - Ideas and reviews
+      operationId: list_1
+      parameters:
+      - name: status
+        in: query
+        required: false
+        schema:
+          type: string
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 20
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PageResponseIdeaResponse"
+    post:
+      tags:
+      - Ideas and reviews
+      summary: Create an idea draft for the authenticated student.
+      operationId: create_1
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IdeaRequest"
+        required: true
+      responses:
+        "201":
+          description: Created
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/IdeaResponse"
+  /api/ideas/{id}/withdraw:
+    post:
+      tags:
+      - Ideas and reviews
+      operationId: withdraw_1
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/IdeaResponse"
+  /api/ideas/{id}/submit:
+    post:
+      tags:
+      - Ideas and reviews
+      operationId: submit
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/IdeaResponse"
+  /api/ideas/{id}/specification/submit:
+    post:
+      tags:
+      - specification-controller
+      operationId: submit_1
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/SpecificationResponse"
+  /api/ideas/{id}/specification/reviews:
+    post:
+      tags:
+      - specification-controller
+      operationId: review
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReviewRequest"
+        required: true
+      responses:
+        "201":
+          description: Created
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ReviewResponse"
+  /api/ideas/{id}/reviews:
+    post:
+      tags:
+      - idea-review-controller
+      operationId: review_1
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IdeaReviewRequest"
+        required: true
+      responses:
+        "201":
+          description: Created
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ReviewResponse"
+  /api/grading-rubrics:
+    get:
+      tags:
+      - Grading rubrics
+      summary: List rubric versions and their effective periods.
+      operationId: list_2
+      parameters:
+      - name: page
+        in: query
+        description: Zero-based page index.
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: size
+        in: query
+        description: "Page size, at most 100."
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 20
+      responses:
+        "200":
+          description: Paginated rubric version summaries.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PageResponseRubricSummary"
+    post:
+      tags:
+      - Grading rubrics
+      summary: Publish a new immutable rubric version (ADMIN only).
+      operationId: publish
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublishRubricRequest"
+        required: true
+      responses:
+        "400":
+          description: "Invalid rubric structure, scale, metric, or rule."
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/RubricResponse"
+        "403":
+          description: Caller is not an administrator.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/RubricResponse"
+        "409":
+          description: The rubric version label already exists.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/RubricResponse"
+        "201":
+          description: Created
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/RubricResponse"
+  /api/formal-applications/{id}/submit:
+    post:
+      tags:
+      - Formal project applications
+      operationId: submit_2
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/FormalApplicationResponse"
+  /api/formal-applications/{id}/reviews:
+    post:
+      tags:
+      - Formal project applications
+      operationId: review_2
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ReviewRequest"
+        required: true
+      responses:
+        "201":
+          description: Created
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/FormalReviewResponse"
+  /api/auth/register:
+    post:
+      tags:
+      - Authentication
+      summary: Register a student account. Any supplied role is ignored.
+      operationId: register
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterRequest"
+        required: true
+      responses:
+        "201":
+          description: Created
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+      security: []
+  /api/auth/login:
+    post:
+      tags:
+      - Authentication
+      summary: Authenticate and receive a signed bearer token.
+      operationId: login
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoginRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+      security: []
+  /api/artifacts/{artifactId}/publication-review:
+    post:
+      tags:
+      - Project artefacts and archive
+      summary: Submit an artefact for publication review or record a teacher decision.
+      operationId: review_3
+      parameters:
+      - name: artifactId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PublicationReviewRequest"
+        required: true
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ArtifactResponse"
+  /api/application-periods:
+    get:
+      tags:
+      - School years and applications
+      operationId: listPeriods
+      parameters:
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 20
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PageResponseApplicationPeriodResponse"
+    post:
+      tags:
+      - School years and applications
+      operationId: createPeriod
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApplicationPeriodRequest"
+        required: true
+      responses:
+        "201":
+          description: Created
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApplicationPeriodResponse"
+  /api/application-periods/{periodId}/applications:
+    get:
+      tags:
+      - student-application-controller
+      operationId: list_3
+      parameters:
+      - name: periodId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 20
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PageResponseStudentApplicationResponse"
+    post:
+      tags:
+      - student-application-controller
+      operationId: create_2
+      parameters:
+      - name: periodId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StudentApplicationRequest"
+        required: true
+      responses:
+        "201":
+          description: Created
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/StudentApplicationResponse"
+  /api/application-periods/{periodId}/allocation-runs:
+    get:
+      tags:
+      - Allocation
+      operationId: list_4
+      parameters:
+      - name: periodId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 20
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PageResponseObjectNode"
+    post:
+      tags:
+      - Allocation
+      summary: Start a replacement allocation after the deadline.
+      operationId: start
+      parameters:
+      - name: periodId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "201":
+          description: Created
+          content:
+            '*/*':
+              schema:
+                type: object
+  /api/allocation-runs/{id}/finalize:
+    post:
+      tags:
+      - Allocation
+      operationId: finalizeRun
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: object
+  /api/users/{id}:
+    patch:
+      tags:
+      - user-name-controller
+      summary: Change an account name. Users may update their own name; administrators
+        may update any account.
+      operationId: changeDisplayName
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/DisplayNameRequest"
+        required: true
+      responses:
+        "200":
+          description: The account name was changed.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+        "400":
+          description: "The name is missing, blank after trimming, or longer than\
+            \ 120 characters after trimming."
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
+        "401":
+          description: Authentication is required.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
+        "403":
+          description: Only the account owner or an administrator may change the name.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
+        "404":
+          description: The account does not exist.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
+  /api/users/{id}/role:
+    patch:
+      tags:
+      - user-controller
+      summary: Change an account role. At least one administrator account must remain.
+      operationId: changeRole
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RoleRequest"
+        required: true
+      responses:
+        "200":
+          description: The account role was changed.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+        "409":
+          description: The role change would remove the last administrator.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
+  /api/users:
+    get:
+      tags:
+      - user-controller
+      summary: List user accounts
+      description: Optional role and q parameters filter by role and case-insensitive
+        username or display-name substring before pagination. Blank q is ignored;
+        % and _ are literal search characters.
+      operationId: list_5
+      parameters:
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 20
+      - name: role
+        in: query
+        required: false
+        schema:
+          type: string
+          enum:
+          - STUDENT
+          - TEACHER
+          - ADMIN
+      - name: q
+        in: query
+        required: false
+        schema:
+          type: string
+      responses:
+        "200":
+          description: The filtered account page.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PageResponseUserResponse"
+        "400":
+          description: The role filter is invalid.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
+        "403":
+          description: Only administrators may list user accounts.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ApiErrorResponse"
+  /api/school-years:
+    get:
+      tags:
+      - School years and applications
+      summary: List available school years.
+      operationId: schoolYears
+      parameters:
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 20
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PageResponseString"
+  /api/public/projects/{projectId}/archive:
+    get:
+      tags:
+      - Project artefacts and archive
+      summary: List approved artefacts for a completed project without authentication.
+      operationId: archive
+      parameters:
+      - name: projectId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 20
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PageResponsePublicArtifactResponse"
+      security: []
+  /api/public/projects/{projectId}/archive/{artifactId}:
+    get:
+      tags:
+      - Project artefacts and archive
+      summary: Download approved artefact content for a completed project as an attachment;
+        no authentication.
+      operationId: content
+      parameters:
+      - name: projectId
+        in: path
+        description: Completed project identifier.
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: artifactId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: "Binary content, always served as an attachment."
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+      security: []
+  /api/projects/{projectId}/students/{studentId}/final-grade:
+    get:
+      tags:
+      - Final grades
+      summary: "Get a student's individual final grade, basis, and history (that student\
+        \ or teachers)."
+      operationId: getStudentFinalGrade
+      parameters:
+      - name: projectId
+        in: path
+        description: Project identifier.
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: studentId
+        in: path
+        description: Student identifier.
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "403":
+          description: Caller lacks the required role or project access.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/FinalGradeHistory"
+        "404":
+          description: No final grade has been recorded.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/FinalGradeHistory"
+  /api/grading-rubrics/{id}:
+    get:
+      tags:
+      - Grading rubrics
+      summary: Get a specific immutable rubric version.
+      operationId: get_2
+      parameters:
+      - name: id
+        in: path
+        description: Rubric version identifier.
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "404":
+          description: Rubric version not found.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/RubricResponse"
+  /api/grading-rubrics/active:
+    get:
+      tags:
+      - Grading rubrics
+      summary: "Get the rubric version effective today, with criteria, scales, metrics,\
+        \ and rules."
+      operationId: active
+      responses:
+        "404":
+          description: No rubric version is currently effective.
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/RubricResponse"
+  /api/audit:
+    get:
+      tags:
+      - audit-controller
+      operationId: list_6
+      parameters:
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 20
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PageResponseObjectNode"
+  /api/audit/{entityType}/{entityId}:
+    get:
+      tags:
+      - audit-controller
+      operationId: forEntity
+      parameters:
+      - name: entityType
+        in: path
+        required: true
+        schema:
+          type: string
+      - name: entityId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - name: page
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 0
+      - name: size
+        in: query
+        required: false
+        schema:
+          type: integer
+          format: int32
+          default: 20
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PageResponseObjectNode"
+  /api/artifacts/{artifactId}:
+    get:
+      tags:
+      - Project artefacts and archive
+      summary: Get private artefact metadata for an authorized project user.
+      operationId: get_3
+      parameters:
+      - name: artifactId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ArtifactResponse"
+    delete:
+      tags:
+      - Project artefacts and archive
+      summary: Remove an artefact before project completion.
+      operationId: delete
+      parameters:
+      - name: artifactId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "204":
+          description: No Content
+  /api/artifacts/{artifactId}/content:
+    get:
+      tags:
+      - Project artefacts and archive
+      summary: Download private artefact content as an attachment.
+      operationId: content_1
+      parameters:
+      - name: artifactId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: "Binary content, always served as an attachment."
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+  /api/application-periods/{periodId}/applications/me:
+    get:
+      tags:
+      - student-application-controller
+      operationId: me
+      parameters:
+      - name: periodId
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/StudentApplicationResponse"
+  /api/allocation-runs/{id}:
+    get:
+      tags:
+      - Allocation
+      operationId: get_4
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          description: OK
+          content:
+            '*/*':
+              schema:
+                type: object
+components:
+  schemas:
+    Decision:
+      type: object
+      description: "Final grade decision: either a configured ruleId, or a manual\
+        \ grade with an explicit rationale."
+      properties:
+        ruleId:
+          type: string
+          description: Configured aggregation rule; omit for a manual decision.
+        grade:
+          type: number
+          description: Manual grade (required without ruleId); with ruleId it must
+            equal the computed result.
+        rationale:
+          type: string
+          description: Rationale; required when no configured rule is used.
+          maxLength: 4000
+          minLength: 0
+    FinalGradesRequest:
+      type: object
+      description: Records project and/or individual final grades; earlier ones are
+        retained as superseded.
+      properties:
+        rubricId:
+          type: string
+          format: uuid
+        versionTransition:
+          $ref: "#/components/schemas/VersionTransition"
+        project:
+          $ref: "#/components/schemas/Decision"
+        students:
+          type: array
+          items:
+            $ref: "#/components/schemas/StudentDecision"
+      required:
+      - rubricId
+    StudentDecision:
+      type: object
+      description: Final grade decision for one student.
+      properties:
+        studentId:
+          type: string
+          format: uuid
+        ruleId:
+          type: string
+        grade:
+          type: number
+        rationale:
+          type: string
+          maxLength: 4000
+          minLength: 0
+      required:
+      - studentId
+    VersionTransition:
+      type: object
+      description: "Explicit, recorded switch to another rubric version for a project\
+        \ that is already bound."
+      properties:
+        reason:
+          type: string
+          description: Why the project moves to another rubric version.
+          maxLength: 2000
+          minLength: 0
+      required:
+      - reason
+    FinalGradeResponse:
+      type: object
+      description: "Stored final grade with its method, rationale and input snapshot."
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        createdAt:
+          type: string
+        projectId:
+          type: string
+          format: uuid
+        rubricId:
+          type: string
+          format: uuid
+        rubricVersion:
+          type: string
+        scope:
+          type: string
+        studentId:
+          type: string
+          format: uuid
+        grade:
+          type: number
+        method:
+          type: string
+        ruleId:
+          type: string
+        ruleVersion:
+          type: integer
+          format: int32
+        rationale:
+          type: string
+        inputs:
+          $ref: "#/components/schemas/Inputs"
+        decidedBy:
+          type: string
+          format: uuid
+        decidedAt:
+          type: string
+    FinalGradesResponse:
+      type: object
+      description: Result of recording final grades.
+      properties:
+        project:
+          $ref: "#/components/schemas/FinalGradeResponse"
+        students:
+          type: array
+          items:
+            $ref: "#/components/schemas/FinalGradeResponse"
+    GradeResponse:
+      type: object
+      description: Stored grade entry bound to an immutable rubric version and criterion.
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        createdAt:
+          type: string
+        projectId:
+          type: string
+          format: uuid
+        studentId:
+          type: string
+          format: uuid
+        rubricId:
+          type: string
+          format: uuid
+        rubricVersion:
+          type: string
+        criterionId:
+          type: string
+        categoryId:
+          type: string
+        grade:
+          type: number
+        assessedOn:
+          type: string
+        evidence:
+          type: string
+        comments:
+          type: string
+        teacherId:
+          type: string
+          format: uuid
+        recordedAt:
+          type: string
+        supersedesId:
+          type: string
+          format: uuid
+        supersededById:
+          type: string
+          format: uuid
+        reason:
+          type: string
+    Inputs:
+      type: object
+      description: Grades and observations that were considered when the final grade
+        was decided.
+      properties:
+        studentGrades:
+          type: array
+          items:
+            $ref: "#/components/schemas/GradeResponse"
+        groupGrades:
+          type: array
+          items:
+            $ref: "#/components/schemas/GradeResponse"
+        metrics:
+          type: array
+          items:
+            $ref: "#/components/schemas/MetricResponse"
+    MetricResponse:
+      type: object
+      description: Stored metric observation referencing the metric definition version.
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        createdAt:
+          type: string
+        projectId:
+          type: string
+          format: uuid
+        rubricId:
+          type: string
+          format: uuid
+        rubricVersion:
+          type: string
+        metricId:
+          type: string
+        metricVersion:
+          type: integer
+          format: int32
+        value:
+          type: number
+        measuredAt:
+          type: string
+        note:
+          type: string
+        recordedBy:
+          type: string
+          format: uuid
+        recordedAt:
+          type: string
+    IdeaRequest:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 200
+          minLength: 0
+        description:
+          type: string
+          maxLength: 5000
+          minLength: 0
+        intendedOutcome:
+          type: string
+          maxLength: 2000
+          minLength: 0
+        scopePoints:
+          type: array
+          items:
+            type: string
+            maxLength: 1000
+            minLength: 0
+          minItems: 1
+        learningTopics:
+          type: array
+          items:
+            type: string
+            maxLength: 200
+            minLength: 0
+          maxItems: 50
+          minItems: 0
+        schoolYear:
+          type: string
+          maxLength: 20
+          minLength: 0
+      required:
+      - description
+      - intendedOutcome
+      - schoolYear
+      - scopePoints
+      - title
+    IdeaResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        ownerId:
+          type: string
+          format: uuid
+        ownerDisplayName:
+          type: string
+          description: Current account display name; included only in authorized idea
+            responses.
+        status:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+        intendedOutcome:
+          type: string
+        scopePoints:
+          type: array
+          items:
+            type: string
+        learningTopics:
+          type: array
+          items:
+            type: string
+        schoolYear:
+          type: string
+        specification:
+          $ref: "#/components/schemas/SpecificationResponse"
+        reviews:
+          type: array
+          items:
+            $ref: "#/components/schemas/ReviewResponse"
+        supervisionPreferences:
+          type: array
+          items:
+            $ref: "#/components/schemas/SupervisionPreferenceResponse"
+    ReviewResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        teacherId:
+          type: string
+          format: uuid
+        teacherDisplayName:
+          type: string
+          description: Current account display name; included only in authorized idea
+            history.
+        reviewType:
+          type: string
+        decision:
+          type: string
+        feedback:
+          type: string
+        workSize:
+          type: integer
+          format: int32
+        curriculumRelevance:
+          type: integer
+          format: int32
+        technicalComplexity:
+          type: integer
+          format: int32
+        feasibility:
+          type: integer
+          format: int32
+        learningValue:
+          type: integer
+          format: int32
+        resourceNeeds:
+          type: integer
+          format: int32
+        riskAndDependencies:
+          type: integer
+          format: int32
+        recommendation:
+          type: string
+    SpecificationResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        objectives:
+          type: array
+          items:
+            type: string
+        intendedUsers:
+          type: array
+          items:
+            type: string
+        requirements:
+          type: array
+          items:
+            type: string
+        deliverables:
+          type: array
+          items:
+            type: string
+        scope:
+          type: string
+        dependencies:
+          type: array
+          items:
+            type: string
+        revisionId:
+          type: string
+    SupervisionPreferenceResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        teacherId:
+          type: string
+          format: uuid
+        teacherDisplayName:
+          type: string
+          description: Current account display name; included only in authorized idea
+            history.
+        preference:
+          type: string
+        note:
+          type: string
+    SupervisorRequest:
+      type: object
+      properties:
+        teacherId:
+          type: string
+          format: uuid
+      required:
+      - teacherId
+    SupervisorResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        teacherId:
+          type: string
+          format: uuid
+        status:
+          type: string
+    SupervisionPreferenceRequest:
+      type: object
+      properties:
+        preference:
+          type: string
+          minLength: 1
+        note:
+          type: string
+          maxLength: 2000
+          minLength: 0
+      required:
+      - preference
+    SpecificationRequest:
+      type: object
+      properties:
+        objectives:
+          type: array
+          items:
+            type: string
+            maxLength: 2000
+            minLength: 0
+          minItems: 1
+        intendedUsers:
+          type: array
+          items:
+            type: string
+            maxLength: 1000
+            minLength: 0
+          minItems: 1
+        requirements:
+          type: array
+          items:
+            type: string
+            maxLength: 2000
+            minLength: 0
+          minItems: 1
+        deliverables:
+          type: array
+          items:
+            type: string
+            maxLength: 1000
+            minLength: 0
+          minItems: 1
+        scope:
+          type: string
+          maxLength: 5000
+          minLength: 0
+        dependencies:
+          type: array
+          items:
+            type: string
+            maxLength: 1000
+            minLength: 0
+          minItems: 1
+      required:
+      - deliverables
+      - dependencies
+      - intendedUsers
+      - objectives
+      - requirements
+      - scope
+    FormalApplicationRequest:
+      type: object
+      properties:
+        topic:
+          type: string
+          maxLength: 200
+          minLength: 0
+        individualTopics:
+          type: array
+          items:
+            $ref: "#/components/schemas/IndividualTopic"
+          minItems: 1
+        initialSituation:
+          type: string
+          maxLength: 400
+          minLength: 0
+        investigationConcerns:
+          type: array
+          items:
+            $ref: "#/components/schemas/StudentText"
+          minItems: 1
+        objective:
+          type: string
+          maxLength: 400
+          minLength: 0
+        plannedResults:
+          type: array
+          items:
+            $ref: "#/components/schemas/StudentText"
+          minItems: 1
+        milestones:
+          type: array
+          items:
+            $ref: "#/components/schemas/Milestone"
+          minItems: 1
+        cooperationPartner:
+          type: string
+          maxLength: 1000
+          minLength: 0
+      required:
+      - individualTopics
+      - initialSituation
+      - investigationConcerns
+      - milestones
+      - objective
+      - plannedResults
+      - topic
+    IndividualTopic:
+      type: object
+      properties:
+        studentId:
+          type: string
+          format: uuid
+        topic:
+          type: string
+          maxLength: 200
+          minLength: 0
+      required:
+      - studentId
+      - topic
+    Milestone:
+      type: object
+      properties:
+        text:
+          type: string
+          maxLength: 1000
+          minLength: 0
+        date:
+          type: string
+          format: date
+      required:
+      - date
+      - text
+    StudentText:
+      type: object
+      properties:
+        studentId:
+          type: string
+          format: uuid
+        text:
+          type: string
+          maxLength: 2400
+          minLength: 0
+      required:
+      - studentId
+      - text
+    FormalApplicationResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        projectId:
+          type: string
+          format: uuid
+        status:
+          type: string
+        topic:
+          type: string
+        individualTopics:
+          type: array
+          items:
+            $ref: "#/components/schemas/IndividualTopic"
+        initialSituation:
+          type: string
+        investigationConcerns:
+          type: array
+          items:
+            $ref: "#/components/schemas/StudentText"
+        objective:
+          type: string
+        plannedResults:
+          type: array
+          items:
+            $ref: "#/components/schemas/StudentText"
+        milestones:
+          type: array
+          items:
+            $ref: "#/components/schemas/Milestone"
+        cooperationPartner:
+          type: string
+        reviewHistory:
+          $ref: "#/components/schemas/PageResponseFormalReviewResponse"
+    FormalReviewResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        teacherId:
+          type: string
+          format: uuid
+        decision:
+          type: string
+        feedback:
+          type: string
+    PageResponseFormalReviewResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/FormalReviewResponse"
+        page:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+    StudentApplicationRequest:
+      type: object
+      properties:
+        projectIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+          minItems: 1
+      required:
+      - projectIds
+    PreferenceResponse:
+      type: object
+      properties:
+        projectId:
+          type: string
+          format: uuid
+        rank:
+          type: integer
+          format: int32
+    StudentApplicationResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        studentId:
+          type: string
+          format: uuid
+        periodId:
+          type: string
+          format: uuid
+        status:
+          type: string
+        preferences:
+          type: array
+          items:
+            $ref: "#/components/schemas/PreferenceResponse"
+    ApplicationPeriodRequest:
+      type: object
+      properties:
+        schoolYear:
+          type: string
+          maxLength: 20
+          minLength: 0
+        opensAt:
+          type: string
+          format: date-time
+        closesAt:
+          type: string
+          format: date-time
+        projectIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+          minItems: 1
+      required:
+      - closesAt
+      - opensAt
+      - projectIds
+      - schoolYear
+    ApplicationPeriodResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        schoolYear:
+          type: string
+        opensAt:
+          type: string
+          format: date-time
+        closesAt:
+          type: string
+          format: date-time
+        status:
+          type: string
+        projectIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+    StudentGradeRequest:
+      type: object
+      description: Teacher assessment of one student against one criterion of a rubric
+        version.
+      properties:
+        rubricId:
+          type: string
+          format: uuid
+        versionTransition:
+          $ref: "#/components/schemas/VersionTransition"
+        studentId:
+          type: string
+          format: uuid
+        criterionId:
+          type: string
+          minLength: 1
+        grade:
+          type: number
+        assessedOn:
+          type: string
+          description: Assessment date; defaults to today.
+          pattern: "\\d{4}-\\d{2}-\\d{2}"
+        evidence:
+          type: string
+          maxLength: 4000
+          minLength: 0
+        comments:
+          type: string
+          maxLength: 4000
+          minLength: 0
+      required:
+      - criterionId
+      - grade
+      - rubricId
+      - studentId
+    GradeRevisionRequest:
+      type: object
+      description: Reassessment; the original entry is retained as superseded on its
+        original rubric version.
+      properties:
+        reason:
+          type: string
+          maxLength: 2000
+          minLength: 0
+        grade:
+          type: number
+        assessedOn:
+          type: string
+          pattern: "\\d{4}-\\d{2}-\\d{2}"
+        evidence:
+          type: string
+          maxLength: 4000
+          minLength: 0
+        comments:
+          type: string
+          maxLength: 4000
+          minLength: 0
+      required:
+      - grade
+      - reason
+    MetricRequest:
+      type: object
+      description: Records one observation of a metric defined in the rubric version.
+      properties:
+        rubricId:
+          type: string
+          format: uuid
+        versionTransition:
+          $ref: "#/components/schemas/VersionTransition"
+        metricId:
+          type: string
+          minLength: 1
+        value:
+          type: number
+        measuredAt:
+          type: string
+          description: ISO instant of the measurement; defaults to now.
+        note:
+          type: string
+          maxLength: 2000
+          minLength: 0
+      required:
+      - metricId
+      - rubricId
+      - value
+    GroupGradeRequest:
+      type: object
+      description: Teacher assessment of the whole group against one criterion of
+        a rubric version.
+      properties:
+        rubricId:
+          type: string
+          format: uuid
+        versionTransition:
+          $ref: "#/components/schemas/VersionTransition"
+        criterionId:
+          type: string
+          minLength: 1
+        grade:
+          type: number
+        assessedOn:
+          type: string
+          pattern: "\\d{4}-\\d{2}-\\d{2}"
+        evidence:
+          type: string
+          maxLength: 4000
+          minLength: 0
+        comments:
+          type: string
+          maxLength: 4000
+          minLength: 0
+      required:
+      - criterionId
+      - grade
+      - rubricId
+    CompletionResponse:
+      type: object
+      properties:
+        projectId:
+          type: string
+          format: uuid
+        status:
+          type: string
+        completedAt:
+          type: string
+    ArtifactUploadRequest:
+      type: object
+      description: Multipart upload form; the artefact is stored privately and never
+        published by upload.
+      properties:
+        type:
+          type: string
+          enum:
+          - WEBSITE_ARCHIVE
+          - POSTER
+          - SOURCE_DATA
+        title:
+          type: string
+          maxLength: 200
+          minLength: 0
+        description:
+          type: string
+          description: Optional description.
+          maxLength: 4000
+          minLength: 0
+        file:
+          type: string
+          format: binary
+          description: "Artefact file, at most 10 MiB."
+        publicationSubmissionMetadata:
+          type: string
+          description: Optional notes for the later publication review.
+          maxLength: 4000
+          minLength: 0
+      required:
+      - file
+      - title
+      - type
+    ArtifactResponse:
+      type: object
+      description: Private artefact metadata for authorized project users; binary
+        content is fetched separately.
+      properties:
+        id:
+          type: string
+          format: uuid
+        projectId:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum:
+          - WEBSITE_ARCHIVE
+          - POSTER
+          - SOURCE_DATA
+        title:
+          type: string
+        description:
+          type: string
+        filename:
+          type: string
+        contentType:
+          type: string
+        size:
+          type: integer
+          format: int64
+        uploaderId:
+          type: string
+          format: uuid
+        uploadedAt:
+          type: string
+          format: date-time
+        publicationStatus:
+          type: string
+          enum:
+          - PRIVATE
+          - PENDING_REVIEW
+          - APPROVED
+          - REJECTED
+        publicationSubmissionMetadata:
+          type: string
+        reviewNote:
+          type: string
+        reviewedAt:
+          type: string
+          format: date-time
+    ReviewRequest:
+      type: object
+      properties:
+        decision:
+          type: string
+          minLength: 1
+        feedback:
+          type: string
+          maxLength: 5000
+          minLength: 0
+        workSize:
+          type: integer
+          format: int32
+          maximum: 5
+          minimum: 1
+        curriculumRelevance:
+          type: integer
+          format: int32
+          maximum: 5
+          minimum: 1
+        technicalComplexity:
+          type: integer
+          format: int32
+          maximum: 5
+          minimum: 1
+        feasibility:
+          type: integer
+          format: int32
+          maximum: 5
+          minimum: 1
+        learningValue:
+          type: integer
+          format: int32
+          maximum: 5
+          minimum: 1
+        resourceNeeds:
+          type: integer
+          format: int32
+          maximum: 5
+          minimum: 1
+        riskAndDependencies:
+          type: integer
+          format: int32
+          maximum: 5
+          minimum: 1
+        recommendation:
+          type: string
+          maxLength: 2000
+          minLength: 0
+      required:
+      - decision
+      - feedback
+    IdeaReviewRequest:
+      type: object
+      properties:
+        decision:
+          type: string
+          minLength: 1
+        feedback:
+          type: string
+          maxLength: 5000
+          minLength: 0
+        workSize:
+          type: integer
+          format: int32
+          maximum: 5
+          minimum: 1
+        curriculumRelevance:
+          type: integer
+          format: int32
+          maximum: 5
+          minimum: 1
+        technicalComplexity:
+          type: integer
+          format: int32
+          maximum: 5
+          minimum: 1
+        feasibility:
+          type: integer
+          format: int32
+          maximum: 5
+          minimum: 1
+        learningValue:
+          type: integer
+          format: int32
+          maximum: 5
+          minimum: 1
+        resourceNeeds:
+          type: integer
+          format: int32
+          maximum: 5
+          minimum: 1
+        riskAndDependencies:
+          type: integer
+          format: int32
+          maximum: 5
+          minimum: 1
+        recommendation:
+          type: string
+          maxLength: 2000
+          minLength: 0
+      required:
+      - decision
+      - feedback
+    AggregationRuleDto:
+      type: object
+      description: Explicitly configured weighted-average rule; no formula exists
+        unless configured here.
+      properties:
+        id:
+          type: string
+          maxLength: 100
+          minLength: 0
+        version:
+          type: integer
+          format: int32
+        scope:
+          type: string
+          minLength: 1
+          pattern: STUDENT|PROJECT
+        type:
+          type: string
+          minLength: 1
+          pattern: WEIGHTED_AVERAGE
+        decimals:
+          type: integer
+          format: int32
+          description: Decimal places of the computed grade (0 to 6).
+        criterionWeights:
+          type: object
+          additionalProperties:
+            type: number
+          description: Weight per criterion id.
+        metricWeights:
+          type: object
+          additionalProperties:
+            type: number
+          description: Weight per metric id.
+      required:
+      - id
+      - scope
+      - type
+      - version
+    CategoryDto:
+      type: object
+      description: Rubric category grouping criteria.
+      properties:
+        id:
+          type: string
+          maxLength: 100
+          minLength: 0
+        name:
+          type: string
+          maxLength: 200
+          minLength: 0
+        description:
+          type: string
+          maxLength: 2000
+          minLength: 0
+        criteria:
+          type: array
+          items:
+            $ref: "#/components/schemas/CriterionDto"
+          minItems: 1
+      required:
+      - criteria
+      - id
+      - name
+    CriterionDto:
+      type: object
+      description: Assessable criterion of a rubric category.
+      properties:
+        id:
+          type: string
+          maxLength: 100
+          minLength: 0
+        name:
+          type: string
+          maxLength: 200
+          minLength: 0
+        description:
+          type: string
+          maxLength: 2000
+          minLength: 0
+        subject:
+          type: string
+          description: "Who may be assessed: STUDENT, GROUP or BOTH."
+          minLength: 1
+          pattern: STUDENT|GROUP|BOTH
+        stage:
+          type: string
+          description: Optional project stage the criterion belongs to.
+          maxLength: 100
+          minLength: 0
+        evidenceRequired:
+          type: boolean
+          description: Whether a grade needs written evidence.
+        scale:
+          $ref: "#/components/schemas/ScaleDto"
+      required:
+      - id
+      - name
+      - scale
+      - subject
+    MetricDefinitionDto:
+      type: object
+      description: Versioned project metric definition with optional bounds.
+      properties:
+        id:
+          type: string
+          maxLength: 100
+          minLength: 0
+        name:
+          type: string
+          maxLength: 200
+          minLength: 0
+        version:
+          type: integer
+          format: int32
+        description:
+          type: string
+          maxLength: 2000
+          minLength: 0
+        unit:
+          type: string
+          maxLength: 50
+          minLength: 0
+        min:
+          type: number
+        max:
+          type: number
+      required:
+      - id
+      - name
+      - version
+    PublishRubricRequest:
+      type: object
+      description: Request to publish a new immutable rubric version.
+      properties:
+        version:
+          type: string
+          description: Unique version label.
+          example: 2026-1
+          maxLength: 100
+          minLength: 0
+        name:
+          type: string
+          maxLength: 200
+          minLength: 0
+        schoolYear:
+          type: string
+          maxLength: 50
+          minLength: 0
+        effectiveFrom:
+          type: string
+          example: 2026-09-01
+          minLength: 1
+          pattern: "\\d{4}-\\d{2}-\\d{2}"
+        effectiveTo:
+          type: string
+          pattern: "\\d{4}-\\d{2}-\\d{2}"
+        finalGradeScale:
+          $ref: "#/components/schemas/ScaleDto"
+        categories:
+          type: array
+          items:
+            $ref: "#/components/schemas/CategoryDto"
+          minItems: 1
+        metricDefinitions:
+          type: array
+          items:
+            $ref: "#/components/schemas/MetricDefinitionDto"
+        aggregationRules:
+          type: array
+          items:
+            $ref: "#/components/schemas/AggregationRuleDto"
+      required:
+      - categories
+      - effectiveFrom
+      - finalGradeScale
+      - name
+      - version
+    ScaleDto:
+      type: object
+      description: Configured numeric scale; values must lie within min and max and
+        be a multiple of step from min.
+      properties:
+        min:
+          type: number
+          description: Lowest value.
+        max:
+          type: number
+          description: Highest value.
+        step:
+          type: number
+          description: Step size from min; defaults to 1.
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+          description: Optional display label per scale value.
+      required:
+      - max
+      - min
+    RubricResponse:
+      type: object
+      description: Published immutable rubric version.
+      properties:
+        id:
+          type: string
+          format: uuid
+        status:
+          type: string
+        createdAt:
+          type: string
+        version:
+          type: string
+        name:
+          type: string
+        schoolYear:
+          type: string
+        effectiveFrom:
+          type: string
+        effectiveTo:
+          type: string
+        finalGradeScale:
+          $ref: "#/components/schemas/ScaleDto"
+        categories:
+          type: array
+          items:
+            $ref: "#/components/schemas/CategoryDto"
+        metricDefinitions:
+          type: array
+          items:
+            $ref: "#/components/schemas/MetricDefinitionDto"
+        aggregationRules:
+          type: array
+          items:
+            $ref: "#/components/schemas/AggregationRuleDto"
+        publishedBy:
+          type: string
+          format: uuid
+        publishedAt:
+          type: string
+    RegisterRequest:
+      type: object
+      properties:
+        username:
+          type: string
+          maxLength: 80
+          minLength: 3
+        password:
+          type: string
+          maxLength: 128
+          minLength: 12
+        displayName:
+          type: string
+          description: Required account name; trimmed before storage and limited to
+            120 characters after trimming.
+        role:
+          type: string
+          enum:
+          - STUDENT
+          - TEACHER
+          - ADMIN
+      required:
+      - displayName
+      - password
+      - username
+    UserResponse:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        displayName:
+          type: string
+        role:
+          type: string
+          enum:
+          - STUDENT
+          - TEACHER
+          - ADMIN
+      required:
+      - displayName
+    LoginRequest:
+      type: object
+      properties:
+        username:
+          type: string
+          minLength: 1
+        password:
+          type: string
+          minLength: 1
+      required:
+      - password
+      - username
+    TokenResponse:
+      type: object
+      properties:
+        token:
+          type: string
+        tokenType:
+          type: string
+        expiresIn:
+          type: integer
+          format: int64
+        user:
+          $ref: "#/components/schemas/UserResponse"
+    PublicationReviewRequest:
+      type: object
+      properties:
+        decision:
+          type: string
+          description: "SUBMIT, APPROVE, REJECT, or UNPUBLISH."
+          example: SUBMIT
+          minLength: 1
+          pattern: SUBMIT|APPROVE|REJECT|UNPUBLISH
+        note:
+          type: string
+          maxLength: 2000
+          minLength: 0
+      required:
+      - decision
+    DisplayNameRequest:
+      type: object
+      properties:
+        displayName:
+          type: string
+          description: Required account name; leading and trailing whitespace is trimmed.
+            The trimmed name must contain 1 to 120 characters.
+      required:
+      - displayName
+    ApiErrorResponse:
+      type: object
+      properties:
+        status:
+          type: integer
+          format: int32
+        error:
+          type: string
+        message:
+          type: string
+      required:
+      - error
+      - message
+      - status
+    RoleRequest:
+      type: object
+      properties:
+        role:
+          type: string
+          enum:
+          - STUDENT
+          - TEACHER
+          - ADMIN
+      required:
+      - role
+    PageResponseUserResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserResponse"
+        page:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+    PageResponseString:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            type: string
+        page:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+    PageResponsePublicArtifactResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/PublicArtifactResponse"
+        page:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+    PublicArtifactResponse:
+      type: object
+      description: Public archive entry; deliberately omits uploader and all internal
+        metadata.
+      properties:
+        id:
+          type: string
+          format: uuid
+        type:
+          type: string
+          enum:
+          - WEBSITE_ARCHIVE
+          - POSTER
+          - SOURCE_DATA
+        size:
+          type: integer
+          format: int64
+    FinalGradeHistory:
+      type: object
+      description: "Current final grade plus the preserved history, newest first."
+      properties:
+        current:
+          $ref: "#/components/schemas/FinalGradeResponse"
+        history:
+          type: array
+          items:
+            $ref: "#/components/schemas/FinalGradeResponse"
+    PageResponseGradeResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/GradeResponse"
+        page:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+    PageResponseMetricResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/MetricResponse"
+        page:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+    PageResponseArtifactResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/ArtifactResponse"
+        page:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+    PageResponseIdeaResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/IdeaResponse"
+        page:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+    PageResponseRubricSummary:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/RubricSummary"
+        page:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+    RubricSummary:
+      type: object
+      description: Compact rubric list entry.
+      properties:
+        id:
+          type: string
+          format: uuid
+        version:
+          type: string
+        name:
+          type: string
+        schoolYear:
+          type: string
+        effectiveFrom:
+          type: string
+        effectiveTo:
+          type: string
+        publishedAt:
+          type: string
+    PageResponseObjectNode:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            type: object
+        page:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+    PageResponseApplicationPeriodResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/ApplicationPeriodResponse"
+        page:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+    PageResponseStudentApplicationResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/StudentApplicationResponse"
+        page:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT

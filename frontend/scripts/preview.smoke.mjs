@@ -14,6 +14,7 @@ import {
   parseArgs,
   saveScreenshot,
   seedTestingIdea,
+  seedTestingIdeaHistory,
   stopChild,
   viewportFor,
   waitForReady,
@@ -71,8 +72,16 @@ test('parses preview options and rejects incomplete or invalid invocations', () 
     parseArgs(['--auth', '--username', 'teacher01', '--seed-idea-owner', 'student01']).seedIdeaOwner,
     'student01',
   )
+  assert.equal(
+    parseArgs(['--auth', '--username', 'admin01', '--seed-idea-history', 'student01']).seedIdeaHistory,
+    'student01',
+  )
   assert.throws(
     () => parseArgs(['--auth', '--username', 'teacher01', '--no-start', '--url', 'http://localhost:5173', '--seed-idea-owner', 'student01']),
+    /requires --auth and a started local preview/,
+  )
+  assert.throws(
+    () => parseArgs(['--auth', '--username', 'admin01', '--no-start', '--url', 'http://localhost:5173', '--seed-idea-history', 'student01']),
     /requires --auth and a started local preview/,
   )
   assert.throws(
@@ -107,8 +116,52 @@ test('seeds a synthetic submitted idea using only the local testing-profile API'
   ])
   assert.equal(JSON.parse(requests[0].body).password, 'testing-only')
   assert.equal(requests[1].headers.Authorization, 'Bearer local-token')
-  assert.match(JSON.parse(requests[1].body).title, /^Feature-07 preview idea /)
+  assert.match(JSON.parse(requests[1].body).title, /^Feature-08 preview idea /)
   assert.equal(requests[2].headers.Authorization, 'Bearer local-token')
+})
+
+test('seeds review and supervision history through the testing-profile teacher APIs', async () => {
+  const requests = []
+  const idea = await seedTestingIdeaHistory({
+    baseUrl: 'http://127.0.0.1:8080',
+    ownerUsername: 'student01',
+    password: 'testing-only',
+    fetchImpl: async (url, options) => {
+      requests.push({ url, ...options })
+      return {
+        ok: true,
+        async json() {
+          if (url.endsWith('/api/auth/login')) {
+            const username = JSON.parse(options.body).username
+            return { token: `token-${username}`, user: { role: username === 'student01' ? 'STUDENT' : 'TEACHER' } }
+          }
+          if (url.endsWith('/api/ideas')) return { id: 'preview-idea' }
+          return { id: 'preview-record' }
+        },
+      }
+    },
+  })
+
+  assert.equal(idea.id, 'preview-idea')
+  assert.deepEqual(requests.map(({ url, method }) => [url, method]), [
+    ['http://127.0.0.1:8080/api/auth/login', 'POST'],
+    ['http://127.0.0.1:8080/api/ideas', 'POST'],
+    ['http://127.0.0.1:8080/api/ideas/preview-idea/submit', 'POST'],
+    ['http://127.0.0.1:8080/api/auth/login', 'POST'],
+    ['http://127.0.0.1:8080/api/ideas/preview-idea/reviews', 'POST'],
+    ['http://127.0.0.1:8080/api/auth/login', 'POST'],
+    ['http://127.0.0.1:8080/api/ideas/preview-idea/supervision-preference', 'PUT'],
+  ])
+  assert.deepEqual(JSON.parse(requests[4].body), {
+    decision: 'REQUEST_REVISION',
+    feedback: 'Clarify the demonstration scope for this preview.',
+  })
+  assert.deepEqual(JSON.parse(requests[6].body), {
+    preference: 'WILLING_TO_SUPERVISE',
+    note: 'Available to supervise during the next term.',
+  })
+  assert.equal(requests[4].headers.Authorization, 'Bearer token-teacher01')
+  assert.equal(requests[6].headers.Authorization, 'Bearer token-teacher02')
 })
 
 test('performs requested page interactions in fill, click, wait, expand, then keyboard order', async () => {

@@ -51,7 +51,7 @@
             <div class="row-main">
               <h3>{{ idea.title }}</h3>
               <p>{{ idea.description }}</p>
-              <p>School year {{ idea.schoolYear }} <span v-if="canSeeOwner"> · Submitted by {{ idea.ownerId }}</span></p>
+              <p>School year {{ idea.schoolYear }} <span v-if="canSeeOwner"> · Submitted by {{ idea.ownerDisplayName }}</span></p>
               <p v-if="isTeacher && idea.ownSupervisionPreference" class="muted supervision-summary">
                 <strong>Your supervision preference:</strong> {{ readable(idea.ownSupervisionPreference) }}
               </p>
@@ -79,10 +79,10 @@
         <div><p class="eyebrow">LIFECYCLE</p><p><span class="status-badge">{{ readable(selectedIdea.status) }}</span></p><p class="notice">{{ lifecycleMessage(selectedIdea.status) }}</p><div v-if="selectedIdea.specification"><strong>Specification</strong><p class="muted">Objectives: {{ selectedIdea.specification.objectives?.join(' · ') }}</p><p class="muted">Scope: {{ selectedIdea.specification.scope }}</p></div></div>
       </div>
       <h3 class="form-section-title">Teacher decision history</h3>
-      <div v-if="selectedIdea.reviews?.length" class="data-list"><article v-for="review in selectedIdea.reviews" :key="review.id" class="data-row"><div class="row-main"><h3>{{ readable(review.decision) }}</h3><p>{{ review.feedback }}</p><p class="muted">Teacher {{ review.teacherId }}<template v-if="review.reviewType === 'SPECIFICATION'"> · ratings reflect professional judgement</template></p><p v-if="recordedRatings(review).length" class="muted">Ratings: {{ recordedRatings(review).join(' · ') }}</p></div></article></div>
+      <div v-if="selectedIdea.reviews?.length" class="data-list"><article v-for="review in selectedIdea.reviews" :key="review.id" class="data-row"><div class="row-main"><h3>{{ readable(review.decision) }}</h3><p>{{ review.feedback }}</p><p class="muted">Teacher {{ review.teacherDisplayName }}<template v-if="review.reviewType === 'SPECIFICATION'"> · ratings reflect professional judgement</template></p><p v-if="recordedRatings(review).length" class="muted">Ratings: {{ recordedRatings(review).join(' · ') }}</p></div></article></div>
       <p v-else class="muted">No teacher decisions have been recorded.</p>
       <h3 v-if="selectedIdea.supervisionPreferences?.length" class="form-section-title">Recorded supervision preferences</h3>
-      <div v-for="entry in selectedIdea.supervisionPreferences ?? []" :key="entry.id" class="choice-item"><span>{{ entry.teacherId }} · {{ readable(entry.preference) }}</span><span class="muted">{{ entry.note }}</span></div>
+      <div v-for="entry in selectedIdea.supervisionPreferences ?? []" :key="entry.id" class="choice-item"><span>{{ entry.teacherDisplayName }} · {{ readable(entry.preference) }}</span><span class="muted">{{ entry.note }}</span></div>
       <div v-if="isStudent && canSpecify(selectedIdea)" class="actions"><button class="button" @click="startSpecification">Develop full specification</button><button v-if="selectedIdea.status === 'IDEA_APPROVED_FOR_SPECIFICATION'" class="button button-secondary" @click="submitSpecification">Submit specification for acceptance review</button></div>
       <div v-if="isTeacher && canReview(selectedIdea)" class="actions"><button id="review-from-details" class="button" type="button" @click="openReview($event)">Review {{ selectedIdea.status === 'SPECIFICATION_SUBMITTED' ? 'specification' : 'idea' }}</button></div>
       <form v-if="isTeacher && !['IDEA_DRAFT','WITHDRAWN','DECLINED'].includes(selectedIdea.status ?? '')" class="panel stack" @submit.prevent="savePreference">
@@ -91,7 +91,7 @@
       </form>
       <form v-if="isAdmin" class="panel stack" @submit.prevent="assignSupervisor">
         <h3 class="form-section-title">Confirm supervisor</h3><p class="muted">Assign only a teacher who has stated they want or are willing to supervise this project.</p>
-        <div class="field"><label class="label" for="teacher-id">Eligible teacher who wants or is willing to supervise</label><select id="teacher-id" v-model="teacherId" class="select" required><option value="">Select an eligible teacher…</option><option v-for="entry in eligibleTeachers" :key="entry.teacherId" :value="entry.teacherId">{{ entry.teacherId }} · {{ readable(entry.preference) }}</option></select></div><button class="button button-secondary" :disabled="!eligibleTeachers.length">Confirm supervisor</button>
+        <div class="field"><label class="label" for="teacher-id">Eligible teacher who wants or is willing to supervise</label><select id="teacher-id" v-model="teacherId" class="select" required><option value="">Select an eligible teacher…</option><option v-for="entry in eligibleTeachers" :key="entry.teacherId" :value="entry.teacherId">{{ entry.teacherDisplayName }} · {{ readable(entry.preference) }}</option></select></div><button class="button button-secondary" :disabled="!eligibleTeachers.length">Confirm supervisor</button>
       </form>
       <form v-if="specEditorOpen" class="panel stack" @submit.prevent="saveSpecification">
         <h2 class="section-title">Full specification — {{ selectedIdea.title }}</h2>

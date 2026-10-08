@@ -24,6 +24,7 @@ export function parseArgs(args) {
     headed: false,
     auth: false,
     seedIdeaOwner: undefined,
+    seedIdeaHistory: undefined,
     fill: [],
     click: [],
     waitFor: [],
@@ -46,6 +47,7 @@ export function parseArgs(args) {
     ['--screenshot', 'screenshot'],
     ['--username', 'username'],
     ['--seed-idea-owner', 'seedIdeaOwner'],
+    ['--seed-idea-history', 'seedIdeaHistory'],
     ['--password-env', 'passwordEnv'],
     ['--chrome', 'chrome'],
     ['--startup-timeout', 'startupTimeout'],
@@ -150,6 +152,9 @@ export function parseArgs(args) {
   if (options.seedIdeaOwner && (!options.auth || !options.username || !options.start)) {
     throw new Error('--seed-idea-owner requires --auth and a started local preview.')
   }
+  if (options.seedIdeaHistory && (!options.auth || !options.username || !options.start)) {
+    throw new Error('--seed-idea-history requires --auth and a started local preview.')
+  }
   if (options.nativeSelectByKey.length && !options.headed) {
     throw new Error('--native-select-by-key requires --headed so macOS can operate the native popup.')
   }
@@ -216,9 +221,9 @@ export async function seedTestingIdea({ baseUrl, ownerUsername, password, fetchI
   }
   const year = new Date().getFullYear()
   const created = await request('/api/ideas', {
-    title: `Feature-07 preview idea ${new Date().toISOString()}`,
+    title: `Feature-08 preview idea ${new Date().toISOString()}`,
     description: 'Synthetic idea created only in the local testing profile for browser verification.',
-    intendedOutcome: 'Show the teacher supervision preference beside this idea.',
+    intendedOutcome: 'Show authorized account display names in the idea history.',
     scopePoints: ['Record and display a supervision preference'],
     learningTopics: [],
     schoolYear: `${year}/${year + 1}`,
@@ -226,6 +231,46 @@ export async function seedTestingIdea({ baseUrl, ownerUsername, password, fetchI
   if (!created.id) throw new Error('The local preview idea was created without an identifier.')
   await request(`/api/ideas/${encodeURIComponent(created.id)}/submit`, {}, session.token)
   return created
+}
+
+export async function seedTestingIdeaHistory({ baseUrl, ownerUsername, password, fetchImpl = fetch }) {
+  const idea = await seedTestingIdea({ baseUrl, ownerUsername, password, fetchImpl })
+  async function request(path, method, body, token) {
+    const response = await fetchImpl(`${baseUrl}${path}`, {
+      method,
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(body),
+    })
+    if (!response.ok) throw new Error(`Could not seed local preview history (HTTP ${response.status}).`)
+    return response.json()
+  }
+  async function login(username) {
+    const response = await fetchImpl(`${baseUrl}/api/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    })
+    if (!response.ok) throw new Error(`Could not authenticate local preview fixture account (HTTP ${response.status}).`)
+    const session = await response.json()
+    if (!session.token) throw new Error(`Local preview fixture account ${username} did not receive a token.`)
+    return session.token
+  }
+
+  const ideaId = encodeURIComponent(idea.id)
+  const reviewToken = await login('teacher01')
+  await request(`/api/ideas/${ideaId}/reviews`, 'POST', {
+    decision: 'REQUEST_REVISION',
+    feedback: 'Clarify the demonstration scope for this preview.',
+  }, reviewToken)
+  const preferenceToken = await login('teacher02')
+  await request(`/api/ideas/${ideaId}/supervision-preference`, 'PUT', {
+    preference: 'WILLING_TO_SUPERVISE',
+    note: 'Available to supervise during the next term.',
+  }, preferenceToken)
+  return idea
 }
 
 export async function saveScreenshot(client, outputDir, filename) {
@@ -879,6 +924,7 @@ Options:
   --path PATH                     Page path to inspect, e.g. /login or /ideas
   --auth --username USER          Authenticate using the local testing account
   --seed-idea-owner USER           Create and submit a synthetic idea using a student testing account before opening the page
+  --seed-idea-history USER         Create a synthetic idea with review and preference history for display verification
   --fill SELECTOR=VALUE           Fill an input, textarea, or select; may be repeated
   --click SELECTOR                Click an element; may be repeated
   --wait-for SELECTOR             Wait for an element after interactions; may be repeated
@@ -950,6 +996,16 @@ async function run(options) {
           password,
         })
         console.log(`Created temporary submitted idea ${created.id} for ${options.seedIdeaOwner} in the testing profile.`)
+      }
+      if (options.seedIdeaHistory) {
+        const password = process.env[options.passwordEnv ?? 'PREVIEW_PASSWORD']
+        if (!password) throw new Error(`Set ${options.passwordEnv ?? 'PREVIEW_PASSWORD'} to seed local preview data.`)
+        const created = await seedTestingIdeaHistory({
+          baseUrl: `http://127.0.0.1:${backendPort}`,
+          ownerUsername: options.seedIdeaHistory,
+          password,
+        })
+        console.log(`Created temporary idea ${created.id} with review and preference history for ${options.seedIdeaHistory} in the testing profile.`)
       }
       const frontendPort = options.frontendPort
       const frontendCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm'

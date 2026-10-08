@@ -263,6 +263,8 @@ public final class ApiDtos {
     public record ReviewResponse(
             UUID id,
             UUID teacherId,
+            @Schema(description = "Current account display name; included only in authorized idea history.")
+            String teacherDisplayName,
             String reviewType,
             String decision,
             String feedback,
@@ -276,7 +278,11 @@ public final class ApiDtos {
             String recommendation) {
     }
 
-    public record SupervisionPreferenceResponse(UUID id, UUID teacherId, String preference, String note) {
+    public record SupervisionPreferenceResponse(
+            UUID id, UUID teacherId,
+            @Schema(description = "Current account display name; included only in authorized idea history.")
+            String teacherDisplayName,
+            String preference, String note) {
     }
 
     public record SupervisorResponse(UUID id, UUID teacherId, String status) {
@@ -285,6 +291,8 @@ public final class ApiDtos {
     public record IdeaResponse(
             UUID id,
             UUID ownerId,
+            @Schema(description = "Current account display name; included only in authorized idea responses.")
+            String ownerDisplayName,
             String status,
             String title,
             String description,

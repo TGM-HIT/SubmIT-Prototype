@@ -911,6 +911,8 @@ export interface components {
             id?: string;
             /** Format: uuid */
             ownerId?: string;
+            /** @description Current account display name; included only in authorized idea responses. */
+            ownerDisplayName?: string;
             status?: string;
             title?: string;
             description?: string;
@@ -927,6 +929,8 @@ export interface components {
             id?: string;
             /** Format: uuid */
             teacherId?: string;
+            /** @description Current account display name; included only in authorized idea history. */
+            teacherDisplayName?: string;
             reviewType?: string;
             decision?: string;
             feedback?: string;
@@ -963,6 +967,8 @@ export interface components {
             id?: string;
             /** Format: uuid */
             teacherId?: string;
+            /** @description Current account display name; included only in authorized idea history. */
+            teacherDisplayName?: string;
             preference?: string;
             note?: string;
         };

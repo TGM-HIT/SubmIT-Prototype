@@ -56,8 +56,8 @@ public class IdeaService {
     public ApiDtos.PageResponse<ApiDtos.IdeaResponse> list(
             AuthenticatedUser caller, String status, int page, int size) {
         Page<StoredRecord> records = findIdeas(caller, status, PageRequest.of(page, size));
-        Page<ApiDtos.IdeaResponse> results = records.map(record -> mapper.response(record, false));
-        return pageResponse(results);
+        return new ApiDtos.PageResponse<>(mapper.responses(records.getContent()), records.getNumber(),
+                records.getSize(), records.getTotalElements(), records.getTotalPages());
     }
 
     @Transactional(readOnly = true)
@@ -220,8 +220,4 @@ public class IdeaService {
         }
     }
 
-    private ApiDtos.PageResponse<ApiDtos.IdeaResponse> pageResponse(Page<ApiDtos.IdeaResponse> records) {
-        return new ApiDtos.PageResponse<>(records.getContent(), records.getNumber(), records.getSize(),
-                records.getTotalElements(), records.getTotalPages());
-    }
 }
