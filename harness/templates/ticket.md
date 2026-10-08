@@ -15,7 +15,7 @@
 
 Durable automated tests (join the build):
 
-- <Name required automated regression scenarios and observable outcomes.>
+- <Name required automated regression scenarios and observable outcomes. If shared seed data or fixtures change, also name existing tests that assert on them.>
 
 Standard project checks (keep only the blocks matching the ticket's scope; all must pass, and the Evaluator re-runs them):
 

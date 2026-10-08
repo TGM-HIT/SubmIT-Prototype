@@ -32,7 +32,9 @@ Use the ticket template as a structure, not as text to leave behind. Replace
 all applicable placeholders, remove inapplicable optional sections and
 instructions, and explicitly say when no automated or manual check applies.
 Keep references valid and relative to the ticket. Do not edit generated API
-artifacts.
+artifacts. When a ticket changes shared seed data, a fixture, or a constant that
+other tests assert on (account counts, seeded IDs), search the test sources for
+those assertions and list them in "Mechanical checks" as tests to update.
 
 Write only the requested ticket file. Do not edit `harness/plan.md`, project
 specifications, role contracts, or other tickets unless the user explicitly
