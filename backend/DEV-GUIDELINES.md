@@ -57,6 +57,7 @@ All seeded accounts use the testing-only password `testing-password`:
 | --- | --- |
 | `STUDENT` | `student01`, `student02`, `student03`, `student04`, `student05` |
 | `TEACHER` | `teacher01`, `teacher02`, `teacher03`, `teacher04`, `teacher05` |
+| `ADMIN` | `admin01`, `admin02` |
 
 These credentials are for local/testing use only. Never use them in production or expose them to a public environment. The accounts are not seeded unless the `testing` profile is active.
 

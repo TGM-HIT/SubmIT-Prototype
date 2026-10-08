@@ -25,7 +25,9 @@ public class TestingAccountsConfiguration {
             new SeedAccount("teacher02", "Teacher 02", Role.TEACHER),
             new SeedAccount("teacher03", "Teacher 03", Role.TEACHER),
             new SeedAccount("teacher04", "Teacher 04", Role.TEACHER),
-            new SeedAccount("teacher05", "Teacher 05", Role.TEACHER));
+            new SeedAccount("teacher05", "Teacher 05", Role.TEACHER),
+            new SeedAccount("admin01", "Admin 01", Role.ADMIN),
+            new SeedAccount("admin02", "Admin 02", Role.ADMIN));
 
     @Bean
     @Order(1)

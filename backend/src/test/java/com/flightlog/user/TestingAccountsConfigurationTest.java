@@ -3,10 +3,12 @@ package com.flightlog.user;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.flightlog.security.Role;
 import java.util.List;
 import java.util.Map;
@@ -20,9 +22,11 @@ import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.DefaultApplicationArguments;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.http.MediaType;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.MvcResult;
 
 @SpringBootTest(properties = "spring.datasource.url=jdbc:h2:mem:testingaccounts;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE")
 @ActiveProfiles("testing")
@@ -33,6 +37,8 @@ class TestingAccountsConfigurationTest {
     @Autowired
     private MockMvc mockMvc;
     @Autowired
+    private ObjectMapper objectMapper;
+    @Autowired
     private UserAccountRepository users;
     @Autowired
     private PasswordEncoder passwordEncoder;
@@ -41,14 +47,15 @@ class TestingAccountsConfigurationTest {
     private ApplicationRunner seeder;
 
     @Test
-    void createsTenAccountsWithSharedEncodedPasswordAndUsableRoleBearingLogins() throws Exception {
+    void createsTwelveAccountsWithSharedEncodedPasswordAndUsableRoleBearingLogins() throws Exception {
         List<UserAccount> accounts = users.findAll();
         Set<String> expectedUsernames = Set.of("student01", "student02", "student03", "student04", "student05",
-                "teacher01", "teacher02", "teacher03", "teacher04", "teacher05");
-        assertEquals(10, accounts.size());
+                "teacher01", "teacher02", "teacher03", "teacher04", "teacher05", "admin01", "admin02");
+        assertEquals(12, accounts.size());
         assertEquals(expectedUsernames, accounts.stream().map(UserAccount::getUsername).collect(Collectors.toSet()));
         assertEquals(5, accounts.stream().filter(account -> account.getRole() == Role.STUDENT).count());
         assertEquals(5, accounts.stream().filter(account -> account.getRole() == Role.TEACHER).count());
+        assertEquals(2, accounts.stream().filter(account -> account.getRole() == Role.ADMIN).count());
 
         for (UserAccount account : accounts) {
             assertNotEquals(TEST_PASSWORD, account.getPasswordHash());
@@ -70,6 +77,44 @@ class TestingAccountsConfigurationTest {
         assertEquals(Set.of("Teacher 01", "Teacher 02", "Teacher 03", "Teacher 04", "Teacher 05"),
                 accounts.stream().filter(account -> account.getRole() == Role.TEACHER)
                         .map(UserAccount::getDisplayName).collect(Collectors.toSet()));
+        assertEquals("Admin 01", users.findByUsername("admin01").orElseThrow().getDisplayName());
+        assertEquals("Admin 02", users.findByUsername("admin02").orElseThrow().getDisplayName());
+    }
+
+    @Test
+    void onlySeededAdministratorsCanReachTheAdministratorUserList() throws Exception {
+        for (String username : List.of("admin01", "admin02")) {
+            mockMvc.perform(get("/api/users").header("Authorization", "Bearer " + loginToken(username)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.content.length()").value(12));
+        }
+
+        for (String username : List.of("student01", "teacher01")) {
+            mockMvc.perform(get("/api/users").header("Authorization", "Bearer " + loginToken(username)))
+                    .andExpect(status().isForbidden());
+        }
+    }
+
+    @Test
+    void seederDoesNotModifyAnExistingAccountWithASeededUsername() throws Exception {
+        UserAccount account = users.findByUsername("admin01").orElseThrow();
+        String originalDisplayName = account.getDisplayName();
+        String originalPasswordHash = account.getPasswordHash();
+        Role originalRole = account.getRole();
+        account = new UserAccount(account.getId(), account.getUsername(), "Existing Account",
+                passwordEncoder.encode("existing-password"), Role.TEACHER);
+        users.save(account);
+
+        seeder.run(new DefaultApplicationArguments(new String[0]));
+
+        UserAccount unchanged = users.findByUsername("admin01").orElseThrow();
+        assertEquals(account.getId(), unchanged.getId());
+        assertEquals("Existing Account", unchanged.getDisplayName());
+        assertEquals(account.getPasswordHash(), unchanged.getPasswordHash());
+        assertEquals(Role.TEACHER, unchanged.getRole());
+
+        users.save(new UserAccount(unchanged.getId(), unchanged.getUsername(), originalDisplayName,
+                originalPasswordHash, originalRole));
     }
 
     @Test
@@ -84,10 +129,19 @@ class TestingAccountsConfigurationTest {
         seeder.run(startupArguments);
 
         List<UserAccount> accountsAfterRestart = users.findAll();
-        assertEquals(10, accountsAfterRestart.size());
+        assertEquals(12, accountsAfterRestart.size());
         for (UserAccount account : accountsAfterRestart) {
             assertEquals(originalIds.get(account.getUsername()), account.getId());
             assertEquals(originalHashes.get(account.getUsername()), account.getPasswordHash());
         }
+    }
+
+    private String loginToken(String username) throws Exception {
+        MvcResult result = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"" + username + "\",\"password\":\"" + TEST_PASSWORD + "\"}"))
+                .andExpect(status().isOk())
+                .andReturn();
+        return objectMapper.readTree(result.getResponse().getContentAsString()).path("token").asText();
     }
 }
