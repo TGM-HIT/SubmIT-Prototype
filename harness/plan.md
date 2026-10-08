@@ -27,3 +27,4 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-02](tickets/Dev-02.md) | done | Add reusable browser preview tooling |
 | [Bug-04](tickets/Bug-04.md) | done | Open idea details and review forms as modals |
 | [Feature-01](tickets/Feature-01.md) | done | Allow unrated idea reviews and show ratings in history |
+| [Feature-02](tickets/Feature-02.md) | done | Add editable account names |

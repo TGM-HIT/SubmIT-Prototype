@@ -1,0 +1,42 @@
+# Run log: Feature-02-20261008-0704
+
+## Ticket
+Feature-02 — Add editable account names ([harness/tickets/Feature-02.md](../../tickets/Feature-02.md)).
+
+## Run sequence (2026-10-08)
+- 07:05 Preflight passed on `main` with a clean worktree and available Java 23/backend/frontend toolchains.
+- Ledger check found the Feature-02 specification file but no Feature-02 row in `harness/plan.md`. At run start, added the missing row as `in progress`; no prior ticket status was present to preserve.
+- Baseline: `16864c1d95d2a03a2af5047d75604030abd76902`.
+- 07:05 Implementor pass 1 dispatched. Implementation commit `456ec95960832de4bb9efe3bbe479c605560bdec`.
+- Handoff completeness gate passed. The handoff was initially missing from its requested path; after the Implementor supplied it, the gate passed. Handoff saved at `handoff-1.md`.
+- Commit-scope gate passed for pass 1; exact commit paths are recorded in `changed-paths-1.txt`.
+- Scope gate flags: `docs/SPEC.md`, `backend/SPEC.md`, and `frontend/SPEC.md`; all three are required by the ticket, and the handoff declares reasons. Evaluator must judge these changes.
+- Handoff OUT OF SCOPE: generated `contracts/openapi.yaml` is gitignored and remains uncommitted; source annotations and generated frontend types are committed. Evaluator must assess the ticket's generated-contract requirement against the reported generation/review and repository ignore behavior.
+- Implementor reports passing backend test/checkstyle/OpenAPI-generation and frontend API-types/typecheck/test/build/preview-test checks, plus successful desktop/mobile browser checks; details and evidence are in `handoff-1.md`.
+- 07:24 Evaluator dispatched with the cumulative diff from baseline `16864c1d95d2a03a2af5047d75604030abd76902` through implementation commit `456ec95960832de4bb9efe3bbe479c605560bdec`, the ticket, and the handoff. All three SPEC changes were explicitly flagged.
+- Evaluation 1: `revise`. F-1 requires a focused regression assertion that PATCH trims padded valid names in response and persistence, and a user-list test with displayName distinct from username that asserts both remain distinct. Other criteria and all three SPEC changes accepted; generated OpenAPI YAML generation/review plus ignored-file status judged compliant. Evaluator did not independently replay manual Chrome checks; it found no human-only gap.
+- 07:29 Revise cycle 1 dispatched to a fresh Implementor. Revision limited to F-1 test assertions; new handoff requested at `handoff-2.md`.
+- Revision commit `44d6c7bf42fbb547ce29be894fbd97002d9836bb` changed only `AccountNameControllerTest.java` and `UserRoleControllerTest.java`. Implementor reports backend test, Checkstyle, and commit whitespace checks passed.
+- Pass-2 handoff was initially not saved by the revision Implementor after follow-up; a fresh Implementor completed the artifact without source changes. The handoff-completeness gate passed on `handoff-2.md`; scope gate passed on `changed-paths-2.txt`.
+- 07:31 Evaluator dispatched to review the cumulative diff from baseline `16864c1d95d2a03a2af5047d75604030abd76902` through revision commit `44d6c7bf42fbb547ce29be894fbd97002d9836bb`, with ticket, both handoffs, and prior evaluation.
+- Evaluation 2: `pass`. F-1 fixed: PATCH test proves response and persistence are trimmed, and admin-list test proves displayName is distinct from username. Evaluator rejudged all criteria and all three SPEC files; backend and frontend checks, OpenAPI generation/review, API types, and diff checks passed. No human-only gap.
+- Closeout: Plan row set to `done`; implementation head remains `44d6c7bf42fbb547ce29be894fbd97002d9836bb`; run artifacts and ledger will be committed separately.
+
+## Follow-ups
+- Handoff 1 reported that generated `contracts/openapi.yaml` was regenerated/reviewed but remains ignored and uncommitted; Evaluation 1 and Evaluation 2 found this compliant.
+- Handoff 2 reported the prior revision Implementor initially left the required handoff unsaved; the artifact-only retry saved a complete handoff and both gates passed.
+
+## Outcome: done (Evaluator pass)
+
+## Metrics
+- Implementor passes: 2 (initial implementation and test revision; one separate artifact-only handoff retry)
+- Revise cycles: 1 of 3
+- Evaluator passes: 2 (revise, pass)
+- Start: 2026-10-08T07:05+0200
+- End: 2026-10-08T07:35+0200
+- Tokens: estimate ~200k across orchestration, three Implementor dispatches, and two Evaluator passes (not measured)
+
+## SPEC CHANGE
+- `docs/SPEC.md` — handoff: documents required account names, validation, editing permissions, and visible names to define shared product behavior. Accepted by Evaluation 1 and 2.
+- `backend/SPEC.md` — handoff: documents account-name API behavior, validation, response data, and seeded names to reflect the backend contract. Accepted by Evaluation 1 and 2.
+- `frontend/SPEC.md` — handoff: documents registration and editing UI, immediate updates, error retention, and focus behavior to reflect the frontend contract. Accepted by Evaluation 1 and 2.
