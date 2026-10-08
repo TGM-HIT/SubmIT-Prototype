@@ -1,19 +1,13 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import { createPinia, setActivePinia } from 'pinia'
+import { createPinia, getActivePinia, setActivePinia } from 'pinia'
+import { defineComponent } from 'vue'
+import { createMemoryHistory, createRouter, RouterView } from 'vue-router'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import AppShell from './AppShell.vue'
 import { useAuthStore } from '../stores/auth'
 import SettingsPage from '../features/settings/SettingsPage.vue'
 
 const api = vi.hoisted(() => ({ changeName: vi.fn() }))
-vi.mock('vue-router', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('vue-router')>()
-  return {
-    ...actual,
-    useRoute: () => ({ meta: {}, name: 'settings' }),
-    useRouter: () => ({ replace: vi.fn() }),
-  }
-})
 vi.mock('../api/services', () => ({ userApi: { changeName: api.changeName } }))
 
 const account = (role: 'STUDENT' | 'TEACHER' | 'ADMIN') => ({
@@ -22,6 +16,38 @@ const account = (role: 'STUDENT' | 'TEACHER' | 'ADMIN') => ({
   displayName: 'Current display name',
   role,
 })
+
+const TestRoot = defineComponent({ components: { RouterView }, template: '<RouterView />' })
+const page = defineComponent({ template: '<div />' })
+
+function createTestRouter() {
+  return createRouter({
+    history: createMemoryHistory(),
+    routes: [{
+      path: '/',
+      component: AppShell,
+      children: [
+        { path: '', name: 'dashboard', component: page, meta: { title: 'Overview' } },
+        { path: 'ideas', name: 'ideas', component: page, meta: { title: 'Ideas & reviews' } },
+        { path: 'applications', name: 'applications', component: page },
+        { path: 'allocation', name: 'allocation', component: page },
+        { path: 'formal-application', name: 'formal-application', component: page },
+        { path: 'grading', name: 'grading', component: page },
+        { path: 'archive', name: 'archive', component: page },
+        { path: 'admin', name: 'admin', component: page },
+        { path: 'settings', name: 'settings', component: SettingsPage, meta: { title: 'User Settings' } },
+      ],
+    }],
+  })
+}
+
+async function mountAt(path: string) {
+  const router = createTestRouter()
+  await router.push(path)
+  await router.isReady()
+  const wrapper = mount(TestRoot, { global: { plugins: [getActivePinia()!, router] }, attachTo: document.body })
+  return wrapper
+}
 
 describe('authenticated shell profile and settings navigation', () => {
   const roleNavigation = {
@@ -36,18 +62,41 @@ describe('authenticated shell profile and settings navigation', () => {
     vi.restoreAllMocks()
   })
 
-  it.each(['STUDENT', 'TEACHER', 'ADMIN'] as const)('shows User Settings beside Archive management for %s without inline editing', (role) => {
+  it.each(['STUDENT', 'TEACHER', 'ADMIN'] as const)(
+    'highlights Overview only on the dashboard and retains the current page state for %s',
+    async (role) => {
+      setActivePinia(createPinia())
+      useAuthStore().updateUser(account(role))
+
+      for (const [path, expectedActiveLink] of [
+        ['/', 'Overview'],
+        ['/ideas', 'Ideas & reviews'],
+        ['/settings', 'User Settings'],
+      ] as const) {
+        const wrapper = await mountAt(path)
+        const overview = wrapper.get('.nav-list a[href="/"]')
+        const isOverviewSelected =
+          overview.classes().includes('router-link-active') ||
+          overview.classes().includes('router-link-exact-active')
+        expect(isOverviewSelected, `${role} at ${path}`).toBe(path === '/')
+
+        const selectedCurrentPage = expectedActiveLink === 'User Settings'
+          ? wrapper.get('.sidebar-bottom a[href="/settings"]')
+          : wrapper.get(`nav[aria-label="Main navigation"] a[href="${path}"]`)
+        expect(
+          selectedCurrentPage.classes().some((className) =>
+            className === 'router-link-active' || className === 'router-link-exact-active'),
+          `${role} current page at ${path}`,
+        ).toBe(true)
+        wrapper.unmount()
+      }
+    },
+  )
+
+  it.each(['STUDENT', 'TEACHER', 'ADMIN'] as const)('shows User Settings beside Archive management for %s without inline editing', async (role) => {
     setActivePinia(createPinia())
     useAuthStore().updateUser(account(role))
-    const wrapper = mount(AppShell, {
-      attachTo: document.body,
-      global: {
-        stubs: {
-          RouterLink: { props: ['to'], template: '<a :href="to"><slot /></a>' },
-          RouterView: SettingsPage,
-        },
-      },
-    })
+    const wrapper = await mountAt('/settings')
 
     expect(wrapper.get('h1').text()).toBe('User Settings')
     const mainNavigation = wrapper.get('nav[aria-label="Main navigation"]')
@@ -71,14 +120,7 @@ describe('authenticated shell profile and settings navigation', () => {
     const auth = useAuthStore()
     auth.updateUser(account('STUDENT'))
     api.changeName.mockResolvedValue({ ...account('STUDENT'), displayName: 'Updated from settings' })
-    const wrapper = mount(AppShell, {
-      global: {
-        stubs: {
-          RouterLink: { props: ['to'], template: '<a :href="to"><slot /></a>' },
-          RouterView: SettingsPage,
-        },
-      },
-    })
+    const wrapper = await mountAt('/settings')
 
     await wrapper.get('#settings-account-name').setValue('Updated from settings')
     await wrapper.get('form').trigger('submit')

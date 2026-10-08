@@ -23,8 +23,8 @@ a { color: inherit; }
 .sidebar .eyebrow { padding-left: 12px; }
 .nav-list { display: grid; gap: 5px; }
 .nav-link { padding: 11px 12px; display: flex; gap: 12px; align-items: center; color: #b9c4d5; border-radius: 9px; text-decoration: none; font-size: 13px; font-weight: 550; }
-.nav-link:hover, .nav-link.router-link-active { color: white; background: #202d43; }
-.nav-link.router-link-active { box-shadow: inset 3px 0 #63d0aa; }
+.nav-link:hover, .nav-link.router-link-active, .nav-link.router-link-exact-active { color: white; background: #202d43; }
+.nav-link.router-link-active, .nav-link.router-link-exact-active { box-shadow: inset 3px 0 #63d0aa; }
 .nav-link span { min-width: 17px; text-align: center; font-size: 17px; }
 .sidebar-bottom { margin-top: auto; }
 .profile { border-top: 1px solid #2a3548; margin-top: 16px; padding: 17px 7px 2px; display: grid; grid-template-columns: 34px minmax(0, 1fr) 22px; align-items: center; gap: 5px 8px; }

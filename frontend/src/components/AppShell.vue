@@ -4,7 +4,13 @@
       <RouterLink class="brand" to="/">Project<span>Ideas</span></RouterLink>
       <p class="eyebrow">WORKSPACE</p>
       <nav aria-label="Main navigation" class="nav-list">
-        <RouterLink v-for="item in navigation" :key="item.to" :to="item.to" class="nav-link">
+        <RouterLink
+          v-for="item in navigation"
+          :key="item.to"
+          :to="item.to"
+          :active-class="item.to === '/' ? 'overview-ancestor-route' : 'router-link-active'"
+          class="nav-link"
+        >
           <span aria-hidden="true">{{ item.icon }}</span>{{ item.label }}
         </RouterLink>
       </nav>
