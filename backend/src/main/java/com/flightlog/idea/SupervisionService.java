@@ -44,7 +44,9 @@ public class SupervisionService {
     @Transactional
     @PreAuthorize("hasRole('TEACHER')")
     public SupervisionPreferenceResponse setPreference(AuthenticatedUser caller, UUID id, JsonNode request) {
-        StoredRecord idea = findIdea(id);
+        StoredRecord idea = store.repository().findByIdForUpdate(id)
+                .filter(record -> IDEA.equals(record.getType()))
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Idea was not found."));
         ObjectNode payload = rules.object(request);
         String preference = rules.text(payload, "preference");
         if (!List.of("WANTS_TO_SUPERVISE", "WILLING_TO_SUPERVISE", "NOT_AVAILABLE").contains(preference)) {
@@ -57,7 +59,17 @@ public class SupervisionService {
         if (List.of("IDEA_DRAFT", "WITHDRAWN", "DECLINED").contains(idea.getStatus())) {
             throw rules.conflict("Supervision preferences are available only for reviewed projects.");
         }
-        StoredRecord record = store.create(SUPERVISION, caller.id().toString(), id.toString(), preference, payload);
+        List<StoredRecord> existing = store.repository()
+                .findByTypeAndParentIdAndOwnerIdOrderByCreatedAtDesc(SUPERVISION, id.toString(),
+                        caller.id().toString());
+        StoredRecord record;
+        if (existing.isEmpty()) {
+            record = store.create(SUPERVISION, caller.id().toString(), id.toString(), preference, payload);
+        } else {
+            record = existing.get(0);
+            store.update(record, preference, payload);
+            existing.stream().skip(1).forEach(store::delete);
+        }
         audit.record(caller, "SUPERVISION_PREFERENCE_CHANGED", IDEA, id);
         return mapper.supervisionResponse(record);
     }

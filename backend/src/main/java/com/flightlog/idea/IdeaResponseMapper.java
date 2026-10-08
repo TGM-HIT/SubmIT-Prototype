@@ -34,7 +34,7 @@ class IdeaResponseMapper {
 
     IdeaResponse response(StoredRecord record, boolean includeHistory) {
         List<StoredRecord> reviews = includeHistory ? children(REVIEW, record) : List.of();
-        List<StoredRecord> preferences = includeHistory ? children(SUPERVISION, record) : List.of();
+        List<StoredRecord> preferences = includeHistory ? currentPreferences(record) : List.of();
         Set<UUID> userIds = new java.util.LinkedHashSet<>();
         userIds.add(UUID.fromString(record.getOwnerId()));
         reviews.stream().map(child -> UUID.fromString(child.getOwnerId())).forEach(userIds::add);
@@ -131,6 +131,14 @@ class IdeaResponseMapper {
 
     private List<StoredRecord> children(String type, StoredRecord parent) {
         return store.page(type, null, parent.getId().toString(), PageRequest.of(0, 100)).getContent();
+    }
+
+    private List<StoredRecord> currentPreferences(StoredRecord parent) {
+        Set<String> teacherIds = new java.util.HashSet<>();
+        return store.repository().findByTypeAndParentIdOrderByCreatedAtDesc(SUPERVISION, parent.getId().toString())
+                .stream()
+                .filter(preference -> teacherIds.add(preference.getOwnerId()))
+                .toList();
     }
 
     private Integer integer(ObjectNode payload, String name) {

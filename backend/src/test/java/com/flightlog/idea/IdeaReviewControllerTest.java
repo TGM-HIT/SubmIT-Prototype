@@ -15,6 +15,11 @@ import com.flightlog.user.UserAccountRepository;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -110,6 +115,74 @@ class IdeaReviewControllerTest {
 
         mockMvc.perform(get("/api/ideas")).andExpect(status().isUnauthorized());
         mockMvc.perform(get("/api/ideas/{id}", ideaId)).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void supervisionPreferenceIsReplacedPerTeacherAndOverlappingWritesRemainUnique() throws Exception {
+        String ideaId = submitIdea("Replace and serialize supervision preferences");
+        String firstTeacherId = users.findByUsername("teacher01").orElseThrow().getId().toString();
+        String secondTeacherId = users.findByUsername("teacher02").orElseThrow().getId().toString();
+
+        preference(ideaId, teacherToken, "WANTS_TO_SUPERVISE", "Initial preference")
+                .andExpect(status().isOk());
+        preference(ideaId, otherTeacherToken, "NOT_AVAILABLE", "Independent preference")
+                .andExpect(status().isOk());
+        preference(ideaId, teacherToken, "WILLING_TO_SUPERVISE", "Replacement preference")
+                .andExpect(status().isOk());
+
+        JsonNode initialPreferences = objectMapper.readTree(getIdea(ideaId, studentToken)
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString())
+                .path("supervisionPreferences");
+        org.junit.jupiter.api.Assertions.assertEquals(2, initialPreferences.size());
+        org.junit.jupiter.api.Assertions.assertEquals(1, countPreferencesFor(initialPreferences, firstTeacherId));
+        org.junit.jupiter.api.Assertions.assertEquals("WILLING_TO_SUPERVISE",
+                preferenceFor(initialPreferences, firstTeacherId).path("preference").asText());
+        org.junit.jupiter.api.Assertions.assertEquals("Replacement preference",
+                preferenceFor(initialPreferences, firstTeacherId).path("note").asText());
+        org.junit.jupiter.api.Assertions.assertEquals("NOT_AVAILABLE",
+                preferenceFor(initialPreferences, secondTeacherId).path("preference").asText());
+        org.junit.jupiter.api.Assertions.assertEquals("Independent preference",
+                preferenceFor(initialPreferences, secondTeacherId).path("note").asText());
+
+        CountDownLatch ready = new CountDownLatch(2);
+        CountDownLatch start = new CountDownLatch(1);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<MvcResult> firstWrite = executor.submit(() -> overlappingPreference(
+                    ideaId, "WANTS_TO_SUPERVISE", "Concurrent first", ready, start));
+            Future<MvcResult> secondWrite = executor.submit(() -> overlappingPreference(
+                    ideaId, "WILLING_TO_SUPERVISE", "Concurrent second", ready, start));
+            org.junit.jupiter.api.Assertions.assertTrue(ready.await(5, TimeUnit.SECONDS));
+            start.countDown();
+            org.junit.jupiter.api.Assertions.assertEquals(200,
+                    firstWrite.get(10, TimeUnit.SECONDS).getResponse().getStatus());
+            org.junit.jupiter.api.Assertions.assertEquals(200,
+                    secondWrite.get(10, TimeUnit.SECONDS).getResponse().getStatus());
+        } finally {
+            start.countDown();
+            executor.shutdownNow();
+        }
+
+        var firstTeacherPreferences = store.repository()
+                .findByTypeAndParentIdAndOwnerIdOrderByCreatedAtDesc(
+                        "supervision_preference", ideaId, firstTeacherId);
+        org.junit.jupiter.api.Assertions.assertEquals(1, firstTeacherPreferences.size());
+
+        JsonNode idea = objectMapper.readTree(getIdea(ideaId, studentToken).andReturn()
+                .getResponse().getContentAsString());
+        JsonNode preferences = idea.path("supervisionPreferences");
+        org.junit.jupiter.api.Assertions.assertEquals(2, preferences.size());
+        JsonNode firstTeacherPreference = preferenceFor(preferences, firstTeacherId);
+        org.junit.jupiter.api.Assertions.assertTrue(java.util.List.of("WANTS_TO_SUPERVISE", "WILLING_TO_SUPERVISE")
+                .contains(firstTeacherPreference.path("preference").asText()));
+        org.junit.jupiter.api.Assertions.assertTrue(java.util.List.of("Concurrent first", "Concurrent second")
+                .contains(firstTeacherPreference.path("note").asText()));
+        JsonNode secondTeacherPreference = preferenceFor(preferences, secondTeacherId);
+        org.junit.jupiter.api.Assertions.assertEquals("NOT_AVAILABLE", secondTeacherPreference.path("preference").asText());
+        org.junit.jupiter.api.Assertions.assertEquals("Independent preference", secondTeacherPreference.path("note").asText());
+
+        preference(ideaId, studentToken, "WANTS_TO_SUPERVISE", "Not a teacher")
+                .andExpect(status().isForbidden());
     }
 
     @Test
@@ -321,13 +394,39 @@ class IdeaReviewControllerTest {
                 .header("Authorization", "Bearer " + token));
     }
 
+    private JsonNode preferenceFor(JsonNode preferences, String teacherId) {
+        return java.util.stream.StreamSupport.stream(preferences.spliterator(), false)
+                .filter(item -> teacherId.equals(item.path("teacherId").asText()))
+                .findFirst().orElseThrow();
+    }
+
+    private long countPreferencesFor(JsonNode preferences, String teacherId) {
+        return java.util.stream.StreamSupport.stream(preferences.spliterator(), false)
+                .filter(item -> teacherId.equals(item.path("teacherId").asText()))
+                .count();
+    }
+
     private org.springframework.test.web.servlet.ResultActions preference(String ideaId, String token)
             throws Exception {
+        return preference(ideaId, token, "WILLING_TO_SUPERVISE", "Available for this project");
+    }
+
+    private org.springframework.test.web.servlet.ResultActions preference(
+            String ideaId, String token, String choice, String note) throws Exception {
         return mockMvc.perform(put("/api/ideas/{id}/supervision-preference", ideaId)
                 .header("Authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(Map.of(
-                        "preference", "WILLING_TO_SUPERVISE", "note", "Available for this project"))));
+                        "preference", choice, "note", note))));
+    }
+
+    private MvcResult overlappingPreference(String ideaId, String choice, String note,
+            CountDownLatch ready, CountDownLatch start) throws Exception {
+        ready.countDown();
+        if (!start.await(5, TimeUnit.SECONDS)) {
+            throw new IllegalStateException("Concurrent preference writes did not start.");
+        }
+        return preference(ideaId, teacherToken, choice, note).andReturn();
     }
 
     private void renameDisplayName(String token, String accountId, String displayName) throws Exception {
