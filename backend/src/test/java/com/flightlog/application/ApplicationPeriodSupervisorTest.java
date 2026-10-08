@@ -100,6 +100,35 @@ class ApplicationPeriodSupervisorTest {
                 .andExpect(status().isBadRequest());
     }
 
+    @Test
+    void periodStillRejectsReversedDates() throws Exception {
+        mockMvc.perform(post("/api/application-periods")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(period(
+                                "2026/2027", Instant.now().plusSeconds(86_400).toString(),
+                                Instant.now().minusSeconds(60).toString(), projectIds))))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void periodStillRejectsProjectsThatAreNotAcceptedForApplications() throws Exception {
+        String nonAccepted = store.create("idea",
+                users.findByUsername("student01").orElseThrow().getId().toString(),
+                null, "IDEA_SUBMITTED",
+                store.object().put("title", "Not yet accepted")
+                        .put("schoolYear", "2026/2027")).getId().toString();
+        List<String> catalogue = List.of(projectIds.get(0), projectIds.get(1), nonAccepted);
+
+        mockMvc.perform(post("/api/application-periods")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(period(
+                                "2026/2027", Instant.now().minusSeconds(60).toString(),
+                                Instant.now().plusSeconds(86_400).toString(), catalogue))))
+                .andExpect(status().isBadRequest());
+    }
+
     private String createAcceptedIdea(String owner) {
         String id = UUID.randomUUID().toString();
         return store.create("idea", owner, null, "ACCEPTED_FOR_APPLICATIONS",

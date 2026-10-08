@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -16,6 +17,7 @@ import com.flightlog.data.StoredRecord;
 import com.flightlog.user.UserAccountRepository;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -94,6 +96,149 @@ class AllocationSupervisorIndependenceTest {
                 .andExpect(jsonPath("$.result.assignments.length()").value(9));
     }
 
+    @Test
+    void assignmentAndReplacementAfterAllocationPreserveResultsGroupsAndRelatedRecords() throws Exception {
+        List<String> projectIds = new ArrayList<>();
+        for (int index = 0; index < 3; index++) {
+            StoredRecord idea = store.create("idea",
+                    users.findByUsername("student01").orElseThrow().getId().toString(),
+                    null, "ACCEPTED_FOR_APPLICATIONS",
+                    store.object().put("title", "Post-allocation project " + index)
+                            .put("schoolYear", "2026/2027"));
+            projectIds.add(idea.getId().toString());
+        }
+
+        StoredRecord allocatedPeriod = createPeriod(projectIds);
+        StoredRecord finalizedPeriod = createPeriod(projectIds);
+        for (String username : List.of("student01", "student02", "student03", "student04",
+                "student05", "teacher01", "teacher02", "teacher03", "teacher04")) {
+            String studentId = users.findByUsername(username).orElseThrow().getId().toString();
+            createApplication(allocatedPeriod, studentId, projectIds);
+            createApplication(finalizedPeriod, studentId, projectIds);
+        }
+        allocationService.startDuePeriods();
+
+        for (String projectId : projectIds) {
+            StoredRecord application = store.create("formal_application",
+                    users.findByUsername("student01").orElseThrow().getId().toString(),
+                    projectId, "SUBMITTED", store.object().put("topic", "Synthetic formal application"));
+            store.create("formal_application_review",
+                    users.findByUsername("teacher03").orElseThrow().getId().toString(),
+                    application.getId().toString(), "APPROVE",
+                    store.object().put("feedback", "Synthetic review"));
+            for (String gradeType : List.of("student_grade", "group_grade", "final_grade")) {
+                store.create(gradeType, users.findByUsername("teacher03").orElseThrow().getId().toString(),
+                        projectId, "CURRENT", store.object().put("grade", 4));
+            }
+        }
+        JsonNode allocatedResultBefore = resultFor(allocatedPeriod).deepCopy();
+        JsonNode finalizedResultBefore = resultFor(finalizedPeriod).deepCopy();
+        JsonNode groupsBeforeAllocatedState = recordsSnapshot("project_group", projectIds);
+        JsonNode formalApplicationsBeforeAllocatedState = recordsSnapshot("formal_application", projectIds);
+        List<String> formalApplicationIds = store.repository()
+                .findAll().stream()
+                .filter(record -> "formal_application".equals(record.getType())
+                        && projectIds.contains(record.getParentId()))
+                .map(record -> record.getId().toString()).toList();
+        JsonNode reviewsBeforeAllocatedState =
+                recordsSnapshot("formal_application_review", formalApplicationIds);
+        JsonNode studentApplicationsBeforeAllocatedState = recordsSnapshot("student_application",
+                List.of(allocatedPeriod.getId().toString(), finalizedPeriod.getId().toString()));
+        JsonNode studentGradesBeforeAllocatedState = recordsSnapshot("student_grade", projectIds);
+        JsonNode groupGradesBeforeAllocatedState = recordsSnapshot("group_grade", projectIds);
+        JsonNode finalGradesBeforeAllocatedState = recordsSnapshot("final_grade", projectIds);
+        assertEquals(0, groupsBeforeAllocatedState.size());
+        assertEquals(3, formalApplicationsBeforeAllocatedState.size());
+        assertEquals(3, reviewsBeforeAllocatedState.size());
+
+        String adminToken = loginAdmin();
+        String firstTeacherId = users.findByUsername("teacher01").orElseThrow().getId().toString();
+        String replacementTeacherId = users.findByUsername("teacher02").orElseThrow().getId().toString();
+        prepareEligibleTeachers(projectIds.get(0), firstTeacherId, replacementTeacherId);
+        assignSupervisor(projectIds.get(0), adminToken, firstTeacherId).andExpect(status().isOk());
+        assignSupervisor(projectIds.get(0), adminToken, replacementTeacherId).andExpect(status().isOk());
+
+        assertEquals(allocatedResultBefore, resultFor(allocatedPeriod));
+        assertEquals(finalizedResultBefore, resultFor(finalizedPeriod));
+        assertEquals(groupsBeforeAllocatedState, recordsSnapshot("project_group", projectIds));
+        assertEquals(formalApplicationsBeforeAllocatedState, recordsSnapshot("formal_application", projectIds));
+        assertEquals(reviewsBeforeAllocatedState,
+                recordsSnapshot("formal_application_review", formalApplicationIds));
+        assertEquals(studentApplicationsBeforeAllocatedState, recordsSnapshot("student_application",
+                List.of(allocatedPeriod.getId().toString(), finalizedPeriod.getId().toString())));
+        assertEquals(studentGradesBeforeAllocatedState, recordsSnapshot("student_grade", projectIds));
+        assertEquals(groupGradesBeforeAllocatedState, recordsSnapshot("group_grade", projectIds));
+        assertEquals(finalGradesBeforeAllocatedState, recordsSnapshot("final_grade", projectIds));
+
+        String finalizedRunId = store.repository()
+                .findByTypeAndParentId("allocation_run", finalizedPeriod.getId().toString()).stream()
+                .filter(run -> "COMPLETED".equals(run.getStatus()))
+                .findFirst().orElseThrow().getId().toString();
+        mockMvc.perform(post("/api/allocation-runs/{id}/finalize", finalizedRunId)
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("FINALIZED"));
+
+        JsonNode allocatedResultBeforeFinalizedAssignments = resultFor(finalizedPeriod).deepCopy();
+        JsonNode finalizedGroupsBefore = recordsSnapshot("project_group", projectIds);
+        JsonNode formalApplicationsBefore = recordsSnapshot("formal_application", projectIds);
+        JsonNode reviewsBefore = recordsSnapshot("formal_application_review", formalApplicationIds);
+        JsonNode studentApplicationsBefore = recordsSnapshot("student_application",
+                List.of(allocatedPeriod.getId().toString(), finalizedPeriod.getId().toString()));
+        JsonNode studentGradesBefore = recordsSnapshot("student_grade", projectIds);
+        JsonNode groupGradesBefore = recordsSnapshot("group_grade", projectIds);
+        JsonNode finalGradesBefore = recordsSnapshot("final_grade", projectIds);
+        assertEquals(3, formalApplicationsBefore.size());
+        assertEquals(3, reviewsBefore.size());
+        assertEquals(3, studentGradesBefore.size());
+        assertEquals(3, groupGradesBefore.size());
+        assertEquals(3, finalGradesBefore.size());
+
+        prepareEligibleTeachers(projectIds.get(1), firstTeacherId, replacementTeacherId);
+        assignSupervisor(projectIds.get(1), adminToken, firstTeacherId).andExpect(status().isOk());
+        assignSupervisor(projectIds.get(1), adminToken, replacementTeacherId).andExpect(status().isOk());
+
+        assertEquals(allocatedResultBeforeFinalizedAssignments, resultFor(finalizedPeriod));
+        assertEquals(finalizedGroupsBefore, recordsSnapshot("project_group", projectIds));
+        assertEquals(formalApplicationsBefore, recordsSnapshot("formal_application", projectIds));
+        assertEquals(reviewsBefore, recordsSnapshot("formal_application_review", formalApplicationIds));
+        assertEquals(studentApplicationsBefore, recordsSnapshot("student_application",
+                List.of(allocatedPeriod.getId().toString(), finalizedPeriod.getId().toString())));
+        assertEquals(studentGradesBefore, recordsSnapshot("student_grade", projectIds));
+        assertEquals(groupGradesBefore, recordsSnapshot("group_grade", projectIds));
+        assertEquals(finalGradesBefore, recordsSnapshot("final_grade", projectIds));
+    }
+
+    private void prepareEligibleTeachers(String projectId, String firstTeacherId, String secondTeacherId) {
+        store.create("supervision_preference", firstTeacherId, projectId, "WANTS_TO_SUPERVISE",
+                store.object().put("preference", "WANTS_TO_SUPERVISE"));
+        store.create("supervision_preference", secondTeacherId, projectId, "WILLING_TO_SUPERVISE",
+                store.object().put("preference", "WILLING_TO_SUPERVISE"));
+    }
+
+    private org.springframework.test.web.servlet.ResultActions assignSupervisor(
+            String projectId, String token, String teacherId) throws Exception {
+        return mockMvc.perform(put("/api/ideas/{id}/supervisor", projectId)
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of("teacherId", teacherId))));
+    }
+
+    private JsonNode recordsSnapshot(String type, List<String> parentIds) {
+        ArrayNode snapshot = objectMapper.createArrayNode();
+        store.repository().findAll().stream()
+                .filter(record -> type.equals(record.getType()) && parentIds.contains(record.getParentId()))
+                .sorted(Comparator.comparing(record -> record.getId().toString()))
+                .forEach(record -> {
+                    ObjectNode item = snapshot.addObject();
+                    item.put("id", record.getId().toString());
+                    item.put("status", record.getStatus());
+                    item.put("parentId", record.getParentId());
+                    item.set("payload", store.parse(record));
+                });
+        return snapshot;
+    }
+
     private StoredRecord createPeriod(List<String> projectIds) {
         ArrayNode ids = store.object().arrayNode();
         projectIds.forEach(ids::add);
@@ -116,7 +261,8 @@ class AllocationSupervisorIndependenceTest {
 
     private JsonNode resultFor(StoredRecord period) {
         StoredRecord run = store.repository().findByTypeAndParentId("allocation_run", period.getId().toString())
-                .stream().filter(record -> "COMPLETED".equals(record.getStatus())).findFirst().orElse(null);
+                .stream().filter(record -> List.of("COMPLETED", "FINALIZED").contains(record.getStatus()))
+                .findFirst().orElse(null);
         return run == null ? null : store.parse(run).path("result");
     }
 

@@ -91,6 +91,7 @@
       </form>
       <form v-if="isAdmin" class="panel stack" @submit.prevent="assignSupervisor">
         <h3 class="form-section-title">Confirm supervisor</h3><p class="muted">Assign only a teacher who has stated they want or are willing to supervise this project.</p>
+        <p v-if="selectedIdea.confirmedSupervisorDisplayName" class="muted">Current supervisor: {{ selectedIdea.confirmedSupervisorDisplayName }}</p>
         <div class="field"><label class="label" for="teacher-id">Eligible teacher who wants or is willing to supervise</label><select id="teacher-id" v-model="teacherId" class="select" required><option value="">Select an eligible teacher…</option><option v-for="entry in eligibleTeachers" :key="entry.teacherId" :value="entry.teacherId">{{ entry.teacherDisplayName }} · {{ readable(entry.preference) }}</option></select></div><button class="button button-secondary" :disabled="!eligibleTeachers.length">Confirm supervisor</button>
       </form>
       <form v-if="specEditorOpen" class="panel stack" @submit.prevent="saveSpecification">

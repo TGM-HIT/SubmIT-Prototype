@@ -257,34 +257,88 @@ describe('IdeasPage overview supervision preferences', () => {
     page.unmount()
   })
 
-  it('lets an administrator assign or replace a supervisor from the focused project details dialog', async () => {
+  it('lets an administrator assign and replace a supervisor after allocation, showing the refreshed current supervisor', async () => {
     state.role = 'ADMIN'
     api.list.mockResolvedValue(pageIdeas('ACCEPTED_FOR_APPLICATIONS'))
-    api.get.mockResolvedValue({
+    let currentSupervisor: string | undefined
+    const details = () => ({
       ...idea('ACCEPTED_FOR_APPLICATIONS'),
-      supervisionPreferences: [{
-        id: 'preference-1',
-        teacherId: 'teacher-2',
-        teacherDisplayName: 'Teacher Two',
-        preference: 'WANTS_TO_SUPERVISE',
-        note: 'Interested.',
-      }],
+      allocationStatus: 'ALLOCATED',
+      confirmedSupervisorDisplayName: currentSupervisor,
+      supervisionPreferences: [
+        {
+          id: 'preference-1',
+          teacherId: 'teacher-1',
+          teacherDisplayName: 'Teacher One',
+          preference: 'WANTS_TO_SUPERVISE',
+          note: 'Interested.',
+        },
+        {
+          id: 'preference-2',
+          teacherId: 'teacher-2',
+          teacherDisplayName: 'Teacher Two',
+          preference: 'WILLING_TO_SUPERVISE',
+          note: 'Available.',
+        },
+      ],
+    })
+    api.get.mockImplementation(async () => details())
+    api.assignSupervisor.mockImplementation(async (_ideaId: string, teacherId: string) => {
+      currentSupervisor = teacherId === 'teacher-1' ? 'Teacher One' : 'Teacher Two'
+      return {}
     })
 
     const page = mountPage()
     await flushPromises()
     await page.get('#details-button-idea-ACCEPTED_FOR_APPLICATIONS').trigger('click')
     await flushPromises()
+
+    await page.get('#teacher-id').setValue('teacher-1')
+    await page.get('[role="dialog"] form').trigger('submit')
+    await flushPromises()
+    expect(api.assignSupervisor).toHaveBeenNthCalledWith(1, 'idea-ACCEPTED_FOR_APPLICATIONS', 'teacher-1')
+    expect(page.get('[role="dialog"]').text()).toContain('Current supervisor: Teacher One')
+
     await page.get('#teacher-id').setValue('teacher-2')
     await page.get('[role="dialog"] form').trigger('submit')
     await flushPromises()
 
-    expect(api.assignSupervisor).toHaveBeenCalledWith('idea-ACCEPTED_FOR_APPLICATIONS', 'teacher-2')
-    expect(api.get).toHaveBeenCalledTimes(2)
-    expect(page.get('[role="dialog"]').text()).toContain('Confirm supervisor')
+    expect(api.assignSupervisor).toHaveBeenNthCalledWith(2, 'idea-ACCEPTED_FOR_APPLICATIONS', 'teacher-2')
+    expect(api.get).toHaveBeenCalledTimes(3)
+    expect(page.get('[role="dialog"]').text()).toContain('Current supervisor: Teacher Two')
     expect(page.text()).toContain('Supervisor confirmed.')
     page.unmount()
   })
+
+  it.each(['TEACHER', 'STUDENT'])(
+    'does not show supervisor assignment controls to %s for an allocated project',
+    async (role) => {
+      state.role = role
+      api.list.mockResolvedValue(pageIdeas('ACCEPTED_FOR_APPLICATIONS'))
+      api.get.mockResolvedValue({
+        ...idea('ACCEPTED_FOR_APPLICATIONS'),
+        allocationStatus: 'ALLOCATED',
+        confirmedSupervisorDisplayName: 'Teacher One',
+        supervisionPreferences: [{
+          id: 'preference-1',
+          teacherId: 'teacher-1',
+          teacherDisplayName: 'Teacher One',
+          preference: 'WANTS_TO_SUPERVISE',
+          note: 'Interested.',
+        }],
+      })
+
+      const page = mountPage()
+      await flushPromises()
+      await page.get('#details-button-idea-ACCEPTED_FOR_APPLICATIONS').trigger('click')
+      await flushPromises()
+
+      expect(page.find('#teacher-id').exists()).toBe(false)
+      expect(page.find('form:has(#teacher-id)').exists()).toBe(false)
+      expect(api.assignSupervisor).not.toHaveBeenCalled()
+      page.unmount()
+    },
+  )
 })
 
 describe('IdeasPage review and details dialogs', () => {
