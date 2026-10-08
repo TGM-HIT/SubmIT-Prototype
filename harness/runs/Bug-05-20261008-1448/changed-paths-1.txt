@@ -1,0 +1,3 @@
+frontend/src/components/AppShell.test.ts
+frontend/src/components/AppShell.vue
+frontend/src/styles.css

@@ -32,3 +32,4 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Feature-04](tickets/Feature-04.md) | done | Testing-profile administrator account |
 | [Feature-05](tickets/Feature-05.md) | done | Filter and search accounts; edit an account in one modal |
 | [Feature-06](tickets/Feature-06.md) | done | Move User Settings beside Archive management |
+| [Bug-05](tickets/Bug-05.md) | done | Limit active Overview navigation state to the dashboard |
