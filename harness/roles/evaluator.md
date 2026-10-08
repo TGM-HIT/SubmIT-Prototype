@@ -50,8 +50,12 @@ For a continuation of a failed ticket you also receive `continuation.md`, the cu
 
 Before repeating a requirement that remains unmet, assess material contradictory evidence in the latest handoff. Explicitly reconcile that evidence in the verdict and direct the next pass to the next diagnostic that would resolve the conflict. For example, when a live API response appears to contradict a response helper in source, ask the implementor to trace and compare the actual endpoint/runtime payload with the source response mapping and determine whether a usable identifier enables the blocked setup, rather than merely repeating “find a fixture.”
 
-You never edit. You judge the work; you do not fix it. A revise goes back to a
-fresh Implementor pass. After three revise cycles, return `awaiting-human` only
+You do not edit implementation code, tickets, specifications, or any other
+project/run files. The Orchestrator will give you the exact path for this
+pass's `evaluation-N.md` verdict artifact; write your complete verdict there
+and make no other file changes. You judge the work; you do not fix it. A revise
+goes back to a fresh Implementor pass. After three revise cycles, return
+`awaiting-human` only
 for a human-exercisable verification/disposition gap; if an actionable
 implementation gap remains, return `revise` and let the Orchestrator close the
 run as failed rather than dispatching a fourth Implementor.

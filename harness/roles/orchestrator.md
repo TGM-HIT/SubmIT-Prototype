@@ -81,8 +81,10 @@ is no human-verification gap to escalate in this gate-failure case; use the
 or disposition.
 
 With both gates clean, dispatch the Evaluator with the diff (or explicit
-no-diff baseline SHA), the ticket specification, and that handoff note, and
-read its verdict.
+no-diff baseline SHA), the ticket specification, and that handoff note. Give
+it the exact artifact path `harness/runs/<run-id>/evaluation-N.md` for this
+pass and require it to save its complete verdict there before returning. Read
+the saved evaluation artifact as the authoritative verdict record.
 
 Evaluator verdicts are `pass`, `revise`, or `awaiting-human`.
 
@@ -131,7 +133,9 @@ Set the ticket to `in progress` while the continuation is active. Do not
 dispatch an Implementor or alter the accepted implementation in this
 continuation. Give a fresh Evaluator the original ticket, accepted diff and
 handoffs, complete prior verdict history, and the human record. Run only the
-applicable independent checks and this evaluator review. A pass closes the
+applicable independent checks and this evaluator review, with the exact
+output path `harness/runs/<run-id>/evaluation-1.md`; require the Evaluator
+to save its complete verdict there before returning. A pass closes the
 ticket as done; an `awaiting-human` verdict returns it to `awaiting-human` with
 a newly prepared checklist. If the Evaluator identifies a concrete code change,
 resume the normal Implementor/gate/Evaluator loop, subject to the three-cycle
@@ -193,6 +197,9 @@ Procedure:
    headings).
 5. Dispatch a fresh Evaluator with the cumulative diff from the baseline SHA, the
    revised ticket, all handoffs, and the prior evaluations as context only.
+   Give it the exact artifact path
+   `harness/runs/<run-id>/evaluation-N.md` for this pass and require it to save
+   its complete verdict there before returning.
    Prior verdicts and prior SPEC-change acceptances do not carry over: the
    Evaluator re-judges every criterion and every SPEC change in the cumulative
    diff against the revised ticket and re-runs all checks. Manual verification
