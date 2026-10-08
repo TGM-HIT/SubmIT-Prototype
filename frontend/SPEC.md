@@ -31,6 +31,8 @@ Provide authenticated views for:
 
 Authentication provides registration, login, JWT handling, logout, and session-expiry behavior.
 
+Registration collects a required account name distinct from the username. Signed-in students, teachers, and administrators can edit their own name from the account area in the authenticated shell; administrators can also edit any account name from user management. Show the current name in the shell and administrator account rows while retaining usernames for account identification. Save updates the visible name immediately without logout or reload. Save and cancel close the editor and return focus to its Edit name control; validation or server errors preserve the entered value for correction.
+
 ## 3. Permissions in the UI
 
 - `ADMIN` sees user and role management, application-period configuration, allocation-run, and finalization controls.

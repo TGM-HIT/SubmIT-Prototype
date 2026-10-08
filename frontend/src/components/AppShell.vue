@@ -11,8 +11,9 @@
       <div class="sidebar-bottom">
         <RouterLink to="/archive" class="nav-link"><span aria-hidden="true">▣</span>Archive management</RouterLink>
         <div v-if="auth.user" class="profile">
-          <div class="avatar" aria-hidden="true">{{ (auth.user.username ?? 'A').slice(0, 1).toUpperCase() }}</div>
-          <div class="profile-meta"><strong>{{ auth.user.username ?? 'Account' }}</strong><small>{{ auth.user.role }}</small></div>
+          <div class="avatar" aria-hidden="true">{{ (auth.user.displayName ?? 'A').slice(0, 1).toUpperCase() }}</div>
+          <div class="profile-meta"><strong>{{ auth.user.displayName }}</strong><small>{{ auth.user.username }} · {{ auth.user.role }}</small></div>
+          <AccountNameEditor :account="auth.user" @saved="auth.updateUser" />
           <button class="icon-button" aria-label="Sign out" title="Sign out" @click="signOut">⇥</button>
         </div>
       </div>
@@ -31,6 +32,7 @@
 import { computed, watch } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import AccountNameEditor from '../features/auth/AccountNameEditor.vue'
 
 const auth = useAuthStore()
 const route = useRoute()

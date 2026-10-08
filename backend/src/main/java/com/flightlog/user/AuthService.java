@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class AuthService {
     private static final long TOKEN_LIFETIME_SECONDS = 28_800L;
+    private static final int MAX_DISPLAY_NAME_LENGTH = 120;
 
     private final UserAccountRepository users;
     private final PasswordEncoder passwordEncoder;
@@ -35,10 +36,11 @@ public class AuthService {
     @Transactional
     public UserResponse register(RegisterRequest request) {
         String username = request.username().trim();
+        String displayName = normalizedName(request.displayName());
         if (users.findByUsername(username).isPresent()) {
             throw new ApiException(HttpStatus.CONFLICT, "Username is already registered.");
         }
-        UserAccount user = users.save(new UserAccount(UUID.randomUUID(), username,
+        UserAccount user = users.save(new UserAccount(UUID.randomUUID(), username, displayName,
                 passwordEncoder.encode(request.password()), Role.STUDENT));
         audit.record(new AuthenticatedUser(user.getId(), user.getUsername(), user.getRole()),
                 "USER_REGISTERED", "user", user.getId());
@@ -58,6 +60,16 @@ public class AuthService {
     }
 
     public UserResponse toResponse(UserAccount user) {
-        return new UserResponse(user.getId(), user.getUsername(), user.getRole());
+        return new UserResponse(user.getId(), user.getUsername(), user.getDisplayName(), user.getRole());
+    }
+
+    public String normalizedName(String displayName) {
+        String normalized = displayName.strip();
+        if (normalized.isEmpty()
+                || normalized.codePointCount(0, normalized.length()) > MAX_DISPLAY_NAME_LENGTH) {
+            throw new ApiException(HttpStatus.BAD_REQUEST,
+                    "Account name must contain 1 to 120 characters after trimming.");
+        }
+        return normalized;
     }
 }

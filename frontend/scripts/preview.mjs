@@ -91,6 +91,16 @@ export function parseArgs(args) {
           const assignment = argument.indexOf('=')
           if (assignment < 1) throw new Error('--step fill must use fill:SELECTOR=VALUE.')
           options.steps.push({ action, selector: argument.slice(0, assignment), value: argument.slice(assignment + 1) })
+        } else if (action === 'click-row-action' && argument) {
+          const separator = argument.indexOf('|')
+          if (separator < 1 || separator === argument.length - 1) {
+            throw new Error('--step click-row-action must use click-row-action:TEXT|SELECTOR.')
+          }
+          options.steps.push({
+            action,
+            value: argument.slice(0, separator),
+            selector: argument.slice(separator + 1),
+          })
         } else if (['click', 'wait', 'read', 'focus', 'screenshot', 'key'].includes(action) && argument) {
           if (action === 'screenshot' && path.basename(argument) !== argument) {
             throw new Error('--step screenshot must use a filename, not a path.')
@@ -566,6 +576,20 @@ export async function applyPageSteps(client, steps, { outputDir, log = console.l
       }`
       await evaluatePage(client, `(${expression})(${JSON.stringify(step.value)})`, `click ${step.value}`)
       log(`Clicked ${step.value}.`)
+    } else if (step.action === 'click-row-action') {
+      const expression = `(text, selector) => {
+        const row = [...document.querySelectorAll('article.data-row')].find((candidate) =>
+          [...candidate.querySelectorAll('.row-main p')].some((item) => item.textContent?.trim() === text));
+        if (!row) throw new Error('No data row contains ' + text);
+        const target = row.querySelector(selector);
+        if (!(target instanceof HTMLElement)) throw new Error('No row action matches ' + selector);
+        target.click();
+        return true;
+      }`
+      await evaluatePage(client,
+        `(${expression})(${JSON.stringify(`Username ${step.value}`)}, ${JSON.stringify(step.selector)})`,
+        `click ${step.selector} in the ${step.value} account row`)
+      log(`Clicked ${step.selector} in account row ${step.value}.`)
     } else if (step.action === 'wait') {
       const expression = `(selector) => new Promise((resolve, reject) => {
         const deadline = Date.now() + 10000;
@@ -825,7 +849,7 @@ Options:
   --select-by-key SELECTOR=VALUE  Select an enabled native option using keyboard input; may be repeated
   --native-select-by-key SELECTOR=VALUE  Use macOS keyboard input on a headed collapsed popup
   --expand-select SELECTOR        Show all native select options inline for screenshot inspection
-  --step ACTION:VALUE             Run ordered fill/click/wait/read/focus/key/screenshot interactions
+  --step ACTION:VALUE             Run ordered interactions; supports click-row-action:USERNAME|SELECTOR
   --password-env NAME             Environment variable containing its password (default PREVIEW_PASSWORD)
   --frontend-port N               Vite port (default 5173)
   --backend-port N                Backend port (default 8080)
@@ -838,6 +862,7 @@ For authenticated inspection, set PREVIEW_PASSWORD using the password documented
 backend/DEV-GUIDELINES.md and pass --username student01 (or another documented account).
 Use --fill, --click, --wait-for, and --expand-select to perform reusable preview interactions after authentication,
 or repeat --step ACTION:VALUE to sequence conditional flows. Steps support fill:SELECTOR=VALUE, click:SELECTOR,
+click-row-action:USERNAME|SELECTOR,
 wait:SELECTOR, read:SELECTOR, focus:SELECTOR, key:Tab|Shift+Tab|Escape, screenshot:FILE, and accept-confirms (local preview only).
 for example to load a form that requires a project ID before its details are shown. Use --tab-to and
 --select-by-key for browser keyboard navigation. On macOS, use --headed and --native-select-by-key for GUI

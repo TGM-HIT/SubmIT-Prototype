@@ -59,8 +59,17 @@ class TestingAccountsConfigurationTest {
                                     + "\",\"password\":\"" + TEST_PASSWORD + "\"}"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.user.username").value(account.getUsername()))
+                    .andExpect(jsonPath("$.user.displayName").value(account.getDisplayName()))
                     .andExpect(jsonPath("$.user.role").value(account.getRole().name()));
         }
+        assertEquals("Student 01", users.findByUsername("student01").orElseThrow().getDisplayName());
+        assertEquals("Teacher 01", users.findByUsername("teacher01").orElseThrow().getDisplayName());
+        assertEquals(Set.of("Student 01", "Student 02", "Student 03", "Student 04", "Student 05"),
+                accounts.stream().filter(account -> account.getRole() == Role.STUDENT)
+                        .map(UserAccount::getDisplayName).collect(Collectors.toSet()));
+        assertEquals(Set.of("Teacher 01", "Teacher 02", "Teacher 03", "Teacher 04", "Teacher 05"),
+                accounts.stream().filter(account -> account.getRole() == Role.TEACHER)
+                        .map(UserAccount::getDisplayName).collect(Collectors.toSet()));
     }
 
     @Test

@@ -14,6 +14,8 @@ The application helps students propose, develop, and join group projects for the
 
 Each account has one role. Users must be authenticated to access application data. Students can edit their own idea or specification only while it is a draft or has been returned for revision. Teachers can review project submissions.
 
+Each account has a required display name distinct from its unique login username. Registration requires a nonblank name; leading and trailing whitespace is trimmed, and the trimmed value must be at most 120 characters. A signed-in user may change their own name, and an administrator may change any account's name without changing its username, password, or role. The authenticated workspace and administrator account list show account names while retaining usernames for identification.
+
 ## 3. Project Lifecycle
 
 An idea follows these stages:

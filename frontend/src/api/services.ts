@@ -13,6 +13,7 @@ type ReviewRequest = components['schemas']['ReviewRequest']
 type ArtifactResponse = components['schemas']['ArtifactResponse']
 type PublicArtifactResponse = components['schemas']['PublicArtifactResponse']
 type UserResponse = components['schemas']['UserResponse']
+type DisplayNameRequest = components['schemas']['DisplayNameRequest']
 type Page<T> = { content: T[]; page: number; size: number; totalElements: number; totalPages: number }
 type Data = Record<string, unknown>
 
@@ -186,6 +187,13 @@ export const archiveApi = {
   },
   complete(projectId: string): Promise<Data> {
     return json(`/api/projects/${encodeURIComponent(projectId)}/complete`, 'POST')
+  },
+}
+
+export const userApi = {
+  changeName(id: string, displayName: string): Promise<UserResponse> {
+    const body: DisplayNameRequest = { displayName }
+    return json(`/api/users/${encodeURIComponent(id)}`, 'PATCH', body)
   },
 }
 

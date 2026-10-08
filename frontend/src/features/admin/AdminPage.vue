@@ -10,7 +10,8 @@
       <AsyncPanel :loading="task.loading.value" :error="task.error.value" @retry="loadUsers(users.page)">
         <div v-if="users.content.length" class="data-list">
           <article v-for="user in users.content" :key="user.id" class="data-row">
-            <div class="row-main"><h3>{{ user.username }}</h3><p>Account {{ user.id }}</p><span class="status-badge">{{ user.role }}</span></div>
+            <div class="row-main"><h3>{{ user.displayName }}</h3><p>Username {{ user.username }}</p><p>Account {{ user.id }}</p><span class="status-badge">{{ user.role }}</span></div>
+            <AccountNameEditor :account="user" @saved="saveName" />
             <form class="toolbar" @submit.prevent="changeRole(user.id ?? '')">
               <div class="field"><label class="label" :for="`role-${user.id}`">Role</label><select :id="`role-${user.id}`" v-model="roleSelections[user.id ?? '']" class="select" @change="clearRoleError(user.id ?? '')"><option value="STUDENT">Student</option><option value="TEACHER">Teacher</option><option value="ADMIN">Administrator</option></select></div>
               <button class="button button-secondary button-small" :disabled="roleSelections[user.id ?? ''] === user.role">Update role</button>
@@ -46,6 +47,7 @@ import { adminApi } from '../../api/services'
 import { useTask } from '../../composables/useTask'
 import AsyncPanel from '../../components/AsyncPanel.vue'
 import Pager from './Pager.vue'
+import AccountNameEditor from '../auth/AccountNameEditor.vue'
 
 type Data = Record<string, unknown>
 const task = useTask()
@@ -58,6 +60,10 @@ const roleErrors = reactive<Record<string, string>>({})
 function emptyPage<T>(): Page<T> { return { content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 } }
 function clearRoleError(id: string): void {
   delete roleErrors[id]
+}
+function saveName(updated: components['schemas']['UserResponse']): void {
+  const index = users.value.content.findIndex((user) => user.id === updated.id)
+  if (index >= 0) users.value.content[index] = updated
 }
 async function loadUsers(page = 0): Promise<void> {
   await task.run(async () => {

@@ -49,6 +49,11 @@ export const useAuthStore = defineStore('auth', () => {
     await login({ username: credentials.username, password: credentials.password })
   }
 
+  function updateUser(updated: components['schemas']['UserResponse']): void {
+    user.value = updated
+    localStorage.setItem(USER_KEY, JSON.stringify(updated))
+  }
+
   function logout(): void {
     token.value = null
     user.value = null
@@ -56,5 +61,5 @@ export const useAuthStore = defineStore('auth', () => {
     localStorage.removeItem(USER_KEY)
   }
 
-  return { token, user, isAuthenticated, login, register, logout }
+  return { token, user, isAuthenticated, login, register, updateUser, logout }
 })

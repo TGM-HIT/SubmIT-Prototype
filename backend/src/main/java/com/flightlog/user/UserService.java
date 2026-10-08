@@ -4,6 +4,7 @@ import com.flightlog.security.AuthenticatedUser;
 import com.flightlog.security.Role;
 import com.flightlog.audit.AuditService;
 import com.flightlog.web.ApiDtos.PageResponse;
+import com.flightlog.web.ApiDtos.DisplayNameRequest;
 import com.flightlog.web.ApiDtos.UserResponse;
 import com.flightlog.web.ApiException;
 import java.util.UUID;
@@ -44,6 +45,18 @@ public class UserService {
         }
         user.setRole(role);
         audit.record(caller, "USER_ROLE_CHANGED", "user", id);
+        return authService.toResponse(user);
+    }
+
+    @Transactional
+    public UserResponse changeDisplayName(AuthenticatedUser caller, UUID id, DisplayNameRequest request) {
+        if (!caller.id().equals(id) && caller.role() != Role.ADMIN) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "You may only change your own account name.");
+        }
+        UserAccount user = users.findById(id)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "User was not found."));
+        user.setDisplayName(authService.normalizedName(request.displayName()));
+        audit.record(caller, "USER_DISPLAY_NAME_CHANGED", "user", id);
         return authService.toResponse(user);
     }
 

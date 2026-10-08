@@ -11,6 +11,7 @@ import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
+import io.swagger.v3.oas.annotations.media.Schema;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -23,6 +24,9 @@ public final class ApiDtos {
     public record RegisterRequest(
             @NotBlank @Size(min = 3, max = 80) String username,
             @NotBlank @Size(min = 12, max = 128) String password,
+            @NotNull @Schema(description = "Required account name; trimmed before storage and limited to 120 "
+                    + "characters after trimming.")
+            String displayName,
             Role role) {
     }
 
@@ -32,7 +36,14 @@ public final class ApiDtos {
     public record TokenResponse(String token, String tokenType, long expiresIn, UserResponse user) {
     }
 
-    public record UserResponse(UUID id, String username, Role role) {
+    public record UserResponse(UUID id, String username,
+            @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String displayName, Role role) {
+    }
+
+    public record DisplayNameRequest(
+            @NotNull @Schema(description = "Required account name; leading and trailing whitespace is trimmed. "
+                    + "The trimmed name must contain 1 to 120 characters.")
+            String displayName) {
     }
 
     public record RoleRequest(@NotNull Role role) {

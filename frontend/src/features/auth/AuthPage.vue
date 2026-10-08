@@ -16,6 +16,11 @@
           <label class="label" for="username">Username</label>
           <input id="username" v-model.trim="username" class="input" autocomplete="username" required minlength="3" maxlength="80" />
         </div>
+        <div v-if="mode === 'register'" class="field">
+          <label class="label" for="display-name">Account name</label>
+          <input id="display-name" v-model="displayName" class="input" autocomplete="name" required />
+          <span class="muted">Shown in your workspace. Leading and trailing spaces are removed; up to 120 characters.</span>
+        </div>
         <div class="field">
           <label class="label" for="password">Password</label>
           <input id="password" v-model="password" class="input" type="password" :autocomplete="mode === 'login' ? 'current-password' : 'new-password'" required :minlength="mode === 'register' ? 12 : 1" maxlength="128" />
@@ -41,6 +46,7 @@ import { useTask } from '../../composables/useTask'
 defineProps<{ mode: 'login' | 'register' }>()
 const username = ref('')
 const password = ref('')
+const displayName = ref('')
 const auth = useAuthStore()
 const route = useRoute()
 const router = useRouter()
@@ -50,7 +56,7 @@ async function submit(): Promise<void> {
   const mode = String(route.name)
   const done = await task.run(
     () => mode === 'register'
-      ? auth.register({ username: username.value, password: password.value })
+      ? auth.register({ username: username.value, password: password.value, displayName: displayName.value })
       : auth.login({ username: username.value, password: password.value }),
     'Signed in successfully.',
   )

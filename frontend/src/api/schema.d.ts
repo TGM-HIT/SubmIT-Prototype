@@ -524,6 +524,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/users/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change an account name. Users may update their own name; administrators may update any account. */
+        patch: operations["changeDisplayName"];
+        trace?: never;
+    };
     "/api/users/{id}/role": {
         parameters: {
             query?: never;
@@ -1298,6 +1315,8 @@ export interface components {
         RegisterRequest: {
             username: string;
             password: string;
+            /** @description Required account name; trimmed before storage and limited to 120 characters after trimming. */
+            displayName: string;
             /** @enum {string} */
             role?: "STUDENT" | "TEACHER" | "ADMIN";
         };
@@ -1305,6 +1324,7 @@ export interface components {
             /** Format: uuid */
             id?: string;
             username?: string;
+            displayName: string;
             /** @enum {string} */
             role?: "STUDENT" | "TEACHER" | "ADMIN";
         };
@@ -1327,15 +1347,19 @@ export interface components {
             decision: string;
             note?: string;
         };
-        RoleRequest: {
-            /** @enum {string} */
-            role: "STUDENT" | "TEACHER" | "ADMIN";
+        DisplayNameRequest: {
+            /** @description Required account name; leading and trailing whitespace is trimmed. The trimmed name must contain 1 to 120 characters. */
+            displayName: string;
         };
         ApiErrorResponse: {
             /** Format: int32 */
             status: number;
             error: string;
             message: string;
+        };
+        RoleRequest: {
+            /** @enum {string} */
+            role: "STUDENT" | "TEACHER" | "ADMIN";
         };
         PageResponseUserResponse: {
             content?: components["schemas"]["UserResponse"][];
@@ -2698,6 +2722,68 @@ export interface operations {
                 };
                 content: {
                     "*/*": Record<string, never>;
+                };
+            };
+        };
+    };
+    changeDisplayName: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DisplayNameRequest"];
+            };
+        };
+        responses: {
+            /** @description The account name was changed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["UserResponse"];
+                };
+            };
+            /** @description The name is missing, blank after trimming, or longer than 120 characters after trimming. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Authentication is required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Only the account owner or an administrator may change the name. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description The account does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiErrorResponse"];
                 };
             };
         };

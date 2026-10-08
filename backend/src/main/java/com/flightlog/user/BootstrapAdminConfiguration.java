@@ -16,7 +16,8 @@ public class BootstrapAdminConfiguration {
             @Value("${DADB_BOOTSTRAPADMIN_PASSWORD:}") String password) {
         return args -> {
             if (!username.isBlank() && !password.isBlank() && users.findByUsername(username).isEmpty()) {
-                users.save(new UserAccount(UUID.randomUUID(), username, encoder.encode(password), Role.ADMIN));
+                users.save(new UserAccount(UUID.randomUUID(), username, "Administrator",
+                        encoder.encode(password), Role.ADMIN));
             }
         };
     }

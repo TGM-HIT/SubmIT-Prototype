@@ -82,6 +82,14 @@ class UserRoleControllerTest {
     }
 
     @Test
+    void administratorUserListIncludesAccountNames() throws Exception {
+        mockMvc.perform(get("/api/users").header("Authorization", bearer(admin)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[?(@.username == 'student')].displayName")
+                        .value(org.hamcrest.Matchers.contains("student")));
+    }
+
+    @Test
     void promotionsAndChangesToNonAdministratorAccountsRemainAvailable() throws Exception {
         mockMvc.perform(patch("/api/users/{id}/role", student.getId())
                         .header("Authorization", bearer(admin))
@@ -99,7 +107,7 @@ class UserRoleControllerTest {
     }
 
     private UserAccount user(String name, Role role) {
-        return new UserAccount(UUID.randomUUID(), name, "unused-password-hash", role);
+        return new UserAccount(UUID.randomUUID(), name, name, "unused-password-hash", role);
     }
 
     private String bearer(UserAccount account) {

@@ -18,6 +18,9 @@ public class UserAccount {
     @Column(nullable = false, unique = true, length = 80)
     private String username;
 
+    @Column(nullable = false, length = 120)
+    private String displayName;
+
     @Column(nullable = false)
     private String passwordHash;
 
@@ -28,9 +31,10 @@ public class UserAccount {
     protected UserAccount() {
     }
 
-    public UserAccount(UUID id, String username, String passwordHash, Role role) {
+    public UserAccount(UUID id, String username, String displayName, String passwordHash, Role role) {
         this.id = id;
         this.username = username;
+        this.displayName = displayName;
         this.passwordHash = passwordHash;
         this.role = role;
     }
@@ -41,6 +45,14 @@ public class UserAccount {
 
     public String getUsername() {
         return username;
+    }
+
+    public String getDisplayName() {
+        return displayName;
+    }
+
+    public void setDisplayName(String displayName) {
+        this.displayName = displayName;
     }
 
     public String getPasswordHash() {

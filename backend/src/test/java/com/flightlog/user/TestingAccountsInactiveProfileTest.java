@@ -43,6 +43,7 @@ class TestingAccountsInactiveProfileTest {
         assertTrue(users.findByUsername("existing-bootstrap-admin").isPresent());
         UserAccount bootstrapAdmin = users.findByUsername("existing-bootstrap-admin").orElseThrow();
         assertEquals(Role.ADMIN, bootstrapAdmin.getRole());
+        assertEquals("Administrator", bootstrapAdmin.getDisplayName());
         assertTrue(passwordEncoder.matches("existing-bootstrap-password", bootstrapAdmin.getPasswordHash()));
         List<String> testingUsernames = List.of("student01", "student02", "student03", "student04", "student05",
                 "teacher01", "teacher02", "teacher03", "teacher04", "teacher05");

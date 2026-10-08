@@ -27,6 +27,13 @@ test('parses preview options and rejects incomplete or invalid invocations', () 
     { action: 'focus', value: '#trigger' },
     { action: 'read', value: 'body' },
   ])
+  assert.deepEqual(parseArgs(['--step', 'click-row-action:teacher01|button.edit']).steps, [
+    { action: 'click-row-action', value: 'teacher01', selector: 'button.edit' },
+  ])
+  assert.throws(
+    () => parseArgs(['--step', 'click-row-action:teacher01']),
+    /TEXT\|SELECTOR/,
+  )
   assert.deepEqual(parseArgs([
     '--headed',
     '--fill', '#project-id=fixture=id',
