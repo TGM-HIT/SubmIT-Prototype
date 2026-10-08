@@ -1,0 +1,31 @@
+# Run log: Feature-03-20261008-0809
+
+## Continuation
+Verification-only continuation of paused run [Feature-03-20261008-0755](../Feature-03-20261008-0755/). The original implementation commit is `2c209cfcc2816c29d09ab166876ed544935897c3`, based on `577232eae635ec1d6af309ad476a8b9346f631c3`. Human record intake was committed separately as `d5f72a837cd0dc6407cc55ba9ecf3f3bc280f78f`; original paused run artifacts and completed attestation will remain unchanged.
+
+## Ticket
+Feature-03 — Move personal name editing to User Settings ([harness/tickets/Feature-03.md](../../tickets/Feature-03.md)).
+
+## Run sequence (2026-10-08)
+- 08:09 Human returned completed `human-acceptance.md` in the paused run. The record states that an administrator could modify their name in desktop and mobile views without problems, marks the administrator check verified, and requests evaluator continuation. Human observations and wording were preserved unchanged; no extra evidence or observations were inferred.
+- Intake commit: `d5f72a837cd0dc6407cc55ba9ecf3f3bc280f78f`.
+- 08:09 Continuation preflight passed on `main` with a clean worktree and available Java 23/backend/frontend toolchains.
+- Feature-03 ledger row set from `awaiting-human` to `in progress`.
+- No Implementor dispatched; this is verification-only, and the accepted implementation is unchanged.
+- Fresh Evaluator dispatched with the original ticket, cumulative accepted diff, original handoff, complete prior evaluation history, and completed human record.
+- Evaluation 1: `pass`. Frontend typecheck, tests (13 files, 51 tests), build, preview smoke tests (15 tests), and cumulative diff check passed. The `frontend/SPEC.md` change remains accepted. Human observation supports administrator name editing on desktop/mobile; evaluator did not infer persistence/cancel/error observations from the human record. Other acceptance items were supported by automated checks and previously reported student/teacher browser evidence; no human gap remains.
+- Closeout: Plan row set to `done`; implementation unchanged at `2c209cfcc2816c29d09ab166876ed544935897c3`; continuation artifacts and ledger will be committed separately.
+
+## Follow-ups
+- Prior handoff OUT OF SCOPE (from paused run): administrator manual preview initially unavailable because the documented testing-profile accounts contained students and teachers but no administrator; the human reports having used an administrator account for desktop and mobile verification.
+
+## Metrics
+- Implementor passes: 0
+- Revise cycles: 0
+- Evaluator passes: 1 (pass)
+- Start: 2026-10-08T08:09+0200
+- End: 2026-10-08T08:13+0200
+- Tokens: estimate ~45k across orchestration and one Evaluator pass (not measured)
+
+## SPEC CHANGE
+- `frontend/SPEC.md` — original handoff: describes authenticated User Settings and moved self-service name editing. Accepted in the paused run's Evaluation 1; the continuation Evaluator will re-judge against the unchanged original ticket and cumulative diff.

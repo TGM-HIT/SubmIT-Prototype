@@ -28,4 +28,4 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Bug-04](tickets/Bug-04.md) | done | Open idea details and review forms as modals |
 | [Feature-01](tickets/Feature-01.md) | done | Allow unrated idea reviews and show ratings in history |
 | [Feature-02](tickets/Feature-02.md) | done | Add editable account names |
-| [Feature-03](tickets/Feature-03.md) | awaiting-human | Move personal name editing to User Settings |
+| [Feature-03](tickets/Feature-03.md) | done | Move personal name editing to User Settings |
