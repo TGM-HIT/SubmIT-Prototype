@@ -565,6 +565,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * List user accounts
+         * @description Optional role and q parameters filter by role and case-insensitive username or display-name substring before pagination. Blank q is ignored; % and _ are literal search characters.
+         */
         get: operations["list_5"];
         put?: never;
         post?: never;
@@ -2828,6 +2832,8 @@ export interface operations {
             query?: {
                 page?: number;
                 size?: number;
+                role?: "STUDENT" | "TEACHER" | "ADMIN";
+                q?: string;
             };
             header?: never;
             path?: never;
@@ -2835,13 +2841,31 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description The filtered account page. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "*/*": components["schemas"]["PageResponseUserResponse"];
+                };
+            };
+            /** @description The role filter is invalid. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Only administrators may list user accounts. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiErrorResponse"];
                 };
             };
         };

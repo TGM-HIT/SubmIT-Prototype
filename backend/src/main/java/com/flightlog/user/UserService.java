@@ -7,9 +7,11 @@ import com.flightlog.web.ApiDtos.PageResponse;
 import com.flightlog.web.ApiDtos.DisplayNameRequest;
 import com.flightlog.web.ApiDtos.UserResponse;
 import com.flightlog.web.ApiException;
+import java.util.Locale;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,11 +29,23 @@ public class UserService {
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<UserResponse> list(AuthenticatedUser caller, int page, int size) {
+    public PageResponse<UserResponse> list(AuthenticatedUser caller, int page, int size, Role role, String query) {
         requireRole(caller, Role.ADMIN);
-        Page<UserAccount> result = users.findAll(PageRequest.of(page, size));
+        String search = normalizeSearch(query);
+        Page<UserAccount> result = users.findByFilters(role, search, PageRequest.of(page, size, Sort.by("id")));
         return new PageResponse<>(result.map(authService::toResponse).getContent(), result.getNumber(),
                 result.getSize(), result.getTotalElements(), result.getTotalPages());
+    }
+
+    private String normalizeSearch(String query) {
+        if (query == null) {
+            return null;
+        }
+        String normalized = query.strip();
+        if (normalized.isEmpty()) {
+            return null;
+        }
+        return normalized.toLowerCase(Locale.ROOT).replace("!", "!!").replace("%", "!%").replace("_", "!_");
     }
 
     @Transactional

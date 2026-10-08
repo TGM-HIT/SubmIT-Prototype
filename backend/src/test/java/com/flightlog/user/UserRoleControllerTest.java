@@ -93,6 +93,83 @@ class UserRoleControllerTest {
     }
 
     @Test
+    void filtersUsersByRoleAndSearchesUsernameOrDisplayNameCaseInsensitively() throws Exception {
+        mockMvc.perform(get("/api/users").param("role", "TEACHER")
+                        .header("Authorization", bearer(admin)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].username").value("teacher"))
+                .andExpect(jsonPath("$.totalElements").value(1));
+
+        mockMvc.perform(get("/api/users").param("q", " EaChE ")
+                        .header("Authorization", bearer(admin)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].username").value("teacher"));
+
+        mockMvc.perform(get("/api/users").param("q", " cCoUnT nA ")
+                        .header("Authorization", bearer(admin)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].username").value("student"));
+
+        mockMvc.perform(get("/api/users").param("role", "STUDENT").param("q", "teacher")
+                        .header("Authorization", bearer(admin)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(0))
+                .andExpect(jsonPath("$.totalElements").value(0));
+
+        mockMvc.perform(get("/api/users").param("q", "  ")
+                        .header("Authorization", bearer(admin)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(4));
+    }
+
+    @Test
+    void treatsSearchWildcardsLiterally() throws Exception {
+        UserAccount percent = user("percent%account", Role.STUDENT);
+        UserAccount underscore = user("under_score", Role.STUDENT);
+        users.saveAll(List.of(percent, underscore));
+
+        mockMvc.perform(get("/api/users").param("q", "%")
+                        .header("Authorization", bearer(admin)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].username").value("percent%account"));
+
+        mockMvc.perform(get("/api/users").param("q", "_")
+                        .header("Authorization", bearer(admin)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.content[0].username").value("under_score"));
+    }
+
+    @Test
+    void filteredPagesReportFilteredMetadataAndInvalidRolesUseTheSharedErrorShape() throws Exception {
+        users.save(user("second-student", Role.STUDENT));
+
+        mockMvc.perform(get("/api/users").param("role", "STUDENT").param("page", "1").param("size", "1")
+                        .header("Authorization", bearer(admin)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page").value(1))
+                .andExpect(jsonPath("$.size").value(1))
+                .andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.totalElements").value(2))
+                .andExpect(jsonPath("$.totalPages").value(2));
+
+        mockMvc.perform(get("/api/users").param("role", "INVALID")
+                        .header("Authorization", bearer(admin)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.status").value(400))
+                .andExpect(jsonPath("$.error").value("Bad Request"))
+                .andExpect(jsonPath("$.message").value("role must be STUDENT, TEACHER, or ADMIN."));
+
+        mockMvc.perform(get("/api/users").header("Authorization", bearer(teacher)))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.status").value(403));
+    }
+
+    @Test
     void promotionsAndChangesToNonAdministratorAccountsRemainAvailable() throws Exception {
         mockMvc.perform(patch("/api/users/{id}/role", student.getId())
                         .header("Authorization", bearer(admin))

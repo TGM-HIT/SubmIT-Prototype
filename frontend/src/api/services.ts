@@ -198,8 +198,11 @@ export const userApi = {
 }
 
 export const adminApi = {
-  users(page = 0): Promise<Page<UserResponse>> {
-    return json(`/api/users?${pageQuery(page)}`)
+  users(page = 0, role?: NonNullable<UserResponse['role']>, query?: string): Promise<Page<UserResponse>> {
+    const params = new URLSearchParams(pageQuery(page))
+    if (role) params.set('role', role)
+    if (query?.trim()) params.set('q', query.trim())
+    return json(`/api/users?${params}`)
   },
   role(id: string, role: UserResponse['role']): Promise<UserResponse> {
     return json(`/api/users/${encodeURIComponent(id)}/role`, 'PATCH', { role })

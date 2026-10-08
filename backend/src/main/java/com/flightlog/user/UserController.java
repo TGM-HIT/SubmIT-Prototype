@@ -33,10 +33,20 @@ public class UserController {
     }
 
     @GetMapping
+    @Operation(summary = "List user accounts", description = "Optional role and q parameters filter by role and "
+            + "case-insensitive username or display-name substring before pagination. Blank q is ignored; % and _ "
+            + "are literal search characters.")
+    @ApiResponse(responseCode = "200", description = "The filtered account page.", useReturnTypeSchema = true)
+    @ApiResponse(responseCode = "400", description = "The role filter is invalid.",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
+    @ApiResponse(responseCode = "403", description = "Only administrators may list user accounts.",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
     public PageResponse<UserResponse> list(@AuthenticationPrincipal AuthenticatedUser caller,
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
-        return userService.list(caller, Math.max(page, 0), normalizeSize(size));
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) Role role,
+            @RequestParam(required = false) String q) {
+        return userService.list(caller, Math.max(page, 0), normalizeSize(size), role, q);
     }
 
     @PatchMapping("/{id}/role")

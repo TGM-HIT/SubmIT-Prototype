@@ -16,7 +16,7 @@ Use standard statuses: `200` for successful reads or body-returning mutations, `
 
 - `POST /api/auth/register` creates a student account; a supplied role is ignored.
 - `POST /api/auth/login` returns a JWT and the account name.
-- `GET /api/users` returns a paginated user list for `ADMIN`.
+- `GET /api/users` returns a paginated user list for `ADMIN`; optional `role` (`STUDENT`, `TEACHER`, or `ADMIN`) and `q` parameters filter by role and case-insensitive username/display-name substring, respectively. Blank `q` is ignored, and `%` and `_` are literal search characters. Filters combine with AND and apply before pagination.
 - `PATCH /api/users/{id}` changes the account name for the account owner or `ADMIN`.
 - `PATCH /api/users/{id}/role` changes a role for `ADMIN`.
 
