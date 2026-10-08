@@ -202,7 +202,7 @@ class IdeaReviewControllerTest {
         renameDisplayName(teacherToken, reviewTeacherId, "Reviewer Current Name");
         renameDisplayName(otherTeacherToken, preferenceTeacherId, "Supervisor Current Name");
 
-        mockMvc.perform(get("/api/ideas")
+        mockMvc.perform(get("/api/ideas?size=100")
                         .header("Authorization", "Bearer " + teacherToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[?(@.id == '" + ideaId + "')].ownerDisplayName")
