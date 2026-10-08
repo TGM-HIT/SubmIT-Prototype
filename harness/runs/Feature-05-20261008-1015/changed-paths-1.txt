@@ -1,0 +1,13 @@
+backend/SPEC.md
+backend/src/main/java/com/flightlog/user/UserAccountRepository.java
+backend/src/main/java/com/flightlog/user/UserController.java
+backend/src/main/java/com/flightlog/user/UserService.java
+backend/src/main/java/com/flightlog/web/ApiExceptionHandler.java
+backend/src/test/java/com/flightlog/user/UserRoleControllerTest.java
+frontend/SPEC.md
+frontend/src/api/schema.d.ts
+frontend/src/api/services.ts
+frontend/src/features/admin/AdminPage.test.ts
+frontend/src/features/admin/AdminPage.vue
+frontend/src/features/auth/AccountNameEditor.test.ts
+frontend/src/features/auth/AccountNameEditor.vue

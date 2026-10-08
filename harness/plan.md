@@ -30,3 +30,4 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Feature-02](tickets/Feature-02.md) | done | Add editable account names |
 | [Feature-03](tickets/Feature-03.md) | done | Move personal name editing to User Settings |
 | [Feature-04](tickets/Feature-04.md) | done | Testing-profile administrator account |
+| [Feature-05](tickets/Feature-05.md) | done | Filter and search accounts; edit an account in one modal |
