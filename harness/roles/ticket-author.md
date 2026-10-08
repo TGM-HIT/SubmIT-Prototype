@@ -20,6 +20,13 @@ focus. For API changes, state the expected contract and required OpenAPI/type
 generation and review steps. Keep tests and verification proportional to the
 scope; do not require irrelevant checks.
 
+When a ticket changes or depends on extending existing documented developer
+tooling, inspect its owning usage guidance. Include a minimal documentation
+update and a check that the updated guidance matches the resulting tool
+behavior whenever the change affects documented capabilities, invocation,
+prerequisites, or setup. Do not require guide edits when the tool's documented
+behavior remains unchanged.
+
 Do not invent product policy, validation rules, lifecycle behavior, or
 authorization decisions. If a missing decision would materially change
 implementation or acceptance, ask the user one focused clarification at a
