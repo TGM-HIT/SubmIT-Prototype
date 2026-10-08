@@ -10,7 +10,7 @@
 
 ## Tickets
 
-Create new ticket specifications from [`templates/ticket.md`](templates/ticket.md), save open tickets as `tickets/<ticket-id>.md`, and add one status row here. When a ticket reaches `done`, move its specification to `tickets/done/<ticket-id>.md` and update this index link in the same closeout. Keep requirements in the ticket file; this index is only for status and navigation.
+Create new ticket specifications from [`templates/ticket.md`](templates/ticket.md), save open tickets as `tickets/<ticket-id>.md`, and add one `to-do` status row here (the Ticket Author adds it when creating the ticket). When a ticket reaches `done`, move its specification to `tickets/done/<ticket-id>.md` and update this index link in the same closeout. Keep requirements in the ticket file; this index is only for status and navigation.
 
 Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket specifications from a user request. Its scope is authoring the ticket only; implementation runs use the Orchestrator.
 
@@ -27,6 +27,8 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Bug-04](tickets/done/Bug-04.md) | done | Open idea details and review forms as modals |
 | [Bug-05](tickets/done/Bug-05.md) | done | Limit active Overview navigation state to the dashboard |
 | [Bug-06](tickets/done/Bug-06.md) | done | Replace a teacher's existing supervision preference |
+| [Bug-07](tickets/Bug-07.md) | to-do | Align the Clear filters button height in Administration |
+| [Bug-08](tickets/Bug-08.md) | to-do | Allow a withdrawn idea to be edited and submitted again |
 
 ### Development
 
@@ -49,3 +51,5 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Feature-06](tickets/done/Feature-06.md) | done | Move User Settings beside Archive management |
 | [Feature-07](tickets/done/Feature-07.md) | done | Show teacher supervision preference in ideas overview |
 | [Feature-08](tickets/done/Feature-08.md) | done | Show account names in Ideas & reviews |
+| [Feature-09](tickets/Feature-09.md) | to-do | Allow application periods without confirmed supervisors |
+| [Feature-10](tickets/Feature-10.md) | to-do | Let administrators assign any teacher as supervisor, warning for explicit refusals |

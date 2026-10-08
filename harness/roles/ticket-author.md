@@ -58,11 +58,16 @@ review controller tests asserting seeded display names). If another open ticket
 in `harness/plan.md` or `harness/tickets/` touches the same seeds or fixtures,
 note the dependency or intended order in the ticket.
 
-Write only the requested ticket file. Do not edit `harness/plan.md`, project
-specifications, role contracts, or other tickets unless the user explicitly
-requests those additional changes. For a new ticket, use the requested ticket
-ID and location; if either is not provided and cannot be derived safely, ask
-the user. Do not update the ticket status ledger unless explicitly asked.
+Write only the requested ticket file, plus one index row for a new ticket. Do not
+edit project specifications, role contracts, or other tickets unless the user
+explicitly requests those additional changes. For a new ticket, use the requested
+ticket ID and location; if either is not provided and cannot be derived safely,
+ask the user. When you create a new ticket, add exactly one row to the matching
+group table in `harness/plan.md` (`Bug-` to Bugs, `Dev-` to Development,
+`Feature-` to Features): status `to-do`, link `tickets/<ticket-id>.md`, and the
+ticket title, kept in ticket-ID order. This is the only plan edit you may make;
+do not change any other row or status. When only refining an existing ticket,
+leave the ledger unchanged unless explicitly asked.
 
 Before reporting completion, check the ticket for leftover template
 placeholders, conflicting requirements, ungrounded assumptions, and whitespace

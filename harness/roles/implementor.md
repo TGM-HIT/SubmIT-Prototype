@@ -11,9 +11,11 @@ The one exception is the specs. If the ticket cannot be implemented correctly wi
 run. Expect them to be modified or untracked; never edit or commit them, and do
 not report them as uncertainty. The sole exception is the exact handoff file
 path the Orchestrator requests for your pass. Create or update only that
-handoff file; do not edit or commit the ledger, run log, heartbeat, gate inputs,
+handoff file and the evidence files below; do not edit or commit the ledger, run log, heartbeat, gate inputs,
 evaluations, or any other run artifact. Keep the handoff uncommitted and report
-its exact path. Stage only the files you changed for the deliverable, by explicit
+its exact path. Store screenshots and other manual-verification evidence under
+`harness/runs/<run-id>/evidence/` (ignored by Git), not `/tmp`, and cite those
+paths in the handoff. Stage only the files you changed for the deliverable, by explicit
 path; never use blanket staging that could include `harness/plan.md`, ticket
 files, or other harness files. If you find a real problem outside the ticket's scope, report
 it under "What's uncertain" on a line starting with "OUT OF SCOPE:" and do not

@@ -236,10 +236,11 @@ Implementor in every dispatch prompt to stage only its own deliverable paths and
 never `harness/plan.md`.
 
 Keep a run log as you go: the ticket, what you dispatched, the gate results, the
-verdicts you got back, and any escalation. Write one line per step in the form
-`<timestamp> <step> <result>`: preflight; each dispatch with its commit SHA; each
+verdicts you got back, and any escalation. Write each step as one Markdown bullet in the form
+`- <timestamp> <step> <result>`: preflight; each dispatch with its commit SHA; each
 gate with its exit code; each Evaluator verdict with its artifact path; and, after
-the closeout commit, its SHA (append it to the local log).
+the closeout commit, its SHA (append it to the local log). Do not write
+unbulleted step lines.
 
 End the run log with a mandatory `## Metrics` footer for every outcome,
 including failed, stopped, and paused runs: Implementor passes, revise cycles,
