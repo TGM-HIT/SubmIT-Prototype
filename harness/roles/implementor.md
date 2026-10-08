@@ -6,9 +6,13 @@ The one exception is the specs. If the ticket cannot be implemented correctly wi
 
 `harness/plan.md` and `harness/runs/` are written by the Orchestrator during the
 run. Expect them to be modified or untracked; never edit or commit them, and do
-not report them as uncertainty. If you find a real problem outside the ticket's
-scope, report it under "What's uncertain" on a line starting with "OUT OF SCOPE:"
-and do not fix it.
+not report them as uncertainty. The sole exception is the exact handoff file
+path the Orchestrator requests for your pass. Create or update only that
+handoff file; do not edit or commit the ledger, run log, heartbeat, gate inputs,
+evaluations, or any other run artifact. Keep the handoff uncommitted and report
+its exact path. If you find a real problem outside the ticket's scope, report
+it under "What's uncertain" on a line starting with "OUT OF SCOPE:" and do not
+fix it.
 
 Run the ticket's completion checks yourself, and confirm they pass, before you
 report anything as done. If the ticket's requested behavior or presentation
@@ -19,17 +23,17 @@ which required checks you ran or could not run. The Evaluator decides whether
 the evidence establishes acceptance. Otherwise, once the checks pass, commit
 your change on the current branch.
 
-Then report back in a handoff note: a short prose block under three fixed headings, nothing more. Use these exact headings, verbatim:
+Then save and report back in the exact handoff file requested by the Orchestrator: a short prose block under three fixed headings, nothing more. Use these exact headings, including the Markdown heading marks, verbatim:
 
-What was done
+## What was done
 
 The change you made and where, including the commit.
 
-What was verified
+## What was verified
 
 Which completion checks you ran, and their result.
 
-What's uncertain
+## What's uncertain
 
 Anything you were unsure about, hit at the scope boundary, or deliberately left alone.
 

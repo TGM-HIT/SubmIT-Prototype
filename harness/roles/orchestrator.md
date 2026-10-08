@@ -25,14 +25,25 @@ pause, resume, end) from the system clock at the moment of the step (for example
 the token figure may be an estimate.
 
 Take the ticket ID you are given and read the corresponding
-`harness/tickets/<ticket-id>.md` specification. Confirm the ticket exists in the
-`harness/plan.md` index and preserve its current status until the run starts.
+`harness/tickets/<ticket-id>.md` specification. If that specification does not
+exist, stop before dispatching any role or changing the ledger; report a
+stopped outcome with no run folder and unchanged ledger, commit, and tree
+state. The specification is authoritative. Check whether the ticket has a row
+in the `harness/plan.md` index; if it does, preserve its current status until
+the run starts.
 
 Set the ticket's row in harness/plan.md to in progress before you dispatch the
-Implementor, so a live run is distinguishable from one that never started.
+Implementor, so a live run is distinguishable from one that never started. If
+the specification exists but its row is missing, insert the row as `in
+progress` when the run starts, using the ticket ID and title from the
+specification, and record the missing-row reconciliation in the run log.
+Never infer or invent ticket requirements from the ledger.
 
 Dispatch the Implementor with the ticket specification path and that ID, and
-read its handoff note.
+request that pass's handoff at the exact path
+`harness/runs/<run-id>/handoff-N.md`. The Implementor may create or update only
+that requested handoff artifact, and must leave it uncommitted. Read the saved
+handoff from that path.
 
 Then run the gates before you dispatch the Evaluator. First, run the
 handoff-completeness gate on the note you just read:
@@ -44,9 +55,9 @@ no-op/resolved finding with no implementation commit, use the exact HEAD SHA
 reported by the Implementor, create an empty changed-paths file in the run
 folder, and run the same gate; an empty list is an intentional no-op, not a
 missing gate input. Record the SHA and no-op outcome. A non-zero exit from
-either gate stops the run: a failed completeness gate sends the handoff back to
-a fresh Implementor with the missing heading. Never dispatch the Evaluator past
-a failed gate.
+either gate stops the run: a failed completeness gate sends the handoff back
+to a fresh Implementor with the missing heading and exact requested handoff
+path. Never dispatch the Evaluator past a failed gate.
 
 The scope gate also permits the three SPEC.md files (docs/, backend/, frontend/) and
 prints a "FLAG: spec change: <path>" line for each one in the commit. A flag is not a
@@ -77,8 +88,10 @@ Evaluator verdicts are `pass`, `revise`, or `awaiting-human`.
 
 - On `pass`, close out as done.
 - On `revise`, dispatch a fresh Implementor with the Evaluator's actionable
-  reasons and re-judge the new change, running both gates again on the new
-  handoff and commit before the Evaluator sees it. A revise cycle counts only
+  reasons and request its handoff at the next numbered path,
+  `harness/runs/<run-id>/handoff-N.md`. Re-judge the new change, running both
+  gates again on the new handoff and commit before the Evaluator sees it. A
+  revise cycle counts only
   when an Implementor revision is dispatched. After three revise cycles, do
   not dispatch a fourth Implementor: close as failed if an actionable
   implementation gap remains, or pause as `awaiting-human` if only
