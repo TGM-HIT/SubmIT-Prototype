@@ -44,6 +44,7 @@ class UserRoleControllerTest {
         anotherAdmin = user("another-admin", Role.ADMIN);
         teacher = user("teacher", Role.TEACHER);
         student = user("student", Role.STUDENT);
+        student.setDisplayName("Student Account Name");
         users.saveAll(List.of(admin, anotherAdmin, teacher, student));
     }
 
@@ -86,6 +87,8 @@ class UserRoleControllerTest {
         mockMvc.perform(get("/api/users").header("Authorization", bearer(admin)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[?(@.username == 'student')].displayName")
+                        .value(org.hamcrest.Matchers.contains("Student Account Name")))
+                .andExpect(jsonPath("$.content[?(@.username == 'student')].username")
                         .value(org.hamcrest.Matchers.contains("student")));
     }
 

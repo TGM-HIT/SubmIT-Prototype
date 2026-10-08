@@ -75,11 +75,13 @@ class AccountNameControllerTest {
 
     @Test
     void eachRoleCanUpdateTheirOwnNameAndOnlyAdminCanUpdateAnotherAccount() throws Exception {
-        update(student, student, "Student Updated")
+        update(student, student, "  Student Updated  ")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.displayName").value("Student Updated"))
                 .andExpect(jsonPath("$.username").value("student"))
                 .andExpect(jsonPath("$.role").value("STUDENT"));
+        org.junit.jupiter.api.Assertions.assertEquals("Student Updated",
+                users.findById(student.getId()).orElseThrow().getDisplayName());
         update(teacher, teacher, "Teacher Updated")
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.displayName").value("Teacher Updated"));
