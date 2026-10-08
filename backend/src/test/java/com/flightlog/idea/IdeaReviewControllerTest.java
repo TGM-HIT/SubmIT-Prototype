@@ -1,6 +1,7 @@
 package com.flightlog.idea;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -8,8 +9,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.flightlog.data.RecordStore;
+import com.flightlog.user.UserAccount;
+import com.flightlog.user.UserAccountRepository;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,12 +34,17 @@ class IdeaReviewControllerTest {
     private MockMvc mockMvc;
     @Autowired
     private ObjectMapper objectMapper;
+    @Autowired
+    private UserAccountRepository users;
+    @Autowired
+    private RecordStore store;
 
     private String studentToken;
     private String otherStudentToken;
     private String teacherToken;
     private String otherTeacherToken;
     private String adminToken;
+    private Map<String, String> originalDisplayNames;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -42,6 +53,23 @@ class IdeaReviewControllerTest {
         teacherToken = login("teacher01");
         otherTeacherToken = login("teacher02");
         adminToken = login("admin01");
+        originalDisplayNames = new HashMap<>();
+        for (String username : java.util.List.of("student01", "teacher01", "teacher02")) {
+            originalDisplayNames.put(username,
+                    users.findByUsername(username).orElseThrow().getDisplayName());
+        }
+    }
+
+    @AfterEach
+    void restoreTestingAccountNames() {
+        if (originalDisplayNames == null) {
+            return;
+        }
+        originalDisplayNames.forEach((username, displayName) -> {
+            UserAccount account = users.findByUsername(username).orElseThrow();
+            account.setDisplayName(displayName);
+            users.save(account);
+        });
     }
 
     @Test
@@ -74,6 +102,81 @@ class IdeaReviewControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.reviews[0].teacherDisplayName").value("Teacher 01"));
         getIdea(ideaId, otherStudentToken).andExpect(status().isForbidden());
+    }
+
+    @Test
+    void ideaListAndDetailKeepTheirAuthenticationRequirement() throws Exception {
+        String ideaId = submitIdea("Unauthenticated access remains restricted");
+
+        mockMvc.perform(get("/api/ideas")).andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/ideas/{id}", ideaId)).andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void currentNamesAfterAccountRenameAppearForEveryExistingIdeaReferenceWithoutChangingIds() throws Exception {
+        String ideaId = submitIdea("Current names after account rename");
+        review(ideaId, Map.of("decision", "REQUEST_REVISION", "feedback", "Please clarify."),
+                teacherToken).andExpect(status().isCreated());
+        preference(ideaId, otherTeacherToken).andExpect(status().isOk());
+
+        JsonNode beforeRename = objectMapper.readTree(getIdea(ideaId, studentToken).andReturn()
+                .getResponse().getContentAsString());
+        String ownerId = beforeRename.path("ownerId").asText();
+        String reviewTeacherId = beforeRename.path("reviews").get(0).path("teacherId").asText();
+        String preferenceTeacherId = beforeRename.path("supervisionPreferences").get(0).path("teacherId").asText();
+
+        renameDisplayName(studentToken, ownerId, "Student Current Name");
+        renameDisplayName(teacherToken, reviewTeacherId, "Reviewer Current Name");
+        renameDisplayName(otherTeacherToken, preferenceTeacherId, "Supervisor Current Name");
+
+        mockMvc.perform(get("/api/ideas")
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[?(@.id == '" + ideaId + "')].ownerDisplayName")
+                        .value(org.hamcrest.Matchers.hasItem("Student Current Name")))
+                .andExpect(jsonPath("$.content[?(@.id == '" + ideaId + "')].ownerId")
+                        .value(org.hamcrest.Matchers.hasItem(ownerId)));
+
+        getIdea(ideaId, studentToken)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.ownerDisplayName").value("Student Current Name"))
+                .andExpect(jsonPath("$.ownerId").value(ownerId))
+                .andExpect(jsonPath("$.reviews[0].teacherDisplayName").value("Reviewer Current Name"))
+                .andExpect(jsonPath("$.reviews[0].teacherId").value(reviewTeacherId))
+                .andExpect(jsonPath("$.supervisionPreferences[0].teacherDisplayName")
+                        .value("Supervisor Current Name"))
+                .andExpect(jsonPath("$.supervisionPreferences[0].teacherId").value(preferenceTeacherId));
+    }
+
+    @Test
+    void publicArchiveEndpointReturnsOnlyItsPublicArtifactMetadataAndNoAccountIdentities() throws Exception {
+        // This checks archive response metadata, not whether arbitrary published artifact content is anonymous.
+        UserAccount student = users.findByUsername("student01").orElseThrow();
+        var project = store.create("project", null, null, "PROJECT_COMPLETED",
+                store.object().put("title", "Synthetic completed archive project"));
+        var publicMetadata = store.object().put("type", "POSTER").put("title", "Public poster")
+                .put("size", 321).put("publicationStatus", "APPROVED")
+                .put("ownerId", student.getId().toString()).put("ownerDisplayName", student.getDisplayName())
+                .put("reviewerUsername", "teacher01").put("teacherDisplayName", "Teacher 01");
+        store.create("artifact", student.getId().toString(), project.getId().toString(), "APPROVED", publicMetadata);
+
+        MvcResult response = mockMvc.perform(get("/api/public/projects/{projectId}/archive", project.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].type").value("POSTER"))
+                .andExpect(jsonPath("$.content[0].size").value(321))
+                .andReturn();
+
+        JsonNode archiveEntry = objectMapper.readTree(response.getResponse().getContentAsString())
+                .path("content").get(0);
+        java.util.Set<String> returnedFields = new java.util.HashSet<>();
+        archiveEntry.fieldNames().forEachRemaining(returnedFields::add);
+        org.junit.jupiter.api.Assertions.assertEquals(java.util.Set.of("id", "type", "size"), returnedFields);
+        org.junit.jupiter.api.Assertions.assertFalse(response.getResponse().getContentAsString()
+                .contains(student.getId().toString()));
+        org.junit.jupiter.api.Assertions.assertFalse(response.getResponse().getContentAsString()
+                .contains(student.getDisplayName()));
+        org.junit.jupiter.api.Assertions.assertFalse(response.getResponse().getContentAsString().contains("teacher01"));
     }
 
     @Test
@@ -225,6 +328,15 @@ class IdeaReviewControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(Map.of(
                         "preference", "WILLING_TO_SUPERVISE", "note", "Available for this project"))));
+    }
+
+    private void renameDisplayName(String token, String accountId, String displayName) throws Exception {
+        mockMvc.perform(patch("/api/users/{id}", accountId)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("displayName", displayName))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.displayName").value(displayName));
     }
 
     private String login(String username) throws Exception {
