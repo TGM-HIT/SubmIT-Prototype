@@ -88,8 +88,11 @@ or disposition.
 With both gates clean, dispatch the Evaluator with the diff (or explicit
 no-diff baseline SHA), the resolved ticket specification, and that handoff note. Give
 it the exact artifact path `harness/runs/<run-id>/evaluation-N.md` for this
-pass and require it to save its complete verdict there before returning. Read
-the saved evaluation artifact as the authoritative verdict record.
+pass and require it to save its complete verdict there before returning. Before
+dispatch, append a timestamped `Evaluator dispatched` bullet to the run log
+with the pass number and requested artifact path, and overwrite the heartbeat
+with the dispatch step. Read the saved evaluation artifact as the authoritative
+verdict record.
 
 Evaluator verdicts are `pass`, `revise`, or `awaiting-human`.
 
@@ -241,6 +244,13 @@ verdicts you got back, and any escalation. Write each step as one Markdown bulle
 gate with its exit code; each Evaluator verdict with its artifact path; and, after
 the closeout commit, its SHA (append it to the local log). Do not write
 unbulleted step lines.
+
+For every pass, log the Implementor dispatch and returned commit SHA, then each
+gate result, then an `Evaluator dispatched` event before the corresponding
+Evaluator verdict event. Evaluator dispatch entries identify the pass and
+requested evaluation artifact path; they do not have an implementation commit
+SHA. At closeout, verify that every Evaluator verdict has a preceding dispatch
+event and that the heartbeat was updated at each Evaluator dispatch and verdict.
 
 End the run log with a mandatory `## Metrics` footer for every outcome,
 including failed, stopped, and paused runs: Implementor passes, revise cycles,

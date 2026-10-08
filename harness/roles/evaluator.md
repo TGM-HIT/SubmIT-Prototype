@@ -9,6 +9,19 @@ this change, and you do not take it on trust.
 
 Re-run every completion check you can run yourself, the mechanical ones, and confirm each result rather than believing the handoff note. Judge the checks you cannot re-run, the acceptance criteria, against the diff and the ticket. A behavioral change that ships without an automated test proving the new behavior is not done, however green the existing suite is.
 
+For each ticket mechanical check and behavioral acceptance criterion, identify
+the specific test that proves it and inspect both its setup and assertions.
+Confirm that comparative tests actually vary the condition under test while
+holding other inputs equivalent; matching test names or expected results are
+not sufficient. For fixture-backed behavior, trace the fixture setup through
+the persisted or returned records needed by the criterion, rather than
+inferring those records from the handoff. For manual preview claims, reconcile
+the cited observations and screenshots with the fixture and test provenance:
+confirm that the claimed view, period, allocation, and records belong to the
+same scenario where the ticket requires an end-to-end flow. Record the
+test-to-criterion evidence in the evaluation and call out any missing link as
+an actionable finding or human-exercisable acceptance gap.
+
 If the diff changes a SPEC.md file, judge that change explicitly: it must be declared in the handoff as a "SPEC CHANGE:", necessary for the ticket, minimal, and consistent with the code and the acceptance criteria. An undeclared, unnecessary, or requirement-weakening spec change is a revise. Always state in your verdict whether spec files changed and whether you accept the change.
 
 For Dev-02, evaluate any changes to `frontend/DEV-GUIDELINES.md` or `backend/DEV-GUIDELINES.md` for necessity and minimality against the delivered tooling. The frontend guide should change only when needed to explain how to use or maintain the workflow; the backend guide should change only for backend-specific profile, fixture, or startup instructions. A guide being allowed by the commit-scope gate does not by itself justify changing it.
