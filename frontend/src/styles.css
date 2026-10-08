@@ -81,6 +81,7 @@ a { color: inherit; }
 .actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 16px; }
 .toolbar { display: flex; flex-wrap: wrap; align-items: end; gap: 11px; margin-bottom: 16px; }
 .toolbar .field { min-width: 160px; }
+.account-filters > .filter-control.button { padding-block: 10px; line-height: 1.5; }
 .data-list { display: grid; gap: 10px; }
 .data-row { display: flex; align-items: flex-start; gap: 16px; justify-content: space-between; padding: 14px; border: 1px solid #e7ebf2; border-radius: 10px; }
 .data-row h3 { margin: 0 0 6px; font-size: 14px; }

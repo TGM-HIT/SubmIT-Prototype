@@ -10,7 +10,7 @@
       <form class="toolbar account-filters" @submit.prevent>
         <div class="field">
           <label class="label" for="account-role-filter">Role</label>
-          <select id="account-role-filter" :value="roleFilter" class="select" @change="applyRoleFilter">
+          <select id="account-role-filter" :value="roleFilter" class="select filter-control" @change="applyRoleFilter">
             <option value="">All roles</option>
             <option value="STUDENT">Student</option>
             <option value="TEACHER">Teacher</option>
@@ -19,9 +19,9 @@
         </div>
         <div class="field account-search-field">
           <label class="label" for="account-search">Search username and name</label>
-          <input id="account-search" v-model="searchInput" class="input" type="search" placeholder="Username or name" @input="scheduleSearch">
+          <input id="account-search" v-model="searchInput" class="input filter-control" type="search" placeholder="Username or name" @input="scheduleSearch">
         </div>
-        <button class="button button-secondary button-small" type="button" @click="clearFilters">Clear filters</button>
+        <button class="button button-secondary button-small filter-control" type="button" @click="clearFilters">Clear filters</button>
       </form>
       <AsyncPanel :loading="task.loading.value" :error="task.error.value" @retry="loadUsers(users.page)">
         <div v-if="users.content.length" class="data-list">

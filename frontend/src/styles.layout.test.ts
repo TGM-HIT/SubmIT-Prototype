@@ -15,6 +15,16 @@ const selectViews = [
 ]
 
 describe('shared form and responsive layout styles', () => {
+  it('marks the Administration filter controls as one shared height group', () => {
+    const admin = readFileSync(resolve(process.cwd(), 'src/features/admin/AdminPage.vue'), 'utf8')
+    const roleFilter = admin.match(/<select id="account-role-filter"[^>]*>/)?.[0]
+    const searchInput = admin.match(/<input id="account-search"[^>]*>/)?.[0]
+    expect(roleFilter).toMatch(/\bclass="[^"]*\bfilter-control\b/)
+    expect(searchInput).toMatch(/\bclass="[^"]*\bfilter-control\b/)
+    const clearButton = admin.match(/<button\b[^>]*>Clear filters<\/button>/)?.[0]
+    expect(clearButton).toMatch(/\bclass="[^"]*\bfilter-control\b/)
+  })
+
   it('gives native select and input controls a shared 40px height and prevents grid-field offsets', () => {
     expect(styles).toMatch(/\.input,\s*\.select\s*\{\s*height:\s*40px;/)
     expect(styles).toMatch(/\.grid\s*>\s*\.field\s*\+\s*\.field\s*\{\s*margin-top:\s*0;/)
