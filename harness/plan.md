@@ -34,3 +34,4 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Feature-06](tickets/Feature-06.md) | done | Move User Settings beside Archive management |
 | [Bug-05](tickets/Bug-05.md) | done | Limit active Overview navigation state to the dashboard |
 | [Feature-07](tickets/Feature-07.md) | done | Show teacher supervision preference in ideas overview |
+| [Feature-08](tickets/Feature-08.md) | done | Show account names in Ideas & reviews |
