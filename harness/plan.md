@@ -34,3 +34,4 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Bug-05](tickets/done/Bug-05.md) | done | Limit active Overview navigation state to the dashboard |
 | [Feature-07](tickets/done/Feature-07.md) | done | Show teacher supervision preference in ideas overview |
 | [Feature-08](tickets/done/Feature-08.md) | done | Show account names in Ideas & reviews |
+| [Bug-06](tickets/done/Bug-06.md) | done | Replace a teacher's existing supervision preference |
