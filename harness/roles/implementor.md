@@ -13,7 +13,9 @@ not report them as uncertainty. The sole exception is the exact handoff file
 path the Orchestrator requests for your pass. Create or update only that
 handoff file; do not edit or commit the ledger, run log, heartbeat, gate inputs,
 evaluations, or any other run artifact. Keep the handoff uncommitted and report
-its exact path. If you find a real problem outside the ticket's scope, report
+its exact path. Stage only the files you changed for the deliverable, by explicit
+path; never use blanket staging that could include `harness/plan.md`, ticket
+files, or other harness files. If you find a real problem outside the ticket's scope, report
 it under "What's uncertain" on a line starting with "OUT OF SCOPE:" and do not
 fix it.
 

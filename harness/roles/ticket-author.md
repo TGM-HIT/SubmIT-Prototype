@@ -52,7 +52,11 @@ instructions, and explicitly say when no automated or manual check applies.
 Keep references valid and relative to the ticket. Do not edit generated API
 artifacts. When a ticket changes shared seed data, a fixture, or a constant that
 other tests assert on (account counts, seeded IDs), search the test sources for
-those assertions and list them in "Mechanical checks" as tests to update.
+those assertions and list them in "Mechanical checks" as tests to update,
+including test classes outside the obvious fixture tests (for example idea or
+review controller tests asserting seeded display names). If another open ticket
+in `harness/plan.md` or `harness/tickets/` touches the same seeds or fixtures,
+note the dependency or intended order in the ticket.
 
 Write only the requested ticket file. Do not edit `harness/plan.md`, project
 specifications, role contracts, or other tickets unless the user explicitly

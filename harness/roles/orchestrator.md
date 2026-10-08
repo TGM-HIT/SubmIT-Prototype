@@ -231,8 +231,15 @@ a terminal failure and commit the tracked ledger update. Do not leave a
 terminal ticket result only in the conversation; the detailed record stays in
 the ignored run folder.
 
+The in-progress ledger edit stays uncommitted until closeout. Tell the
+Implementor in every dispatch prompt to stage only its own deliverable paths and
+never `harness/plan.md`.
+
 Keep a run log as you go: the ticket, what you dispatched, the gate results, the
-verdicts you got back, and any escalation.
+verdicts you got back, and any escalation. Write one line per step in the form
+`<timestamp> <step> <result>`: preflight; each dispatch with its commit SHA; each
+gate with its exit code; each Evaluator verdict with its artifact path; and, after
+the closeout commit, its SHA (append it to the local log).
 
 End the run log with a mandatory `## Metrics` footer for every outcome,
 including failed, stopped, and paused runs: Implementor passes, revise cycles,
