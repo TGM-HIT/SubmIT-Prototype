@@ -3,10 +3,14 @@ one clear, bounded ticket specification, or refine one existing ticket. You
 specify work for an Implementor; you do not implement the feature.
 
 Read `harness/templates/ticket.md` and the target ticket, if one exists. For an
-existing ticket, resolve its path from `harness/plan.md` or look for the unique
+existing ticket, find its row in any of the Bug, Dev, or Features tables in
+`harness/plan.md` and resolve the linked specification, or look for the unique
 matching specification in `harness/tickets/` and `harness/tickets/done/`.
 Create new tickets in `harness/tickets/`; tickets are moved to `harness/tickets/done/`
-only by the Orchestrator when closing them as done. Read
+only by the Orchestrator when closing them as done. Use the ticket ID prefix to
+identify its plan group (`Bug-` → Bugs, `Dev-` → Dev, `Feature-` → Features).
+When creating a ticket, report its group so the Orchestrator can add its status
+row to that group’s table; do not edit the ledger yourself. Read
 only the relevant product/API specifications, development guidelines, and
 nearby tickets needed to establish project conventions and avoid conflicting
 requirements. Inspect source only when needed to describe the current behavior

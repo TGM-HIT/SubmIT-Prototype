@@ -11,6 +11,8 @@ commit, and tree state. Only on exit 0 do you go on to take the ticket ID and
 resolve its specification from the linked path in `harness/plan.md`; for a
 ticket without an index row, check `harness/tickets/<ticket-id>.md` and
 `harness/tickets/done/<ticket-id>.md`, and stop if neither or both exist.
+The plan index is grouped into Bug, Dev, and Features tables; search every
+group for an existing row rather than assuming a single ticket table.
 
 Once preflight exits 0, mint a run id of the form <ticket-id>-<yyyymmdd-hhmm>
 from the clock, create harness/runs/<run-id>/, and open the run log there. Write
@@ -36,8 +38,10 @@ if it does, preserve its current status until the run starts.
 Set the ticket's row in harness/plan.md to in progress before you dispatch the
 Implementor, so a live run is distinguishable from one that never started. If
 the specification exists but its row is missing, insert the row as `in
-progress` when the run starts, using the ticket ID and title from the
-specification, and record the missing-row reconciliation in the run log.
+progress` in the matching Bug, Dev, or Features table when the run starts,
+using the ticket ID and title from the specification. Preserve the grouped
+tables and ticket-ID ordering; create a missing group table only for a known
+ticket prefix. Record the missing-row reconciliation in the run log.
 Never infer or invent ticket requirements from the ledger.
 
 Dispatch the Implementor with the resolved ticket specification path and that ID, and
@@ -115,21 +119,22 @@ Evaluator verdicts are `pass`, `revise`, or `awaiting-human`.
      result, evidence, and decision fields blank. Never mark a check passed on
      the human's behalf.
   3. Set the plan row to `awaiting-human`, record that the run is paused and the
-     exact path of the prepared template in the run log/heartbeat, and commit
-     the log, template, and ledger together. This is nonterminal; do not write
-     a terminal outcome or report `failed`.
+     exact path of the prepared template in the local run log/heartbeat, and
+     commit only the tracked ledger update. Keep the log and template local in
+     the ignored run folder. This is nonterminal; do not write a terminal
+     outcome or report `failed`.
   4. Stop and return the pause details to the calling coordinator. Do not keep
      polling, dispatch an Implementor, or start another evaluation until the
      human/coordinator resumes the ticket.
 
 When the human returns a completed `human-acceptance.md`, preserve it in the
-paused run folder and record its receipt in the run log. Commit this human
-record to the paused run before continuation preflight; this keeps the
-attestation auditable and leaves a clean tree for the normal preflight gate.
+paused run folder and record its receipt in the local run log. Do not force-add
+or commit this ignored record. The tree must be clean for continuation
+preflight; ignored run records do not affect that check.
 Do not alter the human's observations or turn unchecked items into verified
 ones. Then start a new verification-only continuation run; link it to the
 paused run ID and implementation SHA. Keep the paused run, its original
-verdicts, and its completed attestation unchanged after that intake commit.
+verdicts, and its completed attestation unchanged throughout the continuation.
 Set the ticket to `in progress` while the continuation is active. Do not
 dispatch an Implementor or alter the accepted implementation in this
 continuation. Give a fresh Evaluator the original ticket, accepted diff and
@@ -140,8 +145,8 @@ to save its complete verdict there before returning. A pass closes the
 ticket as done; an `awaiting-human` verdict returns it to `awaiting-human` with
 a newly prepared checklist. If the Evaluator identifies a concrete code change,
 resume the normal Implementor/gate/Evaluator loop, subject to the three-cycle
-limit. Record and commit continuation artifacts and the ledger together at
-closeout.
+limit. Keep continuation artifacts in the ignored run folder and commit tracked
+ledger or ticket changes separately at closeout.
 
 An authorized user may instead explicitly accept the current implementation
 after manual inspection, even if some checks remain unverified. This is a
@@ -208,9 +213,10 @@ Procedure:
    performed.
 6. Handle verdicts exactly as in the normal loop. Close out as done, failed, or
    awaiting-human, with the `## Continuation` link and the usual `## Metrics` and
-   SPEC CHANGE sections in the new run log. Commit artifacts separately from the
-   deliverable. Leave the failed run folder untouched; the ledger moves only
-   to the new run's outcome.
+   SPEC CHANGE sections in the new local run log. Keep run artifacts ignored;
+   commit tracked ledger or ticket changes separately from the deliverable.
+   Leave the failed run folder untouched; the ledger moves only to the new run's
+   outcome.
 
 If the human declines to verify or accept, or explicitly requests stopping,
 close as failed and record that decision. Do not turn an unresolved pause into
@@ -220,9 +226,10 @@ After the run folder exists, any role failure, denied required action, failed
 gate that cannot be corrected, or exhausted revise cycle must still go through
 failed closeout, except that a human-exercisable verification gap follows the
 `awaiting-human` pause above. Preserve the truthful partial log, handoffs, and
-verdict or stop reason; set the row to failed only for a terminal failure;
-commit those run artifacts and the ledger. Do not leave a terminal ticket
-result only in the conversation or in an uncommitted folder.
+verdict or stop reason in the local run folder; set the row to failed only for
+a terminal failure and commit the tracked ledger update. Do not leave a
+terminal ticket result only in the conversation; the detailed record stays in
+the ignored run folder.
 
 Keep a run log as you go: the ticket, what you dispatched, the gate results, the
 verdicts you got back, and any escalation.
@@ -240,22 +247,24 @@ own commit paths; the Evaluator receives the cumulative diff from the baseline
 commit. If a handoff contains lines starting `OUT OF SCOPE:`, copy them into a
 `## Follow-ups` section of the run log and mention them in your closing prose.
 
-To close out, commit the run artifacts under harness/runs/<run-id>/ and record
-the outcome in the run log. Keep that a separate commit from the Implementor's
-deliverable, so the commit-scope gate, which runs on the deliverable, never sees
-the harness paths the closeout adds — including the run folder, which now exists
-from run start rather than appearing at closeout.
-Closing out is commit-the-artifacts, record-the-outcome, and update the ledger:
+Run artifacts under `harness/runs/<run-id>/` are local records and are ignored
+by Git. Write and retain the run log, heartbeat, handoffs, evaluations, and
+human-acceptance records there, but do not force-add or commit them. Closing out
+is record-the-outcome in the local run log and update the tracked ledger:
 set the ticket's row in harness/plan.md to done on an Evaluator pass or explicit
 authorized human acceptance, failed on a terminal ticket failure, or leave it
 awaiting-human for a paused run. When setting a ticket to done, move its
 specification from `harness/tickets/<ticket-id>.md` to
 `harness/tickets/done/<ticket-id>.md` and update the plan link in the same
-run-artifacts commit. Create the `done/` directory if necessary. Do not move
-failed or awaiting-human tickets; they remain open at the root ticket path.
-The ledger edit is a harness path, so it rides in the run-artifacts commit. A
-paused run is not terminal; retain its continuation pointer and template for
-the next coordinator.
+tracked closeout commit. Create the `done/` directory if necessary. Also repair
+the run log's ticket link, and any other links in retained run artifacts that
+point to the moved specification, so they resolve from the run folder. Do not
+move failed or awaiting-human tickets; they remain open at the root ticket
+path. Commit tracked closeout changes separately from the Implementor's
+deliverable. For failed or paused runs, commit the tracked ledger update; the
+detailed stop reason or human checklist remains in the ignored local run
+folder. A paused run is not terminal; retain its continuation pointer and
+template for the next coordinator.
 
 If any commit in the run changed a SPEC.md file, flag it prominently: put a "SPEC CHANGE" section in the run log and at the top of your closing prose, listing each file, the reason from the handoff, and the Evaluator's verdict on it, so a human reviews it. This applies to failed runs too.
 
