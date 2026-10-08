@@ -1,5 +1,0 @@
-.gitignore
-frontend/DEV-GUIDELINES.md
-frontend/package.json
-frontend/scripts/preview.mjs
-frontend/scripts/preview.smoke.mjs

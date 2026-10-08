@@ -8,6 +8,9 @@ backend/gradlew*
 contracts/openapi.yaml
 frontend/node_modules
 
+/harness/runs/
+/harness/lessons/
+
 ### STS ###
 .apt_generated
 .classpath

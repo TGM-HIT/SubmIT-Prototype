@@ -1,1 +1,0 @@
-frontend/DEV-GUIDELINES.md

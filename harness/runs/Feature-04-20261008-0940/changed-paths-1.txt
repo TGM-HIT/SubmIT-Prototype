@@ -1,5 +1,0 @@
-backend/DEV-GUIDELINES.md
-backend/src/main/java/com/flightlog/user/TestingAccountsConfiguration.java
-backend/src/test/java/com/flightlog/formal/TestingFormalApplicationFixtureTest.java
-backend/src/test/java/com/flightlog/user/TestingAccountsConfigurationTest.java
-backend/src/test/java/com/flightlog/user/TestingAccountsInactiveProfileTest.java

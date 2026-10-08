@@ -1,2 +1,0 @@
-frontend/src/features/admin/AdminPage.test.ts
-frontend/src/features/admin/AdminPage.vue

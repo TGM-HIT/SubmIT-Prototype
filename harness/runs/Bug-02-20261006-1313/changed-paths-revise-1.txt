@@ -1,2 +1,0 @@
-backend/src/main/java/com/flightlog/user/UserController.java
-frontend/src/api/schema.d.ts

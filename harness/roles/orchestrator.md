@@ -7,9 +7,10 @@ java harness/gates/preflight.java <expected-branch>, passing the branch this
 ticket targets as the argument. A non-zero exit stops the run here, before any
 role is spawned: the tree is dirty, the checkout is on the wrong branch, or the backend or
 frontend toolchain is unavailable. Return a stopped outcome with no run folder and the unchanged ledger,
-commit, and tree state. Only on exit 0 do you go on to take the ticket ID and read its linked
-specification at `harness/tickets/<ticket-id>.md`; use `harness/plan.md` only
-for the status ledger.
+commit, and tree state. Only on exit 0 do you go on to take the ticket ID and
+resolve its specification from the linked path in `harness/plan.md`; for a
+ticket without an index row, check `harness/tickets/<ticket-id>.md` and
+`harness/tickets/done/<ticket-id>.md`, and stop if neither or both exist.
 
 Once preflight exits 0, mint a run id of the form <ticket-id>-<yyyymmdd-hhmm>
 from the clock, create harness/runs/<run-id>/, and open the run log there. Write
@@ -24,13 +25,13 @@ pause, resume, end) from the system clock at the moment of the step (for example
 `date +%Y-%m-%dT%H:%M%z`); never estimate, round forward, or back-fill one. Only
 the token figure may be an estimate.
 
-Take the ticket ID you are given and read the corresponding
-`harness/tickets/<ticket-id>.md` specification. If that specification does not
-exist, stop before dispatching any role or changing the ledger; report a
-stopped outcome with no run folder and unchanged ledger, commit, and tree
-state. The specification is authoritative. Check whether the ticket has a row
-in the `harness/plan.md` index; if it does, preserve its current status until
-the run starts.
+Take the ticket ID you are given and read its resolved specification. The
+specification is authoritative. If it does not exist, stop before dispatching
+any role or changing the ledger; report a stopped outcome with no run folder
+and unchanged ledger, commit, and tree state. A ticket already indexed as
+`done` and stored under `harness/tickets/done/` is closed; do not start a new
+run for it. Check whether the ticket has a row in the `harness/plan.md` index;
+if it does, preserve its current status until the run starts.
 
 Set the ticket's row in harness/plan.md to in progress before you dispatch the
 Implementor, so a live run is distinguishable from one that never started. If
@@ -39,7 +40,7 @@ progress` when the run starts, using the ticket ID and title from the
 specification, and record the missing-row reconciliation in the run log.
 Never infer or invent ticket requirements from the ledger.
 
-Dispatch the Implementor with the ticket specification path and that ID, and
+Dispatch the Implementor with the resolved ticket specification path and that ID, and
 request that pass's handoff at the exact path
 `harness/runs/<run-id>/handoff-N.md`. The Implementor may create or update only
 that requested handoff artifact, and must leave it uncommitted. Read the saved
@@ -81,7 +82,7 @@ is no human-verification gap to escalate in this gate-failure case; use the
 or disposition.
 
 With both gates clean, dispatch the Evaluator with the diff (or explicit
-no-diff baseline SHA), the ticket specification, and that handoff note. Give
+no-diff baseline SHA), the resolved ticket specification, and that handoff note. Give
 it the exact artifact path `harness/runs/<run-id>/evaluation-N.md` for this
 pass and require it to save its complete verdict there before returning. Read
 the saved evaluation artifact as the authoritative verdict record.
@@ -247,9 +248,14 @@ from run start rather than appearing at closeout.
 Closing out is commit-the-artifacts, record-the-outcome, and update the ledger:
 set the ticket's row in harness/plan.md to done on an Evaluator pass or explicit
 authorized human acceptance, failed on a terminal ticket failure, or leave it
-awaiting-human for a paused run. The ledger edit is a harness path, so it rides
-in the run-artifacts commit. A paused run is not terminal; retain its continuation
-pointer and template for the next coordinator.
+awaiting-human for a paused run. When setting a ticket to done, move its
+specification from `harness/tickets/<ticket-id>.md` to
+`harness/tickets/done/<ticket-id>.md` and update the plan link in the same
+run-artifacts commit. Create the `done/` directory if necessary. Do not move
+failed or awaiting-human tickets; they remain open at the root ticket path.
+The ledger edit is a harness path, so it rides in the run-artifacts commit. A
+paused run is not terminal; retain its continuation pointer and template for
+the next coordinator.
 
 If any commit in the run changed a SPEC.md file, flag it prominently: put a "SPEC CHANGE" section in the run log and at the top of your closing prose, listing each file, the reason from the handoff, and the Evaluator's verdict on it, so a human reviews it. This applies to failed runs too.
 

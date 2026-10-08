@@ -1,8 +1,0 @@
-frontend/SPEC.md
-frontend/src/components/AppShell.test.ts
-frontend/src/components/AppShell.vue
-frontend/src/features/settings/SettingsPage.test.ts
-frontend/src/features/settings/SettingsPage.vue
-frontend/src/router/index.test.ts
-frontend/src/router/index.ts
-frontend/src/styles.css

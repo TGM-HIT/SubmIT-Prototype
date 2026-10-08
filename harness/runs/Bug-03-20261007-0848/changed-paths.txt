@@ -1,6 +1,0 @@
-frontend/src/features/applications/ApplicationsPage.test.ts
-frontend/src/features/dashboard/DashboardPage.test.ts
-frontend/src/features/dashboard/DashboardPage.vue
-frontend/src/features/ideas/IdeasPage.layout.test.ts
-frontend/src/styles.css
-frontend/src/styles.layout.test.ts

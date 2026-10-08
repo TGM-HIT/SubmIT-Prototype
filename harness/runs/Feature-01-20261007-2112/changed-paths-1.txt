@@ -1,7 +1,0 @@
-backend/SPEC.md
-backend/src/main/java/com/flightlog/idea/IdeaReviewController.java
-backend/src/main/java/com/flightlog/idea/IdeaRules.java
-backend/src/main/java/com/flightlog/idea/IdeaService.java
-backend/src/main/java/com/flightlog/web/ApiDtos.java
-backend/src/test/java/com/flightlog/idea/IdeaReviewControllerTest.java
-frontend/src/api/schema.d.ts

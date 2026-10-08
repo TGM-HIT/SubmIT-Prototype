@@ -1,5 +1,0 @@
-frontend/SPEC.md
-frontend/scripts/preview.mjs
-frontend/scripts/preview.smoke.mjs
-frontend/src/features/ideas/IdeasPage.test.ts
-frontend/src/features/ideas/IdeasPage.vue

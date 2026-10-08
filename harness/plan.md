@@ -10,28 +10,27 @@
 
 ## Tickets
 
-Create new ticket specifications from [`templates/ticket.md`](templates/ticket.md), save them as `tickets/<ticket-id>.md`, and add one status row here. Keep requirements in the ticket file; this index is only for status and navigation.
+Create new ticket specifications from [`templates/ticket.md`](templates/ticket.md), save open tickets as `tickets/<ticket-id>.md`, and add one status row here. When a ticket reaches `done`, move its specification to `tickets/done/<ticket-id>.md` and update this index link in the same closeout. Keep requirements in the ticket file; this index is only for status and navigation.
 
 Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket specifications from a user request. Its scope is authoring the ticket only; implementation runs use the Orchestrator.
 
 | Ticket | Status | Specification |
 |--------|--------|---------------|
-| [Bug-01](tickets/Bug-01.md) | done | Create Application Period doesn't work |
-| [Bug-02](tickets/Bug-02.md) | done | Prevent removal of the last administrator |
-| [Bug-03](tickets/Bug-03.md) | failed | Make dropdown selectors visually consistent (historical umbrella) |
-| [Bug-03a](tickets/Bug-03a.md) | done | Provide a local fixture for conditional selector verification |
-| [Bug-03b](tickets/Bug-03b.md) | done | Make native dropdown selectors visually consistent |
-| [Bug-03c](tickets/Bug-03c.md) | done | Align Overview dashboard groups |
-| [Bug-03d](tickets/Bug-03d.md) | done | Align New idea form fields |
-| [Dev-01](tickets/Dev-01.md) | done | Seed student and teacher accounts for testing |
-| [Dev-02](tickets/Dev-02.md) | done | Add reusable browser preview tooling |
-| [Bug-04](tickets/Bug-04.md) | done | Open idea details and review forms as modals |
-| [Feature-01](tickets/Feature-01.md) | done | Allow unrated idea reviews and show ratings in history |
-| [Feature-02](tickets/Feature-02.md) | done | Add editable account names |
-| [Feature-03](tickets/Feature-03.md) | done | Move personal name editing to User Settings |
-| [Feature-04](tickets/Feature-04.md) | done | Testing-profile administrator account |
-| [Feature-05](tickets/Feature-05.md) | done | Filter and search accounts; edit an account in one modal |
-| [Feature-06](tickets/Feature-06.md) | done | Move User Settings beside Archive management |
-| [Bug-05](tickets/Bug-05.md) | done | Limit active Overview navigation state to the dashboard |
-| [Feature-07](tickets/Feature-07.md) | done | Show teacher supervision preference in ideas overview |
-| [Feature-08](tickets/Feature-08.md) | done | Show account names in Ideas & reviews |
+| [Bug-01](tickets/done/Bug-01.md) | done | Create Application Period doesn't work |
+| [Bug-02](tickets/done/Bug-02.md) | done | Prevent removal of the last administrator |
+| [Bug-03a](tickets/done/Bug-03a.md) | done | Provide a local fixture for conditional selector verification |
+| [Bug-03b](tickets/done/Bug-03b.md) | done | Make native dropdown selectors visually consistent |
+| [Bug-03c](tickets/done/Bug-03c.md) | done | Align Overview dashboard groups |
+| [Bug-03d](tickets/done/Bug-03d.md) | done | Align New idea form fields |
+| [Dev-01](tickets/done/Dev-01.md) | done | Seed student and teacher accounts for testing |
+| [Dev-02](tickets/done/Dev-02.md) | done | Add reusable browser preview tooling |
+| [Bug-04](tickets/done/Bug-04.md) | done | Open idea details and review forms as modals |
+| [Feature-01](tickets/done/Feature-01.md) | done | Allow unrated idea reviews and show ratings in history |
+| [Feature-02](tickets/done/Feature-02.md) | done | Add editable account names |
+| [Feature-03](tickets/done/Feature-03.md) | done | Move personal name editing to User Settings |
+| [Feature-04](tickets/done/Feature-04.md) | done | Testing-profile administrator account |
+| [Feature-05](tickets/done/Feature-05.md) | done | Filter and search accounts; edit an account in one modal |
+| [Feature-06](tickets/done/Feature-06.md) | done | Move User Settings beside Archive management |
+| [Bug-05](tickets/done/Bug-05.md) | done | Limit active Overview navigation state to the dashboard |
+| [Feature-07](tickets/done/Feature-07.md) | done | Show teacher supervision preference in ideas overview |
+| [Feature-08](tickets/done/Feature-08.md) | done | Show account names in Ideas & reviews |

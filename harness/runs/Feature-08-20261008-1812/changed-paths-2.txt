@@ -1,2 +1,0 @@
-backend/src/test/java/com/flightlog/idea/IdeaReviewControllerTest.java
-contracts/openapi.yaml

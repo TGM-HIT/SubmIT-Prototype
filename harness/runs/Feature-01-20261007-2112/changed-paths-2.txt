@@ -1,3 +1,0 @@
-backend/src/test/java/com/flightlog/idea/IdeaReviewControllerTest.java
-frontend/src/features/ideas/IdeasPage.test.ts
-frontend/src/features/ideas/IdeasPage.vue

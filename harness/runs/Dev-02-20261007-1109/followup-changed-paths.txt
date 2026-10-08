@@ -1,4 +1,0 @@
-frontend/index.html
-frontend/public/favicon.ico
-frontend/scripts/preview.smoke.mjs
-harness/gates/commit-scope.java

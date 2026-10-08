@@ -1,1 +1,0 @@
-harness/gates/commit-scope.java

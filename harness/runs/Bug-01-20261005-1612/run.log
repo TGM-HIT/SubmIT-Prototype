@@ -1,8 +1,0 @@
-Run: Bug-01-20261005-1612
-Ticket: Bug-01
-Started: 2026-10-05 16:12 +02:00
-Heartbeat: 2026-10-05 16:24 +02:00 — evaluator passed after live-browser verification; ticket marked done; preparing separate ledger/artifact commit.
-Outcome: done
-Implementation commit: da9a842f9df3ee4a7a054ba4c226d1bded5e6f85
-Evaluator: pass on revise cycle 1.
-Closeout: backend and frontend checks passed; handoff-complete and commit-scope gates passed; live-browser creation flow verified in Chrome 152.

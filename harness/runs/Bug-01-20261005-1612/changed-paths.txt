@@ -1,2 +1,0 @@
-frontend/src/features/applications/ApplicationsPage.test.ts
-frontend/src/features/applications/ApplicationsPage.vue
