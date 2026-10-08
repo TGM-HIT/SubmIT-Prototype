@@ -15,7 +15,18 @@ handoff file and the evidence files below; do not edit or commit the ledger, run
 evaluations, or any other run artifact. Keep the handoff uncommitted and report
 its exact path. Store screenshots and other manual-verification evidence under
 `harness/runs/<run-id>/evidence/` (ignored by Git), not `/tmp`, and cite those
-paths in the handoff. Stage only the files you changed for the deliverable, by explicit
+paths in the handoff. Name each screenshot for its actual viewport and UI
+state, or provide an evidence index that maps each filename to both. Before
+handoff, compare each label or index entry with the captured image so the
+recorded viewport and state are accurate. Treat identifiable Chrome/macOS
+host diagnostics (for example CVDisplayLink/Mach-port, certificate-store,
+GPU/network-service, GCM registration, and process-teardown messages) as
+environment noise rather than application uncertainty only when the preview
+completes and page-console and request checks show no related application
+errors. Do not broadly suppress diagnostics based on wording alone. If a
+diagnostic prevents a check, correlates with an application error, affects
+behavior, or its source or impact is unclear, report it under "What's
+uncertain" and describe the impact. Stage only the files you changed for the deliverable, by explicit
 path; never use blanket staging that could include `harness/plan.md`, ticket
 files, or other harness files. If you find a real problem outside the ticket's scope, report
 it under "What's uncertain" on a line starting with "OUT OF SCOPE:" and do not
