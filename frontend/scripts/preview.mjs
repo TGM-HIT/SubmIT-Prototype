@@ -23,6 +23,7 @@ export function parseArgs(args) {
     start: true,
     headed: false,
     auth: false,
+    seedIdeaOwner: undefined,
     fill: [],
     click: [],
     waitFor: [],
@@ -44,6 +45,7 @@ export function parseArgs(args) {
     ['--output-dir', 'outputDir'],
     ['--screenshot', 'screenshot'],
     ['--username', 'username'],
+    ['--seed-idea-owner', 'seedIdeaOwner'],
     ['--password-env', 'passwordEnv'],
     ['--chrome', 'chrome'],
     ['--startup-timeout', 'startupTimeout'],
@@ -145,6 +147,9 @@ export function parseArgs(args) {
     throw new Error('--screenshot must be a filename, not a path.')
   }
   if (options.auth && !options.username) throw new Error('--auth requires --username.')
+  if (options.seedIdeaOwner && (!options.auth || !options.username || !options.start)) {
+    throw new Error('--seed-idea-owner requires --auth and a started local preview.')
+  }
   if (options.nativeSelectByKey.length && !options.headed) {
     throw new Error('--native-select-by-key requires --headed so macOS can operate the native popup.')
   }
@@ -189,6 +194,38 @@ export async function waitForReady(url, { timeoutMs, fetchImpl = fetch, isAlive 
     await new Promise((resolve) => setTimeout(resolve, 250))
   }
   throw new Error(`Timed out waiting for ${url} (${lastProblem}). Check the startup output and port configuration.`)
+}
+
+export async function seedTestingIdea({ baseUrl, ownerUsername, password, fetchImpl = fetch }) {
+  async function request(path, body, token) {
+    const response = await fetchImpl(`${baseUrl}${path}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(body),
+    })
+    if (!response.ok) throw new Error(`Could not seed local preview data (HTTP ${response.status}).`)
+    return response.json()
+  }
+
+  const session = await request('/api/auth/login', { username: ownerUsername, password })
+  if (session.user?.role !== 'STUDENT' || !session.token) {
+    throw new Error('--seed-idea-owner must identify a student testing-profile account.')
+  }
+  const year = new Date().getFullYear()
+  const created = await request('/api/ideas', {
+    title: `Feature-07 preview idea ${new Date().toISOString()}`,
+    description: 'Synthetic idea created only in the local testing profile for browser verification.',
+    intendedOutcome: 'Show the teacher supervision preference beside this idea.',
+    scopePoints: ['Record and display a supervision preference'],
+    learningTopics: [],
+    schoolYear: `${year}/${year + 1}`,
+  }, session.token)
+  if (!created.id) throw new Error('The local preview idea was created without an identifier.')
+  await request(`/api/ideas/${encodeURIComponent(created.id)}/submit`, {}, session.token)
+  return created
 }
 
 export async function saveScreenshot(client, outputDir, filename) {
@@ -841,6 +878,7 @@ Options:
   --screenshot FILE               Screenshot filename (default preview.png)
   --path PATH                     Page path to inspect, e.g. /login or /ideas
   --auth --username USER          Authenticate using the local testing account
+  --seed-idea-owner USER           Create and submit a synthetic idea using a student testing account before opening the page
   --fill SELECTOR=VALUE           Fill an input, textarea, or select; may be repeated
   --click SELECTOR                Click an element; may be repeated
   --wait-for SELECTOR             Wait for an element after interactions; may be repeated
@@ -903,6 +941,16 @@ async function run(options) {
         isAlive: () => !interrupted && backend.exitCode === null && backend.signalCode === null,
       })
       console.log(`Backend ready: http://127.0.0.1:${backendPort}`)
+      if (options.seedIdeaOwner) {
+        const password = process.env[options.passwordEnv ?? 'PREVIEW_PASSWORD']
+        if (!password) throw new Error(`Set ${options.passwordEnv ?? 'PREVIEW_PASSWORD'} to seed local preview data.`)
+        const created = await seedTestingIdea({
+          baseUrl: `http://127.0.0.1:${backendPort}`,
+          ownerUsername: options.seedIdeaOwner,
+          password,
+        })
+        console.log(`Created temporary submitted idea ${created.id} for ${options.seedIdeaOwner} in the testing profile.`)
+      }
       const frontendPort = options.frontendPort
       const frontendCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm'
       const frontend = startChild(frontendCommand, [

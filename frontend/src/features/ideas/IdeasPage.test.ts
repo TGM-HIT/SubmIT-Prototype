@@ -2,21 +2,22 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import IdeasPage from './IdeasPage.vue'
 
-const state = vi.hoisted(() => ({ role: 'STUDENT' }))
+const state = vi.hoisted(() => ({ role: 'STUDENT', id: undefined as string | undefined }))
 const api = vi.hoisted(() => ({
   years: vi.fn(),
   list: vi.fn(),
   get: vi.fn(),
   review: vi.fn(),
+  supervision: vi.fn(),
 }))
 
 vi.mock('../../api/services', () => ({
   periodsApi: { years: api.years },
-  ideasApi: { list: api.list, get: api.get, review: api.review },
+  ideasApi: { list: api.list, get: api.get, review: api.review, supervision: api.supervision },
 }))
 
 vi.mock('../../stores/auth', () => ({
-  useAuthStore: () => ({ user: { role: state.role } }),
+  useAuthStore: () => ({ user: { role: state.role, id: state.id } }),
 }))
 
 const idea = (status: string) => ({
@@ -61,10 +62,94 @@ afterEach(() => {
 
 beforeEach(() => {
   state.role = 'STUDENT'
+  state.id = undefined
   api.years.mockResolvedValue({ content: ['2026/2027'] })
   api.list.mockResolvedValue(pageIdeas())
   api.get.mockImplementation(async (id: string) => idea(id.replace('idea-', '')))
   api.review.mockResolvedValue({ decision: 'APPROVE_FOR_SPECIFICATION' })
+  api.supervision.mockResolvedValue({})
+})
+
+describe('IdeasPage overview supervision preferences', () => {
+  it.each(['WANTS_TO_SUPERVISE', 'WILLING_TO_SUPERVISE'])(
+    'shows the signed-in teacher’s recorded %s preference beside its idea',
+    async (preference) => {
+      state.role = 'TEACHER'
+      state.id = 'teacher-1'
+      api.list.mockResolvedValue(pageIdeas('ACCEPTED_FOR_APPLICATIONS'))
+      api.get.mockResolvedValue({
+        ...idea('ACCEPTED_FOR_APPLICATIONS'),
+        supervisionPreferences: [{ id: 'preference-1', teacherId: 'teacher-1', preference }],
+      })
+
+      const page = mountPage()
+      await flushPromises()
+
+      expect(page.get('article.data-row').text()).toContain(`Your supervision preference: ${preference === 'WANTS_TO_SUPERVISE' ? 'Wants' : 'Willing'} to supervise`)
+      expect(api.get).toHaveBeenCalledWith('idea-ACCEPTED_FOR_APPLICATIONS')
+      page.unmount()
+    },
+  )
+
+  it.each([
+    ['no recorded preference', []],
+    ['another teacher’s preference', [{ teacherId: 'teacher-2', preference: 'WANTS_TO_SUPERVISE' }]],
+    ['the signed-in teacher’s NOT_AVAILABLE preference', [{ teacherId: 'teacher-1', preference: 'NOT_AVAILABLE' }]],
+  ])('shows no preference summary for %s', async (_description, supervisionPreferences) => {
+    state.role = 'TEACHER'
+    state.id = 'teacher-1'
+    api.list.mockResolvedValue(pageIdeas('ACCEPTED_FOR_APPLICATIONS'))
+    api.get.mockResolvedValue({ ...idea('ACCEPTED_FOR_APPLICATIONS'), supervisionPreferences })
+
+    const page = mountPage()
+    await flushPromises()
+
+    expect(page.get('article.data-row').text()).not.toContain('Your supervision preference:')
+    expect(page.find('.supervision-summary').exists()).toBe(false)
+    page.unmount()
+  })
+
+  it('keeps recorded preferences in Details & history and saves edits through the existing preference API', async () => {
+    state.role = 'TEACHER'
+    state.id = 'teacher-1'
+    api.list.mockResolvedValue(pageIdeas('ACCEPTED_FOR_APPLICATIONS'))
+    let recordedPreference = 'WILLING_TO_SUPERVISE'
+    let recordedNote = 'Available for this project'
+    api.get.mockImplementation(async () => ({
+      ...idea('ACCEPTED_FOR_APPLICATIONS'),
+      supervisionPreferences: [
+        { id: 'preference-1', teacherId: 'teacher-1', preference: recordedPreference, note: recordedNote },
+        { id: 'preference-2', teacherId: 'teacher-2', preference: 'WANTS_TO_SUPERVISE', note: '' },
+      ],
+    }))
+    api.supervision.mockImplementation(async (_ideaId: string, preference: string, note: string) => {
+      recordedPreference = preference
+      recordedNote = note
+      return {}
+    })
+
+    const page = mountPage()
+    await flushPromises()
+    await page.get('#details-button-idea-ACCEPTED_FOR_APPLICATIONS').trigger('click')
+    await flushPromises()
+
+    const dialog = page.get('[role="dialog"]')
+    expect(dialog.text()).toContain('Recorded supervision preferences')
+    expect(dialog.text()).toContain('teacher-1 · Willing to supervise')
+    expect(dialog.text()).toContain('teacher-2 · Wants to supervise')
+    await dialog.get('#preference').setValue('WANTS_TO_SUPERVISE')
+    await dialog.get('#preference-note').setValue('I can supervise this idea')
+    await dialog.get('form.panel').trigger('submit')
+    await flushPromises()
+
+    expect(api.supervision).toHaveBeenCalledWith('idea-ACCEPTED_FOR_APPLICATIONS', 'WANTS_TO_SUPERVISE', 'I can supervise this idea')
+    expect(page.get('[role="dialog"]').text()).toContain('teacher-1 · Wants to supervise')
+    expect(page.get('[role="dialog"]').text()).toContain('I can supervise this idea')
+    await page.get('[role="dialog"] button').trigger('click')
+    await flushPromises()
+    expect(page.get('article.data-row').text()).toContain('Your supervision preference: Wants to supervise')
+    page.unmount()
+  })
 })
 
 describe('IdeasPage review and details dialogs', () => {

@@ -52,6 +52,9 @@
               <h3>{{ idea.title }}</h3>
               <p>{{ idea.description }}</p>
               <p>School year {{ idea.schoolYear }} <span v-if="canSeeOwner"> · Submitted by {{ idea.ownerId }}</span></p>
+              <p v-if="isTeacher && idea.ownSupervisionPreference" class="muted supervision-summary">
+                <strong>Your supervision preference:</strong> {{ readable(idea.ownSupervisionPreference) }}
+              </p>
               <span class="status-badge" :class="`status-${idea.status?.toLowerCase()}`">{{ readable(idea.status) }}</span>
             </div>
             <div class="actions">
@@ -117,6 +120,7 @@ import AsyncPanel from '../../components/AsyncPanel.vue'
 import TextListField from './TextListField.vue'
 
 type Idea = components['schemas']['IdeaResponse']
+type IdeaOverview = Idea & { ownSupervisionPreference?: string }
 type IdeaInput = components['schemas']['IdeaRequest']
 type Review = components['schemas']['ReviewResponse']
 type RatingKey = 'workSize' | 'curriculumRelevance' | 'technicalComplexity' | 'feasibility' | 'learningValue' | 'resourceNeeds' | 'riskAndDependencies'
@@ -133,7 +137,7 @@ const isStudent = computed(() => auth.user?.role === 'STUDENT')
 const isTeacher = computed(() => auth.user?.role === 'TEACHER')
 const isAdmin = computed(() => auth.user?.role === 'ADMIN')
 const canSeeOwner = computed(() => !isStudent.value)
-const page = ref<Page<Idea>>({ content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 })
+const page = ref<Page<IdeaOverview>>({ content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 })
 const schoolYears = ref<string[]>([])
 const statusFilter = ref('')
 const yearFilter = ref('')
@@ -193,7 +197,29 @@ function lifecycleMessage(status?: string): string {
   return 'Actions are available only when this lifecycle stage permits them.'
 }
 async function load(index = 0): Promise<void> {
-  await task.run(async () => { page.value = await ideasApi.list(index, statusFilter.value || undefined) })
+  await task.run(async () => {
+    const result = await ideasApi.list(index, statusFilter.value || undefined)
+    const teacherId = auth.user?.id
+    if (!isTeacher.value || !teacherId) {
+      page.value = result
+      return
+    }
+
+    const content = await Promise.all(result.content.map(async (idea): Promise<IdeaOverview> => {
+      if (!idea.id) return idea
+      try {
+        const details = await ideasApi.get(idea.id)
+        const preference = details.supervisionPreferences?.find((entry) =>
+          entry.teacherId === teacherId
+          && ['WANTS_TO_SUPERVISE', 'WILLING_TO_SUPERVISE'].includes(entry.preference ?? ''),
+        )?.preference
+        return { ...idea, ownSupervisionPreference: preference }
+      } catch {
+        return idea
+      }
+    }))
+    page.value = { ...result, content }
+  })
 }
 async function reloadReviewedIdea(idea: Idea): Promise<void> {
   const filter = statusFilter.value || undefined
@@ -349,8 +375,12 @@ async function submitReview(): Promise<void> {
 }
 async function savePreference(): Promise<void> {
   if (!selectedIdea.value?.id) return
-  await task.run(() => ideasApi.supervision(selectedIdea.value!.id!, preference.value, preferenceNote.value), 'Supervision preference saved.')
-  await selectIdea(selectedIdea.value)
+  const idea = selectedIdea.value
+  const result = await task.run(() => ideasApi.supervision(idea.id!, preference.value, preferenceNote.value), 'Supervision preference saved.')
+  if (result) {
+    await selectIdea(idea)
+    await load(page.value.page)
+  }
 }
 async function assignSupervisor(): Promise<void> {
   if (!selectedIdea.value?.id) return

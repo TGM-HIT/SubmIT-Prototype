@@ -13,6 +13,7 @@ import {
   formatNativeInputFailure,
   parseArgs,
   saveScreenshot,
+  seedTestingIdea,
   stopChild,
   viewportFor,
   waitForReady,
@@ -66,10 +67,48 @@ test('parses preview options and rejects incomplete or invalid invocations', () 
   assert.throws(() => parseArgs(['--viewport', 'tablet']), /desktop or mobile/)
   assert.throws(() => parseArgs(['--width', '800']), /supplied together/)
   assert.throws(() => parseArgs(['--auth']), /requires --username/)
+  assert.equal(
+    parseArgs(['--auth', '--username', 'teacher01', '--seed-idea-owner', 'student01']).seedIdeaOwner,
+    'student01',
+  )
+  assert.throws(
+    () => parseArgs(['--auth', '--username', 'teacher01', '--no-start', '--url', 'http://localhost:5173', '--seed-idea-owner', 'student01']),
+    /requires --auth and a started local preview/,
+  )
   assert.throws(
     () => parseArgs(['--auth', '--username', 'student01', '--no-start', '--url', 'https://example.com']),
     /restricted to localhost/,
   )
+})
+
+test('seeds a synthetic submitted idea using only the local testing-profile API', async () => {
+  const requests = []
+  const idea = await seedTestingIdea({
+    baseUrl: 'http://127.0.0.1:8080',
+    ownerUsername: 'student01',
+    password: 'testing-only',
+    fetchImpl: async (url, options) => {
+      requests.push({ url, ...options })
+      return {
+        ok: true,
+        async json() {
+          if (url.endsWith('/api/auth/login')) return { token: 'local-token', user: { role: 'STUDENT' } }
+          if (url.endsWith('/api/ideas')) return { id: 'preview-idea' }
+          return { id: 'preview-idea', status: 'IDEA_SUBMITTED' }
+        },
+      }
+    },
+  })
+  assert.equal(idea.id, 'preview-idea')
+  assert.deepEqual(requests.map(({ url }) => url), [
+    'http://127.0.0.1:8080/api/auth/login',
+    'http://127.0.0.1:8080/api/ideas',
+    'http://127.0.0.1:8080/api/ideas/preview-idea/submit',
+  ])
+  assert.equal(JSON.parse(requests[0].body).password, 'testing-only')
+  assert.equal(requests[1].headers.Authorization, 'Bearer local-token')
+  assert.match(JSON.parse(requests[1].body).title, /^Feature-07 preview idea /)
+  assert.equal(requests[2].headers.Authorization, 'Bearer local-token')
 })
 
 test('performs requested page interactions in fill, click, wait, expand, then keyboard order', async () => {
