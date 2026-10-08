@@ -16,18 +16,18 @@ public class TestingAccountsConfiguration {
     static final String DEFAULT_PASSWORD = "testing-password";
 
     private static final List<SeedAccount> ACCOUNTS = List.of(
-            new SeedAccount("student01", "Student 01", Role.STUDENT),
-            new SeedAccount("student02", "Student 02", Role.STUDENT),
-            new SeedAccount("student03", "Student 03", Role.STUDENT),
-            new SeedAccount("student04", "Student 04", Role.STUDENT),
-            new SeedAccount("student05", "Student 05", Role.STUDENT),
-            new SeedAccount("teacher01", "Teacher 01", Role.TEACHER),
-            new SeedAccount("teacher02", "Teacher 02", Role.TEACHER),
-            new SeedAccount("teacher03", "Teacher 03", Role.TEACHER),
-            new SeedAccount("teacher04", "Teacher 04", Role.TEACHER),
-            new SeedAccount("teacher05", "Teacher 05", Role.TEACHER),
-            new SeedAccount("admin01", "Admin 01", Role.ADMIN),
-            new SeedAccount("admin02", "Admin 02", Role.ADMIN));
+            new SeedAccount("student01", "Emily Carter", Role.STUDENT),
+            new SeedAccount("student02", "Noah Bennett", Role.STUDENT),
+            new SeedAccount("student03", "Sofia Ramirez", Role.STUDENT),
+            new SeedAccount("student04", "Liam Foster", Role.STUDENT),
+            new SeedAccount("student05", "Ava Mitchell", Role.STUDENT),
+            new SeedAccount("teacher01", "Olivia Chen", Role.TEACHER),
+            new SeedAccount("teacher02", "Marcus Reed", Role.TEACHER),
+            new SeedAccount("teacher03", "Priya Shah", Role.TEACHER),
+            new SeedAccount("teacher04", "Daniel Brooks", Role.TEACHER),
+            new SeedAccount("teacher05", "Elena Torres", Role.TEACHER),
+            new SeedAccount("admin01", "Grace Morgan", Role.ADMIN),
+            new SeedAccount("admin02", "Samuel Wright", Role.ADMIN));
 
     @Bean
     @Order(1)

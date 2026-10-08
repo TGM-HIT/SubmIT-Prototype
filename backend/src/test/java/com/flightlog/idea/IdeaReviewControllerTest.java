@@ -83,29 +83,29 @@ class IdeaReviewControllerTest {
         review(ideaId, Map.of("decision", "REQUEST_REVISION", "feedback", "Please clarify."),
                 teacherToken).andExpect(status().isCreated());
         preference(ideaId, otherTeacherToken).andExpect(status().isOk())
-                .andExpect(jsonPath("$.teacherDisplayName").value("Teacher 02"))
+                .andExpect(jsonPath("$.teacherDisplayName").value("Marcus Reed"))
                 .andExpect(jsonPath("$.teacherId").exists());
 
         mockMvc.perform(get("/api/ideas")
                         .header("Authorization", "Bearer " + teacherToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[?(@.id == '" + ideaId + "')].ownerDisplayName")
-                        .value(org.hamcrest.Matchers.hasItem("Student 01")))
+                        .value(org.hamcrest.Matchers.hasItem("Emily Carter")))
                 .andExpect(jsonPath("$.content[?(@.id == '" + ideaId + "')].ownerId")
                         .value(org.hamcrest.Matchers.hasItem(org.hamcrest.Matchers.notNullValue())));
 
         getIdea(ideaId, studentToken)
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.ownerDisplayName").value("Student 01"))
+                .andExpect(jsonPath("$.ownerDisplayName").value("Emily Carter"))
                 .andExpect(jsonPath("$.ownerId").exists())
-                .andExpect(jsonPath("$.reviews[0].teacherDisplayName").value("Teacher 01"))
+                .andExpect(jsonPath("$.reviews[0].teacherDisplayName").value("Olivia Chen"))
                 .andExpect(jsonPath("$.reviews[0].teacherId").exists())
-                .andExpect(jsonPath("$.supervisionPreferences[0].teacherDisplayName").value("Teacher 02"))
+                .andExpect(jsonPath("$.supervisionPreferences[0].teacherDisplayName").value("Marcus Reed"))
                 .andExpect(jsonPath("$.supervisionPreferences[0].teacherId").exists())
                 .andExpect(jsonPath("$.supervisionPreferences[0].note").value("Available for this project"));
         getIdea(ideaId, adminToken)
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.reviews[0].teacherDisplayName").value("Teacher 01"));
+                .andExpect(jsonPath("$.reviews[0].teacherDisplayName").value("Olivia Chen"));
         getIdea(ideaId, otherStudentToken).andExpect(status().isForbidden());
     }
 

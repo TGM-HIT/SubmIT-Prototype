@@ -20,7 +20,7 @@ Use standard statuses: `200` for successful reads or body-returning mutations, `
 - `PATCH /api/users/{id}` changes the account name for the account owner or `ADMIN`.
 - `PATCH /api/users/{id}/role` changes a role for `ADMIN`.
 
-Every account has a required display name separate from its unique username. Registration and name updates trim leading and trailing whitespace, then reject blank names and names longer than 120 characters. Registration, login, name-update, and administrator user-list responses include the display name. A name update changes no other account field; role changes remain restricted to the existing administrator-only role endpoint. Testing-profile student and teacher accounts have stable readable names, and a configured bootstrap administrator is named `Administrator`.
+Every account has a required display name separate from its unique username. Registration and name updates trim leading and trailing whitespace, then reject blank names and names longer than 120 characters. Registration, login, name-update, and administrator user-list responses include the display name. A name update changes no other account field; role changes remain restricted to the existing administrator-only role endpoint. Testing-profile student, teacher, and administrator accounts have stable, distinct, human-readable display names while retaining their existing usernames; a configured bootstrap administrator is named `Administrator`.
 
 ### School years and application periods
 

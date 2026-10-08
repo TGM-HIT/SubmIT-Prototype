@@ -49,15 +49,31 @@ class TestingAccountsConfigurationTest {
     @Test
     void createsTwelveAccountsWithSharedEncodedPasswordAndUsableRoleBearingLogins() throws Exception {
         List<UserAccount> accounts = users.findAll();
-        Set<String> expectedUsernames = Set.of("student01", "student02", "student03", "student04", "student05",
-                "teacher01", "teacher02", "teacher03", "teacher04", "teacher05", "admin01", "admin02");
+        Map<String, String> expectedDisplayNames = Map.ofEntries(
+                Map.entry("student01", "Emily Carter"),
+                Map.entry("student02", "Noah Bennett"),
+                Map.entry("student03", "Sofia Ramirez"),
+                Map.entry("student04", "Liam Foster"),
+                Map.entry("student05", "Ava Mitchell"),
+                Map.entry("teacher01", "Olivia Chen"),
+                Map.entry("teacher02", "Marcus Reed"),
+                Map.entry("teacher03", "Priya Shah"),
+                Map.entry("teacher04", "Daniel Brooks"),
+                Map.entry("teacher05", "Elena Torres"),
+                Map.entry("admin01", "Grace Morgan"),
+                Map.entry("admin02", "Samuel Wright"));
+        Set<String> expectedUsernames = expectedDisplayNames.keySet();
         assertEquals(12, accounts.size());
         assertEquals(expectedUsernames, accounts.stream().map(UserAccount::getUsername).collect(Collectors.toSet()));
         assertEquals(5, accounts.stream().filter(account -> account.getRole() == Role.STUDENT).count());
         assertEquals(5, accounts.stream().filter(account -> account.getRole() == Role.TEACHER).count());
         assertEquals(2, accounts.stream().filter(account -> account.getRole() == Role.ADMIN).count());
+        assertEquals(expectedDisplayNames.size(),
+                accounts.stream().map(UserAccount::getDisplayName).collect(Collectors.toSet()).size());
 
         for (UserAccount account : accounts) {
+            assertEquals(expectedDisplayNames.get(account.getUsername()), account.getDisplayName());
+            assertEquals(expectedRole(account.getUsername()), account.getRole());
             assertNotEquals(TEST_PASSWORD, account.getPasswordHash());
             assertTrue(passwordEncoder.matches(TEST_PASSWORD, account.getPasswordHash()));
             mockMvc.perform(post("/api/auth/login")
@@ -66,19 +82,9 @@ class TestingAccountsConfigurationTest {
                                     + "\",\"password\":\"" + TEST_PASSWORD + "\"}"))
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.user.username").value(account.getUsername()))
-                    .andExpect(jsonPath("$.user.displayName").value(account.getDisplayName()))
+                    .andExpect(jsonPath("$.user.displayName").value(expectedDisplayNames.get(account.getUsername())))
                     .andExpect(jsonPath("$.user.role").value(account.getRole().name()));
         }
-        assertEquals("Student 01", users.findByUsername("student01").orElseThrow().getDisplayName());
-        assertEquals("Teacher 01", users.findByUsername("teacher01").orElseThrow().getDisplayName());
-        assertEquals(Set.of("Student 01", "Student 02", "Student 03", "Student 04", "Student 05"),
-                accounts.stream().filter(account -> account.getRole() == Role.STUDENT)
-                        .map(UserAccount::getDisplayName).collect(Collectors.toSet()));
-        assertEquals(Set.of("Teacher 01", "Teacher 02", "Teacher 03", "Teacher 04", "Teacher 05"),
-                accounts.stream().filter(account -> account.getRole() == Role.TEACHER)
-                        .map(UserAccount::getDisplayName).collect(Collectors.toSet()));
-        assertEquals("Admin 01", users.findByUsername("admin01").orElseThrow().getDisplayName());
-        assertEquals("Admin 02", users.findByUsername("admin02").orElseThrow().getDisplayName());
     }
 
     @Test
@@ -143,5 +149,15 @@ class TestingAccountsConfigurationTest {
                 .andExpect(status().isOk())
                 .andReturn();
         return objectMapper.readTree(result.getResponse().getContentAsString()).path("token").asText();
+    }
+
+    private Role expectedRole(String username) {
+        if (username.startsWith("student")) {
+            return Role.STUDENT;
+        }
+        if (username.startsWith("teacher")) {
+            return Role.TEACHER;
+        }
+        return Role.ADMIN;
     }
 }
