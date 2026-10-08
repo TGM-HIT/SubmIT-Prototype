@@ -14,6 +14,11 @@ its exact path. If you find a real problem outside the ticket's scope, report
 it under "What's uncertain" on a line starting with "OUT OF SCOPE:" and do not
 fix it.
 
+For API changes, regenerate and inspect the required generated contract or
+types, but do not edit generated artifacts manually. Check repository ignore
+and tracking conventions before deciding whether generated output belongs in
+the change; generation and review do not by themselves require committing it.
+
 Run the ticket's completion checks yourself, and confirm they pass, before you
 report anything as done. If the ticket's requested behavior or presentation
 already meets its requirements on the current branch, do not make a redundant

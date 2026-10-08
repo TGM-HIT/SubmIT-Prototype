@@ -17,8 +17,11 @@ prerequisites, durable regression scenarios, applicable standard checks, and
 reproducible manual checks when needed. For interactive UI behavior, state the
 success and cancel end states, including refreshed visible data and keyboard
 focus. For API changes, state the expected contract and required OpenAPI/type
-generation and review steps. Keep tests and verification proportional to the
-scope; do not require irrelevant checks.
+generation and review steps. Check whether generated outputs are tracked or
+ignored before requiring them in a ticket; distinguish regenerating and
+reviewing an artifact from committing it, and specify a commit only when
+repository conventions call for tracking that output. Keep tests and
+verification proportional to the scope; do not require irrelevant checks.
 
 When a ticket changes or depends on extending existing documented developer
 tooling, inspect its owning usage guidance. Include a minimal documentation
