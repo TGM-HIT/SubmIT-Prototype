@@ -34,7 +34,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 |--------|--------|---------------|
 | [Dev-01](tickets/done/Dev-01.md) | done | Seed student and teacher accounts for testing |
 | [Dev-02](tickets/done/Dev-02.md) | done | Add reusable browser preview tooling |
-| [Dev-03](tickets/Dev-03.md) | to-do | Give testing accounts meaningful display names |
+| [Dev-03](tickets/done/Dev-03.md) | done | Give testing accounts meaningful display names |
 
 ### Features
 
