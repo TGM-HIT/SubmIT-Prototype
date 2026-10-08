@@ -33,6 +33,10 @@ test('parses preview options and rejects incomplete or invalid invocations', () 
   assert.deepEqual(parseArgs(['--step', 'click-row-action:teacher01|button.edit']).steps, [
     { action: 'click-row-action', value: 'teacher01', selector: 'button.edit' },
   ])
+  assert.deepEqual(parseArgs(['--step', 'select-index:#teacher-id=2']).steps, [
+    { action: 'select-index', selector: '#teacher-id', index: 2 },
+  ])
+  assert.throws(() => parseArgs(['--step', 'select-index:#teacher-id=-1']), /NONNEGATIVE_INDEX/)
   assert.throws(
     () => parseArgs(['--step', 'click-row-action:teacher01']),
     /TEXT\|SELECTOR/,
@@ -247,6 +251,25 @@ test('runs ordered preview steps and captures screenshots between interactions',
   assert.match(logs.join(' '), /Screenshot saved:/)
   assert.match(logs.join(' '), /top dialog closed/)
   assert.match(logs.join(' '), /Focus returned to #trigger/)
+})
+
+test('selects an enabled option by index and dispatches the normal select events', async () => {
+  const expressions = []
+  const logs = []
+  await applyPageSteps({
+    async send(method, params) {
+      if (method === 'Runtime.evaluate') {
+        expressions.push(params.expression)
+        return { result: { value: 'Marcus Reed · Willing to supervise' } }
+      }
+      return {}
+    },
+  }, [{ action: 'select-index', selector: '#teacher-id', index: 1 }], {
+    log: (message) => logs.push(message),
+  })
+  assert.match(expressions[0], /selectedIndex = index/)
+  assert.match(expressions[0], /new Event\('change'/)
+  assert.match(logs.join(' '), /Selected option 1 \(Marcus Reed · Willing to supervise\)/)
 })
 
 test('opens a collapsed native selector before keyboard navigation', async () => {

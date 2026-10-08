@@ -47,29 +47,32 @@ class AllocationSupervisorIndependenceTest {
 
     @Test
     void completedAllocationIncludesProjectsWithoutSupervisorsAndMatchesSupervisedResult() throws Exception {
-        List<String> projectIds = new ArrayList<>();
+        List<String> supervisorFreeProjectIds = new ArrayList<>();
+        List<String> supervisedProjectIds = new ArrayList<>();
         for (int index = 0; index < 3; index++) {
-            StoredRecord idea = store.create("idea",
-                    users.findByUsername("student01").orElseThrow().getId().toString(),
-                    null, "ACCEPTED_FOR_APPLICATIONS",
-                    store.object().put("title", "Allocation project " + index)
-                            .put("schoolYear", "2026/2027"));
-            projectIds.add(idea.getId().toString());
+            supervisorFreeProjectIds.add(createAcceptedProject(index, "Supervisor-free"));
+            supervisedProjectIds.add(createAcceptedProject(index, "Supervised"));
         }
 
-        StoredRecord withoutSupervisors = createPeriod(projectIds);
-        StoredRecord withSupervisors = createPeriod(projectIds);
+        StoredRecord withoutSupervisors = createPeriod(supervisorFreeProjectIds);
+        StoredRecord withSupervisors = createPeriod(supervisedProjectIds);
         String adminId = users.findByUsername("admin01").orElseThrow().getId().toString();
         String teacherId = users.findByUsername("teacher01").orElseThrow().getId().toString();
-        for (String projectId : projectIds) {
+        for (String projectId : supervisedProjectIds) {
             store.create("confirmed_supervisor", adminId, projectId, "CONFIRMED",
                     store.object().put("teacherId", teacherId));
+        }
+        for (String projectId : supervisorFreeProjectIds) {
+            assertEquals(0, store.repository().findByTypeAndParentId("confirmed_supervisor", projectId).size());
+        }
+        for (String projectId : supervisedProjectIds) {
+            assertEquals(1, store.repository().findByTypeAndParentId("confirmed_supervisor", projectId).size());
         }
         for (String username : List.of("student01", "student02", "student03", "student04",
                 "student05", "teacher01", "teacher02", "teacher03", "teacher04")) {
             String studentId = users.findByUsername(username).orElseThrow().getId().toString();
-            createApplication(withoutSupervisors, studentId, projectIds);
-            createApplication(withSupervisors, studentId, projectIds);
+            createApplication(withoutSupervisors, studentId, supervisorFreeProjectIds);
+            createApplication(withSupervisors, studentId, supervisedProjectIds);
         }
 
         allocationService.startDuePeriods();
@@ -77,8 +80,10 @@ class AllocationSupervisorIndependenceTest {
         JsonNode noSupervisorResult = resultFor(withoutSupervisors);
         JsonNode supervisorResult = resultFor(withSupervisors);
         assertNotNull(noSupervisorResult);
-        assertEquals(supervisorResult, noSupervisorResult);
+        assertNotNull(supervisorResult);
         assertEquals(9, noSupervisorResult.path("assignments").size());
+        assertEquals(supervisorResult, normalizeProjectIds(noSupervisorResult,
+                supervisorFreeProjectIds, supervisedProjectIds));
 
         String token = loginAdmin();
         MvcResult runs = mockMvc.perform(get("/api/application-periods/{periodId}/allocation-runs",
@@ -87,13 +92,44 @@ class AllocationSupervisorIndependenceTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[0].status").value("COMPLETED"))
                 .andExpect(jsonPath("$.content[0].result.assignments.length()").value(9))
+                .andExpect(jsonPath("$.content[0].projectIds.length()").value(3))
                 .andReturn();
+        JsonNode snapshot = objectMapper.readTree(runs.getResponse().getContentAsString())
+                .path("content").get(0);
+        List<String> snapshotProjectIds = new ArrayList<>();
+        snapshot.path("projectIds").forEach(project -> snapshotProjectIds.add(project.asText()));
+        assertEquals(supervisorFreeProjectIds, snapshotProjectIds);
+        assertEquals(9, snapshot.path("applications").size());
         String runId = objectMapper.readTree(runs.getResponse().getContentAsString())
                 .path("content").get(0).path("id").asText();
         mockMvc.perform(get("/api/allocation-runs/{id}", runId)
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.result.assignments.length()").value(9));
+    }
+
+    private String createAcceptedProject(int index, String setName) {
+        StoredRecord idea = store.create("idea",
+                users.findByUsername("student01").orElseThrow().getId().toString(),
+                null, "ACCEPTED_FOR_APPLICATIONS",
+                store.object().put("title", setName + " allocation project " + index)
+                        .put("schoolYear", "2026/2027"));
+        return idea.getId().toString();
+    }
+
+    private JsonNode normalizeProjectIds(JsonNode result, List<String> sourceIds, List<String> targetIds) {
+        Map<String, String> projectMapping = new java.util.HashMap<>();
+        for (int index = 0; index < sourceIds.size(); index++) {
+            projectMapping.put(sourceIds.get(index), targetIds.get(index));
+        }
+        JsonNode normalized = result.deepCopy();
+        for (String collection : List.of("assignments", "unassignedProjects")) {
+            for (JsonNode item : normalized.path(collection)) {
+                String projectId = item.path("projectId").asText();
+                ((ObjectNode) item).put("projectId", projectMapping.get(projectId));
+            }
+        }
+        return normalized;
     }
 
     @Test

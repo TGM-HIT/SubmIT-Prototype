@@ -10,10 +10,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.flightlog.data.RecordStore;
 import com.flightlog.data.StoredRecordRepository;
+import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.DefaultApplicationArguments;
@@ -40,7 +43,42 @@ class TestingIdeasFixtureTest {
     @Autowired
     private StoredRecordRepository records;
     @Autowired
+    private RecordStore store;
+    @Autowired
     private TestingIdeasFixtureSeeder seeder;
+
+    @Test
+    void allocationPreviewContainsSubmittedApplicationsAndServiceGeneratedCompletedRun() {
+        UUID markerId = UUID.nameUUIDFromBytes(
+                "testing-allocation-preview:period".getBytes(StandardCharsets.UTF_8));
+        var fixture = records.findByTypeAndParentId("testing_idea_fixture", markerId.toString())
+                .stream().findFirst().orElseThrow();
+        String periodId = store.parse(fixture).path("periodId").asText();
+        var period = records.findById(UUID.fromString(periodId)).orElseThrow();
+        assertEquals("ALLOCATED", period.getStatus());
+
+        List<com.flightlog.data.StoredRecord> applications =
+                records.findByTypeAndParentId("student_application", periodId);
+        assertEquals(3, applications.size());
+        assertTrue(applications.stream().allMatch(application -> "SUBMITTED".equals(application.getStatus())));
+
+        var run = records.findByTypeAndParentId("allocation_run", periodId).stream()
+                .filter(candidate -> "COMPLETED".equals(candidate.getStatus()))
+                .findFirst().orElseThrow();
+        assertEquals(run.getId().toString(), fixture.getOwnerId());
+        assertEquals(markerId.toString(), fixture.getParentId());
+        assertEquals(periodId, run.getParentId());
+        JsonNode runPayload = store.parse(run);
+        JsonNode catalogueProjectIds = store.parse(period).path("projectIds");
+        assertEquals(3, catalogueProjectIds.size());
+        assertEquals(catalogueProjectIds, runPayload.path("projectIds"));
+        assertEquals(3, runPayload.path("applications").size());
+        assertFalse(runPayload.path("applications").isEmpty());
+        assertEquals(3, runPayload.path("result").path("assignments").size());
+        for (JsonNode projectId : catalogueProjectIds) {
+            assertTrue(records.findByTypeAndParentId("confirmed_supervisor", projectId.asText()).isEmpty());
+        }
+    }
 
     @Test
     void exposesTwoValidWorkflowIdeasPerStudentToOwnersAndTeachers() throws Exception {

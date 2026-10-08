@@ -105,18 +105,31 @@ export function parseArgs(args) {
             value: argument.slice(0, separator),
             selector: argument.slice(separator + 1),
           })
-        } else if (['click', 'wait', 'read', 'focus', 'scroll', 'screenshot', 'key'].includes(action) && argument) {
+        } else if (['click', 'wait', 'read', 'focus', 'scroll', 'screenshot', 'key', 'select-index'].includes(action) && argument) {
           if (action === 'screenshot' && path.basename(argument) !== argument) {
             throw new Error('--step screenshot must use a filename, not a path.')
           }
           if (action === 'key' && !['Tab', 'Shift+Tab', 'Escape'].includes(argument)) {
             throw new Error('--step key must be Tab, Shift+Tab, or Escape.')
           }
-          options.steps.push({ action, value: argument })
+          if (action === 'select-index') {
+            const assignment = argument.lastIndexOf('=')
+            const optionIndex = Number(argument.slice(assignment + 1))
+            if (assignment < 1 || !Number.isInteger(optionIndex) || optionIndex < 0) {
+              throw new Error('--step select-index must use select-index:SELECTOR=NONNEGATIVE_INDEX.')
+            }
+            options.steps.push({
+              action,
+              selector: argument.slice(0, assignment),
+              index: optionIndex,
+            })
+          } else {
+            options.steps.push({ action, value: argument })
+          }
         } else if (action === 'accept-confirms' && !argument) {
           options.steps.push({ action })
         } else {
-          throw new Error('--step must be fill:SELECTOR=VALUE, click:SELECTOR, wait:SELECTOR, read:SELECTOR, focus:SELECTOR, scroll:SELECTOR, screenshot:FILE, key:Tab|Shift+Tab|Escape, or accept-confirms.')
+          throw new Error('--step must be fill:SELECTOR=VALUE, select-index:SELECTOR=INDEX, click:SELECTOR, wait:SELECTOR, read:SELECTOR, focus:SELECTOR, scroll:SELECTOR, screenshot:FILE, key:Tab|Shift+Tab|Escape, or accept-confirms.')
         }
       } else {
         options[name] = value
@@ -647,6 +660,21 @@ export async function applyPageSteps(client, steps, { outputDir, log = console.l
       }`
       await evaluatePage(client, `(${expression})(${JSON.stringify(step.selector)}, ${JSON.stringify(step.value)})`, `fill ${step.selector}`)
       log(`Filled ${step.selector}.`)
+    } else if (step.action === 'select-index') {
+      const expression = `(selector, index) => {
+        const element = document.querySelector(selector);
+        if (!(element instanceof HTMLSelectElement)) throw new Error('No select matches ' + selector);
+        const option = element.options[index];
+        if (!option || option.disabled) throw new Error('No enabled option at index ' + index + ' in ' + selector);
+        element.selectedIndex = index;
+        element.dispatchEvent(new Event('input', { bubbles: true }));
+        element.dispatchEvent(new Event('change', { bubbles: true }));
+        return option.textContent?.trim() ?? '';
+      }`
+      const text = await evaluatePage(client,
+        `(${expression})(${JSON.stringify(step.selector)}, ${step.index})`,
+        `select option ${step.index} in ${step.selector}`)
+      log(`Selected option ${step.index} (${text}) in ${step.selector}.`)
     } else if (step.action === 'click') {
       const expression = `(selector) => {
         const element = document.querySelector(selector);
@@ -954,7 +982,7 @@ backend/DEV-GUIDELINES.md and pass --username student01 (or another documented a
 Use --fill, --click, --wait-for, and --expand-select to perform reusable preview interactions after authentication,
 or repeat --step ACTION:VALUE to sequence conditional flows. Steps support fill:SELECTOR=VALUE, click:SELECTOR,
 click-row-action:USERNAME|SELECTOR,
-wait:SELECTOR, read:SELECTOR, focus:SELECTOR, scroll:SELECTOR, key:Tab|Shift+Tab|Escape, screenshot:FILE, and accept-confirms (local preview only).
+wait:SELECTOR, read:SELECTOR, focus:SELECTOR, scroll:SELECTOR, key:Tab|Shift+Tab|Escape, select-index:SELECTOR=INDEX, screenshot:FILE, and accept-confirms (local preview only).
 for example to load a form that requires a project ID before its details are shown. Use --tab-to and
 --select-by-key for browser keyboard navigation. On macOS, use --headed and --native-select-by-key for GUI
 keyboard input to a collapsed popup (Terminal may require Accessibility permission).

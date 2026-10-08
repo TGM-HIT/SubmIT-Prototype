@@ -2,7 +2,6 @@ package com.flightlog.idea;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.flightlog.data.RecordStore;
-import com.flightlog.data.StoredRecord;
 import com.flightlog.security.AuthenticatedUser;
 import com.flightlog.security.Role;
 import com.flightlog.user.UserAccount;
@@ -34,11 +33,14 @@ public class TestingIdeasFixtureSeeder implements ApplicationRunner {
     private final UserAccountRepository users;
     private final RecordStore store;
     private final IdeaService ideas;
+    private final TestingAllocationPreviewSeeder allocationPreview;
 
-    public TestingIdeasFixtureSeeder(UserAccountRepository users, RecordStore store, IdeaService ideas) {
+    public TestingIdeasFixtureSeeder(UserAccountRepository users, RecordStore store, IdeaService ideas,
+            TestingAllocationPreviewSeeder allocationPreview) {
         this.users = users;
         this.store = store;
         this.ideas = ideas;
+        this.allocationPreview = allocationPreview;
     }
 
     @Override
@@ -105,35 +107,12 @@ public class TestingIdeasFixtureSeeder implements ApplicationRunner {
             createPreferenceIfAbsent(willingTeacher, ideaId, "WILLING_TO_SUPERVISE");
         }
 
-        UUID periodMarker = UUID.nameUUIDFromBytes(
-                "testing-allocation-preview:period".getBytes(StandardCharsets.UTF_8));
+        UUID periodMarker = allocationPreviewMarker();
         if (isSeeded(periodMarker)) {
             return;
         }
         UserAccount admin = requireAccount("admin01", Role.ADMIN);
-        ObjectNode period = store.object()
-                .put("schoolYear", APPLICATION_SCHOOL_YEAR)
-                .put("opensAt", "2026-10-01T08:00:00Z")
-                .put("closesAt", "2026-10-07T17:00:00Z");
-        period.set("projectIds", store.value(ideasForPreview));
-        StoredRecord periodRecord = store.create("application_period", admin.getId().toString(), null,
-                "ALLOCATED", period);
-
-        ObjectNode group = store.object().put("projectId", ideasForPreview.get(0).toString());
-        group.set("studentIds", store.value(students.stream().map(user -> user.getId().toString()).toList()));
-        ObjectNode allocationResult = store.object();
-        allocationResult.set("assignments", store.object().arrayNode().add(group));
-        allocationResult.set("unassignedProjects", store.object().arrayNode());
-        ObjectNode run = store.object()
-                .put("initial", true)
-                .put("createdAt", "2026-10-07T17:00:00Z");
-        run.set("projectIds", store.value(ideasForPreview));
-        run.set("applications", store.object().arrayNode());
-        run.set("result", allocationResult);
-        StoredRecord runRecord = store.create("allocation_run", admin.getId().toString(),
-                periodRecord.getId().toString(), "COMPLETED", run);
-        store.create(FIXTURE_TYPE, runRecord.getId().toString(), periodMarker.toString(), "SEEDED",
-                store.object().put("periodId", periodRecord.getId().toString()));
+        allocationPreview.seed(admin, students, ideasForPreview, periodMarker);
     }
 
     private UUID seededIdeaId(UUID markerId) {
@@ -214,6 +193,11 @@ public class TestingIdeasFixtureSeeder implements ApplicationRunner {
     private boolean isSeeded(UUID markerId) {
         return store.repository().findFirstByTypeAndParentIdOrderByCreatedAtDesc(
                 FIXTURE_TYPE, markerId.toString()).isPresent();
+    }
+
+    private UUID allocationPreviewMarker() {
+        return UUID.nameUUIDFromBytes(
+                "testing-allocation-preview:period".getBytes(StandardCharsets.UTF_8));
     }
 
     private void markSeeded(UUID markerId, UUID ideaId) {
