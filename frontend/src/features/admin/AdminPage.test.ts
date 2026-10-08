@@ -202,6 +202,23 @@ describe('administrator account management', () => {
     expect(page.get('[role="status"]').text()).toBe('Account updated.')
   })
 
+  it('shows the blank-name error in the modal through the real Save click path', async () => {
+    const page = pageWith()
+    await flushPromises()
+    await openEditor(page)
+    const input = page.get('#account-name')
+    expect(input.attributes('required')).toBeUndefined()
+    await input.setValue('')
+    // Clicking Save goes through native constraint validation, unlike a synthetic submit event.
+    await page.get('form.edit-account-form button[type="submit"]').trigger('click')
+    await flushPromises()
+
+    expect(page.get('[role="alert"]').text()).toContain('1 to 120 characters')
+    expect((page.get('#account-name').element as HTMLInputElement).value).toBe('')
+    expect(page.find('[role="dialog"]').exists()).toBe(true)
+    expect(api.changeName).not.toHaveBeenCalled()
+  })
+
   it('keeps a name server error in the modal with the entered value', async () => {
     api.changeName.mockRejectedValue(new ApiError('Name update rejected.', 400))
     const page = pageWith()

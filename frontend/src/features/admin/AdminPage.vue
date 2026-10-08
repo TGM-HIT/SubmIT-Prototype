@@ -49,10 +49,10 @@
     <p v-if="task.success.value" class="success-note" role="status">{{ task.success.value }}</p>
 
     <ModalDialog v-if="editingUser" :title="`Edit ${editingUser.displayName} account (${editingUser.username})`" :return-focus="editTrigger" :fallback-focus="accountsHeading" @close="closeEditor">
-      <form class="edit-account-form" @submit.prevent="saveAccount">
+      <form class="edit-account-form" novalidate @submit.prevent="saveAccount">
         <div class="field">
           <label class="label" for="account-name">Account name</label>
-          <input id="account-name" v-model="nameDraft" class="input" autocomplete="name" required>
+          <input id="account-name" v-model="nameDraft" class="input" autocomplete="name">
         </div>
         <p class="muted">1–120 characters after trimming.</p>
         <div class="field">
