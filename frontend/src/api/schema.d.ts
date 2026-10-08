@@ -920,6 +920,7 @@ export interface components {
             scopePoints?: string[];
             learningTopics?: string[];
             schoolYear?: string;
+            confirmedSupervisorDisplayName?: string;
             specification?: components["schemas"]["SpecificationResponse"];
             reviews?: components["schemas"]["ReviewResponse"][];
             supervisionPreferences?: components["schemas"]["SupervisionPreferenceResponse"][];
@@ -1508,6 +1509,19 @@ export interface components {
         };
         PageResponseStudentApplicationResponse: {
             content?: components["schemas"]["StudentApplicationResponse"][];
+            /** Format: int32 */
+            page?: number;
+            /** Format: int32 */
+            size?: number;
+            /** Format: int64 */
+            totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
+        };
+        PageResponseMapStringObject: {
+            content?: {
+                [key: string]: unknown;
+            }[];
             /** Format: int32 */
             page?: number;
             /** Format: int32 */
@@ -2687,7 +2701,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["PageResponseObjectNode"];
+                    "*/*": components["schemas"]["PageResponseMapStringObject"];
                 };
             };
         };
@@ -2709,7 +2723,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": Record<string, never>;
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };
@@ -2731,7 +2747,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": Record<string, never>;
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };
@@ -3177,7 +3195,9 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": Record<string, never>;
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
                 };
             };
         };

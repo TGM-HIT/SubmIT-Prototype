@@ -1,10 +1,13 @@
 package com.flightlog.allocation;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.flightlog.security.AuthenticatedUser;
 import com.flightlog.web.ApiDtos.PageResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -19,32 +22,41 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Allocation")
 public class AllocationController {
     private final AllocationService service;
+    private final ObjectMapper objectMapper;
 
-    public AllocationController(AllocationService service) {
+    public AllocationController(AllocationService service, ObjectMapper objectMapper) {
         this.service = service;
+        this.objectMapper = objectMapper;
     }
 
     @PostMapping("/api/application-periods/{periodId}/allocation-runs")
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Start a replacement allocation after the deadline.")
-    public ObjectNode start(@AuthenticationPrincipal AuthenticatedUser caller, @PathVariable UUID periodId) {
-        return service.startReplacement(caller, periodId);
+    public Map<String, Object> start(@AuthenticationPrincipal AuthenticatedUser caller, @PathVariable UUID periodId) {
+        return plain(service.startReplacement(caller, periodId));
     }
 
     @GetMapping("/api/application-periods/{periodId}/allocation-runs")
-    public PageResponse<ObjectNode> list(@AuthenticationPrincipal AuthenticatedUser caller,
+    public PageResponse<Map<String, Object>> list(@AuthenticationPrincipal AuthenticatedUser caller,
             @PathVariable UUID periodId, @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
-        return service.listRuns(caller, periodId, Math.max(page, 0), Math.min(Math.max(size, 1), 100));
+        PageResponse<ObjectNode> runs = service.listRuns(caller, periodId,
+                Math.max(page, 0), Math.min(Math.max(size, 1), 100));
+        return new PageResponse<>(runs.content().stream().map(this::plain).toList(), runs.page(), runs.size(),
+                runs.totalElements(), runs.totalPages());
     }
 
     @GetMapping("/api/allocation-runs/{id}")
-    public ObjectNode get(@AuthenticationPrincipal AuthenticatedUser caller, @PathVariable UUID id) {
-        return service.getRun(caller, id);
+    public Map<String, Object> get(@AuthenticationPrincipal AuthenticatedUser caller, @PathVariable UUID id) {
+        return plain(service.getRun(caller, id));
     }
 
     @PostMapping("/api/allocation-runs/{id}/finalize")
-    public ObjectNode finalizeRun(@AuthenticationPrincipal AuthenticatedUser caller, @PathVariable UUID id) {
-        return service.finalizeRun(caller, id);
+    public Map<String, Object> finalizeRun(@AuthenticationPrincipal AuthenticatedUser caller, @PathVariable UUID id) {
+        return plain(service.finalizeRun(caller, id));
+    }
+
+    private Map<String, Object> plain(ObjectNode response) {
+        return objectMapper.convertValue(response, new TypeReference<>() { });
     }
 }

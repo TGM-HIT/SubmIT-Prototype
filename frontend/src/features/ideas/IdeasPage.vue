@@ -192,7 +192,7 @@ function canReview(idea: Idea): boolean {
 }
 function lifecycleMessage(status?: string): string {
   if (status === 'IDEA_APPROVED_FOR_SPECIFICATION') return 'Approval lets you write a full specification. It does not yet make this project available for student applications.'
-  if (status === 'ACCEPTED_FOR_APPLICATIONS') return 'A teacher accepted the submitted specification. The project may be included in an application period once a supervisor is confirmed.'
+  if (status === 'ACCEPTED_FOR_APPLICATIONS') return 'A teacher accepted the submitted specification. The project may be included in an application period; an administrator can assign an eligible supervisor after allocation.'
   if (status === 'SPECIFICATION_SUBMITTED') return 'The full specification is waiting for a separate teacher acceptance decision.'
   return 'Actions are available only when this lifecycle stage permits them.'
 }
@@ -384,9 +384,12 @@ async function savePreference(): Promise<void> {
 }
 async function assignSupervisor(): Promise<void> {
   if (!selectedIdea.value?.id) return
-  await task.run(() => ideasApi.assignSupervisor(selectedIdea.value!.id!, teacherId.value), 'Supervisor confirmed.')
+  const idea = selectedIdea.value
+  const result = await task.run(() => ideasApi.assignSupervisor(idea.id!, teacherId.value), 'Supervisor confirmed.')
+  if (!result) return
   teacherId.value = ''
-  await selectIdea(selectedIdea.value)
+  await selectIdea(idea)
+  task.success.value = 'Supervisor confirmed.'
 }
 let skipFilterReload = false
 watch(statusFilter, () => {

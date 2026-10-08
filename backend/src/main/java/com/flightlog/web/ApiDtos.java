@@ -300,6 +300,7 @@ public final class ApiDtos {
             List<String> scopePoints,
             List<String> learningTopics,
             String schoolYear,
+            @JsonInclude(JsonInclude.Include.NON_NULL) String confirmedSupervisorDisplayName,
             SpecificationResponse specification,
             List<ReviewResponse> reviews,
             List<SupervisionPreferenceResponse> supervisionPreferences) {

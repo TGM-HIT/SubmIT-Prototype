@@ -46,21 +46,24 @@ class TestingIdeasFixtureTest {
     void exposesTwoValidWorkflowIdeasPerStudentToOwnersAndTeachers() throws Exception {
         String teacherToken = login("teacher01");
         JsonNode teacherList = getIdeas(teacherToken);
-        assertEquals(10, teacherList.path("totalElements").asInt());
+        assertEquals(13, teacherList.path("totalElements").asInt());
         Set<String> teacherIdeaIds = new HashSet<>();
 
         for (String username : STUDENTS) {
             String studentToken = login(username);
             JsonNode studentList = getIdeas(studentToken);
-            assertEquals(2, studentList.path("totalElements").asInt(), username);
-            assertEquals(2, studentList.path("content").size(), username);
+            int expectedIdeas = List.of("student01", "student02", "student03").contains(username) ? 3 : 2;
+            assertEquals(expectedIdeas, studentList.path("totalElements").asInt(), username);
+            assertEquals(expectedIdeas, studentList.path("content").size(), username);
 
             JsonNode submitted = null;
             JsonNode specified = null;
             Set<String> titles = new HashSet<>();
             for (JsonNode item : studentList.path("content")) {
-                titles.add(item.path("title").asText());
-                teacherIdeaIds.add(item.path("id").asText());
+                if (!"ACCEPTED_FOR_APPLICATIONS".equals(item.path("status").asText())) {
+                    titles.add(item.path("title").asText());
+                    teacherIdeaIds.add(item.path("id").asText());
+                }
                 if ("IDEA_SUBMITTED".equals(item.path("status").asText())) {
                     submitted = item;
                 } else if ("SPECIFICATION_SUBMITTED".equals(item.path("status").asText())) {
@@ -145,8 +148,8 @@ class TestingIdeasFixtureTest {
         seeder.run(new DefaultApplicationArguments(new String[0]));
 
         JsonNode afterRerun = getIdeas(login("student01"));
-        assertEquals(2, afterRerun.path("totalElements").asInt());
-        assertEquals(2, afterRerun.path("content").size());
+        assertEquals(3, afterRerun.path("totalElements").asInt());
+        assertEquals(3, afterRerun.path("content").size());
         assertNotEquals(submittedId, specifiedId);
         assertEquals("IDEA_NEEDS_REVISION", getIdea(login("student01"), submittedId).path("status").asText());
         assertEquals("SPECIFICATION_NEEDS_REVISION", getIdea(login("student01"), specifiedId)

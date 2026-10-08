@@ -56,7 +56,7 @@ public class IdeaService {
     public ApiDtos.PageResponse<ApiDtos.IdeaResponse> list(
             AuthenticatedUser caller, String status, int page, int size) {
         Page<StoredRecord> records = findIdeas(caller, status, PageRequest.of(page, size));
-        return new ApiDtos.PageResponse<>(mapper.responses(records.getContent()), records.getNumber(),
+        return new ApiDtos.PageResponse<>(mapper.responses(records.getContent(), caller.role()), records.getNumber(),
                 records.getSize(), records.getTotalElements(), records.getTotalPages());
     }
 
@@ -64,7 +64,7 @@ public class IdeaService {
     public ApiDtos.IdeaResponse get(AuthenticatedUser caller, UUID id) {
         StoredRecord idea = findIdea(id);
         requireVisible(caller, idea);
-        return mapper.response(idea, true);
+        return mapper.response(idea, true, caller.role());
     }
 
     @Transactional

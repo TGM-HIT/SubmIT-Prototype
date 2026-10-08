@@ -119,6 +119,32 @@ describe('application period configuration', () => {
     expect(page.find('form').exists()).toBe(false)
   })
 
+  it('offers accepted projects with no supervisor and does not explain supervision as a prerequisite', async () => {
+    const page = await openForm()
+    expect(page.text()).toContain('Accepted project 1')
+    expect(page.text()).not.toContain('confirmed supervisor')
+    expect(page.text()).not.toContain('supervised projects')
+    await selectCompleteForm(page)
+    await page.get('form').trigger('submit')
+    await flushPromises()
+    expect(api.createPeriod).toHaveBeenCalledOnce()
+  })
+
+  it('keeps projects from another school year out of the period eligibility count', async () => {
+    api.listIdeas.mockResolvedValue({
+      content: projectIds.map((id, index) => ({
+        id,
+        title: `Accepted project ${index + 1}`,
+        schoolYear: index === 0 ? '2025/2026' : '2026/2027',
+        status: 'ACCEPTED_FOR_APPLICATIONS',
+      })),
+    })
+    const page = await openForm()
+    await selectCompleteForm(page)
+    expect(page.get('button[type="submit"]').attributes('disabled')).toBeDefined()
+    expect(page.text()).toContain('Remove projects that are not accepted for the selected school year.')
+  })
+
   it('renders the native school-year selector with shared styling and binds its selection', async () => {
     const page = await openForm()
     const selector = page.get<HTMLSelectElement>('#period-year')

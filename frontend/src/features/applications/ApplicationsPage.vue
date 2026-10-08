@@ -1,6 +1,6 @@
 <template>
   <section class="page">
-    <p class="page-intro">Browse accepted, supervised projects and submit one ranked preference list. Applications are editable only while the school-year period is open and before its deadline.</p>
+    <p class="page-intro">Browse accepted projects and submit one ranked preference list. Applications are editable only while the school-year period is open and before its deadline.</p>
     <form v-if="isAdmin && periodEditor" class="panel stack" @submit.prevent="createPeriod">
       <h2 class="section-title">Configure an application period</h2>
       <div class="grid grid-3">
@@ -11,7 +11,7 @@
       <p class="label">Accepted projects · choose at least three</p>
       <div class="choice-list">
         <label v-for="idea in acceptedIdeas" :key="idea.id" class="choice-item"><span><strong>{{ idea.title }}</strong><small class="muted"> · {{ idea.schoolYear }}</small></span><input v-model="periodForm.projectIds" type="checkbox" :value="idea.id" /></label>
-        <p v-if="!acceptedIdeas.length" class="empty">No accepted projects were returned. Teacher acceptance and a confirmed supervisor are required first.</p>
+        <p v-if="!acceptedIdeas.length" class="empty">No accepted projects were returned. Teacher acceptance is required first.</p>
       </div>
       <ul v-if="periodValidationMessages.length" class="notice" role="status" aria-live="polite" aria-label="Application period requirements">
         <li v-for="message in periodValidationMessages" :key="message">{{ message }}</li>
@@ -117,10 +117,11 @@ const periodValidationMessages = computed(() => {
     messages.push('The closing date and time must be later than the opening date and time.')
   }
 
-  const eligibleProjectIds = new Set(acceptedIdeas.value.flatMap((idea) => idea.id ? [idea.id] : []))
+  const eligibleProjectIds = new Set(acceptedIdeas.value.flatMap((idea) =>
+    idea.id && idea.schoolYear === periodForm.schoolYear ? [idea.id] : []))
   const selectedEligibleProjects = new Set(periodForm.projectIds.filter((id) => eligibleProjectIds.has(id)))
   if (periodForm.projectIds.some((id) => !eligibleProjectIds.has(id))) {
-    messages.push('Remove projects that are not in the accepted project catalogue.')
+    messages.push('Remove projects that are not accepted for the selected school year.')
   }
   if (selectedEligibleProjects.size < 3) messages.push('Select at least three accepted projects.')
   return messages

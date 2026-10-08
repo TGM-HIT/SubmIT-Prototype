@@ -24,7 +24,7 @@
       <span class="status-badge" :class="`status-${statusOf(selectedRun).toLowerCase()}`">{{ statusOf(selectedRun) }}</span>
       <p v-if="selectedRun.error" class="error-box">Run did not complete: {{ selectedRun.error }}</p>
       <div v-for="(assignment, index) in assignments(selectedRun)" :key="index" class="data-row">
-        <div class="row-main"><h3>Project {{ assignment.projectId }}</h3><p>{{ assignment.studentIds.length }} students assigned</p><p class="muted">Members are shown only to authorized project staff. Group sizes remain within the required 3–5 range.</p></div>
+        <div class="row-main"><h3>Project {{ assignment.projectId }}</h3><p>{{ assignment.studentIds.length }} students assigned</p><p>Supervisor: {{ supervisors[assignment.projectId] || 'No supervisor assigned' }}</p><p class="muted">Members are shown only to authorized project staff. Group sizes remain within the required 3–5 range.</p></div>
         <div class="choice-list"><span v-for="student in assignment.studentIds" :key="student" class="status-badge">{{ student }}</span></div>
       </div>
       <h3 class="form-section-title">Unassigned outcomes</h3>
@@ -39,7 +39,7 @@
 import { computed, onMounted, ref } from 'vue'
 import type { components } from '../../api/schema'
 import type { Page } from '../../api/client'
-import { allocationApi, periodsApi } from '../../api/services'
+import { allocationApi, ideasApi, periodsApi } from '../../api/services'
 import { useAuthStore } from '../../stores/auth'
 import { useTask } from '../../composables/useTask'
 import AsyncPanel from '../../components/AsyncPanel.vue'
@@ -52,6 +52,7 @@ const periods = ref<Period[]>([])
 const periodId = ref('')
 const runs = ref<Page<Data>>({ content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 })
 const selectedRun = ref<Data | null>(null)
+const supervisors = ref<Record<string, string>>({})
 const selectedPeriod = computed(() => periods.value.find((period) => period.id === periodId.value))
 const deadlinePassed = computed(() => Boolean(selectedPeriod.value?.closesAt && Date.now() >= new Date(selectedPeriod.value.closesAt).getTime()))
 
@@ -89,7 +90,20 @@ async function loadRuns(page = 0): Promise<void> {
   await task.run(async () => { runs.value = await periodsApi.runs(periodId.value, page) })
 }
 async function loadResult(id: string): Promise<void> {
-  selectedRun.value = await task.run(() => allocationApi.getRun(id)) ?? null
+  const result = await task.run(() => allocationApi.getRun(id))
+  selectedRun.value = result ?? null
+  supervisors.value = {}
+  if (!result || !['ADMIN', 'TEACHER'].includes(auth.user?.role ?? '')) return
+  const names = await Promise.all(assignments(result).map(async ({ projectId }) => {
+    try {
+      const idea = await ideasApi.get(projectId)
+      return [projectId, idea.confirmedSupervisorDisplayName ?? ''] as const
+    } catch (error) {
+      task.error.value = error instanceof Error ? error.message : 'Could not load project supervisor.'
+      return [projectId, ''] as const
+    }
+  }))
+  supervisors.value = Object.fromEntries(names)
 }
 async function startReplacement(): Promise<void> {
   if (!selectedPeriod.value || !confirm('Start a replacement allocation run? The existing run history will remain.')) return

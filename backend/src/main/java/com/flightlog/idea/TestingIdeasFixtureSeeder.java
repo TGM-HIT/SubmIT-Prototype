@@ -2,6 +2,7 @@ package com.flightlog.idea;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.flightlog.data.RecordStore;
+import com.flightlog.data.StoredRecord;
 import com.flightlog.security.AuthenticatedUser;
 import com.flightlog.security.Role;
 import com.flightlog.user.UserAccount;
@@ -26,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class TestingIdeasFixtureSeeder implements ApplicationRunner {
     private static final String FIXTURE_TYPE = "testing_idea_fixture";
     private static final String SCHOOL_YEAR = "2026-2027";
+    private static final String APPLICATION_SCHOOL_YEAR = "2026/2027";
     private static final List<String> STUDENT_USERNAMES = List.of(
             "student01", "student02", "student03", "student04", "student05");
 
@@ -48,8 +50,104 @@ public class TestingIdeasFixtureSeeder implements ApplicationRunner {
                 seedSubmittedIdea(student);
                 seedSpecifiedIdea(student);
             }
+            seedAcceptedAllocationPreview();
         } finally {
             SecurityContextHolder.clearContext();
+        }
+    }
+
+    private void seedAcceptedAllocationPreview() {
+        List<UserAccount> students = List.of(
+                requireAccount("student01", Role.STUDENT),
+                requireAccount("student02", Role.STUDENT),
+                requireAccount("student03", Role.STUDENT));
+        UserAccount teacher = requireAccount("teacher01", Role.TEACHER);
+        UserAccount willingTeacher = requireAccount("teacher02", Role.TEACHER);
+        List<UUID> ideasForPreview = new java.util.ArrayList<>();
+        for (int index = 0; index < students.size(); index++) {
+            UserAccount student = students.get(index);
+            String stage = "accepted-allocation-" + (index + 1);
+            UUID markerId = markerId(student, stage);
+            UUID ideaId;
+            if (isSeeded(markerId)) {
+                ideaId = seededIdeaId(markerId);
+            } else {
+                setCaller(student);
+                ObjectNode payload = store.object()
+                        .put("title", "Supervisor-free preview project " + (index + 1))
+                        .put("description", "A fictional classroom project with invented measurements.")
+                        .put("intendedOutcome", "A synthetic comparison of three paper design options.")
+                        .put("schoolYear", APPLICATION_SCHOOL_YEAR);
+                payload.set("scopePoints", store.value(List.of("Compare three paper designs",
+                        "Use only fictional measurements")));
+                payload.set("learningTopics", store.value(List.of("Forces", "Fair testing")));
+                IdeaResponse idea = ideas.create(authenticatedUser(student), payload);
+                ideas.submit(authenticatedUser(student), idea.id());
+
+                setCaller(teacher);
+                ideas.review(authenticatedUser(teacher), idea.id(), false,
+                        store.object().put("decision", "APPROVE_FOR_SPECIFICATION")
+                                .put("feedback", "Synthetic project approved for specification."));
+
+                setCaller(student);
+                ideas.saveSpecification(authenticatedUser(student), idea.id(), specificationPayload(student));
+                ideas.submitSpecification(authenticatedUser(student), idea.id());
+
+                setCaller(teacher);
+                ideas.review(authenticatedUser(teacher), idea.id(), true,
+                        store.object().put("decision", "ACCEPT_FOR_APPLICATIONS")
+                                .put("feedback", "Synthetic project accepted for the application catalogue."));
+                ideaId = idea.id();
+                markSeeded(markerId, ideaId);
+            }
+            ideasForPreview.add(ideaId);
+            createPreferenceIfAbsent(teacher, ideaId, "WANTS_TO_SUPERVISE");
+            createPreferenceIfAbsent(willingTeacher, ideaId, "WILLING_TO_SUPERVISE");
+        }
+
+        UUID periodMarker = UUID.nameUUIDFromBytes(
+                "testing-allocation-preview:period".getBytes(StandardCharsets.UTF_8));
+        if (isSeeded(periodMarker)) {
+            return;
+        }
+        UserAccount admin = requireAccount("admin01", Role.ADMIN);
+        ObjectNode period = store.object()
+                .put("schoolYear", APPLICATION_SCHOOL_YEAR)
+                .put("opensAt", "2026-10-01T08:00:00Z")
+                .put("closesAt", "2026-10-07T17:00:00Z");
+        period.set("projectIds", store.value(ideasForPreview));
+        StoredRecord periodRecord = store.create("application_period", admin.getId().toString(), null,
+                "ALLOCATED", period);
+
+        ObjectNode group = store.object().put("projectId", ideasForPreview.get(0).toString());
+        group.set("studentIds", store.value(students.stream().map(user -> user.getId().toString()).toList()));
+        ObjectNode allocationResult = store.object();
+        allocationResult.set("assignments", store.object().arrayNode().add(group));
+        allocationResult.set("unassignedProjects", store.object().arrayNode());
+        ObjectNode run = store.object()
+                .put("initial", true)
+                .put("createdAt", "2026-10-07T17:00:00Z");
+        run.set("projectIds", store.value(ideasForPreview));
+        run.set("applications", store.object().arrayNode());
+        run.set("result", allocationResult);
+        StoredRecord runRecord = store.create("allocation_run", admin.getId().toString(),
+                periodRecord.getId().toString(), "COMPLETED", run);
+        store.create(FIXTURE_TYPE, runRecord.getId().toString(), periodMarker.toString(), "SEEDED",
+                store.object().put("periodId", periodRecord.getId().toString()));
+    }
+
+    private UUID seededIdeaId(UUID markerId) {
+        return store.repository().findFirstByTypeAndParentIdOrderByCreatedAtDesc(
+                        FIXTURE_TYPE, markerId.toString())
+                .map(record -> UUID.fromString(store.parse(record).path("ideaId").asText()))
+                .orElseThrow();
+    }
+
+    private void createPreferenceIfAbsent(UserAccount teacher, UUID ideaId, String preference) {
+        if (store.repository().findByTypeAndParentIdAndOwnerIdOrderByCreatedAtDesc(
+                "supervision_preference", ideaId.toString(), teacher.getId().toString()).isEmpty()) {
+            store.create("supervision_preference", teacher.getId().toString(), ideaId.toString(),
+                    preference, store.object().put("note", "Synthetic testing-profile preference."));
         }
     }
 

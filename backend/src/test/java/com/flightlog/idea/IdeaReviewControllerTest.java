@@ -86,7 +86,7 @@ class IdeaReviewControllerTest {
                 .andExpect(jsonPath("$.teacherDisplayName").value("Marcus Reed"))
                 .andExpect(jsonPath("$.teacherId").exists());
 
-        mockMvc.perform(get("/api/ideas")
+        mockMvc.perform(get("/api/ideas?size=100")
                         .header("Authorization", "Bearer " + teacherToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[?(@.id == '" + ideaId + "')].ownerDisplayName")
@@ -107,6 +107,39 @@ class IdeaReviewControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.reviews[0].teacherDisplayName").value("Olivia Chen"));
         getIdea(ideaId, otherStudentToken).andExpect(status().isForbidden());
+    }
+
+    @Test
+    void administratorsCanAssignAndReplaceEligibleSupervisorsWithoutExposingSupervisorToStudents() throws Exception {
+        String ideaId = submitIdea("Supervisor assignment is administrator-only");
+        String firstTeacherId = users.findByUsername("teacher01").orElseThrow().getId().toString();
+        String secondTeacherId = users.findByUsername("teacher02").orElseThrow().getId().toString();
+        preference(ideaId, teacherToken, "WANTS_TO_SUPERVISE", "Ready to supervise")
+                .andExpect(status().isOk());
+        preference(ideaId, otherTeacherToken, "WILLING_TO_SUPERVISE", "Available")
+                .andExpect(status().isOk());
+
+        assignSupervisor(ideaId, adminToken, firstTeacherId).andExpect(status().isOk());
+        getIdea(ideaId, adminToken).andExpect(status().isOk())
+                .andExpect(jsonPath("$.confirmedSupervisorDisplayName").value("Olivia Chen"));
+        getIdea(ideaId, teacherToken).andExpect(status().isOk())
+                .andExpect(jsonPath("$.confirmedSupervisorDisplayName").value("Olivia Chen"));
+        getIdea(ideaId, studentToken).andExpect(status().isOk())
+                .andExpect(jsonPath("$.confirmedSupervisorDisplayName").doesNotExist());
+
+        assignSupervisor(ideaId, adminToken, secondTeacherId).andExpect(status().isOk());
+        getIdea(ideaId, adminToken).andExpect(status().isOk())
+                .andExpect(jsonPath("$.confirmedSupervisorDisplayName").value("Marcus Reed"));
+        assignSupervisor(ideaId, teacherToken, firstTeacherId).andExpect(status().isForbidden());
+    }
+
+    @Test
+    void supervisorAssignmentStillRequiresAnEligibleTeacherPreference() throws Exception {
+        String ideaId = submitIdea("Supervisor assignment requires an eligible preference");
+        String teacherId = users.findByUsername("teacher01").orElseThrow().getId().toString();
+        assignSupervisor(ideaId, adminToken, teacherId).andExpect(status().isConflict());
+        preference(ideaId, teacherToken, "NOT_AVAILABLE", "Unavailable").andExpect(status().isOk());
+        assignSupervisor(ideaId, adminToken, teacherId).andExpect(status().isConflict());
     }
 
     @Test
@@ -418,6 +451,14 @@ class IdeaReviewControllerTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(Map.of(
                         "preference", choice, "note", note))));
+    }
+
+    private org.springframework.test.web.servlet.ResultActions assignSupervisor(
+            String ideaId, String token, String teacherId) throws Exception {
+        return mockMvc.perform(put("/api/ideas/{id}/supervisor", ideaId)
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of("teacherId", teacherId))));
     }
 
     private MvcResult overlappingPreference(String ideaId, String choice, String note,

@@ -29,7 +29,7 @@ Every account has a required display name separate from its unique username. Reg
 - `GET /api/application-periods` and `GET /api/application-periods/{id}` return periods and their status, dates, and accepted project catalogue.
 - `PUT /api/application-periods/{id}` updates dates or catalogue configuration for `ADMIN`, provided the period has not been finalized.
 
-An application period records its school year, opening and closing timestamps, eligible accepted projects, and lifecycle status (`DRAFT`, `OPEN`, `CLOSED`, `ALLOCATING`, `ALLOCATED`, or `FINALIZED`). Dates must be ordered; an application period cannot open unless at least three accepted projects are available. At the closing deadline, the system automatically closes applications, snapshots eligible applications, and starts an allocation run.
+An application period records its school year, opening and closing timestamps, eligible accepted projects from that same school year, and lifecycle status (`DRAFT`, `OPEN`, `CLOSED`, `ALLOCATING`, `ALLOCATED`, or `FINALIZED`). Dates must be ordered; an application period cannot open unless at least three accepted projects are available. At the closing deadline, the system automatically closes applications, snapshots eligible applications, and starts an allocation run.
 
 ### Ideas and project specifications
 
@@ -55,7 +55,7 @@ Reviews include written feedback and may include an overall recommendation. Each
 
 For idea reviews of submitted ideas, `REQUEST_REVISION` and `DECLINE` require non-empty written feedback, but ratings are optional; any supplied rating remains an integer from 1 through 5. A rating key supplied as an explicit JSON `null` (or any other non-integer or out-of-range value) is rejected without changing the idea or adding a history entry, while an omitted rating is accepted. Review responses identify whether an entry is an idea or full-specification review. The authorized idea response history returns the ratings actually recorded with each idea decision and does not synthesize omitted values. Full-specification review validation and rating display remain unchanged.
 
-Only teachers may review or record supervision preferences. A decision must be valid for the current lifecycle stage. Reviews and decisions are append-only; corrections are recorded as new review entries rather than overwriting history. Acceptance is rejected unless a full specification has been submitted. Only a teacher with `WANTS_TO_SUPERVISE` or `WILLING_TO_SUPERVISE` may be assigned as the confirmed supervisor. A project cannot be made available in an application period without a confirmed supervisor.
+Only teachers may review or record supervision preferences. A decision must be valid for the current lifecycle stage. Reviews and decisions are append-only; corrections are recorded as new review entries rather than overwriting history. Acceptance is rejected unless a full specification has been submitted. Only a teacher with `WANTS_TO_SUPERVISE` or `WILLING_TO_SUPERVISE` may be assigned as the confirmed supervisor. Projects may be included in an application period without a confirmed supervisor; administrators may assign or replace an eligible supervisor at any time, including after allocation or finalization. Supervisor changes do not alter allocation results, group membership, applications, reviews, or grades.
 
 ### Applications
 

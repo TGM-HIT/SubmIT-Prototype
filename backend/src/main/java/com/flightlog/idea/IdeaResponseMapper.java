@@ -3,6 +3,7 @@ package com.flightlog.idea;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.flightlog.data.RecordStore;
 import com.flightlog.data.StoredRecord;
+import com.flightlog.security.Role;
 import com.flightlog.user.UserAccount;
 import com.flightlog.user.UserAccountRepository;
 import com.flightlog.web.ApiDtos.IdeaResponse;
@@ -24,6 +25,9 @@ class IdeaResponseMapper {
     private static final String REVIEW = "review";
     private static final String SUPERVISION = "supervision_preference";
 
+    private record ResponseContext(Map<UUID, String> names, String supervisorDisplayName) {
+    }
+
     private final RecordStore store;
     private final UserAccountRepository users;
 
@@ -33,18 +37,23 @@ class IdeaResponseMapper {
     }
 
     IdeaResponse response(StoredRecord record, boolean includeHistory) {
+        return response(record, includeHistory, null);
+    }
+
+    IdeaResponse response(StoredRecord record, boolean includeHistory, Role viewerRole) {
         List<StoredRecord> reviews = includeHistory ? children(REVIEW, record) : List.of();
         List<StoredRecord> preferences = includeHistory ? currentPreferences(record) : List.of();
         Set<UUID> userIds = new java.util.LinkedHashSet<>();
         userIds.add(UUID.fromString(record.getOwnerId()));
         reviews.stream().map(child -> UUID.fromString(child.getOwnerId())).forEach(userIds::add);
         preferences.stream().map(child -> UUID.fromString(child.getOwnerId())).forEach(userIds::add);
-        Map<UUID, String> names = displayNames(userIds);
-        return response(record, includeHistory, reviews, preferences, names);
+        return response(record, includeHistory, reviews, preferences,
+                new ResponseContext(displayNames(userIds), supervisorDisplayName(record, viewerRole)));
     }
 
     private IdeaResponse response(StoredRecord record, boolean includeHistory, List<StoredRecord> reviewRecords,
-            List<StoredRecord> preferenceRecords, Map<UUID, String> names) {
+            List<StoredRecord> preferenceRecords, ResponseContext context) {
+        Map<UUID, String> names = context.names();
         ObjectNode payload = store.parse(record);
         SpecificationResponse specification = null;
         List<ReviewResponse> reviews = List.of();
@@ -64,16 +73,32 @@ class IdeaResponseMapper {
                 payload.path("title").asText(), payload.path("description").asText(),
                 payload.path("intendedOutcome").asText(), strings(payload, "scopePoints"),
                 strings(payload, "learningTopics"), payload.path("schoolYear").asText(),
-                specification, reviews, preferences);
+                context.supervisorDisplayName(), specification, reviews, preferences);
     }
 
-    List<IdeaResponse> responses(List<StoredRecord> records) {
+    List<IdeaResponse> responses(List<StoredRecord> records, Role viewerRole) {
         Set<UUID> ownerIds = records.stream().map(record -> UUID.fromString(record.getOwnerId()))
                 .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
         Map<UUID, String> names = displayNames(ownerIds);
         return records.stream()
-                .map(record -> response(record, false, List.of(), List.of(), names))
+                .map(record -> response(record, false, List.of(), List.of(),
+                        new ResponseContext(names, supervisorDisplayName(record, viewerRole))))
                 .toList();
+    }
+
+    private String supervisorDisplayName(StoredRecord idea, Role viewerRole) {
+        if (viewerRole != Role.ADMIN && viewerRole != Role.TEACHER) {
+            return null;
+        }
+        return store.repository().findFirstByTypeAndParentIdOrderByCreatedAtDesc(
+                "confirmed_supervisor", idea.getId().toString())
+                .map(store::parse)
+                .map(assignment -> assignment.path("teacherId").asText(null))
+                .filter(id -> id != null && !id.isBlank())
+                .map(UUID::fromString)
+                .flatMap(users::findById)
+                .map(user -> user.getDisplayName())
+                .orElse(null);
     }
 
     SpecificationResponse specificationResponse(StoredRecord record) {

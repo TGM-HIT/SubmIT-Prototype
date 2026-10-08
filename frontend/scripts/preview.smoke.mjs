@@ -25,8 +25,9 @@ test('parses preview options and rejects incomplete or invalid invocations', () 
   assert.equal(parseArgs(['--headed']).headed, true)
   assert.equal(parseArgs(['--viewport', 'mobile', '--output-dir', '/tmp/previews']).viewport, 'mobile')
   assert.equal(parseArgs(['--no-start', '--url', 'http://localhost:5173']).start, false)
-  assert.deepEqual(parseArgs(['--step', 'focus:#trigger', '--step', 'read:body']).steps, [
+  assert.deepEqual(parseArgs(['--step', 'focus:#trigger', '--step', 'scroll:#result', '--step', 'read:body']).steps, [
     { action: 'focus', value: '#trigger' },
+    { action: 'scroll', value: '#result' },
     { action: 'read', value: 'body' },
   ])
   assert.deepEqual(parseArgs(['--step', 'click-row-action:teacher01|button.edit']).steps, [

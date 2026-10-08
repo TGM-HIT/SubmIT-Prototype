@@ -123,11 +123,11 @@ For each review, teachers can provide a 1-to-5 rating (1 = low, 5 = high) and op
 
 Ratings support discussion and comparison; they do not automatically accept or reject a project. Teachers can also provide an overall recommendation and explain their assessment.
 
-For every reviewed project, each teacher can record one supervision preference: **wants to supervise**, **willing to supervise**, or **not available**. A teacher may add a note. This preference does not by itself assign a supervisor. An administrator confirms as the project's supervisor one teacher who has said they want to supervise or are willing to supervise, before it is included in an application period.
+For every reviewed project, each teacher can record one supervision preference: **wants to supervise**, **willing to supervise**, or **not available**. A teacher may add a note. This preference does not by itself assign a supervisor. An administrator may confirm as the project's supervisor a teacher who has said they want to supervise or are willing to supervise, including after the project has been allocated; projects need not have a confirmed supervisor to be included in an application period.
 
 ## 9. Student Applications and Group Allocation
 
-An application period belongs to a school year and has an opening time, a closing deadline, and a set of accepted projects. Students submit one application containing at least three distinct accepted projects ranked in preference order. The same project cannot appear twice in one ranking. Students may update or withdraw their application until the deadline.
+An application period belongs to a school year and has an opening time, a closing deadline, and a set of accepted projects from that school year. Students submit one application containing at least three distinct accepted projects ranked in preference order. The same project cannot appear twice in one ranking. Students may update or withdraw their application until the deadline.
 
 At the deadline, the system automatically closes application changes and starts an allocation run. Each student is assigned to at most one project. Every allocated project group contains at least three and at most five students. The allocation should maximize the number of students assigned and, among allocations with the same number assigned, maximize satisfaction of student rankings, giving higher-ranked choices greater weight.
 

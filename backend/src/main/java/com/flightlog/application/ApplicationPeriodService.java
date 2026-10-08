@@ -31,6 +31,7 @@ public class ApplicationPeriodService {
     private static final String APPLICATION = "student_application";
     private static final String APPLICATION_REVISION = "student_application_revision";
     private static final String PROJECT_IDS = "projectIds";
+    private static final String SCHOOL_YEAR = "schoolYear";
     private static final String OPENS_AT = "opensAt";
     private static final String CLOSES_AT = "closesAt";
 
@@ -64,7 +65,7 @@ public class ApplicationPeriodService {
             throw new ApiException(HttpStatus.BAD_REQUEST,
                     "An application period must include at least three accepted projects.");
         }
-        ensureEligibleProjects(projectIds);
+        ensureEligibleProjects(projectIds, payload.path(SCHOOL_YEAR).asText());
         String status = periodStatus(payload);
         StoredRecord period = store.create(PERIOD, caller.id().toString(), null, status, payload);
         audit.record(caller, "APPLICATION_PERIOD_CREATED", PERIOD, period.getId());
@@ -95,7 +96,7 @@ public class ApplicationPeriodService {
             throw new ApiException(HttpStatus.BAD_REQUEST,
                     "An application period must include at least three accepted projects.");
         }
-        ensureEligibleProjects(projectIds);
+        ensureEligibleProjects(projectIds, payload.path(SCHOOL_YEAR).asText());
         store.update(period, periodStatus(payload), payload);
         audit.record(caller, "APPLICATION_PERIOD_UPDATED", PERIOD, id);
         return mapper.period(period);
@@ -172,13 +173,13 @@ public class ApplicationPeriodService {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Request body must be a JSON object.");
         }
         ObjectNode payload = (ObjectNode) request.deepCopy();
-        String schoolYear = text(payload, "schoolYear");
+        String schoolYear = text(payload, SCHOOL_YEAR);
         Instant openingAt = instant(payload, OPENS_AT);
         Instant closingAt = instant(payload, CLOSES_AT);
         if (!closingAt.isAfter(openingAt)) {
             throw new ApiException(HttpStatus.BAD_REQUEST, CLOSES_AT + " must be later than " + OPENS_AT + ".");
         }
-        payload.put("schoolYear", schoolYear);
+        payload.put(SCHOOL_YEAR, schoolYear);
         payload.put(OPENS_AT, openingAt.toString());
         payload.put(CLOSES_AT, closingAt.toString());
         projectIds(payload.path(PROJECT_IDS));
@@ -209,7 +210,7 @@ public class ApplicationPeriodService {
         return payload;
     }
 
-    private void ensureEligibleProjects(List<String> ids) {
+    private void ensureEligibleProjects(List<String> ids, String schoolYear) {
         for (String id : ids) {
             StoredRecord idea = store.repository().findById(UUID.fromString(id))
                     .filter(record -> IDEA.equals(record.getType()))
@@ -217,10 +218,9 @@ public class ApplicationPeriodService {
             if (!"ACCEPTED_FOR_APPLICATIONS".equals(idea.getStatus())) {
                 throw new ApiException(HttpStatus.BAD_REQUEST, "Only accepted projects can be catalogued.");
             }
-            boolean hasSupervisor = store.repository().findFirstByTypeAndParentIdOrderByCreatedAtDesc(
-                    "confirmed_supervisor", id).isPresent();
-            if (!hasSupervisor) {
-                throw conflict("Every catalog project must have a confirmed supervisor.");
+            if (!schoolYear.equals(store.parse(idea).path(SCHOOL_YEAR).asText())) {
+                throw new ApiException(HttpStatus.BAD_REQUEST,
+                        "Every catalog project must match the application period school year.");
             }
         }
     }

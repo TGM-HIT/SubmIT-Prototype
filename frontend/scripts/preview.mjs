@@ -105,7 +105,7 @@ export function parseArgs(args) {
             value: argument.slice(0, separator),
             selector: argument.slice(separator + 1),
           })
-        } else if (['click', 'wait', 'read', 'focus', 'screenshot', 'key'].includes(action) && argument) {
+        } else if (['click', 'wait', 'read', 'focus', 'scroll', 'screenshot', 'key'].includes(action) && argument) {
           if (action === 'screenshot' && path.basename(argument) !== argument) {
             throw new Error('--step screenshot must use a filename, not a path.')
           }
@@ -116,7 +116,7 @@ export function parseArgs(args) {
         } else if (action === 'accept-confirms' && !argument) {
           options.steps.push({ action })
         } else {
-          throw new Error('--step must be fill:SELECTOR=VALUE, click:SELECTOR, wait:SELECTOR, read:SELECTOR, focus:SELECTOR, screenshot:FILE, key:Tab|Shift+Tab|Escape, or accept-confirms.')
+          throw new Error('--step must be fill:SELECTOR=VALUE, click:SELECTOR, wait:SELECTOR, read:SELECTOR, focus:SELECTOR, scroll:SELECTOR, screenshot:FILE, key:Tab|Shift+Tab|Escape, or accept-confirms.')
         }
       } else {
         options[name] = value
@@ -705,6 +705,13 @@ export async function applyPageSteps(client, steps, { outputDir, log = console.l
       })))`, `verify focus on ${step.value}`)
       if (!result.matches) throw new Error(`Expected focus to return to ${step.value}; active element is ${JSON.stringify(result.activeElement)}.`)
       log(`Focus returned to ${step.value}.`)
+    } else if (step.action === 'scroll') {
+      await evaluatePage(client, `(() => {
+        const element = document.querySelector(${JSON.stringify(step.value)});
+        if (!element) throw new Error('No element matches ' + ${JSON.stringify(step.value)});
+        element.scrollIntoView({ block: 'center', inline: 'nearest' });
+      })()`, `scroll ${step.value} into view`)
+      log(`Scrolled ${step.value} into view.`)
     } else if (step.action === 'accept-confirms') {
       await evaluatePage(client, 'window.confirm = () => true', 'allow confirmation dialogs in the local preview')
       log('Preview confirmation dialogs will be accepted.')
@@ -947,7 +954,7 @@ backend/DEV-GUIDELINES.md and pass --username student01 (or another documented a
 Use --fill, --click, --wait-for, and --expand-select to perform reusable preview interactions after authentication,
 or repeat --step ACTION:VALUE to sequence conditional flows. Steps support fill:SELECTOR=VALUE, click:SELECTOR,
 click-row-action:USERNAME|SELECTOR,
-wait:SELECTOR, read:SELECTOR, focus:SELECTOR, key:Tab|Shift+Tab|Escape, screenshot:FILE, and accept-confirms (local preview only).
+wait:SELECTOR, read:SELECTOR, focus:SELECTOR, scroll:SELECTOR, key:Tab|Shift+Tab|Escape, screenshot:FILE, and accept-confirms (local preview only).
 for example to load a form that requires a project ID before its details are shown. Use --tab-to and
 --select-by-key for browser keyboard navigation. On macOS, use --headed and --native-select-by-key for GUI
 keyboard input to a collapsed popup (Terminal may require Accessibility permission).
