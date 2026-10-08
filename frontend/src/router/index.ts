@@ -10,6 +10,7 @@ import FormalApplicationPage from '../features/formal/FormalApplicationPage.vue'
 import GradingPage from '../features/grading/GradingPage.vue'
 import ArchivePage from '../features/archive/ArchivePage.vue'
 import AdminPage from '../features/admin/AdminPage.vue'
+import SettingsPage from '../features/settings/SettingsPage.vue'
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -29,6 +30,7 @@ export const router = createRouter({
         { path: 'grading', name: 'grading', component: GradingPage },
         { path: 'archive', name: 'archive', component: ArchivePage, props: { publicOnly: false } },
         { path: 'admin', name: 'admin', component: AdminPage },
+        { path: 'settings', name: 'settings', component: SettingsPage },
       ],
     },
     { path: '/:pathMatch(.*)*', redirect: '/' },

@@ -27,20 +27,16 @@ a { color: inherit; }
 .nav-link.router-link-active { box-shadow: inset 3px 0 #63d0aa; }
 .nav-link span { min-width: 17px; text-align: center; font-size: 17px; }
 .sidebar-bottom { margin-top: auto; }
-.profile { border-top: 1px solid #2a3548; margin-top: 16px; padding: 17px 7px 2px; display: grid; grid-template-columns: 34px minmax(0, 1fr) 22px; grid-template-rows: auto auto; align-items: center; gap: 5px 8px; }
+.profile { border-top: 1px solid #2a3548; margin-top: 16px; padding: 17px 7px 2px; display: grid; grid-template-columns: 34px minmax(0, 1fr) 22px; align-items: center; gap: 5px 8px; }
 .avatar { width: 34px; height: 34px; background: #35517a; color: #e9f1ff; border-radius: 50%; display: grid; place-items: center; font-weight: 700; }
-.profile .avatar { grid-column: 1; grid-row: 1 / 3; }
+.profile .avatar { grid-column: 1; }
 .profile-meta { grid-column: 2; grid-row: 1; min-width: 0; display: grid; gap: 3px; font-size: 12px; }
 .profile-meta strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .profile-meta small { color: #9eabc0; font-size: 10px; letter-spacing: .08em; }
-.account-name-editor { min-width: max-content; }
-.profile .account-name-editor { grid-column: 2; grid-row: 2; justify-self: start; min-width: 0; }
-.profile .account-name-editor > button { padding: 7px 5px; font-size: 10px; }
 .profile .icon-button { grid-column: 3; grid-row: 1; padding: 0; }
 .name-edit-form { min-width: min(280px, 72vw); display: grid; gap: 8px; }
 .name-edit-form .muted { margin: 0; font-size: 11px; }
 .name-edit-form .actions { margin-top: 0; }
-.profile .name-edit-form { position: absolute; bottom: 72px; left: 16px; padding: 14px; border: 1px solid #d8dfeb; border-radius: 10px; background: white; color: #172033; box-shadow: 0 12px 30px #111a2b2b; }
 .icon-button { color: #bac6d9; background: transparent; border: 0; cursor: pointer; font-size: 20px; }
 .main-area { margin-left: 248px; padding: 0 clamp(20px, 4vw, 60px) 60px; min-height: 100vh; max-width: 1680px; }
 .topbar { min-height: 115px; border-bottom: 1px solid #e3e8f0; display: flex; justify-content: space-between; align-items: center; margin-bottom: 30px; }
@@ -132,7 +128,6 @@ a { color: inherit; }
   .profile { display: flex; flex-basis: 100%; justify-content: flex-end; margin: 0; border: 0; padding: 0; }
   .profile-meta { display: grid; flex: 1; max-width: none; text-align: right; }
   .profile-meta strong, .profile-meta small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .profile .name-edit-form { bottom: auto; top: calc(100% - 4px); left: auto; right: 12px; z-index: 3; }
   .main-area { margin-left: 0; padding: 0 18px 40px; }
   .topbar { min-height: 88px; margin-bottom: 21px; }
   .grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }

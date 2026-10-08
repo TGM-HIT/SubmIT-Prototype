@@ -31,7 +31,7 @@ Provide authenticated views for:
 
 Authentication provides registration, login, JWT handling, logout, and session-expiry behavior.
 
-Registration collects a required account name distinct from the username. Signed-in students, teachers, and administrators can edit their own name from the account area in the authenticated shell; administrators can also edit any account name from user management. Show the current name in the shell and administrator account rows while retaining usernames for account identification. Save updates the visible name immediately without logout or reload. Save and cancel close the editor and return focus to its Edit name control; validation or server errors preserve the entered value for correction.
+Registration collects a required account name distinct from the username. Signed-in students, teachers, and administrators can manage their own account name on the authenticated User Settings page at `/settings`; the shell provides a User Settings navigation link and continues to show the current display name, username, and role. Save trims outer whitespace, requires a nonblank value of at most 120 characters after trimming, updates the authenticated account and shell immediately without logout or reload, and shows a success status while remaining on the page. Cancel restores the saved name without changing it. Save and cancel return focus to the Account name field; validation or server errors preserve the entered value for correction. Username and role are not editable there. Administrators can still edit any account name from user management.
 
 ## 3. Permissions in the UI
 

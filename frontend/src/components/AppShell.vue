@@ -13,7 +13,6 @@
         <div v-if="auth.user" class="profile">
           <div class="avatar" aria-hidden="true">{{ (auth.user.displayName ?? 'A').slice(0, 1).toUpperCase() }}</div>
           <div class="profile-meta"><strong>{{ auth.user.displayName }}</strong><small>{{ auth.user.username }} · {{ auth.user.role }}</small></div>
-          <AccountNameEditor :account="auth.user" @saved="auth.updateUser" />
           <button class="icon-button" aria-label="Sign out" title="Sign out" @click="signOut">⇥</button>
         </div>
       </div>
@@ -32,13 +31,13 @@
 import { computed, watch } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
-import AccountNameEditor from '../features/auth/AccountNameEditor.vue'
 
 const auth = useAuthStore()
 const route = useRoute()
 const router = useRouter()
 const allItems = [
   { to: '/', label: 'Overview', icon: '⌂', roles: ['STUDENT', 'TEACHER', 'ADMIN'] },
+  { to: '/settings', label: 'User Settings', icon: '⚙', roles: ['STUDENT', 'TEACHER', 'ADMIN'] },
   { to: '/ideas', label: 'Ideas & reviews', icon: '✧', roles: ['STUDENT', 'TEACHER', 'ADMIN'] },
   { to: '/applications', label: 'Applications', icon: '☷', roles: ['STUDENT', 'TEACHER', 'ADMIN'] },
   { to: '/allocation', label: 'Allocation', icon: '⇄', roles: ['TEACHER', 'ADMIN'] },
@@ -58,6 +57,7 @@ const pageTitle = computed(() => String(route.meta.title ?? {
   grading: 'Rubrics & progress',
   archive: 'Project archive',
   admin: 'Administration',
+  settings: 'User Settings',
 }[String(route.name)] ?? 'Project Ideas'))
 watch(() => auth.isAuthenticated, (signedIn) => {
   if (!signedIn && route.name !== 'public-archive' && route.name !== 'login' && route.name !== 'register') {
