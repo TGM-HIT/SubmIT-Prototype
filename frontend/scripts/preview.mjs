@@ -373,19 +373,24 @@ export async function stopChild(child, graceMs = 5000) {
   await waitForExit(child, graceMs)
 }
 
-export async function isPortFree(port, host = '127.0.0.1') {
+export async function isPortFree(port, hosts = ['::', '0.0.0.0', '::1', '127.0.0.1']) {
+  // A loopback-only bind can succeed while another process holds a wildcard or
+  // IPv6 listener, so probe wildcard and loopback addresses of both families.
   const { createServer } = await import('node:net')
-  const server = createServer()
-  try {
-    await new Promise((resolve, reject) => {
-      server.once('error', reject)
-      server.listen(port, host, resolve)
-    })
-  } catch (error) {
-    if (error?.code === 'EADDRINUSE' || error?.code === 'EACCES') return false
-    throw error
+  for (const host of hosts) {
+    const server = createServer()
+    try {
+      await new Promise((resolve, reject) => {
+        server.once('error', reject)
+        server.listen({ port, host, exclusive: true }, resolve)
+      })
+    } catch (error) {
+      if (error?.code === 'EADDRINUSE' || error?.code === 'EACCES') return false
+      if (error?.code === 'EADDRNOTAVAIL' || error?.code === 'EAFNOSUPPORT') continue
+      throw error
+    }
+    await new Promise((resolve) => server.close(resolve))
   }
-  await new Promise((resolve) => server.close(resolve))
   return true
 }
 
@@ -566,6 +571,13 @@ export async function startSession({
       signal: controller.signal,
     })
     log(`Frontend ready: ${session.frontendUrl}`)
+    // Readiness may have been answered by a foreign listener; confirm ours survived.
+    await new Promise((resolve) => setTimeout(resolve, 500))
+    for (const [label, pid, port] of [['backend', backend.pid, backendPort], ['frontend', frontend.pid, frontendPort]]) {
+      if (!processAlive(pid)) {
+        throw new Error(`The spawned ${label} (pid ${pid}) exited during startup although port ${port} answered; another process probably holds that port. See the ${label} log.`)
+      }
+    }
     log(`Shared preview session ready. Use --session on later invocations; stop it with --session-stop.`)
     return session
   } catch (error) {
@@ -889,6 +901,29 @@ export async function applyPageInteractions(client, options, {
   await applyPageSteps(client, options.steps ?? [], { outputDir: options.outputDir, log })
 }
 
+export const RECORD_LOCATOR_EXPRESSION = `(key, selector, click, timeoutMs = 10000) => new Promise((resolve, reject) => {
+        const deadline = Date.now() + timeoutMs;
+        const find = () => [...document.querySelectorAll('article.data-row')].filter((candidate) =>
+          candidate.querySelector('h3')?.textContent?.trim() === key
+          || candidate.querySelector('[id="details-button-' + key + '"]'));
+        const check = () => {
+          const rows = find();
+          if (rows.length > 1) return reject(new Error(rows.length + ' records match ' + key + '; use the record ID.'));
+          if (rows.length === 1) {
+            if (!click) return resolve(rows[0].innerText.replace(/\\s+/g, ' ').trim());
+            const target = selector.startsWith('text:')
+              ? [...rows[0].querySelectorAll('button')].find((button) => button.textContent?.trim() === selector.slice(5))
+              : rows[0].querySelector(selector);
+            if (!(target instanceof HTMLElement)) return reject(new Error('No record action matches ' + selector + ' for ' + key));
+            target.click();
+            return resolve(rows[0].querySelector('h3')?.textContent?.trim() ?? key);
+          }
+          if (Date.now() >= deadline) return reject(new Error('No record with title or ID ' + key + ' is listed on this page.'));
+          setTimeout(check, 100);
+        };
+        check();
+      })`
+
 export async function applyPageSteps(client, steps, { outputDir, log = console.log } = {}) {
   for (const step of steps) {
     if (step.action === 'fill') {
@@ -948,28 +983,7 @@ export async function applyPageSteps(client, steps, { outputDir, log = console.l
         `click ${step.selector} in the ${step.value} account row`)
       log(`Clicked ${step.selector} in account row ${step.value}.`)
     } else if (step.action === 'click-record-action' || step.action === 'read-record') {
-      const expression = `(key, selector, click) => new Promise((resolve, reject) => {
-        const deadline = Date.now() + 10000;
-        const find = () => [...document.querySelectorAll('article.data-row')].filter((candidate) =>
-          candidate.querySelector('h3')?.textContent?.trim() === key
-          || candidate.querySelector('[id="details-button-' + key + '"]'));
-        const check = () => {
-          const rows = find();
-          if (rows.length > 1) return reject(new Error(rows.length + ' records match ' + key + '; use the record ID.'));
-          if (rows.length === 1) {
-            if (!click) return resolve(rows[0].innerText.replace(/\\s+/g, ' ').trim());
-            const target = selector.startsWith('text:')
-              ? [...rows[0].querySelectorAll('button')].find((button) => button.textContent?.trim() === selector.slice(5))
-              : rows[0].querySelector(selector);
-            if (!(target instanceof HTMLElement)) return reject(new Error('No record action matches ' + selector + ' for ' + key));
-            target.click();
-            return resolve(rows[0].querySelector('h3')?.textContent?.trim() ?? key);
-          }
-          if (Date.now() >= deadline) return reject(new Error('No record with title or ID ' + key + ' is listed on this page.'));
-          setTimeout(check, 100);
-        };
-        check();
-      })`
+      const expression = RECORD_LOCATOR_EXPRESSION
       const click = step.action === 'click-record-action'
       const text = await evaluatePage(client,
         `(${expression})(${JSON.stringify(step.value)}, ${JSON.stringify(step.selector ?? '')}, ${click})`,
@@ -1296,6 +1310,12 @@ async function seedRequested(options, baseUrl) {
   }
 }
 
+function assertSpawnedAlive(child, label, port) {
+  if (child.exitCode !== null || child.signalCode !== null) {
+    throw new Error(`The spawned ${label} exited during startup although port ${port} answered; another process probably holds that port. See the ${label} output above.`)
+  }
+}
+
 async function run(options) {
   if (options.session) {
     const session = await requireSession({ sessionFile: options.sessionFile })
@@ -1341,6 +1361,8 @@ async function run(options) {
         isAlive: () => !interrupted && backend.exitCode === null && backend.signalCode === null,
       })
       console.log(`Backend ready: http://127.0.0.1:${backendPort}`)
+      await new Promise((resolve) => setTimeout(resolve, 500))
+      assertSpawnedAlive(backend, 'backend', backendPort)
       await seedRequested(options, `http://127.0.0.1:${backendPort}`)
       const frontendPort = options.frontendPort
       const frontendCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm'
@@ -1356,6 +1378,8 @@ async function run(options) {
         isAlive: () => !interrupted && frontend.exitCode === null && frontend.signalCode === null,
       })
       console.log(`Frontend ready: http://127.0.0.1:${frontendPort}`)
+      assertSpawnedAlive(backend, 'backend', backendPort)
+      assertSpawnedAlive(frontend, 'frontend', frontendPort)
     }
     if (interrupted) throw new Error('Preview interrupted.')
     console.log(`Opening ${url}`)

@@ -21,6 +21,7 @@ import {
   seedTestingIdeaHistory,
   stopChild,
   isPortFree,
+  RECORD_LOCATOR_EXPRESSION,
   viewportFor,
   waitForReady,
 } from './preview.mjs'
@@ -623,4 +624,111 @@ test('reports a session whose service died instead of reusing it', async (contex
   await assert.rejects(requireSession({ sessionFile }), /no longer running/)
   assert.equal(await stopSession({ sessionFile, log: () => undefined }), true)
   assert.equal(await readSession(sessionFile), undefined)
+})
+
+test('detects wildcard and IPv6 listeners as port conflicts and fails the session start clearly', async (context) => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'preview-session-test-'))
+  context.after(() => rm(dir, { recursive: true, force: true }))
+  const sessionFile = path.join(dir, 'session.json')
+  const { createServer: createNetServer } = await import('node:net')
+  const hosts = [undefined, '::', '0.0.0.0', '::1']
+  for (const host of hosts) {
+    const blocker = createNetServer()
+    try {
+      await new Promise((resolve, reject) => {
+        blocker.once('error', reject)
+        blocker.listen(0, host, resolve)
+      })
+    } catch (error) {
+      if (error?.code === 'EADDRNOTAVAIL' || error?.code === 'EAFNOSUPPORT') continue
+      throw error
+    }
+    const { port } = blocker.address()
+    try {
+      assert.equal(await isPortFree(port), false, `host ${host ?? '(wildcard)'}`)
+      let spawned = false
+      const never = { command: process.execPath, args: ['-e', 'process.exit(0)'], cwd: dir, env: process.env }
+      await assert.rejects(
+        startSession({
+          sessionFile, frontendPort: port, backendPort: port + 1, log: () => undefined,
+          services: { backend: { ...never, get args() { spawned = true; return never.args } }, frontend: never },
+        }),
+        /Frontend port \d+ is already in use/,
+      )
+      assert.equal(spawned, false)
+      assert.equal(await readSession(sessionFile), undefined)
+    } finally {
+      await new Promise((resolve) => blocker.close(resolve))
+    }
+  }
+})
+
+test('fails the session start when a spawned service exits after readiness', async (context) => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'preview-session-test-'))
+  context.after(() => rm(dir, { recursive: true, force: true }))
+  const sessionFile = path.join(dir, 'session.json')
+  const { createServer: createNetServer } = await import('node:net')
+  const free = async () => {
+    const probe = createNetServer()
+    await new Promise((resolve) => probe.listen(0, '127.0.0.1', resolve))
+    const { port } = probe.address()
+    await new Promise((resolve) => probe.close(resolve))
+    return port
+  }
+  const [frontendPort, backendPort] = [await free(), await free()]
+  const script = 'const s = require("http").createServer((_, r) => r.end("ok")).listen(Number(process.argv[1]), "127.0.0.1"); setTimeout(() => process.exit(1), 700)'
+  const service = (port) => ({ command: process.execPath, args: ['-e', script, String(port)], cwd: dir, env: process.env })
+  await assert.rejects(
+    startSession({ sessionFile, frontendPort, backendPort, startupTimeout: 5000, log: () => undefined,
+      services: { backend: service(backendPort), frontend: service(frontendPort) } }),
+    /exited during startup although port \d+ answered/,
+  )
+  assert.equal(await readSession(sessionFile), undefined)
+})
+
+test('executes the record locator against a fake Ideas list', async () => {
+  const vm = await import('node:vm')
+  class FakeElement {
+    constructor({ title, id, buttons = [], text = '' }) {
+      this.title = title
+      this.id = id
+      this.buttons = buttons.map((label) => Object.assign(new FakeElement({}), { textContent: label, clicks: 0, click() { this.clicks += 1 } }))
+      this.innerText = text || `${title} body`
+    }
+    click() {}
+    querySelector(selector) {
+      if (selector === 'h3') return this.title === undefined ? null : { textContent: ` ${this.title} ` }
+      if (selector === `[id="details-button-${this.id}"]`) return this.id ? {} : null
+      if (selector === 'button.edit') return this.buttons.find((button) => button.textContent === 'Edit') ?? null
+      return null
+    }
+    querySelectorAll(selector) { return selector === 'button' ? this.buttons : [] }
+  }
+  const run = (rows, key, selector = '', click = false) => {
+    const sandbox = {
+      document: { querySelectorAll: (selector) => (selector === 'article.data-row' ? rows : []) },
+      HTMLElement: FakeElement, Date, setTimeout, Error,
+    }
+    return vm.runInNewContext(`(${RECORD_LOCATOR_EXPRESSION})(${JSON.stringify(key)}, ${JSON.stringify(selector)}, ${click}, 150)`, sandbox)
+  }
+  const a = new FakeElement({ title: 'Alpha idea', id: 'id-a', buttons: ['Edit', 'Submit'], text: 'Alpha  idea\nsubmitted' })
+  const b = new FakeElement({ title: 'Alpha idea extended', id: 'id-b', buttons: ['Edit'] })
+  const c = new FakeElement({ title: 'Twin', id: 'id-c1', buttons: ['Edit'] })
+  const d = new FakeElement({ title: 'Twin', id: 'id-c2', buttons: ['Edit'] })
+  const rows = [a, b, c, d]
+
+  assert.equal(await run(rows, 'Alpha idea'), 'Alpha idea submitted')
+  assert.equal(await run(rows, 'id-b'), `${b.title} body`)
+  assert.equal(await run(rows, 'Alpha idea', 'text:Submit', true), 'Alpha idea')
+  assert.equal(a.buttons[1].clicks, 1)
+  assert.equal(b.buttons.every((button) => button.clicks === 0), true)
+  assert.equal(await run(rows, 'id-b', 'button.edit', true), 'Alpha idea extended')
+  assert.equal(b.buttons[0].clicks, 1)
+  assert.equal(a.buttons[0].clicks, 0)
+  await assert.rejects(run(rows, 'Alpha'), /No record with title or ID Alpha is listed/)
+  await assert.rejects(run(rows, 'Twin'), /2 records match Twin; use the record ID\./)
+  await assert.rejects(run(rows, 'missing'), /No record with title or ID missing is listed/)
+  await assert.rejects(run(rows, 'Alpha idea', 'text:Withdraw', true), /No record action matches text:Withdraw for Alpha idea/)
+  assert.deepEqual([...rows, ...rows].flatMap((row) => row.buttons).filter((button) => button.clicks > 1), [])
+  assert.equal(c.buttons[0].clicks + d.buttons[0].clicks, 0)
 })
