@@ -26,7 +26,20 @@ completes and page-console and request checks show no related application
 errors. Do not broadly suppress diagnostics based on wording alone. If a
 diagnostic prevents a check, correlates with an application error, affects
 behavior, or its source or impact is unclear, report it under "What's
-uncertain" and describe the impact. Stage only the files you changed for the deliverable, by explicit
+uncertain" and describe the impact.
+
+When the ticket requires browser verification, do it with the existing
+Chrome/CDP preview tool; never write a one-off script and never report the tooling
+as unavailable without trying it. From `frontend/`, run `npm run preview:help`,
+then `PREVIEW_PASSWORD=testing-password npm run preview -- --auth --username
+<user> --path <route> --viewport desktop|mobile --output-dir
+<repo>/harness/runs/<run-id>/evidence --screenshot <name>.png`, using
+`--seed-idea-owner`, `--seed-idea-history`, `--fill`, `--click` and `--wait-for`
+to reach the required states (see "Local browser preview" in
+`frontend/DEV-GUIDELINES.md`). Run it once per required viewport. If the command
+itself fails (for example Chrome cannot launch in your environment), include the
+exact command and its error output under "What's uncertain" and do not describe
+the failure as tooling being absent. Stage only the files you changed for the deliverable, by explicit
 path; never use blanket staging that could include `harness/plan.md`, ticket
 files, or other harness files. If you find a real problem outside the ticket's scope, report
 it under "What's uncertain" on a line starting with "OUT OF SCOPE:" and do not
