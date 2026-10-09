@@ -212,6 +212,19 @@ async function load(index = 0): Promise<void> {
     const result = await ideasApi.list(index, statusFilter.value || undefined)
     const teacherId = auth.user?.id
     if (!isTeacher.value || !teacherId) {
+      if (isStudent.value) {
+        const content = await Promise.all(result.content.map(async (idea): Promise<IdeaOverview> => {
+          if (idea.status !== 'WITHDRAWN' || !idea.id) return idea
+          try {
+            const details = await ideasApi.get(idea.id)
+            return { ...idea, specification: details.specification }
+          } catch {
+            return idea
+          }
+        }))
+        page.value = { ...result, content }
+        return
+      }
       page.value = result
       return
     }

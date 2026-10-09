@@ -10,6 +10,7 @@ const api = vi.hoisted(() => ({
   review: vi.fn(),
   update: vi.fn(),
   submit: vi.fn(),
+  specification: vi.fn(),
   supervision: vi.fn(),
   assignSupervisor: vi.fn(),
 }))
@@ -24,6 +25,7 @@ vi.mock('../../api/services', () => ({
     review: api.review,
     supervision: api.supervision,
     assignSupervisor: api.assignSupervisor,
+    specification: api.specification,
   },
 }))
 
@@ -116,6 +118,48 @@ describe('IdeasPage overview supervision preferences', () => {
     expect(api.list).toHaveBeenCalledTimes(2)
     expect(document.activeElement?.getAttribute('data-review-focus-fallback')).not.toBeNull()
     vi.unstubAllGlobals()
+    page.unmount()
+  })
+
+  it('loads withdrawn specification details before offering overview actions', async () => {
+    const withdrawn = idea('WITHDRAWN')
+    api.list.mockResolvedValueOnce(pageIdeas('WITHDRAWN')).mockResolvedValue({
+      ...pageIdeas('IDEA_APPROVED_FOR_SPECIFICATION'),
+      content: [{ ...idea('IDEA_APPROVED_FOR_SPECIFICATION'), id: 'idea-WITHDRAWN' }],
+    })
+    api.get.mockResolvedValue({
+      ...withdrawn,
+      specification: {
+        id: 'specification-1',
+        status: 'SPECIFICATION_DRAFT',
+        objectives: ['Objective'],
+        intendedUsers: ['Students'],
+        requirements: ['Requirement'],
+        deliverables: ['Deliverable'],
+        scope: 'A scope',
+        dependencies: ['None'],
+      },
+    })
+    api.specification.mockResolvedValue({})
+    const page = mountPage()
+    await flushPromises()
+
+    const row = page.get('article.data-row')
+    expect(api.get).toHaveBeenCalledWith('idea-WITHDRAWN')
+    expect(row.findAll('button').map((button) => button.text())).not.toContain('Edit')
+    expect(row.findAll('button').map((button) => button.text())).not.toContain('Submit')
+
+    await row.find('button').trigger('click')
+    await flushPromises()
+    expect(page.text()).toContain('Edit full specification')
+    await page.findAll('button').find((button) => button.text() === 'Edit full specification')!.trigger('click')
+    await page.get('form').trigger('submit')
+    await flushPromises()
+    expect(api.specification).toHaveBeenCalledWith('idea-WITHDRAWN', expect.any(Object))
+    expect(api.get).toHaveBeenCalledWith('idea-WITHDRAWN')
+    expect(api.list).toHaveBeenCalledTimes(2)
+    expect(page.get('article.data-row').text()).toContain('Idea approved for specification')
+    expect(document.activeElement?.getAttribute('data-review-focus-fallback')).not.toBeNull()
     page.unmount()
   })
 

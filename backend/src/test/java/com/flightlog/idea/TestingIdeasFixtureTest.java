@@ -296,6 +296,47 @@ class TestingIdeasFixtureTest {
     }
 
     @Test
+    void ownedIdeasInOtherLifecycleStatesRejectEditAndSubmitWithoutMutation() throws Exception {
+        String token = login("student01");
+        String teacherToken = login("teacher01");
+        String submittedId = createAndSubmit(token, "Matrix submitted");
+        String approvedId = createAndSubmit(token, "Matrix approved");
+        mockMvc.perform(post("/api/ideas/{id}/reviews", approvedId)
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"decision\":\"APPROVE_FOR_SPECIFICATION\",\"feedback\":\"Approved.\"}"))
+                .andExpect(status().isCreated());
+        String declinedId = createAndSubmit(token, "Matrix declined");
+        mockMvc.perform(post("/api/ideas/{id}/reviews", declinedId)
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"decision\":\"DECLINE\",\"feedback\":\"Declined.\"}"))
+                .andExpect(status().isCreated());
+        String acceptedId = java.util.stream.StreamSupport.stream(getIdeas(token).path("content").spliterator(), false)
+                .filter(item -> "ACCEPTED_FOR_APPLICATIONS".equals(item.path("status").asText()))
+                .findFirst().orElseThrow().path("id").asText();
+
+        for (String id : List.of(submittedId, approvedId, declinedId, acceptedId)) {
+            JsonNode before = getIdea(token, id);
+            JsonNode replacement = before.deepCopy();
+            ((com.fasterxml.jackson.databind.node.ObjectNode) replacement).put("title", "Should not change");
+            mockMvc.perform(put("/api/ideas/{id}", id)
+                            .header("Authorization", "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON).content(replacement.toString()))
+                    .andExpect(status().isConflict());
+            mockMvc.perform(post("/api/ideas/{id}/submit", id)
+                            .header("Authorization", "Bearer " + token))
+                    .andExpect(status().isConflict());
+            JsonNode after = getIdea(token, id);
+            assertEquals(before.path("status"), after.path("status"), id);
+            assertEquals(before.path("title"), after.path("title"), id);
+            assertEquals(before.path("description"), after.path("description"), id);
+            assertEquals(before.path("reviews"), after.path("reviews"), id);
+            assertEquals(before.path("supervisionPreferences"), after.path("supervisionPreferences"), id);
+        }
+    }
+
+    @Test
     void teachersCanReviewBothSeededStagesAndRerunningPreservesTheirChanges() throws Exception {
         String teacherToken = login("teacher01");
         JsonNode studentIdeas = getIdeas(login("student01")).path("content");
@@ -348,6 +389,20 @@ class TestingIdeasFixtureTest {
                 .andExpect(status().isOk())
                 .andReturn();
         return objectMapper.readTree(result.getResponse().getContentAsString());
+    }
+
+    private String createAndSubmit(String token, String title) throws Exception {
+        String payload = "{\"title\":\"" + title + "\",\"description\":\"A valid description.\","
+                + "\"intendedOutcome\":\"A valid outcome.\",\"schoolYear\":\"2026-2027\","
+                + "\"scopePoints\":[\"A valid scope point\"],\"learningTopics\":[]}";
+        MvcResult created = mockMvc.perform(post("/api/ideas")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON).content(payload))
+                .andExpect(status().isCreated()).andReturn();
+        String id = objectMapper.readTree(created.getResponse().getContentAsString()).path("id").asText();
+        mockMvc.perform(post("/api/ideas/{id}/submit", id).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+        return id;
     }
 
     private JsonNode getIdea(String token, String id) throws Exception {
