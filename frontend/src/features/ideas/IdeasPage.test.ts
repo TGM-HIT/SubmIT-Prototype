@@ -490,6 +490,29 @@ describe('IdeasPage overview supervision preferences', () => {
     page.unmount()
   })
 
+  it('omits empty preference groups when all teachers have no preference', async () => {
+    state.role = 'ADMIN'
+    api.list.mockResolvedValue(pageIdeas('ACCEPTED_FOR_APPLICATIONS'))
+    api.users.mockResolvedValue(pageUsers([
+      { id: 'teacher-b', displayName: 'Teacher B', role: 'TEACHER' },
+      { id: 'teacher-a', displayName: 'Teacher A', role: 'TEACHER' },
+    ]))
+    api.get.mockResolvedValue({
+      ...idea('ACCEPTED_FOR_APPLICATIONS'),
+      supervisionPreferences: [],
+    })
+
+    const page = mountPage()
+    await flushPromises()
+    await page.get('#details-button-idea-ACCEPTED_FOR_APPLICATIONS').trigger('click')
+    await flushPromises()
+
+    const groups = page.findAll('#teacher-id optgroup')
+    expect(groups.map((group) => group.attributes('label'))).toEqual(['No preference'])
+    expect(groups[0].findAll('option').map((option) => option.text())).toEqual(['Teacher A', 'Teacher B'])
+    page.unmount()
+  })
+
   it('assigns a no-preference teacher directly and warns, confirms, and cancels a refusal override', async () => {
     state.role = 'ADMIN'
     api.list.mockResolvedValue(pageIdeas('ACCEPTED_FOR_APPLICATIONS'))
