@@ -53,4 +53,4 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Feature-07](tickets/done/Feature-07.md) | done | Show teacher supervision preference in ideas overview |
 | [Feature-08](tickets/done/Feature-08.md) | done | Show account names in Ideas & reviews |
 | [Feature-09](tickets/done/Feature-09.md) | done | Allow application periods without confirmed supervisors |
-| [Feature-10](tickets/Feature-10.md) | to-do | Let administrators assign any teacher as supervisor, warning for explicit refusals |
+| [Feature-10](tickets/Feature-10.md) | awaiting-human | Let administrators assign any teacher as supervisor, warning for explicit refusals |
