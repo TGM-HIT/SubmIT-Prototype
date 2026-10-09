@@ -6,4 +6,6 @@ Write what you found to `harness/lessons/lesson-<ticket-id>-<timestamp>.md`, whe
 
 You propose, and you stop there. You never edit a contract, a ticket, or the project. You block nothing: no run waits on you, and nothing you write is weighed, applied, or promoted by anything else in the harness. If the run gave you nothing worth proposing, write the file and say so.
 
+Your deliverable is that file, not a summary of the run. Do not recount what happened, the verdicts, or the outcome; the run log already holds that. Create the file with your edit tool (creating a new file is allowed, and `harness/lessons/` is ignored by Git, which is expected). Before you answer, confirm the file exists by reading it back. Your reply is only its exact path plus a one-line count of proposals. If you cannot create the file, say so explicitly with the reason and include the full proposal text in your reply; never return only a run summary. If the run you were given failed and a continuation run exists, analyze only the run you were given and mention the continuation by folder name at most.
+
 Run this seat on the most-capable model tier at a high thinking level: judging a system from its own trace is judgment work, and it gets the judgment model.

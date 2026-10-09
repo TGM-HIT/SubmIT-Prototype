@@ -15,6 +15,7 @@
   - Keep authentication restricted to localhost and testing-profile accounts, with credentials only from the documented testing configuration (`PREVIEW_PASSWORD`).
   - Keep the tooling local/testing only. Do not change production application behavior, the testing-profile seed data, or API contracts, and add no new dependency.
   - Keep temporary state and artifacts out of version control.
+- Provide a reusable, documented way for a later invocation to locate and open a specific record that an earlier invocation created or changed (for example by title or identifier, using existing `--step`/`--click` mechanics or a minimal extension), so a different role can open the same record rather than a different seeded one. Do not rely on matching by username alone.
 - Documentation: update the "Local browser preview" section of `frontend/DEV-GUIDELINES.md` minimally to describe the persistent session (start, reuse, stop, data lifetime, and the role-switch pattern), and update `npm run preview:help` to match. Do not edit `backend/DEV-GUIDELINES.md` unless the implementation introduces a backend-specific startup requirement.
 - Dependency: none required. This ticket extends tooling from Dev-02, and it does not touch shared seed data or fixtures. Bug-08 is in progress and does not depend on this ticket. Its handoff-2 noted this gap as out of scope.
 
@@ -22,7 +23,7 @@
 
 Durable automated tests (join the build):
 
-- Extend `frontend/scripts/preview.smoke.mjs` (run by `npm run preview:test`) to cover argument handling and validation for the new option(s), the clear failure when the shared services are not running, and cleanup of started processes. Existing smoke tests keep passing.
+- Extend `frontend/scripts/preview.smoke.mjs` (run by `npm run preview:test`) to cover argument handling and validation for the new option(s) and the record-locating option, the clear failure when the shared services are not running, and cleanup of started processes. Existing smoke tests keep passing.
 
 Standard project checks:
 
@@ -31,14 +32,15 @@ Standard project checks:
 
 ## One-time manual verification (in addition to automated tests)
 
-- **Implementor-performed:** using the documented commands, start the shared session once. Then, in separate invocations, run a student (`student01`) invocation that creates or changes data (for example `--seed-idea-owner student01`, or UI steps via `--step`), followed by a teacher (`teacher01`) invocation that shows that same data. Capture desktop screenshots of both under `harness/runs/<run-id>/evidence/` and show that the second invocation displays data from the first.
+- **Implementor-performed:** using the documented commands, start the shared session once. Then run these independent invocations against it: (1) `student01` creates and submits an idea with a distinctive title (for example `--seed-idea-owner student01`); (2) `student01` edits that idea through the UI (`--step`) and saves a changed field; (3) `teacher01` opens that same idea by title or identifier and shows the changed content and its submitted status. Capture desktop screenshots of invocations 2 and 3 under `harness/runs/<run-id>/evidence/`, and show in the handoff that invocation 3 displays the record changed in invocation 2. A separately seeded stand-in idea does not satisfy this.
+- **Evaluator re-run:** the Evaluator repeats the same three-invocation sequence itself instead of relying only on the Implementor's screenshots.
 - Stop the session with the documented command and confirm that no frontend, backend, or browser processes remain, and that a following default (non-persistent) invocation still starts a fresh temporary profile without the earlier data.
 - Report console and failed-request output honestly. Treat known Chrome/macOS host diagnostics as noise only under the rules in `harness/roles/implementor.md`. If a step cannot run, report the exact command and error; never claim checks that were not performed.
 
 ## Acceptance criteria (the Evaluator judges)
 
 - A developer or agent can use documented commands to keep one backend/frontend session running and perform several independent preview invocations that see each other's testing-profile data.
-- Switching roles between invocations works by authenticating again, and screenshots from a later invocation show data changed by an earlier one.
+- Switching roles between invocations works by authenticating again. A later invocation as a different role displays the same record (identified by title or id) that an earlier invocation mutated, showing the mutated content and status plus any preserved history; a separately seeded stand-in does not satisfy this.
 - Default behavior without the new option is unchanged: fresh temporary profile, self-contained start, and cleanup.
 - Missing or conflicting services produce clear, actionable errors. Stopping the session cleans up every process it started.
 - `frontend/DEV-GUIDELINES.md` and `npm run preview:help` accurately describe the resulting behavior, with no unrelated documentation edits.
