@@ -155,6 +155,12 @@ class IdeaReviewControllerTest {
         assignSupervisor(ideaId, adminToken, unavailableTeacherId)
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("NOT_AVAILABLE")));
+        getIdea(ideaId, adminToken).andExpect(status().isOk())
+                .andExpect(jsonPath("$.confirmedSupervisorDisplayName").value("Daniel Brooks"))
+                .andExpect(jsonPath("$.status").value("IDEA_SUBMITTED"))
+                .andExpect(jsonPath("$.supervisionPreferences.length()").value(4))
+                .andExpect(jsonPath("$.supervisionPreferences[?(@.teacherId == '" + unavailableTeacherId
+                        + "')].preference").value(org.hamcrest.Matchers.contains("NOT_AVAILABLE")));
         assignSupervisor(ideaId, adminToken, unavailableTeacherId, true).andExpect(status().isOk());
 
         String studentId = users.findByUsername("student01").orElseThrow().getId().toString();
