@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process'
-import { access, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, open, readFile, rm, writeFile } from 'node:fs/promises'
 import { constants } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -15,12 +15,15 @@ const defaults = {
   outputDir: path.join(frontendDir, '.preview'),
   screenshot: 'preview.png',
   startupTimeout: 180_000,
+  sessionFile: path.join(frontendDir, '.preview', 'session.json'),
 }
 
 export function parseArgs(args) {
   const options = {
     ...defaults,
     start: true,
+    session: false,
+    sessionCommand: undefined,
     headed: false,
     auth: false,
     seedIdeaOwner: undefined,
@@ -48,6 +51,7 @@ export function parseArgs(args) {
     ['--username', 'username'],
     ['--seed-idea-owner', 'seedIdeaOwner'],
     ['--seed-idea-history', 'seedIdeaHistory'],
+    ['--seed-idea-title', 'seedIdeaTitle'],
     ['--password-env', 'passwordEnv'],
     ['--chrome', 'chrome'],
     ['--startup-timeout', 'startupTimeout'],
@@ -61,8 +65,11 @@ export function parseArgs(args) {
     ['--expand-select', 'expandSelect'],
     ['--step', 'steps'],
   ])
+  const explicitPorts = new Set()
   for (let index = 0; index < args.length; index += 1) {
     const flag = args[index]
+    if (flag === '--frontend-port') explicitPorts.add('frontendPort')
+    if (flag === '--backend-port') explicitPorts.add('backendPort')
     if (flag === '--help' || flag === '-h') {
       options.help = true
     } else if (flag === '--no-start') {
@@ -71,6 +78,11 @@ export function parseArgs(args) {
       options.headed = true
     } else if (flag === '--auth') {
       options.auth = true
+    } else if (flag === '--session') {
+      options.session = true
+    } else if (['--session-start', '--session-url', '--session-stop'].includes(flag)) {
+      if (options.sessionCommand) throw new Error('Use only one of --session-start, --session-url, and --session-stop.')
+      options.sessionCommand = flag.slice('--session-'.length)
     } else if (valueOptions.has(flag)) {
       const value = args[index + 1]
       if (!value || value.startsWith('--')) throw new Error(`${flag} requires a value.`)
@@ -95,6 +107,18 @@ export function parseArgs(args) {
           const assignment = argument.indexOf('=')
           if (assignment < 1) throw new Error('--step fill must use fill:SELECTOR=VALUE.')
           options.steps.push({ action, selector: argument.slice(0, assignment), value: argument.slice(assignment + 1) })
+        } else if (action === 'click-record-action' && argument) {
+          const separator = argument.lastIndexOf('|')
+          if (separator < 1 || separator === argument.length - 1) {
+            throw new Error('--step click-record-action must use click-record-action:TITLE_OR_ID|SELECTOR.')
+          }
+          options.steps.push({
+            action,
+            value: argument.slice(0, separator),
+            selector: argument.slice(separator + 1),
+          })
+        } else if (action === 'read-record' && argument) {
+          options.steps.push({ action, value: argument })
         } else if (action === 'click-row-action' && argument) {
           const separator = argument.indexOf('|')
           if (separator < 1 || separator === argument.length - 1) {
@@ -129,7 +153,7 @@ export function parseArgs(args) {
         } else if (action === 'accept-confirms' && !argument) {
           options.steps.push({ action })
         } else {
-          throw new Error('--step must be fill:SELECTOR=VALUE, select-index:SELECTOR=INDEX, click:SELECTOR, wait:SELECTOR, read:SELECTOR, focus:SELECTOR, scroll:SELECTOR, screenshot:FILE, key:Tab|Shift+Tab|Escape, or accept-confirms.')
+          throw new Error('--step must be fill:SELECTOR=VALUE, select-index:SELECTOR=INDEX, click-record-action:TITLE_OR_ID|SELECTOR, read-record:TITLE_OR_ID, click:SELECTOR, wait:SELECTOR, read:SELECTOR, focus:SELECTOR, scroll:SELECTOR, screenshot:FILE, key:Tab|Shift+Tab|Escape, or accept-confirms.')
         }
       } else {
         options[name] = value
@@ -162,11 +186,30 @@ export function parseArgs(args) {
     throw new Error('--screenshot must be a filename, not a path.')
   }
   if (options.auth && !options.username) throw new Error('--auth requires --username.')
-  if (options.seedIdeaOwner && (!options.auth || !options.username || !options.start)) {
-    throw new Error('--seed-idea-owner requires --auth and a started local preview.')
+  const seedable = options.start || options.session
+  if (options.seedIdeaOwner && (!options.auth || !options.username || !seedable)) {
+    throw new Error('--seed-idea-owner requires --auth and a started local preview or --session.')
   }
-  if (options.seedIdeaHistory && (!options.auth || !options.username || !options.start)) {
-    throw new Error('--seed-idea-history requires --auth and a started local preview.')
+  if (options.seedIdeaHistory && (!options.auth || !options.username || !seedable)) {
+    throw new Error('--seed-idea-history requires --auth and a started local preview or --session.')
+  }
+  if (options.seedIdeaTitle !== undefined && !options.seedIdeaOwner && !options.seedIdeaHistory) {
+    throw new Error('--seed-idea-title requires --seed-idea-owner or --seed-idea-history.')
+  }
+  if (options.seedIdeaTitle !== undefined && (!options.seedIdeaTitle.trim() || options.seedIdeaTitle.length > 200)) {
+    throw new Error('--seed-idea-title must be 1 to 200 characters.')
+  }
+  if (options.sessionCommand && options.session) {
+    throw new Error('--session cannot be combined with --session-start, --session-url, or --session-stop.')
+  }
+  if (options.sessionCommand && (options.url || !options.start || options.auth)) {
+    throw new Error(`--session-${options.sessionCommand} manages the shared services only; do not combine it with --url, --no-start, or --auth.`)
+  }
+  if (options.session && (options.url || !options.start)) {
+    throw new Error('--session uses the URL of the running shared session; do not combine it with --url or --no-start.')
+  }
+  if (options.session && (explicitPorts.has('frontendPort') || explicitPorts.has('backendPort'))) {
+    throw new Error('--session uses the ports of the running shared session; pass --frontend-port/--backend-port to --session-start instead.')
   }
   if (options.nativeSelectByKey.length && !options.headed) {
     throw new Error('--native-select-by-key requires --headed so macOS can operate the native popup.')
@@ -214,7 +257,7 @@ export async function waitForReady(url, { timeoutMs, fetchImpl = fetch, isAlive 
   throw new Error(`Timed out waiting for ${url} (${lastProblem}). Check the startup output and port configuration.`)
 }
 
-export async function seedTestingIdea({ baseUrl, ownerUsername, password, fetchImpl = fetch }) {
+export async function seedTestingIdea({ baseUrl, ownerUsername, password, title, fetchImpl = fetch }) {
   async function request(path, body, token) {
     const response = await fetchImpl(`${baseUrl}${path}`, {
       method: 'POST',
@@ -234,7 +277,7 @@ export async function seedTestingIdea({ baseUrl, ownerUsername, password, fetchI
   }
   const year = new Date().getFullYear()
   const created = await request('/api/ideas', {
-    title: `Feature-08 preview idea ${new Date().toISOString()}`,
+    title: title ?? `Feature-08 preview idea ${new Date().toISOString()}`,
     description: 'Synthetic idea created only in the local testing profile for browser verification.',
     intendedOutcome: 'Show authorized account display names in the idea history.',
     scopePoints: ['Record and display a supervision preference'],
@@ -246,8 +289,8 @@ export async function seedTestingIdea({ baseUrl, ownerUsername, password, fetchI
   return created
 }
 
-export async function seedTestingIdeaHistory({ baseUrl, ownerUsername, password, fetchImpl = fetch }) {
-  const idea = await seedTestingIdea({ baseUrl, ownerUsername, password, fetchImpl })
+export async function seedTestingIdeaHistory({ baseUrl, ownerUsername, password, title, fetchImpl = fetch }) {
+  const idea = await seedTestingIdea({ baseUrl, ownerUsername, password, title, fetchImpl })
   async function request(path, method, body, token) {
     const response = await fetchImpl(`${baseUrl}${path}`, {
       method,
@@ -328,6 +371,210 @@ export async function stopChild(child, graceMs = 5000) {
     if (error?.code !== 'ESRCH') throw error
   }
   await waitForExit(child, graceMs)
+}
+
+export async function isPortFree(port, host = '127.0.0.1') {
+  const { createServer } = await import('node:net')
+  const server = createServer()
+  try {
+    await new Promise((resolve, reject) => {
+      server.once('error', reject)
+      server.listen(port, host, resolve)
+    })
+  } catch (error) {
+    if (error?.code === 'EADDRINUSE' || error?.code === 'EACCES') return false
+    throw error
+  }
+  await new Promise((resolve) => server.close(resolve))
+  return true
+}
+
+export async function assertPortsFree(ports) {
+  for (const [label, port] of ports) {
+    if (!(await isPortFree(port))) {
+      throw new Error(`${label} port ${port} is already in use. Stop whatever is using it (or run --session-stop if it is a shared preview session), or choose another port with --frontend-port/--backend-port.`)
+    }
+  }
+}
+
+function processAlive(pid) {
+  if (!Number.isInteger(pid)) return false
+  try {
+    process.kill(process.platform === 'win32' ? pid : -pid, 0)
+    return true
+  } catch (error) {
+    return error?.code === 'EPERM'
+  }
+}
+
+export async function readSession(sessionFile = defaults.sessionFile) {
+  let text
+  try {
+    text = await readFile(sessionFile, 'utf8')
+  } catch (error) {
+    if (error?.code === 'ENOENT') return undefined
+    throw error
+  }
+  try {
+    return JSON.parse(text)
+  } catch {
+    throw new Error(`The shared preview session file ${sessionFile} is unreadable. Run --session-stop to clear it.`)
+  }
+}
+
+export function sessionServicesAlive(session) {
+  return processAlive(session.frontendPid) && processAlive(session.backendPid)
+}
+
+export async function requireSession({ sessionFile = defaults.sessionFile, fetchImpl = fetch } = {}) {
+  const session = await readSession(sessionFile)
+  if (!session) {
+    throw new Error('No shared preview session is running. Start one with: npm run preview -- --session-start')
+  }
+  if (!sessionServicesAlive(session)) {
+    throw new Error('The shared preview session recorded in ' + sessionFile + ' is no longer running (a service exited). Run --session-stop to clean up, then --session-start.')
+  }
+  for (const [label, url] of [['backend', `${session.backendUrl}/v3/api-docs`], ['frontend', session.frontendUrl]]) {
+    try {
+      const response = await fetchImpl(url, { signal: AbortSignal.timeout(3000) })
+      if (!response.ok && !(response.status >= 300 && response.status < 400)) throw new Error(`HTTP ${response.status}`)
+    } catch (error) {
+      throw new Error(`The shared preview ${label} did not answer at ${url} (${error instanceof Error ? error.message : String(error)}). Run --session-stop, then --session-start.`)
+    }
+  }
+  return session
+}
+
+export function sessionServices({ frontendPort, backendPort }, childEnv) {
+  const backendCommand = process.platform === 'win32' ? 'gradlew.bat' : './gradlew'
+  const frontendCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm'
+  return {
+    backend: {
+      command: backendCommand,
+      args: ['--no-daemon', 'bootRun', `--args=--spring.profiles.active=testing --server.port=${backendPort}`],
+      cwd: path.join(repoDir, 'backend'),
+      env: childEnv,
+    },
+    frontend: {
+      command: frontendCommand,
+      args: ['run', 'dev', '--', '--host', '127.0.0.1', '--port', String(frontendPort), '--strictPort'],
+      cwd: frontendDir,
+      env: { ...childEnv, VITE_BACKEND_URL: `http://127.0.0.1:${backendPort}` },
+    },
+  }
+}
+
+async function spawnDetached(service, logFile) {
+  await mkdir(path.dirname(logFile), { recursive: true })
+  const handle = await open(logFile, 'w')
+  try {
+    const child = spawn(service.command, service.args, {
+      cwd: service.cwd,
+      env: service.env,
+      detached: process.platform !== 'win32',
+      stdio: ['ignore', handle.fd, handle.fd],
+      shell: false,
+    })
+    await new Promise((resolve, reject) => {
+      child.once('spawn', resolve)
+      child.once('error', reject)
+    })
+    child.unref()
+    return child
+  } finally {
+    await handle.close()
+  }
+}
+
+export async function stopSession({ sessionFile = defaults.sessionFile, graceMs = 8000, log = console.log } = {}) {
+  const session = await readSession(sessionFile).catch(() => undefined)
+  if (!session) {
+    log('No shared preview session is recorded; nothing to stop.')
+    await rm(sessionFile, { force: true })
+    return false
+  }
+  for (const pid of [session.frontendPid, session.backendPid]) {
+    if (!Number.isInteger(pid)) continue
+    for (const signal of ['SIGTERM', 'SIGKILL']) {
+      if (!processAlive(pid)) break
+      try {
+        process.kill(process.platform === 'win32' ? pid : -pid, signal)
+      } catch (error) {
+        if (error?.code !== 'ESRCH') throw error
+      }
+      const deadline = Date.now() + graceMs
+      while (processAlive(pid) && Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, 100))
+    }
+    if (processAlive(pid)) throw new Error(`Could not stop process group ${pid} of the shared preview session; stop it manually.`)
+  }
+  await rm(sessionFile, { force: true })
+  log('Shared preview session stopped; its frontend and backend processes are gone and its data is discarded.')
+  return true
+}
+
+export async function startSession({
+  sessionFile = defaults.sessionFile,
+  frontendPort = defaults.frontendPort,
+  backendPort = defaults.backendPort,
+  startupTimeout = defaults.startupTimeout,
+  services,
+  log = console.log,
+} = {}) {
+  const existing = await readSession(sessionFile)
+  if (existing) {
+    throw new Error(sessionServicesAlive(existing)
+      ? `A shared preview session is already running at ${existing.frontendUrl}. Use it with --session, or run --session-stop first.`
+      : `A stale shared preview session is recorded in ${sessionFile}. Run --session-stop first.`)
+  }
+  await assertPortsFree([['Frontend', frontendPort], ['Backend', backendPort]])
+  const childEnv = { ...process.env }
+  delete childEnv.PREVIEW_PASSWORD
+  const selected = services ?? sessionServices({ frontendPort, backendPort }, childEnv)
+  const logDir = path.dirname(sessionFile)
+  const session = {
+    frontendPort,
+    backendPort,
+    frontendUrl: `http://127.0.0.1:${frontendPort}`,
+    backendUrl: `http://127.0.0.1:${backendPort}`,
+    startedAt: new Date().toISOString(),
+    backendLog: path.join(logDir, 'session-backend.log'),
+    frontendLog: path.join(logDir, 'session-frontend.log'),
+  }
+  const controller = new AbortController()
+  const onSignal = () => controller.abort()
+  process.once('SIGINT', onSignal)
+  process.once('SIGTERM', onSignal)
+  try {
+    const backend = await spawnDetached(selected.backend, session.backendLog)
+    session.backendPid = backend.pid
+    await mkdir(logDir, { recursive: true })
+    await writeFile(sessionFile, JSON.stringify(session, null, 2))
+    log(`Starting shared backend (pid ${backend.pid}); log: ${session.backendLog}`)
+    await waitForReady(`${session.backendUrl}/v3/api-docs`, {
+      timeoutMs: startupTimeout,
+      isAlive: () => processAlive(backend.pid),
+      signal: controller.signal,
+    })
+    log(`Backend ready: ${session.backendUrl}`)
+    const frontend = await spawnDetached(selected.frontend, session.frontendLog)
+    session.frontendPid = frontend.pid
+    await writeFile(sessionFile, JSON.stringify(session, null, 2))
+    log(`Starting shared frontend (pid ${frontend.pid}); log: ${session.frontendLog}`)
+    await waitForReady(session.frontendUrl, {
+      timeoutMs: 60_000,
+      isAlive: () => processAlive(frontend.pid),
+      signal: controller.signal,
+    })
+    log(`Frontend ready: ${session.frontendUrl}`)
+    log(`Shared preview session ready. Use --session on later invocations; stop it with --session-stop.`)
+    return session
+  } catch (error) {
+    await stopSession({ sessionFile, log: () => undefined }).catch(() => undefined)
+    throw new Error(`Could not start the shared preview session: ${error instanceof Error ? error.message : String(error)} (service logs: ${logDir}/session-*.log)`)
+  } finally {
+    process.removeListener('SIGINT', onSignal)
+    process.removeListener('SIGTERM', onSignal)
+  }
 }
 
 function chromeCandidates() {
@@ -700,6 +947,34 @@ export async function applyPageSteps(client, steps, { outputDir, log = console.l
         `(${expression})(${JSON.stringify(`Username ${step.value}`)}, ${JSON.stringify(step.selector)})`,
         `click ${step.selector} in the ${step.value} account row`)
       log(`Clicked ${step.selector} in account row ${step.value}.`)
+    } else if (step.action === 'click-record-action' || step.action === 'read-record') {
+      const expression = `(key, selector, click) => new Promise((resolve, reject) => {
+        const deadline = Date.now() + 10000;
+        const find = () => [...document.querySelectorAll('article.data-row')].filter((candidate) =>
+          candidate.querySelector('h3')?.textContent?.trim() === key
+          || candidate.querySelector('[id="details-button-' + key + '"]'));
+        const check = () => {
+          const rows = find();
+          if (rows.length > 1) return reject(new Error(rows.length + ' records match ' + key + '; use the record ID.'));
+          if (rows.length === 1) {
+            if (!click) return resolve(rows[0].innerText.replace(/\\s+/g, ' ').trim());
+            const target = selector.startsWith('text:')
+              ? [...rows[0].querySelectorAll('button')].find((button) => button.textContent?.trim() === selector.slice(5))
+              : rows[0].querySelector(selector);
+            if (!(target instanceof HTMLElement)) return reject(new Error('No record action matches ' + selector + ' for ' + key));
+            target.click();
+            return resolve(rows[0].querySelector('h3')?.textContent?.trim() ?? key);
+          }
+          if (Date.now() >= deadline) return reject(new Error('No record with title or ID ' + key + ' is listed on this page.'));
+          setTimeout(check, 100);
+        };
+        check();
+      })`
+      const click = step.action === 'click-record-action'
+      const text = await evaluatePage(client,
+        `(${expression})(${JSON.stringify(step.value)}, ${JSON.stringify(step.selector ?? '')}, ${click})`,
+        `${click ? `click ${step.selector} in` : 'read'} record ${step.value}`)
+      log(click ? `Clicked ${step.selector} in record ${step.value}.` : `Record ${step.value}: ${text}`)
     } else if (step.action === 'wait') {
       const expression = `(selector) => new Promise((resolve, reject) => {
         const deadline = Date.now() + 10000;
@@ -949,6 +1224,20 @@ function helpText() {
 Starts Vite and the backend with the testing profile, waits for both, inspects a real
 page over Chrome DevTools Protocol, saves a screenshot, and stops every process it started.
 Use Ctrl-C to stop during startup or inspection. Generated default screenshots are ignored.
+By default every invocation uses a fresh temporary testing profile that is discarded afterwards.
+
+Persistent shared session (opt-in; testing profile only, data lives until it is stopped):
+  --session-start                 Start the shared backend and frontend detached, wait until both are ready,
+                                  print the frontend URL, and exit leaving them running
+  --session-url                   Print the frontend URL of the running session (fails if none is running)
+  --session-stop                  Stop the session's frontend and backend process groups and discard its data
+  --session                       Run this invocation against the running session instead of starting services.
+                                  Each invocation still gets its own browser profile, so switch roles by passing
+                                  another --auth --username. Fails clearly if the session is not running.
+  Seeding flags (--seed-idea-owner/--seed-idea-history) work with --session and seed into the session's backend.
+  Only one session or one default preview can use ports 5173/8080 (or --frontend-port/--backend-port given to
+  --session-start) at a time: while a session runs, a default preview fails with a clear message; a port already in
+  use makes --session-start fail instead of reusing the foreign service. Session state: frontend/.preview/session.json.
 
 Options:
   --viewport desktop|mobile       Default desktop (1440x1000) or narrow mobile (390x844)
@@ -960,6 +1249,7 @@ Options:
   --auth --username USER          Authenticate using the local testing account
   --seed-idea-owner USER           Create and submit a synthetic idea using a student testing account before opening the page
   --seed-idea-history USER         Create a synthetic idea with review and preference history for display verification
+  --seed-idea-title TITLE          Distinctive title for the seeded idea so a later invocation can find it
   --fill SELECTOR=VALUE           Fill an input, textarea, or select; may be repeated
   --click SELECTOR                Click an element; may be repeated
   --wait-for SELECTOR             Wait for an element after interactions; may be repeated
@@ -968,7 +1258,10 @@ Options:
   --select-by-key SELECTOR=VALUE  Select an enabled native option using keyboard input; may be repeated
   --native-select-by-key SELECTOR=VALUE  Use macOS keyboard input on a headed collapsed popup
   --expand-select SELECTOR        Show all native select options inline for screenshot inspection
-  --step ACTION:VALUE             Run ordered interactions; supports click-row-action:USERNAME|SELECTOR
+  --step ACTION:VALUE             Run ordered interactions; supports click-row-action:USERNAME|SELECTOR and, on the
+                                  Ideas list, click-record-action:TITLE_OR_ID|SELECTOR (or |text:BUTTON_TEXT, e.g. text:Edit)
+                                  and read-record:TITLE_OR_ID
+                                  (exact title or idea ID; fails if no or several rows match)
   --password-env NAME             Environment variable containing its password (default PREVIEW_PASSWORD)
   --frontend-port N               Vite port (default 5173)
   --backend-port N                Backend port (default 8080)
@@ -989,7 +1282,33 @@ keyboard input to a collapsed popup (Terminal may require Accessibility permissi
 `
 }
 
+async function seedRequested(options, baseUrl) {
+  if (!options.seedIdeaOwner && !options.seedIdeaHistory) return
+  const password = process.env[options.passwordEnv ?? 'PREVIEW_PASSWORD']
+  if (!password) throw new Error(`Set ${options.passwordEnv ?? 'PREVIEW_PASSWORD'} to seed local preview data.`)
+  if (options.seedIdeaOwner) {
+    const created = await seedTestingIdea({ baseUrl, ownerUsername: options.seedIdeaOwner, password, title: options.seedIdeaTitle })
+    console.log(`Created submitted idea ${created.id} (title: ${JSON.stringify(created.title ?? options.seedIdeaTitle ?? 'generated')}) for ${options.seedIdeaOwner} in the testing profile at ${baseUrl}.`)
+  }
+  if (options.seedIdeaHistory) {
+    const created = await seedTestingIdeaHistory({ baseUrl, ownerUsername: options.seedIdeaHistory, password, title: options.seedIdeaTitle })
+    console.log(`Created idea ${created.id} (title: ${JSON.stringify(created.title ?? options.seedIdeaTitle ?? 'generated')}) with review and preference history for ${options.seedIdeaHistory} in the testing profile at ${baseUrl}.`)
+  }
+}
+
 async function run(options) {
+  if (options.session) {
+    const session = await requireSession({ sessionFile: options.sessionFile })
+    options = { ...options, url: session.frontendUrl, start: false }
+    console.log(`Using shared preview session ${session.frontendUrl} (backend ${session.backendUrl}).`)
+    await seedRequested(options, session.backendUrl)
+  } else if (options.start) {
+    const existing = await readSession(options.sessionFile)
+    if (existing) {
+      throw new Error(`A shared preview session is recorded (${existing.frontendUrl}). Use --session to reuse it, or run --session-stop before a default isolated preview.`)
+    }
+    await assertPortsFree([['Frontend', options.frontendPort], ['Backend', options.backendPort]])
+  }
   const url = buildUrl(options)
   const children = []
   const childEnv = { ...process.env }
@@ -1022,26 +1341,7 @@ async function run(options) {
         isAlive: () => !interrupted && backend.exitCode === null && backend.signalCode === null,
       })
       console.log(`Backend ready: http://127.0.0.1:${backendPort}`)
-      if (options.seedIdeaOwner) {
-        const password = process.env[options.passwordEnv ?? 'PREVIEW_PASSWORD']
-        if (!password) throw new Error(`Set ${options.passwordEnv ?? 'PREVIEW_PASSWORD'} to seed local preview data.`)
-        const created = await seedTestingIdea({
-          baseUrl: `http://127.0.0.1:${backendPort}`,
-          ownerUsername: options.seedIdeaOwner,
-          password,
-        })
-        console.log(`Created temporary submitted idea ${created.id} for ${options.seedIdeaOwner} in the testing profile.`)
-      }
-      if (options.seedIdeaHistory) {
-        const password = process.env[options.passwordEnv ?? 'PREVIEW_PASSWORD']
-        if (!password) throw new Error(`Set ${options.passwordEnv ?? 'PREVIEW_PASSWORD'} to seed local preview data.`)
-        const created = await seedTestingIdeaHistory({
-          baseUrl: `http://127.0.0.1:${backendPort}`,
-          ownerUsername: options.seedIdeaHistory,
-          password,
-        })
-        console.log(`Created temporary idea ${created.id} with review and preference history for ${options.seedIdeaHistory} in the testing profile.`)
-      }
+      await seedRequested(options, `http://127.0.0.1:${backendPort}`)
       const frontendPort = options.frontendPort
       const frontendCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm'
       const frontend = startChild(frontendCommand, [
@@ -1096,7 +1396,17 @@ async function main() {
       console.log(helpText())
       return
     }
-    await run(options)
+    if (options.sessionCommand === 'start') {
+      const session = await startSession(options)
+      console.log(session.frontendUrl)
+    } else if (options.sessionCommand === 'url') {
+      const session = await requireSession({ sessionFile: options.sessionFile })
+      console.log(session.frontendUrl)
+    } else if (options.sessionCommand === 'stop') {
+      await stopSession({ sessionFile: options.sessionFile })
+    } else {
+      await run(options)
+    }
   } catch (error) {
     console.error(`Preview failed: ${error instanceof Error ? error.message : String(error)}`)
     process.exitCode = 1

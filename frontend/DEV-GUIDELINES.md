@@ -63,4 +63,21 @@ For an actual collapsed native popup on macOS, use headed Google Chrome with `--
    If `IDEA_SUBMITTED` is already selected or unavailable, use another enabled `#status-filter` value that is different from its current value.
 4. Count this as successful evidence only when the real command reports that the macOS native-popup keyboard selected the requested value, completes the screenshot, and the saved screenshot at `/tmp/bug03b-native/ideas-native-selected.png` shows the selector displaying the changed value. The preview also checks the live DOM value before taking the screenshot. Record that screenshot path and the reported value. A permission error, mock/smoke-test result, or screenshot without a confirmed changed value is not proof that the native popup interaction succeeded; do not substitute `--select-by-key` or `--expand-select` for this check.
 
+### Persistent shared preview session
+
+By default every `npm run preview` invocation starts a fresh temporary testing profile and discards it afterwards. To verify a multi-actor flow across several independent invocations (for example a student edits an idea and a teacher then reviews that same idea), opt in to one shared session. Its data lives only until you stop it; browser login state is never shared, because every invocation launches its own temporary browser profile.
+
+```sh
+npm run preview -- --session-start     # starts backend + frontend detached, waits for readiness, prints the frontend URL
+npm run preview -- --session-url       # prints the URL again; fails if no session is running
+PREVIEW_PASSWORD=testing-password npm run preview -- --session --auth --username student01 --seed-idea-history student01 --seed-idea-title 'Distinct title' --path /ideas --screenshot step1.png
+PREVIEW_PASSWORD=testing-password npm run preview -- --session --auth --username student01 --path /ideas --step 'click-record-action:Distinct title|text:Edit' --step 'wait:#idea-title' --step 'accept-confirms' --step 'fill:#idea-description=Edited by the student' --step 'click:form.panel button.button:not([type=button])' --step 'wait:article.data-row' --step 'click-record-action:Distinct title|text:Submit'
+PREVIEW_PASSWORD=testing-password npm run preview -- --session --auth --username teacher01 --path /ideas --step 'read-record:Distinct title' --screenshot teacher.png
+npm run preview -- --session-stop      # stops both process groups and discards the data
+```
+
+A submitted idea is not editable by its student, so the example seeds with `--seed-idea-history` (submitted, then a teacher requests revision); the student can then edit and resubmit it through the UI. Switch roles by authenticating again with another `--username`. `--seed-idea-owner` and `--seed-idea-history` work with `--session` and seed into the session's backend; `--seed-idea-title` gives the seeded idea a distinctive title. To reopen a record that an earlier invocation created or changed, use `--step click-record-action:TITLE_OR_ID|SELECTOR` (click a control inside that Ideas-list row, given as a CSS selector or `text:BUTTON_TEXT` such as `text:Edit`) or `--step read-record:TITLE_OR_ID` (log the row's text, including its status). The key is the exact idea title or the idea ID (the ID is the suffix of the row's `details-button-ID`); the step fails if no row or more than one row matches, so it never falls back to a different record. The record must be on the listed page.
+
+Limitations: one session at a time, on ports 5173 and 8080 unless `--frontend-port`/`--backend-port` are given to `--session-start`. `--session-start` fails with a clear message if a port is in use or a session is already running; `--session` fails if no session is running or a service died (run `--session-stop` to clear it); a default (non-session) preview fails while a session is running rather than clashing on its ports. Session state and service logs are in the ignored `frontend/.preview/` directory. Always run `--session-stop` when finished.
+
 Use `npm run preview:test` for the no-dependency preview-tool smoke tests.

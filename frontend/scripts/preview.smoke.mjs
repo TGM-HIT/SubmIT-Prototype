@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { createServer } from 'node:http'
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
@@ -12,10 +12,15 @@ import {
   collectBrowserErrors,
   formatNativeInputFailure,
   parseArgs,
+  readSession,
+  requireSession,
+  startSession,
+  stopSession,
   saveScreenshot,
   seedTestingIdea,
   seedTestingIdeaHistory,
   stopChild,
+  isPortFree,
   viewportFor,
   waitForReady,
 } from './preview.mjs'
@@ -497,4 +502,125 @@ test('terminates a spawned process and its process group during cleanup', async 
   })
   await stopChild(child, 1000)
   assert.equal(child.signalCode, 'SIGTERM')
+})
+
+test('parses shared-session, seed-title, and record-locator options', () => {
+  assert.equal(parseArgs([]).session, false)
+  assert.equal(parseArgs(['--session']).session, true)
+  assert.equal(parseArgs(['--session-start', '--frontend-port', '5199']).sessionCommand, 'start')
+  assert.equal(parseArgs(['--session-url']).sessionCommand, 'url')
+  assert.equal(parseArgs(['--session-stop']).sessionCommand, 'stop')
+  assert.throws(() => parseArgs(['--session-start', '--session-stop']), /only one of/)
+  assert.throws(() => parseArgs(['--session', '--session-url']), /cannot be combined/)
+  assert.throws(() => parseArgs(['--session-start', '--auth', '--username', 'student01']), /manages the shared services only/)
+  assert.throws(() => parseArgs(['--session', '--url', 'http://localhost:5173']), /do not combine it with --url/)
+  assert.throws(() => parseArgs(['--session', '--frontend-port', '5199']), /ports of the running shared session/)
+  const seeded = parseArgs(['--session', '--auth', '--username', 'student01', '--seed-idea-owner', 'student01', '--seed-idea-title', 'Distinct title'])
+  assert.equal(seeded.seedIdeaTitle, 'Distinct title')
+  assert.throws(() => parseArgs(['--seed-idea-title', 'Orphan']), /requires --seed-idea-owner/)
+  assert.throws(
+    () => parseArgs(['--session', '--auth', '--username', 'student01', '--seed-idea-owner', 'student01', '--seed-idea-title', ' ']),
+    /1 to 200 characters/,
+  )
+  assert.deepEqual(parseArgs(['--step', 'click-record-action:My idea|button.edit', '--step', 'read-record:abc-123']).steps, [
+    { action: 'click-record-action', value: 'My idea', selector: 'button.edit' },
+    { action: 'read-record', value: 'abc-123' },
+  ])
+  assert.throws(() => parseArgs(['--step', 'click-record-action:only-title']), /TITLE_OR_ID\|SELECTOR/)
+})
+
+test('seeds an idea with a caller-supplied title', async () => {
+  const bodies = []
+  await seedTestingIdea({
+    baseUrl: 'http://127.0.0.1:8080',
+    ownerUsername: 'student01',
+    password: 'testing-only',
+    title: 'Distinct title',
+    fetchImpl: async (url, options) => {
+      bodies.push(options.body)
+      return { ok: true, async json() { return url.endsWith('/api/auth/login') ? { token: 't', user: { role: 'STUDENT' } } : { id: 'i1' } } }
+    },
+  })
+  assert.equal(JSON.parse(bodies[1]).title, 'Distinct title')
+})
+
+test('locates a record by exact title or ID on the Ideas list rows', async () => {
+  const expressions = []
+  const client = { async send(method, params) {
+    expressions.push(params.expression)
+    return { result: { value: 'ok' } }
+  } }
+  const logs = []
+  await applyPageSteps(client, [
+    { action: 'click-record-action', value: 'My idea', selector: 'button.edit' },
+    { action: 'read-record', value: 'abc-123' },
+  ], { log: (line) => logs.push(line) })
+  assert.match(expressions[0], /"My idea", "button.edit", true/)
+  assert.match(expressions[1], /"abc-123", "", false/)
+  assert.match(expressions[0], /details-button-/)
+  assert.match(logs.join('\n'), /Clicked button.edit in record My idea/)
+  assert.match(logs.join('\n'), /Record abc-123: ok/)
+})
+
+test('manages a shared session: conflict, readiness, reuse errors, and full cleanup', async (context) => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'preview-session-test-'))
+  context.after(() => rm(dir, { recursive: true, force: true }))
+  const sessionFile = path.join(dir, 'session.json')
+  const log = () => undefined
+  const serverScript = 'require("http").createServer((_, r) => r.end("ok")).listen(Number(process.argv[1]), "127.0.0.1")'
+  const free = async () => {
+    const { createServer } = await import('node:net')
+    const server = createServer()
+    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const { port } = server.address()
+    await new Promise((resolve) => server.close(resolve))
+    return port
+  }
+  const [frontendPort, backendPort] = [await free(), await free()]
+  const services = {
+    backend: { command: process.execPath, args: ['-e', serverScript, String(backendPort)], cwd: dir, env: process.env },
+    frontend: { command: process.execPath, args: ['-e', serverScript, String(frontendPort)], cwd: dir, env: process.env },
+  }
+
+  await assert.rejects(requireSession({ sessionFile }), /No shared preview session is running/)
+  assert.equal(await stopSession({ sessionFile, log }), false)
+
+  const blocker = createServer()
+  await new Promise((resolve) => blocker.listen(frontendPort, '127.0.0.1', resolve))
+  assert.equal(await isPortFree(frontendPort), false)
+  await assert.rejects(
+    startSession({ sessionFile, frontendPort, backendPort, services, log }),
+    /Frontend port \d+ is already in use/,
+  )
+  assert.equal(await readSession(sessionFile), undefined)
+  await new Promise((resolve) => blocker.close(resolve))
+
+  const session = await startSession({ sessionFile, frontendPort, backendPort, services, startupTimeout: 10_000, log })
+  const pids = [session.frontendPid, session.backendPid]
+  assert.equal(session.frontendUrl, `http://127.0.0.1:${frontendPort}`)
+  assert.equal((await requireSession({ sessionFile })).backendUrl, `http://127.0.0.1:${backendPort}`)
+  await assert.rejects(startSession({ sessionFile, frontendPort, backendPort, services, log }), /already running/)
+
+  assert.equal(await stopSession({ sessionFile, log }), true)
+  for (const pid of pids) {
+    assert.throws(() => process.kill(pid, 0), { code: 'ESRCH' })
+  }
+  assert.equal(await readSession(sessionFile), undefined)
+  assert.equal(await isPortFree(frontendPort), true)
+  await assert.rejects(requireSession({ sessionFile }), /No shared preview session is running/)
+})
+
+test('reports a session whose service died instead of reusing it', async (context) => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'preview-session-test-'))
+  context.after(() => rm(dir, { recursive: true, force: true }))
+  const sessionFile = path.join(dir, 'session.json')
+  await writeFile(sessionFile, JSON.stringify({
+    frontendPid: 2_000_000_000,
+    backendPid: 2_000_000_001,
+    frontendUrl: 'http://127.0.0.1:1',
+    backendUrl: 'http://127.0.0.1:2',
+  }))
+  await assert.rejects(requireSession({ sessionFile }), /no longer running/)
+  assert.equal(await stopSession({ sessionFile, log: () => undefined }), true)
+  assert.equal(await readSession(sessionFile), undefined)
 })
