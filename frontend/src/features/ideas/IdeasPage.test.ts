@@ -10,6 +10,7 @@ const api = vi.hoisted(() => ({
   review: vi.fn(),
   update: vi.fn(),
   submit: vi.fn(),
+  submitSpecification: vi.fn(),
   specification: vi.fn(),
   supervision: vi.fn(),
   assignSupervisor: vi.fn(),
@@ -26,6 +27,7 @@ vi.mock('../../api/services', () => ({
     supervision: api.supervision,
     assignSupervisor: api.assignSupervisor,
     specification: api.specification,
+    submitSpecification: api.submitSpecification,
   },
 }))
 
@@ -152,7 +154,7 @@ describe('IdeasPage overview supervision preferences', () => {
     await row.find('button').trigger('click')
     await flushPromises()
     expect(page.text()).toContain('Edit full specification')
-    await page.findAll('button').find((button) => button.text() === 'Edit full specification')!.trigger('click')
+    await page.findAll('button').find((button) => ['Edit full specification', 'Develop full specification'].includes(button.text()))!.trigger('click')
     await page.get('form').trigger('submit')
     await flushPromises()
     expect(api.specification).toHaveBeenCalledWith('idea-WITHDRAWN', expect.any(Object))
@@ -160,6 +162,52 @@ describe('IdeasPage overview supervision preferences', () => {
     expect(api.list).toHaveBeenCalledTimes(2)
     expect(page.get('article.data-row').text()).toContain('Idea approved for specification')
     expect(document.activeElement?.getAttribute('data-review-focus-fallback')).not.toBeNull()
+    page.unmount()
+  })
+
+  it('submits a changed withdrawn specification, refreshes status, and focuses the list after closing details', async () => {
+    const withdrawn = {
+      ...idea('WITHDRAWN'),
+      specification: {
+        id: 'specification-1',
+        status: 'SPECIFICATION_DRAFT',
+        objectives: ['Objective'],
+        intendedUsers: ['Students'],
+        requirements: ['Requirement'],
+        deliverables: ['Deliverable'],
+        scope: 'Original scope',
+        dependencies: ['None'],
+      },
+    }
+    api.list.mockResolvedValueOnce(pageIdeas('WITHDRAWN')).mockResolvedValue({
+      ...pageIdeas('SPECIFICATION_SUBMITTED'),
+      content: [{ ...idea('SPECIFICATION_SUBMITTED'), id: 'idea-WITHDRAWN' }],
+    })
+    api.get.mockResolvedValueOnce(withdrawn).mockResolvedValue({
+      ...withdrawn,
+      status: 'IDEA_APPROVED_FOR_SPECIFICATION',
+    })
+    api.specification.mockResolvedValue({ ...withdrawn.specification, scope: 'Changed scope' })
+    api.submitSpecification.mockResolvedValue({ status: 'SPECIFICATION_SUBMITTED' })
+    const page = mountPage()
+    await flushPromises()
+    await page.get('article.data-row').find('button').trigger('click')
+    await flushPromises()
+    await page.findAll('button').find((button) => ['Edit full specification', 'Develop full specification'].includes(button.text()))!.trigger('click')
+    await page.get('#spec-scope').setValue('Changed scope')
+    await page.get('[role="dialog"] form').trigger('submit')
+    await flushPromises()
+    expect(api.specification).toHaveBeenCalledWith('idea-WITHDRAWN', expect.objectContaining({ scope: 'Changed scope' }))
+    vi.stubGlobal('confirm', () => true)
+    await page.get('article.data-row').findAll('button').find((button) => button.text() === 'Details & history')!.trigger('click')
+    await flushPromises()
+    await page.findAll('button').find((button) => button.text() === 'Submit specification for acceptance review')!.trigger('click')
+    await flushPromises()
+    expect(api.submitSpecification).toHaveBeenCalledWith('idea-WITHDRAWN')
+    expect(api.list).toHaveBeenCalledTimes(3)
+    expect(document.activeElement?.getAttribute('data-review-focus-fallback')).not.toBeNull()
+    expect(page.get('article.data-row').text()).toContain('Specification submitted')
+    vi.unstubAllGlobals()
     page.unmount()
   })
 

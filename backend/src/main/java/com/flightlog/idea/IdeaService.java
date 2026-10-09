@@ -211,7 +211,9 @@ public class IdeaService {
         StoredRecord specification = store.repository()
                 .findFirstByTypeAndParentIdOrderByCreatedAtDesc(SPECIFICATION, idea.getId().toString())
                 .orElse(null);
-        if (specification != null && SPEC_SUBMITTED.equals(specification.getStatus())) {
+        if (specification != null && (SPEC_SUBMITTED.equals(specification.getStatus())
+                || SPEC_NEEDS_REVISION.equals(specification.getStatus())
+                || SPEC_DRAFT.equals(specification.getStatus()))) {
             throw rules.conflict("A withdrawn full specification must be edited or submitted through the specification flow.");
         }
     }

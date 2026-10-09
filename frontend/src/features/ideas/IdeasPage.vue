@@ -343,6 +343,7 @@ async function saveSpecification(): Promise<void> {
   const result = await task.run(() => ideasApi.specification(selectedIdea.value!.id!, { ...specForm }), 'Specification saved.')
   if (result) {
     specEditorOpen.value = false
+    detailsOpen.value = false
     await selectIdea({ id: ideaId } as Idea)
     await load(page.value.page)
     await nextTick()
@@ -354,6 +355,7 @@ async function submitSpecification(): Promise<void> {
   const ideaId = selectedIdea.value.id
   const result = await task.run(() => ideasApi.submitSpecification(selectedIdea.value!.id!), 'Specification submitted.')
   if (result) {
+    detailsOpen.value = false
     await selectIdea({ id: ideaId } as Idea)
     await load(page.value.page)
     await nextTick()

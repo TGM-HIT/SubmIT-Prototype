@@ -263,6 +263,7 @@ class TestingIdeasFixtureTest {
         mockMvc.perform(post("/api/ideas/{id}/withdraw", id).header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk());
         JsonNode spec = detail.path("specification");
+        ((com.fasterxml.jackson.databind.node.ObjectNode) spec).put("scope", "Changed scope for the resubmitted specification.");
         mockMvc.perform(put("/api/ideas/{id}/specification", id)
                         .header("Authorization", "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON).content(spec.toString()))
@@ -273,10 +274,12 @@ class TestingIdeasFixtureTest {
         JsonNode resubmitted = getIdea(login("teacher01"), id);
         assertEquals("SPECIFICATION_SUBMITTED", resubmitted.path("status").asText());
         assertEquals(existingReviews, resubmitted.path("reviews"));
+        assertEquals("Changed scope for the resubmitted specification.",
+                resubmitted.path("specification").path("scope").asText());
     }
 
     @Test
-    void genericWithdrawnIdeaEndpointsCannotChangeWithdrawnFullSpecification() throws Exception {
+    void genericWithdrawnIdeaEndpointsCannotChangeWithdrawnFullSpecificationInAnyChildState() throws Exception {
         String token = login("student01");
         JsonNode specified = java.util.stream.StreamSupport.stream(
                         getIdeas(token).path("content").spliterator(), false)
@@ -285,26 +288,33 @@ class TestingIdeasFixtureTest {
         String id = specified.path("id").asText();
         JsonNode before = getIdea(token, id);
         JsonNode specificationBefore = before.path("specification").deepCopy();
+        var specificationRecord = records.findById(UUID.fromString(specificationBefore.path("id").asText())).orElseThrow();
 
         mockMvc.perform(post("/api/ideas/{id}/withdraw", id)
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk());
-        JsonNode withdrawn = getIdea(token, id);
-        assertEquals("WITHDRAWN", withdrawn.path("status").asText());
-        assertEquals(specificationBefore, withdrawn.path("specification"));
+        for (String childState : List.of("SPECIFICATION_SUBMITTED", "SPECIFICATION_NEEDS_REVISION",
+                "SPECIFICATION_DRAFT")) {
+            specificationRecord.setStatus(childState);
+            records.save(specificationRecord);
+            JsonNode withdrawn = getIdea(token, id);
+            assertEquals("WITHDRAWN", withdrawn.path("status").asText());
+            assertEquals(childState, withdrawn.path("specification").path("status").asText());
+            assertEquals(specificationBefore.path("objectives"), withdrawn.path("specification").path("objectives"));
 
-        mockMvc.perform(put("/api/ideas/{id}", id)
-                        .header("Authorization", "Bearer " + token)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(withdrawn.toString()))
-                .andExpect(status().isConflict());
-        mockMvc.perform(post("/api/ideas/{id}/submit", id)
-                        .header("Authorization", "Bearer " + token))
-                .andExpect(status().isConflict());
+            mockMvc.perform(put("/api/ideas/{id}", id)
+                            .header("Authorization", "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(withdrawn.toString()))
+                    .andExpect(status().isConflict());
+            mockMvc.perform(post("/api/ideas/{id}/submit", id)
+                            .header("Authorization", "Bearer " + token))
+                    .andExpect(status().isConflict());
 
-        JsonNode after = getIdea(token, id);
-        assertEquals("WITHDRAWN", after.path("status").asText());
-        assertEquals(specificationBefore, after.path("specification"));
+            JsonNode after = getIdea(token, id);
+            assertEquals("WITHDRAWN", after.path("status").asText());
+            assertEquals(withdrawn.path("specification"), after.path("specification"));
+        }
     }
 
     @Test
