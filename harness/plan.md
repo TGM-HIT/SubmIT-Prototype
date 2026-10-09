@@ -38,7 +38,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-02](tickets/done/Dev-02.md) | done | Add reusable browser preview tooling |
 | [Dev-03](tickets/done/Dev-03.md) | done | Give testing accounts meaningful display names |
 | [Dev-04](tickets/done/Dev-04.md) | done | Seed sample ideas and specifications for testing |
-| [Dev-05](tickets/Dev-05.md) | to-do | Keep preview data across independent preview invocations |
+| [Dev-05](tickets/done/Dev-05.md) | done | Keep preview data across independent preview invocations |
 
 ### Features
 
