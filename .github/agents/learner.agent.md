@@ -1,6 +1,6 @@
 ---
 name: learner
-description: "Analyze one completed ticket run for improvements to harness contracts and ticket clarity, then write a proposal without changing the contracts. Use for post-run process learning."
+description: "Analyze one completed ticket run (and, for a continuation after human acceptance, the earlier runs of the same ticket) for improvements to harness contracts and ticket clarity, then write a proposal without changing the contracts. Use for post-run process learning."
 tools: [read, edit, search]
 reasoning-effort: high
 argument-hint: "Ticket ID and exact timestamped run folder"
