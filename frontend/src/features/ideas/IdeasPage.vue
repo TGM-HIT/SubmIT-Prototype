@@ -61,7 +61,7 @@
               <button :id="`details-button-${idea.id}`" data-review-focus-fallback class="button button-secondary button-small" type="button" @click="openDetails(idea, $event)">Details &amp; history</button>
               <button v-if="isTeacher && canReview(idea)" :id="`review-button-${idea.id}`" class="button button-small" type="button" @click="startReview(idea, $event)">Review</button>
               <button v-if="isStudent && editable(idea)" class="button button-secondary button-small" type="button" @click="editIdea(idea)">Edit</button>
-              <button v-if="isStudent && editable(idea)" class="button button-small" type="button" @click="submitIdea(idea)">Submit</button>
+              <button v-if="isStudent && editable(idea)" class="button button-small" type="button" @click="submitIdea(idea, $event)">Submit</button>
               <button v-if="isStudent && canWithdraw(idea)" class="button button-danger button-small" type="button" @click="withdrawIdea(idea)">Withdraw</button>
             </div>
           </article>
@@ -83,7 +83,7 @@
       <p v-else class="muted">No teacher decisions have been recorded.</p>
       <h3 v-if="selectedIdea.supervisionPreferences?.length" class="form-section-title">Recorded supervision preferences</h3>
       <div v-for="entry in selectedIdea.supervisionPreferences ?? []" :key="entry.id" class="choice-item"><span>{{ entry.teacherDisplayName }} · {{ readable(entry.preference) }}</span><span class="muted">{{ entry.note }}</span></div>
-      <div v-if="isStudent && canSpecify(selectedIdea)" class="actions"><button class="button" @click="startSpecification">Develop full specification</button><button v-if="selectedIdea.status === 'IDEA_APPROVED_FOR_SPECIFICATION'" class="button button-secondary" @click="submitSpecification">Submit specification for acceptance review</button></div>
+      <div v-if="isStudent && canSpecify(selectedIdea)" class="actions"><button class="button" @click="startSpecification">{{ selectedIdea.status === 'WITHDRAWN' ? 'Edit full specification' : 'Develop full specification' }}</button><button v-if="selectedIdea.status === 'IDEA_APPROVED_FOR_SPECIFICATION'" class="button button-secondary" @click="submitSpecification">Submit specification for acceptance review</button></div>
       <div v-if="isTeacher && canReview(selectedIdea)" class="actions"><button id="review-from-details" class="button" type="button" @click="openReview($event)">Review {{ selectedIdea.status === 'SPECIFICATION_SUBMITTED' ? 'specification' : 'idea' }}</button></div>
       <form v-if="isTeacher && !['IDEA_DRAFT','WITHDRAWN','DECLINED'].includes(selectedIdea.status ?? '')" class="panel stack" @submit.prevent="savePreference">
         <h3 class="form-section-title">Your supervision preference</h3>
@@ -187,6 +187,7 @@ function canWithdraw(idea: Idea): boolean {
 }
 function canSpecify(idea: Idea): boolean {
   return ['IDEA_APPROVED_FOR_SPECIFICATION','SPECIFICATION_NEEDS_REVISION'].includes(idea.status ?? '')
+    || (idea.status === 'WITHDRAWN' && Boolean(idea.specification))
 }
 function canReview(idea: Idea): boolean {
   return ['IDEA_SUBMITTED', 'SPECIFICATION_SUBMITTED'].includes(idea.status ?? '')
@@ -290,10 +291,17 @@ async function saveIdea(): Promise<void> {
   const result = await task.run(() => editingId.value ? ideasApi.update(editingId.value, input) : ideasApi.create(input), 'Idea draft saved.')
   if (result) { editorOpen.value = false; await load(page.value.page) }
 }
-async function submitIdea(idea: Idea): Promise<void> {
+async function submitIdea(idea: Idea, event?: MouseEvent): Promise<void> {
   if (!confirm('Submit this idea for teacher review? Editing will be locked until it is returned or approved.')) return
+  const fallbackId = event?.currentTarget instanceof HTMLElement
+    ? `details-button-${idea.id ?? ''}` : `details-button-${idea.id ?? ''}`
   const result = await task.run(() => ideasApi.submit(idea.id ?? ''), 'Idea submitted for review.')
-  if (result) await load(page.value.page)
+  if (result) {
+    await load(page.value.page)
+    await nextTick()
+    const fallback = document.getElementById(fallbackId)
+    fallback?.focus()
+  }
 }
 async function withdrawIdea(idea: Idea): Promise<void> {
   if (!confirm('Withdraw this project idea? This action cannot be undone from this screen.')) return

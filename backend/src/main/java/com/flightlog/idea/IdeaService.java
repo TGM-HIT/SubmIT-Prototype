@@ -87,7 +87,9 @@ public class IdeaService {
         StoredRecord idea = findIdea(id);
         requireOwner(caller, idea);
         rules.status(idea, IDEA_DRAFT, IDEA_NEEDS_REVISION, WITHDRAWN);
-        store.update(idea, IDEA_SUBMITTED, store.parse(idea));
+        ObjectNode payload = store.parse(idea);
+        validateIdeaPayload(payload);
+        store.update(idea, IDEA_SUBMITTED, payload);
         audit.record(caller, "IDEA_SUBMITTED", IDEA, id);
         return mapper.response(idea, false);
     }
@@ -97,7 +99,7 @@ public class IdeaService {
     public ApiDtos.SpecificationResponse saveSpecification(AuthenticatedUser caller, UUID id, JsonNode request) {
         StoredRecord idea = findIdea(id);
         requireOwner(caller, idea);
-        rules.status(idea, IDEA_APPROVED, SPEC_NEEDS_REVISION);
+        rules.status(idea, IDEA_APPROVED, SPEC_NEEDS_REVISION, WITHDRAWN);
         ObjectNode payload = rules.object(request);
         rules.nonEmptyArray(payload, "objectives");
         rules.nonEmptyArray(payload, "intendedUsers");
@@ -107,10 +109,7 @@ public class IdeaService {
         rules.nonEmptyArray(payload, "dependencies");
         StoredRecord current = store.repository()
                 .findFirstByTypeAndParentIdOrderByCreatedAtDesc(SPECIFICATION, id.toString()).orElse(null);
-        if (current != null && !SPEC_DRAFT.equals(current.getStatus())
-                && !SPEC_NEEDS_REVISION.equals(current.getStatus())) {
-            throw rules.conflict("A submitted specification cannot be edited until returned for revision.");
-        }
+        ensureSpecificationEditable(idea, current);
         StoredRecord revision = store.create("specification_revision", caller.id().toString(), id.toString(),
                 "SAVED", payload.deepCopy());
         payload.put("revisionId", revision.getId().toString());
@@ -119,6 +118,9 @@ public class IdeaService {
                     "SPECIFICATION_DRAFT", payload);
         } else {
             store.update(current, SPEC_NEEDS_REVISION, payload);
+        }
+        if (WITHDRAWN.equals(idea.getStatus())) {
+            store.update(idea, IDEA_APPROVED, store.parse(idea));
         }
         audit.record(caller, "SPECIFICATION_UPDATED", SPECIFICATION, current.getId());
         return mapper.specificationResponse(current);
@@ -186,6 +188,18 @@ public class IdeaService {
         rules.nonEmptyArray(payload, "scopePoints");
         rules.optionalArray(payload, LEARNING_TOPICS);
         rules.text(payload, "schoolYear");
+    }
+
+    private void ensureSpecificationEditable(StoredRecord idea, StoredRecord specification) {
+        if (specification == null || SPEC_DRAFT.equals(specification.getStatus())
+                || SPEC_NEEDS_REVISION.equals(specification.getStatus())) {
+            return;
+        }
+        if (WITHDRAWN.equals(idea.getStatus()) && SPEC_SUBMITTED.equals(specification.getStatus())) {
+            store.update(specification, SPEC_DRAFT, store.parse(specification));
+            return;
+        }
+        throw rules.conflict("A submitted specification cannot be edited until returned for revision.");
     }
 
     private StoredRecord findIdea(UUID id) {

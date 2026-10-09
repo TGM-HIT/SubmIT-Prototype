@@ -188,6 +188,50 @@ class TestingIdeasFixtureTest {
     }
 
     @Test
+    void directWithdrawnResubmissionRejectsInvalidStoredPayloadWithoutChangingState() throws Exception {
+        String token = login("student01");
+        JsonNode source = getIdea(token, getIdeas(token).path("content").get(0).path("id").asText());
+        String id = source.path("id").asText();
+        mockMvc.perform(post("/api/ideas/{id}/withdraw", id).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+        var record = records.findById(UUID.fromString(id)).orElseThrow();
+        var invalid = store.parse(record);
+        invalid.remove("title");
+        record.setPayload(invalid.toString());
+        records.save(record);
+
+        mockMvc.perform(post("/api/ideas/{id}/submit", id).header("Authorization", "Bearer " + token))
+                .andExpect(status().isBadRequest());
+        assertEquals("WITHDRAWN", records.findById(UUID.fromString(id)).orElseThrow().getStatus());
+    }
+
+    @Test
+    void withdrawnSpecificationCanBeEditedAndResubmittedThroughExistingLifecycle() throws Exception {
+        String token = login("student01");
+        JsonNode specified = null;
+        for (JsonNode candidate : getIdeas(token).path("content")) {
+            if ("SPECIFICATION_SUBMITTED".equals(candidate.path("status").asText())) {
+                specified = candidate;
+                break;
+            }
+        }
+        assertTrue(specified != null);
+        String id = specified.path("id").asText();
+        JsonNode detail = getIdea(token, id);
+        mockMvc.perform(post("/api/ideas/{id}/withdraw", id).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+        JsonNode spec = detail.path("specification");
+        mockMvc.perform(put("/api/ideas/{id}/specification", id)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON).content(spec.toString()))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/ideas/{id}/specification/submit", id)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+        assertEquals("SPECIFICATION_SUBMITTED", getIdea(login("teacher01"), id).path("status").asText());
+    }
+
+    @Test
     void teachersCanReviewBothSeededStagesAndRerunningPreservesTheirChanges() throws Exception {
         String teacherToken = login("teacher01");
         JsonNode studentIdeas = getIdeas(login("student01")).path("content");

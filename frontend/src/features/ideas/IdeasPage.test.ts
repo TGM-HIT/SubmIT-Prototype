@@ -94,11 +94,28 @@ describe('IdeasPage overview supervision preferences', () => {
     const row = page.get('article.data-row')
     expect(row.text()).toContain('Edit')
     expect(row.text()).toContain('Submit')
-    await row.get('button:nth-child(2)').trigger('click')
+    await row.findAll('button').find((button) => button.text() === 'Edit')!.trigger('click')
     await page.get('form').trigger('submit')
     await flushPromises()
     expect(api.update).toHaveBeenCalledWith('idea-WITHDRAWN', expect.objectContaining({ title: 'A WITHDRAWN idea' }))
     expect(api.list).toHaveBeenCalledTimes(2)
+    page.unmount()
+  })
+
+  it('submits a withdrawn idea, refreshes the list, and restores focus to Details', async () => {
+    api.list.mockResolvedValueOnce(pageIdeas('WITHDRAWN')).mockResolvedValue({
+      ...pageIdeas('IDEA_SUBMITTED'),
+      content: [{ ...idea('IDEA_SUBMITTED'), id: 'idea-WITHDRAWN' }],
+    })
+    const page = mountPage()
+    await flushPromises()
+    vi.stubGlobal('confirm', () => true)
+    await page.get('article.data-row').findAll('button').find((button) => button.text() === 'Submit')!.trigger('click')
+    await flushPromises()
+    expect(api.submit).toHaveBeenCalledWith('idea-WITHDRAWN')
+    expect(api.list).toHaveBeenCalledTimes(2)
+    expect(document.activeElement?.getAttribute('data-review-focus-fallback')).not.toBeNull()
+    vi.unstubAllGlobals()
     page.unmount()
   })
 
@@ -110,6 +127,17 @@ describe('IdeasPage overview supervision preferences', () => {
     const row = page.get('article.data-row')
     expect(row.findAll('button').map((button) => button.text())).not.toContain('Edit')
     expect(row.findAll('button').map((button) => button.text())).not.toContain('Submit')
+    page.unmount()
+  })
+
+  it('does not offer withdrawn edit or submit actions to administrators', async () => {
+    state.role = 'ADMIN'
+    api.list.mockResolvedValue(pageIdeas('WITHDRAWN'))
+    const page = mountPage()
+    await flushPromises()
+    const buttons = page.get('article.data-row').findAll('button').map((button) => button.text())
+    expect(buttons).not.toContain('Edit')
+    expect(buttons).not.toContain('Submit')
     page.unmount()
   })
 
