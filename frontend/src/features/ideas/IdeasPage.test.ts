@@ -14,10 +14,12 @@ const api = vi.hoisted(() => ({
   specification: vi.fn(),
   supervision: vi.fn(),
   assignSupervisor: vi.fn(),
+  users: vi.fn(),
 }))
 
 vi.mock('../../api/services', () => ({
   periodsApi: { years: api.years },
+  adminApi: { users: api.users },
   ideasApi: {
     list: api.list,
     get: api.get,
@@ -60,6 +62,10 @@ function pageIdeas(...statuses: string[]) {
   }
 }
 
+function pageUsers(content: Array<{ id: string; displayName: string; role: string }>) {
+  return { content, page: 0, size: 100, totalElements: content.length, totalPages: 1 }
+}
+
 function mountPage() {
   return mount(IdeasPage, {
     attachTo: document.body,
@@ -87,6 +93,10 @@ beforeEach(() => {
   api.submit.mockResolvedValue({})
   api.supervision.mockResolvedValue({})
   api.assignSupervisor.mockResolvedValue({})
+  api.users.mockResolvedValue(pageUsers([
+    { id: 'teacher-1', displayName: 'Teacher One', role: 'TEACHER' },
+    { id: 'teacher-2', displayName: 'Teacher Two', role: 'TEACHER' },
+  ]))
 })
 
 describe('IdeasPage overview supervision preferences', () => {
@@ -290,7 +300,6 @@ describe('IdeasPage overview supervision preferences', () => {
   it.each([
     ['no recorded preference', []],
     ['another teacher’s preference', [{ teacherId: 'teacher-2', preference: 'WANTS_TO_SUPERVISE' }]],
-    ['the signed-in teacher’s NOT_AVAILABLE preference', [{ teacherId: 'teacher-1', preference: 'NOT_AVAILABLE' }]],
   ])('shows no preference summary for %s', async (_description, supervisionPreferences) => {
     state.role = 'TEACHER'
     state.id = 'teacher-1'
@@ -302,6 +311,23 @@ describe('IdeasPage overview supervision preferences', () => {
 
     expect(page.get('article.data-row').text()).not.toContain('Your supervision preference:')
     expect(page.find('.supervision-summary').exists()).toBe(false)
+    page.unmount()
+  })
+
+  it('shows the signed-in teacher an explicit refusal in the overview with its short label', async () => {
+    state.role = 'TEACHER'
+    state.id = 'teacher-1'
+    api.list.mockResolvedValue(pageIdeas('ACCEPTED_FOR_APPLICATIONS'))
+    api.get.mockResolvedValue({ ...idea('ACCEPTED_FOR_APPLICATIONS'), supervisionPreferences: [{
+      id: 'preference-1', teacherId: 'teacher-1', teacherDisplayName: 'Teacher One',
+      preference: 'NOT_WILLING_TO_SUPERVISE',
+    }] })
+    const page = mountPage()
+    await flushPromises()
+    expect(page.get('.supervision-summary').text()).toContain('Your supervision preference: Not willing')
+    await page.get('#details-button-idea-ACCEPTED_FOR_APPLICATIONS').trigger('click')
+    await flushPromises()
+    expect(page.get('[role="dialog"]').text()).toContain('Teacher One · Not willing')
     page.unmount()
   })
 
@@ -345,6 +371,7 @@ describe('IdeasPage overview supervision preferences', () => {
     expect(dialog.text()).toContain('Recorded supervision preferences')
     expect(dialog.text()).toContain('Teacher One · Willing to supervise')
     expect(dialog.text()).toContain('Teacher Two · Wants to supervise')
+    expect(dialog.get('#preference option[value="NOT_WILLING_TO_SUPERVISE"]').text()).toBe('Not willing')
     expect(dialog.text()).not.toContain('teacher-1')
     expect(dialog.text()).not.toContain('teacher-2')
     await dialog.get('#preference').setValue('WANTS_TO_SUPERVISE')
@@ -398,7 +425,7 @@ describe('IdeasPage overview supervision preferences', () => {
     page.unmount()
   })
 
-  it('shows administrator eligible supervisors by display name while retaining their ID as the option value', async () => {
+  it('shows administrator teacher options by display name while retaining their ID as the option value', async () => {
     state.role = 'ADMIN'
     api.list.mockResolvedValue(pageIdeas('ACCEPTED_FOR_APPLICATIONS'))
     api.get.mockResolvedValue({
@@ -418,8 +445,99 @@ describe('IdeasPage overview supervision preferences', () => {
     await flushPromises()
 
     const option = page.get('#teacher-id option[value="teacher-2"]')
-    expect(option.text()).toBe('Teacher Two · Wants to supervise')
+    expect(option.text()).toBe('Teacher Two')
     expect(page.get('#teacher-id').text()).not.toContain('teacher-2')
+    page.unmount()
+  })
+
+  it('groups every teacher in the required order, alphabetically, omitting empty groups', async () => {
+    state.role = 'ADMIN'
+    api.list.mockResolvedValue(pageIdeas('ACCEPTED_FOR_APPLICATIONS'))
+    api.users.mockResolvedValue(pageUsers([
+      { id: 'willing-z', displayName: 'Willing Z', role: 'TEACHER' },
+      { id: 'refusal-b', displayName: 'Refusal B', role: 'TEACHER' },
+      { id: 'no-pref-z', displayName: 'No Pref Z', role: 'TEACHER' },
+      { id: 'want-b', displayName: 'Want B', role: 'TEACHER' },
+      { id: 'no-pref-a', displayName: 'No Pref A', role: 'TEACHER' },
+      { id: 'want-a', displayName: 'Want A', role: 'TEACHER' },
+      { id: 'refusal-a', displayName: 'Refusal A', role: 'TEACHER' },
+    ]))
+    api.get.mockResolvedValue({
+      ...idea('ACCEPTED_FOR_APPLICATIONS'),
+      supervisionPreferences: [
+        { id: 'p1', teacherId: 'want-a', preference: 'WANTS_TO_SUPERVISE' },
+        { id: 'p2', teacherId: 'want-b', preference: 'WANTS_TO_SUPERVISE' },
+        { id: 'p3', teacherId: 'willing-z', preference: 'WILLING_TO_SUPERVISE' },
+        { id: 'p4', teacherId: 'refusal-a', preference: 'NOT_WILLING_TO_SUPERVISE' },
+        { id: 'p5', teacherId: 'refusal-b', preference: 'NOT_AVAILABLE' },
+      ],
+    })
+
+    const page = mountPage()
+    await flushPromises()
+    await page.get('#details-button-idea-ACCEPTED_FOR_APPLICATIONS').trigger('click')
+    await flushPromises()
+    const groups = page.findAll('#teacher-id optgroup')
+    expect(groups.map((group) => group.attributes('label'))).toEqual([
+      'Wants to supervise', 'Willing to supervise', 'No preference', 'Not willing',
+    ])
+    expect(groups.map((group) => group.findAll('option').map((option) => option.text()))).toEqual([
+      ['Want A', 'Want B'],
+      ['Willing Z'],
+      ['No Pref A', 'No Pref Z'],
+      ['Refusal A', 'Refusal B'],
+    ])
+    page.unmount()
+  })
+
+  it('assigns a no-preference teacher directly and warns, confirms, and cancels a refusal override', async () => {
+    state.role = 'ADMIN'
+    api.list.mockResolvedValue(pageIdeas('ACCEPTED_FOR_APPLICATIONS'))
+    api.users.mockResolvedValue(pageUsers([
+      { id: 'no-pref', displayName: 'No Preference Teacher', role: 'TEACHER' },
+      { id: 'refusal', displayName: 'Refusing Teacher', role: 'TEACHER' },
+    ]))
+    let assigned: string | undefined
+    api.get.mockImplementation(async () => ({
+      ...idea('ACCEPTED_FOR_APPLICATIONS'),
+      confirmedSupervisorDisplayName: assigned,
+      supervisionPreferences: [{
+        id: 'preference-1', teacherId: 'refusal', preference: 'NOT_AVAILABLE', note: 'On leave this year.',
+      }],
+    }))
+    api.assignSupervisor.mockImplementation(async (_ideaId: string, teacherId: string, acknowledged: boolean) => {
+      assigned = teacherId === 'no-pref' ? 'No Preference Teacher' : acknowledged ? 'Refusing Teacher' : assigned
+      return {}
+    })
+
+    const page = mountPage()
+    await flushPromises()
+    await page.get('#details-button-idea-ACCEPTED_FOR_APPLICATIONS').trigger('click')
+    await flushPromises()
+    await page.get('#teacher-id').setValue('no-pref')
+    expect(page.find('.refusal-warning').exists()).toBe(false)
+    await page.get('[role="dialog"] form:has(#teacher-id)').trigger('submit')
+    await flushPromises()
+    expect(api.assignSupervisor).toHaveBeenNthCalledWith(1, 'idea-ACCEPTED_FOR_APPLICATIONS', 'no-pref', false)
+    expect(page.get('[role="dialog"]').text()).toContain('Current supervisor: No Preference Teacher')
+
+    await page.get('#teacher-id').setValue('refusal')
+    expect(page.get('.refusal-warning').text()).toContain('Refusing Teacher declined to supervise this idea.')
+    expect(page.get('.refusal-warning').text()).toContain('On leave this year.')
+    expect(page.get('#teacher-id').element).toBeDefined()
+    await page.findAll('[role="dialog"] button').find((button) => button.text() === 'Cancel')!.trigger('click')
+    await flushPromises()
+    expect(api.assignSupervisor).toHaveBeenCalledTimes(1)
+    expect((page.get('#teacher-id').element as HTMLSelectElement).value).toBe('')
+    expect(document.activeElement).toBe(page.get('#teacher-id').element)
+
+    await page.get('#teacher-id').setValue('refusal')
+    await page.get('.refusal-acknowledgment input').setValue(true)
+    await page.get('[role="dialog"] form:has(#teacher-id)').trigger('submit')
+    await flushPromises()
+    expect(api.assignSupervisor).toHaveBeenNthCalledWith(2, 'idea-ACCEPTED_FOR_APPLICATIONS', 'refusal', true)
+    expect(page.get('[role="dialog"]').text()).toContain('Current supervisor: Refusing Teacher')
+    expect(document.activeElement).toBe(page.get('#teacher-id').element)
     page.unmount()
   })
 
@@ -462,14 +580,14 @@ describe('IdeasPage overview supervision preferences', () => {
     await page.get('#teacher-id').setValue('teacher-1')
     await page.get('[role="dialog"] form').trigger('submit')
     await flushPromises()
-    expect(api.assignSupervisor).toHaveBeenNthCalledWith(1, 'idea-ACCEPTED_FOR_APPLICATIONS', 'teacher-1')
+    expect(api.assignSupervisor).toHaveBeenNthCalledWith(1, 'idea-ACCEPTED_FOR_APPLICATIONS', 'teacher-1', false)
     expect(page.get('[role="dialog"]').text()).toContain('Current supervisor: Teacher One')
 
     await page.get('#teacher-id').setValue('teacher-2')
     await page.get('[role="dialog"] form').trigger('submit')
     await flushPromises()
 
-    expect(api.assignSupervisor).toHaveBeenNthCalledWith(2, 'idea-ACCEPTED_FOR_APPLICATIONS', 'teacher-2')
+    expect(api.assignSupervisor).toHaveBeenNthCalledWith(2, 'idea-ACCEPTED_FOR_APPLICATIONS', 'teacher-2', false)
     expect(api.get).toHaveBeenCalledTimes(3)
     expect(page.get('[role="dialog"]').text()).toContain('Current supervisor: Teacher Two')
     expect(page.text()).toContain('Supervisor confirmed.')

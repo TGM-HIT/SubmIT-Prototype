@@ -110,10 +110,18 @@ class IdeaReviewControllerTest {
     }
 
     @Test
-    void administratorsCanAssignAndReplaceEligibleSupervisorsWithoutExposingSupervisorToStudents() throws Exception {
+    void administratorsCanAssignTeachersWithAnyPreferenceAndMustAcknowledgeExplicitRefusals() throws Exception {
         String ideaId = submitIdea("Supervisor assignment is administrator-only");
         String firstTeacherId = users.findByUsername("teacher01").orElseThrow().getId().toString();
         String secondTeacherId = users.findByUsername("teacher02").orElseThrow().getId().toString();
+        String noPreferenceTeacherId = users.findByUsername("teacher03").orElseThrow().getId().toString();
+        String notWillingTeacherId = users.findByUsername("teacher04").orElseThrow().getId().toString();
+        String unavailableTeacherId = users.findByUsername("teacher05").orElseThrow().getId().toString();
+
+        assignSupervisor(ideaId, adminToken, noPreferenceTeacherId).andExpect(status().isOk());
+        getIdea(ideaId, adminToken).andExpect(status().isOk())
+                .andExpect(jsonPath("$.confirmedSupervisorDisplayName").value("Priya Shah"));
+
         preference(ideaId, teacherToken, "WANTS_TO_SUPERVISE", "Ready to supervise")
                 .andExpect(status().isOk());
         preference(ideaId, otherTeacherToken, "WILLING_TO_SUPERVISE", "Available")
@@ -130,16 +138,45 @@ class IdeaReviewControllerTest {
         assignSupervisor(ideaId, adminToken, secondTeacherId).andExpect(status().isOk());
         getIdea(ideaId, adminToken).andExpect(status().isOk())
                 .andExpect(jsonPath("$.confirmedSupervisorDisplayName").value("Marcus Reed"));
+
+        preference(ideaId, login("teacher04"), "NOT_WILLING_TO_SUPERVISE", "I declined this project.")
+                .andExpect(status().isOk());
+        assignSupervisor(ideaId, adminToken, notWillingTeacherId)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("NOT_WILLING_TO_SUPERVISE")));
+        getIdea(ideaId, adminToken).andExpect(status().isOk())
+                .andExpect(jsonPath("$.confirmedSupervisorDisplayName").value("Marcus Reed"));
+        assignSupervisor(ideaId, adminToken, notWillingTeacherId, true).andExpect(status().isOk());
+        getIdea(ideaId, adminToken).andExpect(status().isOk())
+                .andExpect(jsonPath("$.confirmedSupervisorDisplayName").value("Daniel Brooks"));
+
+        preference(ideaId, login("teacher05"), "NOT_AVAILABLE", "Unavailable.")
+                .andExpect(status().isOk());
+        assignSupervisor(ideaId, adminToken, unavailableTeacherId)
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.message").value(org.hamcrest.Matchers.containsString("NOT_AVAILABLE")));
+        assignSupervisor(ideaId, adminToken, unavailableTeacherId, true).andExpect(status().isOk());
+
+        String studentId = users.findByUsername("student01").orElseThrow().getId().toString();
+        String administratorId = users.findByUsername("admin01").orElseThrow().getId().toString();
+        assignSupervisor(ideaId, adminToken, studentId).andExpect(status().isConflict());
+        assignSupervisor(ideaId, adminToken, administratorId).andExpect(status().isConflict());
+        assignSupervisor(ideaId, adminToken, java.util.UUID.randomUUID().toString()).andExpect(status().isNotFound());
+        assignSupervisor(ideaId, studentToken, firstTeacherId).andExpect(status().isForbidden());
         assignSupervisor(ideaId, teacherToken, firstTeacherId).andExpect(status().isForbidden());
     }
 
     @Test
-    void supervisorAssignmentStillRequiresAnEligibleTeacherPreference() throws Exception {
-        String ideaId = submitIdea("Supervisor assignment requires an eligible preference");
+    void newNotWillingPreferenceCanBeRecordedAndIsReturnedInAuthorizedIdeaHistory() throws Exception {
+        String ideaId = submitIdea("New refusal preference is visible in history");
         String teacherId = users.findByUsername("teacher01").orElseThrow().getId().toString();
-        assignSupervisor(ideaId, adminToken, teacherId).andExpect(status().isConflict());
-        preference(ideaId, teacherToken, "NOT_AVAILABLE", "Unavailable").andExpect(status().isOk());
-        assignSupervisor(ideaId, adminToken, teacherId).andExpect(status().isConflict());
+        preference(ideaId, teacherToken, "NOT_WILLING_TO_SUPERVISE", "I do not want to supervise.")
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.preference").value("NOT_WILLING_TO_SUPERVISE"));
+        getIdea(ideaId, studentToken).andExpect(status().isOk())
+                .andExpect(jsonPath("$.supervisionPreferences[0].teacherId").value(teacherId))
+                .andExpect(jsonPath("$.supervisionPreferences[0].preference").value("NOT_WILLING_TO_SUPERVISE"))
+                .andExpect(jsonPath("$.supervisionPreferences[0].note").value("I do not want to supervise."));
     }
 
     @Test
@@ -455,10 +492,16 @@ class IdeaReviewControllerTest {
 
     private org.springframework.test.web.servlet.ResultActions assignSupervisor(
             String ideaId, String token, String teacherId) throws Exception {
+        return assignSupervisor(ideaId, token, teacherId, false);
+    }
+
+    private org.springframework.test.web.servlet.ResultActions assignSupervisor(
+            String ideaId, String token, String teacherId, boolean acknowledgeRefusal) throws Exception {
         return mockMvc.perform(put("/api/ideas/{id}/supervisor", ideaId)
                 .header("Authorization", "Bearer " + token)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(Map.of("teacherId", teacherId))));
+                .content(objectMapper.writeValueAsString(Map.of(
+                        "teacherId", teacherId, "acknowledgeRefusal", acknowledgeRefusal))));
     }
 
     private MvcResult overlappingPreference(String ideaId, String choice, String note,

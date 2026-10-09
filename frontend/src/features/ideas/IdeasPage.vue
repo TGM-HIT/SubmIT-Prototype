@@ -53,7 +53,7 @@
               <p>{{ idea.description }}</p>
               <p>School year {{ idea.schoolYear }} <span v-if="canSeeOwner"> · Submitted by {{ idea.ownerDisplayName }}</span></p>
               <p v-if="isTeacher && idea.ownSupervisionPreference" class="muted supervision-summary">
-                <strong>Your supervision preference:</strong> {{ readable(idea.ownSupervisionPreference) }}
+                <strong>Your supervision preference:</strong> {{ preferenceLabel(idea.ownSupervisionPreference) }}
               </p>
               <span class="status-badge" :class="`status-${idea.status?.toLowerCase()}`">{{ readable(idea.status) }}</span>
             </div>
@@ -82,17 +82,24 @@
       <div v-if="selectedIdea.reviews?.length" class="data-list"><article v-for="review in selectedIdea.reviews" :key="review.id" class="data-row"><div class="row-main"><h3>{{ readable(review.decision) }}</h3><p>{{ review.feedback }}</p><p class="muted">Teacher {{ review.teacherDisplayName }}<template v-if="review.reviewType === 'SPECIFICATION'"> · ratings reflect professional judgement</template></p><p v-if="recordedRatings(review).length" class="muted">Ratings: {{ recordedRatings(review).join(' · ') }}</p></div></article></div>
       <p v-else class="muted">No teacher decisions have been recorded.</p>
       <h3 v-if="selectedIdea.supervisionPreferences?.length" class="form-section-title">Recorded supervision preferences</h3>
-      <div v-for="entry in selectedIdea.supervisionPreferences ?? []" :key="entry.id" class="choice-item"><span>{{ entry.teacherDisplayName }} · {{ readable(entry.preference) }}</span><span class="muted">{{ entry.note }}</span></div>
+      <div v-for="entry in selectedIdea.supervisionPreferences ?? []" :key="entry.id" class="choice-item"><span>{{ entry.teacherDisplayName }} · {{ preferenceLabel(entry.preference) }}</span><span class="muted">{{ entry.note }}</span></div>
       <div v-if="isStudent && canSpecify(selectedIdea)" class="actions"><button class="button" @click="startSpecification">{{ selectedIdea.status === 'WITHDRAWN' ? 'Edit full specification' : 'Develop full specification' }}</button><button v-if="selectedIdea.status === 'IDEA_APPROVED_FOR_SPECIFICATION'" class="button button-secondary" @click="submitSpecification">Submit specification for acceptance review</button></div>
       <div v-if="isTeacher && canReview(selectedIdea)" class="actions"><button id="review-from-details" class="button" type="button" @click="openReview($event)">Review {{ selectedIdea.status === 'SPECIFICATION_SUBMITTED' ? 'specification' : 'idea' }}</button></div>
       <form v-if="isTeacher && !['IDEA_DRAFT','WITHDRAWN','DECLINED'].includes(selectedIdea.status ?? '')" class="panel stack" @submit.prevent="savePreference">
         <h3 class="form-section-title">Your supervision preference</h3>
-        <div class="grid grid-2"><div class="field"><label class="label" for="preference">Preference</label><select id="preference" v-model="preference" class="select"><option value="WANTS_TO_SUPERVISE">Wants to supervise</option><option value="WILLING_TO_SUPERVISE">Willing to supervise</option><option value="NOT_AVAILABLE">Not available</option></select></div><div class="field"><label class="label" for="preference-note">Optional note</label><input id="preference-note" v-model="preferenceNote" class="input" maxlength="2000" /></div></div><button class="button button-secondary" :disabled="task.loading.value">Save preference</button>
+        <div class="grid grid-2"><div class="field"><label class="label" for="preference">Preference</label><select id="preference" v-model="preference" class="select"><option value="WANTS_TO_SUPERVISE">Wants to supervise</option><option value="WILLING_TO_SUPERVISE">Willing to supervise</option><option value="NOT_WILLING_TO_SUPERVISE">Not willing</option><option value="NOT_AVAILABLE">Not available</option></select></div><div class="field"><label class="label" for="preference-note">Optional note</label><input id="preference-note" v-model="preferenceNote" class="input" maxlength="2000" /></div></div><button class="button button-secondary" :disabled="task.loading.value">Save preference</button>
       </form>
       <form v-if="isAdmin" class="panel stack" @submit.prevent="assignSupervisor">
-        <h3 class="form-section-title">Confirm supervisor</h3><p class="muted">Assign only a teacher who has stated they want or are willing to supervise this project.</p>
+        <h3 class="form-section-title">Confirm supervisor</h3><p class="muted">Any teacher can be assigned. Explicit refusals require your acknowledgment.</p>
         <p v-if="selectedIdea.confirmedSupervisorDisplayName" class="muted">Current supervisor: {{ selectedIdea.confirmedSupervisorDisplayName }}</p>
-        <div class="field"><label class="label" for="teacher-id">Eligible teacher who wants or is willing to supervise</label><select id="teacher-id" v-model="teacherId" class="select" required><option value="">Select an eligible teacher…</option><option v-for="entry in eligibleTeachers" :key="entry.teacherId" :value="entry.teacherId">{{ entry.teacherDisplayName }} · {{ readable(entry.preference) }}</option></select></div><button class="button button-secondary" :disabled="!eligibleTeachers.length">Confirm supervisor</button>
+        <div class="field"><label class="label" for="teacher-id">Teacher</label><select id="teacher-id" v-model="teacherId" class="select" required @change="refusalAcknowledged = false"><option value="">Select a teacher…</option><optgroup v-for="group in teacherGroups" :key="group.key" :label="group.label"><option v-for="entry in group.teachers" :key="entry.id" :value="entry.id">{{ entry.displayName }}</option></optgroup></select></div>
+        <div v-if="selectedTeacherRefusal" class="notice refusal-warning" role="alert">
+          <strong>{{ selectedTeacherRefusal.teacher.displayName }} declined to supervise this idea.</strong>
+          <span v-if="selectedTeacherRefusal.note"> {{ selectedTeacherRefusal.note }}</span>
+          <label class="refusal-acknowledgment"><input v-model="refusalAcknowledged" type="checkbox"> <span>I acknowledge this refusal and want to assign this teacher anyway.</span></label>
+        </div>
+        <p v-if="task.error.value" class="error-box" role="alert">{{ task.error.value }}</p>
+        <div class="actions"><button class="button button-secondary" :disabled="!teacherId || (selectedTeacherRefusal !== null && !refusalAcknowledged)">Confirm supervisor</button><button v-if="teacherId" class="button button-secondary" type="button" @click="cancelSupervisorSelection">Cancel</button></div>
       </form>
       <form v-if="specEditorOpen" class="panel stack" @submit.prevent="saveSpecification">
         <h2 class="section-title">Full specification — {{ selectedIdea.title }}</h2>
@@ -112,7 +119,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import type { components } from '../../api/schema'
-import { ideasApi, periodsApi } from '../../api/services'
+import { adminApi, ideasApi, periodsApi } from '../../api/services'
 import type { Page } from '../../api/client'
 import { useAuthStore } from '../../stores/auth'
 import { useTask } from '../../composables/useTask'
@@ -121,6 +128,7 @@ import AsyncPanel from '../../components/AsyncPanel.vue'
 import TextListField from './TextListField.vue'
 
 type Idea = components['schemas']['IdeaResponse']
+type User = components['schemas']['UserResponse']
 type IdeaOverview = Idea & { ownSupervisionPreference?: string }
 type IdeaInput = components['schemas']['IdeaRequest']
 type Review = components['schemas']['ReviewResponse']
@@ -156,6 +164,8 @@ const isSpecReview = ref(false)
 const preference = ref('WILLING_TO_SUPERVISE')
 const preferenceNote = ref('')
 const teacherId = ref('')
+const refusalAcknowledged = ref(false)
+const teachers = ref<User[]>([])
 const scopeText = ref('')
 const learningText = ref('')
 const ideaForm = reactive({ title: '', description: '', intendedOutcome: '', schoolYear: '' })
@@ -165,12 +175,43 @@ const reviewForm = reactive<Record<RatingKey | 'decision' | 'feedback' | 'recomm
   workSize: '', curriculumRelevance: '', technicalComplexity: '', feasibility: '', learningValue: '', resourceNeeds: '', riskAndDependencies: '',
 })
 const visibleIdeas = computed(() => page.value.content.filter((idea) => !yearFilter.value || idea.schoolYear === yearFilter.value))
-const eligibleTeachers = computed(() => (selectedIdea.value?.supervisionPreferences ?? [])
-  .filter((entry) => ['WANTS_TO_SUPERVISE', 'WILLING_TO_SUPERVISE'].includes(entry.preference ?? '')
-    && Boolean(entry.teacherId)))
+const preferenceForTeacher = computed(() => new Map(
+  (selectedIdea.value?.supervisionPreferences ?? []).map((entry) => [entry.teacherId, entry]),
+))
+const teacherGroups = computed(() => {
+  const groups = [
+    { key: 'WANTS_TO_SUPERVISE', label: 'Wants to supervise' },
+    { key: 'WILLING_TO_SUPERVISE', label: 'Willing to supervise' },
+    { key: 'NO_PREFERENCE', label: 'No preference' },
+    { key: 'NOT_WILLING', label: 'Not willing' },
+  ]
+  return groups.map((group) => ({
+    ...group,
+    teachers: teachers.value
+      .map((teacher) => ({ ...teacher, preferenceEntry: preferenceForTeacher.value.get(teacher.id ?? '') }))
+      .filter(({ preferenceEntry }) => {
+        const value = preferenceEntry?.preference
+        if (group.key === 'WANTS_TO_SUPERVISE') return value === 'WANTS_TO_SUPERVISE'
+        if (group.key === 'WILLING_TO_SUPERVISE') return value === 'WILLING_TO_SUPERVISE'
+        if (group.key === 'NO_PREFERENCE') return !value
+        return value === 'NOT_WILLING_TO_SUPERVISE' || value === 'NOT_AVAILABLE'
+      })
+      .sort((first, second) => (first.displayName ?? '').localeCompare(second.displayName ?? '')),
+  })).filter((group) => group.teachers.length > 0)
+})
+const selectedTeacherRefusal = computed(() => {
+  const teacher = teachers.value.find((entry) => entry.id === teacherId.value)
+  const preferenceEntry = preferenceForTeacher.value.get(teacherId.value)
+  if (!teacher || !['NOT_WILLING_TO_SUPERVISE', 'NOT_AVAILABLE'].includes(preferenceEntry?.preference ?? '')) return null
+  return { teacher, note: preferenceEntry?.note }
+})
 
 function readable(value?: string): string {
   return (value ?? 'Unknown').replaceAll('_', ' ').toLowerCase().replace(/^./, (char) => char.toUpperCase())
+}
+function preferenceLabel(value?: string): string {
+  if (value === 'NOT_WILLING_TO_SUPERVISE') return 'Not willing'
+  return readable(value)
 }
 function recordedRatings(review: Review): string[] {
   if (review.reviewType !== 'IDEA') return []
@@ -235,7 +276,7 @@ async function load(index = 0): Promise<void> {
         const details = await ideasApi.get(idea.id)
         const preference = details.supervisionPreferences?.find((entry) =>
           entry.teacherId === teacherId
-          && ['WANTS_TO_SUPERVISE', 'WILLING_TO_SUPERVISE'].includes(entry.preference ?? ''),
+          && ['WANTS_TO_SUPERVISE', 'WILLING_TO_SUPERVISE', 'NOT_WILLING_TO_SUPERVISE', 'NOT_AVAILABLE'].includes(entry.preference ?? ''),
         )?.preference
         return { ...idea, ownSupervisionPreference: preference }
       } catch {
@@ -272,7 +313,19 @@ async function openDetails(idea: Idea, event: MouseEvent): Promise<void> {
   detailsReturnFocus.value = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
   selectedIdea.value = null
   await selectIdea(idea)
-  if (selectedIdea.value) detailsOpen.value = true
+  if (selectedIdea.value) {
+    teacherId.value = ''
+    refusalAcknowledged.value = false
+    if (isAdmin.value) await loadTeachers()
+    detailsOpen.value = true
+  }
+}
+async function loadTeachers(): Promise<void> {
+  const first = await task.run(() => adminApi.users(0, 'TEACHER', undefined, 100))
+  if (!first) return
+  const remaining = await Promise.all(Array.from({ length: Math.max(0, first.totalPages - 1) }, (_, index) =>
+    task.run(() => adminApi.users(index + 1, 'TEACHER', undefined, 100))))
+  teachers.value = [...first.content, ...remaining.flatMap((page) => page?.content ?? [])]
 }
 function closeDetails(): void {
   detailsOpen.value = false
@@ -428,12 +481,27 @@ async function savePreference(): Promise<void> {
 }
 async function assignSupervisor(): Promise<void> {
   if (!selectedIdea.value?.id) return
+  const refusal = selectedTeacherRefusal.value !== null
+  if (refusal && !refusalAcknowledged.value) return
   const idea = selectedIdea.value
-  const result = await task.run(() => ideasApi.assignSupervisor(idea.id!, teacherId.value), 'Supervisor confirmed.')
+  const result = await task.run(
+    () => ideasApi.assignSupervisor(idea.id!, teacherId.value, refusal && refusalAcknowledged.value),
+    'Supervisor confirmed.',
+  )
   if (!result) return
   teacherId.value = ''
+  refusalAcknowledged.value = false
   await selectIdea(idea)
+  await load(page.value.page)
   task.success.value = 'Supervisor confirmed.'
+  await nextTick()
+  document.getElementById('teacher-id')?.focus()
+}
+async function cancelSupervisorSelection(): Promise<void> {
+  teacherId.value = ''
+  refusalAcknowledged.value = false
+  await nextTick()
+  document.getElementById('teacher-id')?.focus()
 }
 let skipFilterReload = false
 watch(statusFilter, () => {

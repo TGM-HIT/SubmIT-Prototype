@@ -123,7 +123,7 @@ For each review, teachers can provide a 1-to-5 rating (1 = low, 5 = high) and op
 
 Ratings support discussion and comparison; they do not automatically accept or reject a project. Teachers can also provide an overall recommendation and explain their assessment.
 
-For every reviewed project, each teacher can record one supervision preference: **wants to supervise**, **willing to supervise**, or **not available**. A teacher may add a note. This preference does not by itself assign a supervisor. An administrator may confirm as the project's supervisor a teacher who has said they want to supervise or are willing to supervise, including after the project has been allocated; projects need not have a confirmed supervisor to be included in an application period.
+For every reviewed project, each teacher can record one supervision preference: **wants to supervise**, **willing to supervise**, **not willing**, or **not available**. A teacher may add a note. This preference does not by itself assign a supervisor. An administrator may confirm any teacher as the project's supervisor, including after the project has been allocated; assigning a teacher who explicitly declined requires the administrator to acknowledge the refusal. Projects need not have a confirmed supervisor to be included in an application period.
 
 ## 9. Student Applications and Group Allocation
 

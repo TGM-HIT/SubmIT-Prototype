@@ -207,10 +207,17 @@ public final class ApiDtos {
     }
 
     public record SupervisionPreferenceRequest(
-            @NotBlank String preference, @Size(max = 2000) String note) {
+            @NotBlank @Schema(allowableValues = {"WANTS_TO_SUPERVISE", "WILLING_TO_SUPERVISE",
+                    "NOT_WILLING_TO_SUPERVISE", "NOT_AVAILABLE"})
+            String preference,
+            @Size(max = 2000) String note) {
     }
 
-    public record SupervisorRequest(@NotNull UUID teacherId) {
+    public record SupervisorRequest(
+            @NotNull UUID teacherId,
+            @Schema(description = "Explicitly acknowledge that this teacher recorded an explicit refusal "
+                    + "(NOT_WILLING_TO_SUPERVISE or NOT_AVAILABLE). Required to assign such a teacher.")
+            Boolean acknowledgeRefusal) {
     }
 
     public record ApplicationPeriodRequest(

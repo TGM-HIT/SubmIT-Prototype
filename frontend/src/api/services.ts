@@ -55,8 +55,8 @@ export const ideasApi = {
   supervision(id: string, preference: string, note: string): Promise<unknown> {
     return json(`/api/ideas/${encodeURIComponent(id)}/supervision-preference`, 'PUT', { preference, note })
   },
-  assignSupervisor(id: string, teacherId: string): Promise<unknown> {
-    return json(`/api/ideas/${encodeURIComponent(id)}/supervisor`, 'PUT', { teacherId })
+  assignSupervisor(id: string, teacherId: string, acknowledgeRefusal = false): Promise<unknown> {
+    return json(`/api/ideas/${encodeURIComponent(id)}/supervisor`, 'PUT', { teacherId, acknowledgeRefusal })
   },
 }
 
@@ -198,10 +198,11 @@ export const userApi = {
 }
 
 export const adminApi = {
-  users(page = 0, role?: NonNullable<UserResponse['role']>, query?: string): Promise<Page<UserResponse>> {
+  users(page = 0, role?: NonNullable<UserResponse['role']>, query?: string, size = 20): Promise<Page<UserResponse>> {
     const params = new URLSearchParams(pageQuery(page))
     if (role) params.set('role', role)
     if (query?.trim()) params.set('q', query.trim())
+    params.set('size', String(size))
     return json(`/api/users?${params}`)
   },
   role(id: string, role: UserResponse['role']): Promise<UserResponse> {

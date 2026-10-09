@@ -30,6 +30,7 @@ export interface paths {
             cookie?: never;
         };
         get: operations["get"];
+        /** Update an idea draft, returned idea, or withdrawn idea owned by the student. */
         put: operations["update"];
         post?: never;
         delete?: never;
@@ -303,6 +304,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Submit an owned draft, returned idea, or withdrawn idea for teacher review. */
         post: operations["submit"];
         delete?: never;
         options?: never;
@@ -976,6 +978,8 @@ export interface components {
         SupervisorRequest: {
             /** Format: uuid */
             teacherId: string;
+            /** @description Explicitly acknowledge that this teacher recorded an explicit refusal (NOT_WILLING_TO_SUPERVISE or NOT_AVAILABLE). Required to assign such a teacher. */
+            acknowledgeRefusal?: boolean;
         };
         SupervisorResponse: {
             /** Format: uuid */
@@ -985,7 +989,8 @@ export interface components {
             status?: string;
         };
         SupervisionPreferenceRequest: {
-            preference: string;
+            /** @enum {string} */
+            preference: "WANTS_TO_SUPERVISE" | "WILLING_TO_SUPERVISE" | "NOT_WILLING_TO_SUPERVISE" | "NOT_AVAILABLE";
             note?: string;
         };
         SpecificationRequest: {

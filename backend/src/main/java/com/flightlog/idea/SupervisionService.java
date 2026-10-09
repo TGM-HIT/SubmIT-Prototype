@@ -49,7 +49,8 @@ public class SupervisionService {
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Idea was not found."));
         ObjectNode payload = rules.object(request);
         String preference = rules.text(payload, "preference");
-        if (!List.of("WANTS_TO_SUPERVISE", "WILLING_TO_SUPERVISE", "NOT_AVAILABLE").contains(preference)) {
+        if (!List.of("WANTS_TO_SUPERVISE", "WILLING_TO_SUPERVISE", "NOT_WILLING_TO_SUPERVISE",
+                "NOT_AVAILABLE").contains(preference)) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Unsupported supervision preference.");
         }
         if (payload.hasNonNull("note") && payload.path("note").asText().length() > MAX_NOTE_LENGTH) {
@@ -78,7 +79,8 @@ public class SupervisionService {
     @PreAuthorize("hasRole('ADMIN')")
     public SupervisorResponse assign(AuthenticatedUser caller, UUID id, JsonNode request) {
         findIdea(id);
-        UUID teacherId = UUID.fromString(rules.object(request).path("teacherId").asText());
+        ObjectNode payload = rules.object(request);
+        UUID teacherId = UUID.fromString(payload.path("teacherId").asText());
         UserAccount teacher = users.findById(teacherId)
                 .orElseThrow(() -> new EntityNotFoundException("Teacher was not found."));
         if (teacher.getRole() != Role.TEACHER) {
@@ -86,10 +88,15 @@ public class SupervisionService {
         }
         StoredRecord preference = store.repository()
                 .findFirstByTypeAndParentIdAndOwnerIdOrderByCreatedAtDesc(SUPERVISION, id.toString(),
-                        teacherId.toString())
-                .orElseThrow(() -> rules.conflict("The teacher has not recorded a supervision preference."));
-        if (!List.of("WANTS_TO_SUPERVISE", "WILLING_TO_SUPERVISE").contains(preference.getStatus())) {
-            throw rules.conflict("The teacher is not available to supervise this project.");
+                        teacherId.toString()).orElse(null);
+        if (preference != null && List.of("NOT_WILLING_TO_SUPERVISE", "NOT_AVAILABLE")
+                .contains(preference.getStatus()) && !payload.path("acknowledgeRefusal").asBoolean(false)) {
+            throw rules.conflict("The teacher explicitly declined to supervise this project ("
+                    + preference.getStatus() + "). Acknowledge the refusal to continue.");
+        }
+        if (preference != null && !List.of("WANTS_TO_SUPERVISE", "WILLING_TO_SUPERVISE",
+                "NOT_WILLING_TO_SUPERVISE", "NOT_AVAILABLE").contains(preference.getStatus())) {
+            throw rules.conflict("The teacher has an unsupported supervision preference.");
         }
         ObjectNode assignment = store.object().put("teacherId", teacherId.toString());
         StoredRecord record = store.create("confirmed_supervisor", caller.id().toString(), id.toString(),
