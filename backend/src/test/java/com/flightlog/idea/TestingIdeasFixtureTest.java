@@ -163,7 +163,21 @@ class TestingIdeasFixtureTest {
         }
         assertTrue(revision != null);
         String id = revision.path("id").asText();
-        int historySize = revision.path("reviews").size();
+        String teacherToken = login("teacher01");
+        mockMvc.perform(post("/api/ideas/{id}/reviews", id)
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"decision\":\"REQUEST_REVISION\",\"feedback\":\"Clarify the model.\","
+                                + "\"workSize\":4,\"feasibility\":5,\"learningValue\":4}"))
+                .andExpect(status().isCreated());
+        mockMvc.perform(put("/api/ideas/{id}/supervision-preference", id)
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"preference\":\"WILLING_TO_SUPERVISE\",\"note\":\"Available for this project\"}"))
+                .andExpect(status().isOk());
+        JsonNode beforeWithdraw = getIdea(studentToken, id);
+        JsonNode reviewBefore = beforeWithdraw.path("reviews").get(0).deepCopy();
+        JsonNode preferenceBefore = beforeWithdraw.path("supervisionPreferences").get(0).deepCopy();
         mockMvc.perform(post("/api/ideas/{id}/withdraw", id)
                         .header("Authorization", "Bearer " + studentToken))
                 .andExpect(status().isOk());
@@ -182,9 +196,36 @@ class TestingIdeasFixtureTest {
                 .andExpect(status().isOk())
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
                         .jsonPath("$.status").value("IDEA_SUBMITTED"));
-        JsonNode resubmitted = getIdea(login("teacher01"), id);
+        JsonNode resubmitted = getIdea(teacherToken, id);
         assertEquals("IDEA_SUBMITTED", resubmitted.path("status").asText());
-        assertEquals(historySize, resubmitted.path("reviews").size());
+        assertEquals(1, resubmitted.path("reviews").size());
+        assertEquals(reviewBefore, resubmitted.path("reviews").get(0));
+        assertEquals(1, resubmitted.path("supervisionPreferences").size());
+        assertEquals(preferenceBefore, resubmitted.path("supervisionPreferences").get(0));
+        assertTrue(java.util.stream.StreamSupport.stream(getIdeas(teacherToken).path("content").spliterator(), false)
+                .anyMatch(item -> id.equals(item.path("id").asText())
+                        && "IDEA_SUBMITTED".equals(item.path("status").asText())));
+    }
+
+    @Test
+    void invalidWithdrawnEditLeavesPayloadAndRelatedRecordsUnchanged() throws Exception {
+        String token = login("student01");
+        JsonNode source = getIdea(token, getIdeas(token).path("content").get(0).path("id").asText());
+        String id = source.path("id").asText();
+        mockMvc.perform(post("/api/ideas/{id}/withdraw", id).header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+        JsonNode before = getIdea(token, id);
+        var invalid = before.deepCopy();
+        ((com.fasterxml.jackson.databind.node.ObjectNode) invalid).remove("title");
+        mockMvc.perform(put("/api/ideas/{id}", id)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON).content(invalid.toString()))
+                .andExpect(status().isBadRequest());
+        JsonNode after = getIdea(token, id);
+        assertEquals("WITHDRAWN", after.path("status").asText());
+        assertEquals(before.path("reviews"), after.path("reviews"));
+        assertEquals(before.path("supervisionPreferences"), after.path("supervisionPreferences"));
+        assertEquals(before.path("title"), after.path("title"));
     }
 
     @Test
@@ -218,6 +259,7 @@ class TestingIdeasFixtureTest {
         assertTrue(specified != null);
         String id = specified.path("id").asText();
         JsonNode detail = getIdea(token, id);
+        JsonNode existingReviews = detail.path("reviews").deepCopy();
         mockMvc.perform(post("/api/ideas/{id}/withdraw", id).header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk());
         JsonNode spec = detail.path("specification");
@@ -228,7 +270,29 @@ class TestingIdeasFixtureTest {
         mockMvc.perform(post("/api/ideas/{id}/specification/submit", id)
                         .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk());
-        assertEquals("SPECIFICATION_SUBMITTED", getIdea(login("teacher01"), id).path("status").asText());
+        JsonNode resubmitted = getIdea(login("teacher01"), id);
+        assertEquals("SPECIFICATION_SUBMITTED", resubmitted.path("status").asText());
+        assertEquals(existingReviews, resubmitted.path("reviews"));
+    }
+
+    @Test
+    void onlyTheOwnerStudentCanEditOrResubmitAWithdrawnIdea() throws Exception {
+        String ownerToken = login("student01");
+        JsonNode source = getIdea(ownerToken, getIdeas(ownerToken).path("content").get(0).path("id").asText());
+        String id = source.path("id").asText();
+        mockMvc.perform(post("/api/ideas/{id}/withdraw", id).header("Authorization", "Bearer " + ownerToken))
+                .andExpect(status().isOk());
+        String payload = source.toString();
+        for (String username : List.of("student02", "teacher01", "admin01")) {
+            mockMvc.perform(put("/api/ideas/{id}", id)
+                            .header("Authorization", "Bearer " + login(username))
+                            .contentType(MediaType.APPLICATION_JSON).content(payload))
+                    .andExpect(status().isForbidden());
+            mockMvc.perform(post("/api/ideas/{id}/submit", id)
+                            .header("Authorization", "Bearer " + login(username)))
+                    .andExpect(status().isForbidden());
+        }
+        assertEquals("WITHDRAWN", getIdea(ownerToken, id).path("status").asText());
     }
 
     @Test

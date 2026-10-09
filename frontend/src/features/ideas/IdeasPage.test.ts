@@ -119,6 +119,19 @@ describe('IdeasPage overview supervision preferences', () => {
     page.unmount()
   })
 
+  it('focuses the status filter when a successful submit removes the row', async () => {
+    api.list.mockResolvedValueOnce(pageIdeas('WITHDRAWN')).mockResolvedValue(pageIdeas())
+    const page = mountPage()
+    await flushPromises()
+    vi.stubGlobal('confirm', () => true)
+    await page.get('article.data-row').findAll('button').find((button) => button.text() === 'Submit')!.trigger('click')
+    await flushPromises()
+    expect(api.list).toHaveBeenCalledTimes(2)
+    expect(document.activeElement?.id).toBe('status-filter')
+    vi.unstubAllGlobals()
+    page.unmount()
+  })
+
   it('does not offer withdrawn edit or submit actions to teachers', async () => {
     state.role = 'TEACHER'
     api.list.mockResolvedValue(pageIdeas('WITHDRAWN'))

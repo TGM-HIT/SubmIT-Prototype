@@ -43,7 +43,7 @@
       <div class="toolbar">
         <div class="field"><label class="label" for="status-filter">Lifecycle status</label><select id="status-filter" v-model="statusFilter" class="select"><option value="">All visible statuses</option><option v-for="status in statuses" :key="status" :value="status">{{ readable(status) }}</option></select></div>
         <div class="field"><label class="label" for="year-filter">School year</label><select id="year-filter" v-model="yearFilter" class="select"><option value="">All school years</option><option v-for="year in schoolYears" :key="year" :value="year">{{ year }}</option></select></div>
-        <button class="button button-secondary" type="button" @click="load(0)">Refresh list</button>
+        <button id="ideas-refresh-list" class="button button-secondary" type="button" @click="load(0)">Refresh list</button>
       </div>
       <AsyncPanel :loading="task.loading.value" :error="task.error.value" @retry="load(page.page)">
         <div v-if="visibleIdeas.length" class="data-list">
@@ -60,8 +60,8 @@
             <div class="actions">
               <button :id="`details-button-${idea.id}`" data-review-focus-fallback class="button button-secondary button-small" type="button" @click="openDetails(idea, $event)">Details &amp; history</button>
               <button v-if="isTeacher && canReview(idea)" :id="`review-button-${idea.id}`" class="button button-small" type="button" @click="startReview(idea, $event)">Review</button>
-              <button v-if="isStudent && editable(idea)" class="button button-secondary button-small" type="button" @click="editIdea(idea)">Edit</button>
-              <button v-if="isStudent && editable(idea)" class="button button-small" type="button" @click="submitIdea(idea, $event)">Submit</button>
+              <button v-if="isStudent && editable(idea) && !hasWithdrawnSpecification(idea)" class="button button-secondary button-small" type="button" @click="editIdea(idea)">Edit</button>
+              <button v-if="isStudent && editable(idea) && !hasWithdrawnSpecification(idea)" class="button button-small" type="button" @click="submitIdea(idea, $event)">Submit</button>
               <button v-if="isStudent && canWithdraw(idea)" class="button button-danger button-small" type="button" @click="withdrawIdea(idea)">Withdraw</button>
             </div>
           </article>
@@ -182,6 +182,15 @@ function recordedRatings(review: Review): string[] {
 function editable(idea: Idea): boolean {
   return ['IDEA_DRAFT','IDEA_NEEDS_REVISION','WITHDRAWN'].includes(idea.status ?? '')
 }
+function hasWithdrawnSpecification(idea: Idea): boolean {
+  return idea.status === 'WITHDRAWN' && Boolean(idea.specification)
+}
+function focusListFallback(id: string): void {
+  const target = document.getElementById(`details-button-${id}`)
+    ?? document.getElementById('status-filter')
+    ?? document.getElementById('ideas-refresh-list')
+  target?.focus()
+}
 function canWithdraw(idea: Idea): boolean {
   return !['WITHDRAWN','DECLINED','ALLOCATED','FINALIZED'].includes(idea.status ?? '')
 }
@@ -292,15 +301,13 @@ async function saveIdea(): Promise<void> {
   if (result) { editorOpen.value = false; await load(page.value.page) }
 }
 async function submitIdea(idea: Idea, event?: MouseEvent): Promise<void> {
+  void event
   if (!confirm('Submit this idea for teacher review? Editing will be locked until it is returned or approved.')) return
-  const fallbackId = event?.currentTarget instanceof HTMLElement
-    ? `details-button-${idea.id ?? ''}` : `details-button-${idea.id ?? ''}`
   const result = await task.run(() => ideasApi.submit(idea.id ?? ''), 'Idea submitted for review.')
   if (result) {
     await load(page.value.page)
     await nextTick()
-    const fallback = document.getElementById(fallbackId)
-    fallback?.focus()
+    focusListFallback(idea.id ?? '')
   }
 }
 async function withdrawIdea(idea: Idea): Promise<void> {
@@ -319,13 +326,26 @@ function startSpecification(): void {
 }
 async function saveSpecification(): Promise<void> {
   if (!selectedIdea.value?.id) return
+  const ideaId = selectedIdea.value.id
   const result = await task.run(() => ideasApi.specification(selectedIdea.value!.id!, { ...specForm }), 'Specification saved.')
-  if (result) { specEditorOpen.value = false; await selectIdea(selectedIdea.value) }
+  if (result) {
+    specEditorOpen.value = false
+    await selectIdea({ id: ideaId } as Idea)
+    await load(page.value.page)
+    await nextTick()
+    focusListFallback(ideaId)
+  }
 }
 async function submitSpecification(): Promise<void> {
   if (!selectedIdea.value?.id || !confirm('Submit the full specification for teacher acceptance review?')) return
+  const ideaId = selectedIdea.value.id
   const result = await task.run(() => ideasApi.submitSpecification(selectedIdea.value!.id!), 'Specification submitted.')
-  if (result) await selectIdea(selectedIdea.value!)
+  if (result) {
+    await selectIdea({ id: ideaId } as Idea)
+    await load(page.value.page)
+    await nextTick()
+    focusListFallback(ideaId)
+  }
 }
 function openReview(event?: MouseEvent): void {
   if (!selectedIdea.value) return
