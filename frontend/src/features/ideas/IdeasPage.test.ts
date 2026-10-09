@@ -8,6 +8,8 @@ const api = vi.hoisted(() => ({
   list: vi.fn(),
   get: vi.fn(),
   review: vi.fn(),
+  update: vi.fn(),
+  submit: vi.fn(),
   supervision: vi.fn(),
   assignSupervisor: vi.fn(),
 }))
@@ -17,6 +19,8 @@ vi.mock('../../api/services', () => ({
   ideasApi: {
     list: api.list,
     get: api.get,
+    update: api.update,
+    submit: api.submit,
     review: api.review,
     supervision: api.supervision,
     assignSupervisor: api.assignSupervisor,
@@ -75,11 +79,40 @@ beforeEach(() => {
   api.list.mockResolvedValue(pageIdeas())
   api.get.mockImplementation(async (id: string) => idea(id.replace('idea-', '')))
   api.review.mockResolvedValue({ decision: 'APPROVE_FOR_SPECIFICATION' })
+  api.update.mockResolvedValue({})
+  api.submit.mockResolvedValue({})
   api.supervision.mockResolvedValue({})
   api.assignSupervisor.mockResolvedValue({})
 })
 
 describe('IdeasPage overview supervision preferences', () => {
+  it('offers withdrawn students edit and submit actions, and refreshes after each succeeds', async () => {
+    api.list.mockResolvedValueOnce(pageIdeas('WITHDRAWN')).mockResolvedValue(pageIdeas())
+    const page = mountPage()
+    await flushPromises()
+
+    const row = page.get('article.data-row')
+    expect(row.text()).toContain('Edit')
+    expect(row.text()).toContain('Submit')
+    await row.get('button:nth-child(2)').trigger('click')
+    await page.get('form').trigger('submit')
+    await flushPromises()
+    expect(api.update).toHaveBeenCalledWith('idea-WITHDRAWN', expect.objectContaining({ title: 'A WITHDRAWN idea' }))
+    expect(api.list).toHaveBeenCalledTimes(2)
+    page.unmount()
+  })
+
+  it('does not offer withdrawn edit or submit actions to teachers', async () => {
+    state.role = 'TEACHER'
+    api.list.mockResolvedValue(pageIdeas('WITHDRAWN'))
+    const page = mountPage()
+    await flushPromises()
+    const row = page.get('article.data-row')
+    expect(row.findAll('button').map((button) => button.text())).not.toContain('Edit')
+    expect(row.findAll('button').map((button) => button.text())).not.toContain('Submit')
+    page.unmount()
+  })
+
   it.each(['TEACHER', 'ADMIN'])(
     'shows the submitter display name rather than the owner ID in the %s overview',
     async (role) => {

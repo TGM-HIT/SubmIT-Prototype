@@ -180,7 +180,7 @@ function recordedRatings(review: Review): string[] {
   })
 }
 function editable(idea: Idea): boolean {
-  return ['IDEA_DRAFT','IDEA_NEEDS_REVISION'].includes(idea.status ?? '')
+  return ['IDEA_DRAFT','IDEA_NEEDS_REVISION','WITHDRAWN'].includes(idea.status ?? '')
 }
 function canWithdraw(idea: Idea): boolean {
   return !['WITHDRAWN','DECLINED','ALLOCATED','FINALIZED'].includes(idea.status ?? '')

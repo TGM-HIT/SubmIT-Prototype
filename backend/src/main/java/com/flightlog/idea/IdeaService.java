@@ -29,6 +29,7 @@ public class IdeaService {
     private static final String SPEC_SUBMITTED = "SPECIFICATION_SUBMITTED";
     private static final String SPEC_NEEDS_REVISION = "SPECIFICATION_NEEDS_REVISION";
     private static final String SPEC_DRAFT = "SPECIFICATION_DRAFT";
+    private static final String WITHDRAWN = "WITHDRAWN";
     private static final String LEARNING_TOPICS = "learningTopics";
     private final RecordStore store;
     private final AuditService audit;
@@ -72,10 +73,10 @@ public class IdeaService {
     public ApiDtos.IdeaResponse update(AuthenticatedUser caller, UUID id, JsonNode request) {
         StoredRecord idea = findIdea(id);
         requireOwner(caller, idea);
-        rules.status(idea, IDEA_DRAFT, IDEA_NEEDS_REVISION);
+        rules.status(idea, IDEA_DRAFT, IDEA_NEEDS_REVISION, WITHDRAWN);
         ObjectNode payload = rules.object(request);
         validateIdeaPayload(payload);
-        store.update(idea, idea.getStatus(), payload);
+        store.update(idea, WITHDRAWN.equals(idea.getStatus()) ? IDEA_DRAFT : idea.getStatus(), payload);
         audit.record(caller, "IDEA_UPDATED", IDEA, id);
         return mapper.response(idea, false);
     }
@@ -85,7 +86,7 @@ public class IdeaService {
     public ApiDtos.IdeaResponse submit(AuthenticatedUser caller, UUID id) {
         StoredRecord idea = findIdea(id);
         requireOwner(caller, idea);
-        rules.status(idea, IDEA_DRAFT, IDEA_NEEDS_REVISION);
+        rules.status(idea, IDEA_DRAFT, IDEA_NEEDS_REVISION, WITHDRAWN);
         store.update(idea, IDEA_SUBMITTED, store.parse(idea));
         audit.record(caller, "IDEA_SUBMITTED", IDEA, id);
         return mapper.response(idea, false);

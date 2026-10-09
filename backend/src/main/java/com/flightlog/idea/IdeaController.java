@@ -57,12 +57,14 @@ public class IdeaController {
     }
 
     @PutMapping("/{id}")
+    @Operation(summary = "Update an idea draft, returned idea, or withdrawn idea owned by the student.")
     public IdeaResponse update(@AuthenticationPrincipal AuthenticatedUser caller, @PathVariable UUID id,
             @Valid @RequestBody IdeaRequest request) {
         return ideaService.update(caller, id, objectMapper.valueToTree(request));
     }
 
     @PostMapping("/{id}/submit")
+    @Operation(summary = "Submit an owned draft, returned idea, or withdrawn idea for teacher review.")
     public IdeaResponse submit(@AuthenticationPrincipal AuthenticatedUser caller, @PathVariable UUID id) {
         return ideaService.submit(caller, id);
     }

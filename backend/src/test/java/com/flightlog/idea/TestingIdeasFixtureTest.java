@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -102,6 +103,7 @@ class TestingIdeasFixtureTest {
                     titles.add(item.path("title").asText());
                     teacherIdeaIds.add(item.path("id").asText());
                 }
+
                 if ("IDEA_SUBMITTED".equals(item.path("status").asText())) {
                     submitted = item;
                 } else if ("SPECIFICATION_SUBMITTED".equals(item.path("status").asText())) {
@@ -146,6 +148,43 @@ class TestingIdeasFixtureTest {
                     .isEmpty());
         }
         assertEquals(10, teacherIdeaIds.size());
+    }
+
+    @Test
+    void ownerCanEditAndResubmitWithdrawnIdeaWhileHistoryIsPreserved() throws Exception {
+        String studentToken = login("student01");
+        JsonNode ideas = getIdeas(studentToken).path("content");
+        JsonNode revision = null;
+        for (JsonNode idea : ideas) {
+            if ("IDEA_SUBMITTED".equals(idea.path("status").asText())) {
+                revision = getIdea(studentToken, idea.path("id").asText());
+                break;
+            }
+        }
+        assertTrue(revision != null);
+        String id = revision.path("id").asText();
+        int historySize = revision.path("reviews").size();
+        mockMvc.perform(post("/api/ideas/{id}/withdraw", id)
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk());
+
+        var edited = revision.deepCopy();
+        ((com.fasterxml.jackson.databind.node.ObjectNode) edited).put("title", "Reopened idea");
+        mockMvc.perform(put("/api/ideas/{id}", id)
+                        .header("Authorization", "Bearer " + studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(edited.toString()))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .jsonPath("$.status").value("IDEA_DRAFT"));
+        mockMvc.perform(post("/api/ideas/{id}/submit", id)
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .jsonPath("$.status").value("IDEA_SUBMITTED"));
+        JsonNode resubmitted = getIdea(login("teacher01"), id);
+        assertEquals("IDEA_SUBMITTED", resubmitted.path("status").asText());
+        assertEquals(historySize, resubmitted.path("reviews").size());
     }
 
     @Test
