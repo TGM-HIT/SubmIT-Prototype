@@ -74,6 +74,7 @@ public class IdeaService {
         StoredRecord idea = findIdea(id);
         requireOwner(caller, idea);
         rules.status(idea, IDEA_DRAFT, IDEA_NEEDS_REVISION, WITHDRAWN);
+        rejectGenericLifecycleForWithdrawnSpecification(idea);
         ObjectNode payload = rules.object(request);
         validateIdeaPayload(payload);
         store.update(idea, WITHDRAWN.equals(idea.getStatus()) ? IDEA_DRAFT : idea.getStatus(), payload);
@@ -87,6 +88,7 @@ public class IdeaService {
         StoredRecord idea = findIdea(id);
         requireOwner(caller, idea);
         rules.status(idea, IDEA_DRAFT, IDEA_NEEDS_REVISION, WITHDRAWN);
+        rejectGenericLifecycleForWithdrawnSpecification(idea);
         ObjectNode payload = store.parse(idea);
         validateIdeaPayload(payload);
         store.update(idea, IDEA_SUBMITTED, payload);
@@ -200,6 +202,18 @@ public class IdeaService {
             return;
         }
         throw rules.conflict("A submitted specification cannot be edited until returned for revision.");
+    }
+
+    private void rejectGenericLifecycleForWithdrawnSpecification(StoredRecord idea) {
+        if (!WITHDRAWN.equals(idea.getStatus())) {
+            return;
+        }
+        StoredRecord specification = store.repository()
+                .findFirstByTypeAndParentIdOrderByCreatedAtDesc(SPECIFICATION, idea.getId().toString())
+                .orElse(null);
+        if (specification != null && SPEC_SUBMITTED.equals(specification.getStatus())) {
+            throw rules.conflict("A withdrawn full specification must be edited or submitted through the specification flow.");
+        }
     }
 
     private StoredRecord findIdea(UUID id) {

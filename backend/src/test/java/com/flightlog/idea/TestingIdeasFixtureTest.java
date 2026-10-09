@@ -276,6 +276,38 @@ class TestingIdeasFixtureTest {
     }
 
     @Test
+    void genericWithdrawnIdeaEndpointsCannotChangeWithdrawnFullSpecification() throws Exception {
+        String token = login("student01");
+        JsonNode specified = java.util.stream.StreamSupport.stream(
+                        getIdeas(token).path("content").spliterator(), false)
+                .filter(candidate -> "SPECIFICATION_SUBMITTED".equals(candidate.path("status").asText()))
+                .findFirst().orElseThrow();
+        String id = specified.path("id").asText();
+        JsonNode before = getIdea(token, id);
+        JsonNode specificationBefore = before.path("specification").deepCopy();
+
+        mockMvc.perform(post("/api/ideas/{id}/withdraw", id)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk());
+        JsonNode withdrawn = getIdea(token, id);
+        assertEquals("WITHDRAWN", withdrawn.path("status").asText());
+        assertEquals(specificationBefore, withdrawn.path("specification"));
+
+        mockMvc.perform(put("/api/ideas/{id}", id)
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(withdrawn.toString()))
+                .andExpect(status().isConflict());
+        mockMvc.perform(post("/api/ideas/{id}/submit", id)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isConflict());
+
+        JsonNode after = getIdea(token, id);
+        assertEquals("WITHDRAWN", after.path("status").asText());
+        assertEquals(specificationBefore, after.path("specification"));
+    }
+
+    @Test
     void onlyTheOwnerStudentCanEditOrResubmitAWithdrawnIdea() throws Exception {
         String ownerToken = login("student01");
         JsonNode source = getIdea(ownerToken, getIdeas(ownerToken).path("content").get(0).path("id").asText());
