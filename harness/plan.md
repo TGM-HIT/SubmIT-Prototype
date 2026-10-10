@@ -30,6 +30,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Bug-07](tickets/done/Bug-07.md) | done | Align the Clear filters button height in Administration |
 | [Bug-08](tickets/done/Bug-08.md) | done | Allow a withdrawn idea to be edited and submitted again |
 | [Bug-09](tickets/done/Bug-09.md) | done | Show names instead of IDs in application summaries and allocation results |
+| [Bug-10](tickets/Bug-10.md) | to-do | Show project titles instead of UUIDs to students in an open application period |
 
 ### Development
 
@@ -55,3 +56,5 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Feature-08](tickets/done/Feature-08.md) | done | Show account names in Ideas & reviews |
 | [Feature-09](tickets/done/Feature-09.md) | done | Allow application periods without confirmed supervisors |
 | [Feature-10](tickets/done/Feature-10.md) | done | Let administrators assign any teacher as supervisor, warning for explicit refusals |
+| [Feature-11](tickets/Feature-11.md) | to-do | Show students their application status and project assignment |
+| [Feature-12](tickets/Feature-12.md) | to-do | Show students the specifications of projects they can select |

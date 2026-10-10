@@ -59,6 +59,15 @@ which required checks you ran or could not run. The Evaluator decides whether
 the evidence establishes acceptance. Otherwise, once the checks pass, commit
 your change on the current branch.
 
+Before handoff, list each "Durable automated tests" bullet in the ticket and the
+test that covers it, and confirm each assertion could fail if the behavior
+regressed (for example, persistence assertions must reload from the repository
+rather than reuse a returned object). Put the mapping under "What was verified"
+and report any bullet with no test under "What's uncertain". On a revise pass,
+either redo the affected manual verification or state in "What's uncertain"
+which earlier evidence is reused and which changed UI behavior it does not
+cover.
+
 Then save and report back in the exact handoff file requested by the Orchestrator: a short prose block under three fixed headings, nothing more. Use these exact headings, including the Markdown heading marks, verbatim:
 
 ## What was done

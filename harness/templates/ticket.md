@@ -16,6 +16,7 @@
 Durable automated tests (join the build):
 
 - <Name required automated regression scenarios and observable outcomes. If shared seed data or fixtures change, also name existing tests that assert on them.>
+- <For every acceptance criterion covering a failure, fallback, boundary, or authorization case, name a matching automated scenario here, and name each endpoint or view it applies to. An acceptance criterion with no named check is not covered.>
 
 Standard project checks (keep only the blocks matching the ticket's scope; all must pass, and the Evaluator re-runs them):
 

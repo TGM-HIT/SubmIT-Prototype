@@ -28,6 +28,8 @@ For Dev-02, evaluate any changes to `frontend/DEV-GUIDELINES.md` or `backend/DEV
 
 Return one verdict: `pass`, `revise`, or `awaiting-human`.
 
+If the Implementor's handoff says manual evidence from an earlier pass was reused on a revise pass, check that claim against the files changed in the revise commit and treat any changed UI behavior the reused evidence does not cover as an unmet criterion.
+
 - `pass` means all required acceptance criteria are established; ship it.
 - `revise` means a concrete implementation or test change can resolve an unmet
   criterion. Name specific, actionable new work for a fresh Implementor, based
