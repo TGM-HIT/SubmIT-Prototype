@@ -23,12 +23,12 @@
       <div class="page-heading"><div><h2 class="section-title">Run outcome</h2><p class="muted">Snapshot captured {{ selectedRun.createdAt ?? 'time unavailable' }}</p></div><button class="button button-secondary button-small" @click="selectedRun = null">Close result</button></div>
       <span class="status-badge" :class="`status-${statusOf(selectedRun).toLowerCase()}`">{{ statusOf(selectedRun) }}</span>
       <p v-if="selectedRun.error" class="error-box">Run did not complete: {{ selectedRun.error }}</p>
-      <div v-for="(assignment, index) in assignments(selectedRun)" :key="index" class="data-row">
-        <div class="row-main"><h3 class="staff-display-label">{{ assignment.projectTitle }}</h3><p>{{ assignment.studentIds.length }} students assigned</p><p>Supervisor: {{ supervisors[assignment.projectId] || 'No supervisor assigned' }}</p><p class="muted">Members are shown only to authorized project staff. Group sizes remain within the required 3–5 range.</p></div>
-        <div class="choice-list"><span v-for="student in assignment.studentNames" :key="student" class="status-badge staff-member-label">{{ student }}</span></div>
+      <div v-for="assignment in assignments(selectedRun)" :key="assignment.projectId" class="data-row">
+        <div class="row-main"><h3 class="staff-display-label">{{ assignment.projectTitle }}</h3><p>{{ assignment.students.length }} students assigned</p><p>Supervisor: {{ supervisors[assignment.projectId] || 'No supervisor assigned' }}</p><p class="muted">Members are shown only to authorized project staff. Group sizes remain within the required 3–5 range.</p></div>
+        <div class="choice-list"><span v-for="(student, index) in assignment.students" :key="student.id || index" class="status-badge staff-member-label">{{ student.name }}</span></div>
       </div>
       <h3 class="form-section-title">Unassigned outcomes</h3>
-      <div v-if="unassigned(selectedRun).length" class="choice-list"><p v-for="(entry, index) in unassigned(selectedRun)" :key="index" class="notice staff-display-label">{{ entry.studentDisplayName ?? entry.projectTitle ?? 'Unassigned' }} · {{ entry.reason ?? entry.explanation ?? 'No reason supplied by the run.' }}</p></div>
+      <div v-if="unassigned(selectedRun).length" class="choice-list"><p v-for="(entry, index) in unassigned(selectedRun)" :key="unassignedKey(entry, index)" class="notice staff-display-label">{{ entry.studentDisplayName ?? entry.projectTitle ?? 'Unassigned' }} · {{ entry.reason ?? entry.explanation ?? 'No reason supplied by the run.' }}</p></div>
       <p v-else class="muted">The run did not report unassigned students or projects.</p>
     </section>
     <p v-if="task.success.value" class="success-note" role="status">{{ task.success.value }}</p>
@@ -59,7 +59,7 @@ const deadlinePassed = computed(() => Boolean(selectedPeriod.value?.closesAt && 
 function idOf(run: Data): string { return String(run.id ?? '') }
 function statusOf(run: Data): string { return String(run.status ?? 'UNKNOWN').toUpperCase() }
 function date(value?: string): string { return value ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : 'unknown' }
-function assignments(run: Data): { projectId: string; projectTitle: string; studentIds: string[]; studentNames: string[] }[] {
+function assignments(run: Data): { projectId: string; projectTitle: string; students: { id: string; name: string }[] }[] {
   const result = run.result
   if (!result || typeof result !== "object" || !Array.isArray((result as Data).assignments)) return []
   const groups = new Map<string, { title: string; students: Map<string, string> }>()
@@ -84,9 +84,12 @@ function assignments(run: Data): { projectId: string; projectTitle: string; stud
   return [...groups.entries()].map(([projectId, group]) => ({
     projectId,
     projectTitle: group.title,
-    studentIds: [...group.students.keys()],
-    studentNames: [...group.students.values()],
+    students: [...group.students.entries()].map(([id, name]) => ({ id, name })),
   }))
+}
+function unassignedKey(entry: Data, index: number): string | number {
+  const id = entry.studentId ?? entry.projectId
+  return typeof id === "string" || typeof id === "number" ? id : index
 }
 function unassigned(run: Data): Data[] {
   const result = run.result as Data | undefined
