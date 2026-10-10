@@ -213,4 +213,37 @@ describe('application period configuration', () => {
     expect(styles).toContain(".staff-display-label { overflow-wrap: anywhere; word-break: break-word; }")
   })
 
+  it("shows neutral placeholders when summary names and project titles are unresolved", async () => {
+    const applicationId = "11111111-1111-4111-8111-111111111111"
+    const studentId = "22222222-2222-4222-8222-222222222222"
+    const projectId = "33333333-3333-4333-8333-333333333333"
+    api.listPeriods.mockResolvedValue({
+      content: [{ id: "period-1", schoolYear: "2026/2027", status: "ALLOCATED", projectIds }],
+      page: 0, size: 20, totalElements: 1, totalPages: 1,
+    })
+    api.applications.mockResolvedValue({
+      content: [{
+        id: applicationId,
+        studentId,
+        periodId: "period-1",
+        status: "SUBMITTED",
+        preferences: [{ projectId, rank: 1 }],
+      }],
+    })
+
+    const page = mountPage()
+    await flushPromises()
+    const summaryButton = page.findAll("button").find((button) => button.text() === "View application summary")
+    expect(summaryButton).toBeDefined()
+    await summaryButton!.trigger("click")
+    await flushPromises()
+
+    expect(page.text()).toContain("Application · Unknown student")
+    expect(page.text()).toContain("Status: Submitted · Student Unknown student")
+    expect(page.text()).toContain("1. Unknown project")
+    expect(page.text()).not.toContain(applicationId)
+    expect(page.text()).not.toContain(studentId)
+    expect(page.text()).not.toContain(projectId)
+  })
+
 })

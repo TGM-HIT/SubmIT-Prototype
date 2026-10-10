@@ -80,6 +80,33 @@ describe('allocation supervisor display', () => {
     await flushPromises()
     expect(page.text()).toContain('Supervisor: Teacher One')
   })
+
+  it("shows neutral placeholders for unresolved assigned and unassigned references", async () => {
+    const studentId = "11111111-1111-4111-8111-111111111111"
+    const projectId = "22222222-2222-4222-8222-222222222222"
+    api.getRun.mockResolvedValue({
+      id: "run-1",
+      status: "COMPLETED",
+      result: {
+        assignments: [{ studentId, projectId }],
+        unassignedStudents: [{ studentId, reason: "RANKED_PROJECTS_NOT_FORMED" }],
+        unassignedProjects: [{ projectId, reason: "NOT_SELECTED_BY_OPTIMIZATION" }],
+      },
+    })
+    const page = mountPage()
+    await flushPromises()
+    await page.findAll("button").find((button) => button.text() === "Inspect result")!.trigger("click")
+    await flushPromises()
+
+    expect(page.text()).toContain("Unknown project")
+    expect(page.text()).toContain("Unknown student")
+    expect(page.text()).toContain("Unknown student · RANKED_PROJECTS_NOT_FORMED")
+    expect(page.text()).toContain("Unknown project · NOT_SELECTED_BY_OPTIMIZATION")
+    expect(page.text()).not.toContain(studentId)
+    expect(page.text()).not.toContain(projectId)
+  })
+
+
   it("shows current names and titles for assignments and unassigned outcomes", async () => {
     const projectId = "33333333-3333-4333-8333-333333333333"
     const studentIds = [

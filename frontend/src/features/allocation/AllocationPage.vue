@@ -28,7 +28,7 @@
         <div class="choice-list"><span v-for="(student, index) in assignment.students" :key="student.id || index" class="status-badge staff-member-label">{{ student.name }}</span></div>
       </div>
       <h3 class="form-section-title">Unassigned outcomes</h3>
-      <div v-if="unassigned(selectedRun).length" class="choice-list"><p v-for="(entry, index) in unassigned(selectedRun)" :key="unassignedKey(entry, index)" class="notice staff-display-label">{{ entry.studentDisplayName ?? entry.projectTitle ?? 'Unassigned' }} · {{ entry.reason ?? entry.explanation ?? 'No reason supplied by the run.' }}</p></div>
+      <div v-if="unassigned(selectedRun).length" class="choice-list"><p v-for="(entry, index) in unassigned(selectedRun)" :key="unassignedKey(entry, index)" class="notice staff-display-label">{{ unassignedLabel(entry) }} · {{ entry.reason ?? entry.explanation ?? 'No reason supplied by the run.' }}</p></div>
       <p v-else class="muted">The run did not report unassigned students or projects.</p>
     </section>
     <p v-if="task.success.value" class="success-note" role="status">{{ task.success.value }}</p>
@@ -90,6 +90,19 @@ function assignments(run: Data): { projectId: string; projectTitle: string; stud
 function unassignedKey(entry: Data, index: number): string | number {
   const id = entry.studentId ?? entry.projectId
   return typeof id === "string" || typeof id === "number" ? id : index
+}
+function unassignedLabel(entry: Data): string {
+  if (typeof entry.studentId === "string") {
+    return typeof entry.studentDisplayName === "string" && entry.studentDisplayName.trim()
+      ? entry.studentDisplayName : "Unknown student"
+  }
+  if (typeof entry.projectId === "string") {
+    return typeof entry.projectTitle === "string" && entry.projectTitle.trim()
+      ? entry.projectTitle : "Unknown project"
+  }
+  return typeof entry.studentDisplayName === "string" && entry.studentDisplayName.trim()
+    ? entry.studentDisplayName
+    : typeof entry.projectTitle === "string" && entry.projectTitle.trim() ? entry.projectTitle : "Unassigned"
 }
 function unassigned(run: Data): Data[] {
   const result = run.result as Data | undefined

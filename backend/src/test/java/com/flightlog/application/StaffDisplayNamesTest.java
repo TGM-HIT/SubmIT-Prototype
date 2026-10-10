@@ -111,9 +111,59 @@ class StaffDisplayNamesTest {
                     .path("studentDisplayName").asText());
             assertEquals("Solar current title", refreshed.path("assignments").get(0).path("projectTitle").asText());
         }
-        assertEquals(originalPayload, run.getPayload());
-        assertFalse(run.getPayload().contains("studentDisplayName"));
-        assertFalse(run.getPayload().contains("projectTitle"));
+        String persistedPayload = store.repository().findById(run.getId()).orElseThrow().getPayload();
+        assertEquals(originalPayload, persistedPayload);
+        assertFalse(persistedPayload.contains("studentDisplayName"));
+        assertFalse(persistedPayload.contains("projectTitle"));
+    }
+
+    @Test
+    void unresolvedApplicationAndAllocationReferencesKeepIdsAndReturnNeutralLabels() throws Exception {
+        UUID missingStudentId = UUID.randomUUID();
+        UUID missingProjectId = UUID.randomUUID();
+        ObjectNode applicationPayload = store.object();
+        applicationPayload.putArray("preferences").addObject()
+                .put("projectId", missingProjectId.toString()).put("rank", 1);
+        StoredRecord application = store.create("student_application", missingStudentId.toString(),
+                period.getId().toString(), "SUBMITTED", applicationPayload);
+
+        JsonNode applications = getJson("/api/application-periods/" + period.getId() + "/applications", teacherToken);
+        JsonNode unresolvedApplication = null;
+        for (JsonNode entry : applications.path("content")) {
+            if (application.getId().toString().equals(entry.path("id").asText())) unresolvedApplication = entry;
+        }
+        assertTrue(unresolvedApplication != null, "unresolved application should remain in the staff summary");
+        assertEquals(missingStudentId.toString(), unresolvedApplication.path("studentId").asText());
+        assertEquals("Unknown student", unresolvedApplication.path("studentDisplayName").asText());
+        assertEquals(missingProjectId.toString(),
+                unresolvedApplication.path("preferences").get(0).path("projectId").asText());
+        assertEquals("Unknown project", unresolvedApplication.path("preferences").get(0)
+                .path("projectTitle").asText());
+
+        ObjectNode runPayload = store.object().put("createdAt", "2026-10-10T10:00:00Z");
+        ObjectNode result = runPayload.putObject("result");
+        result.putArray("assignments").addObject()
+                .put("studentId", missingStudentId.toString()).put("projectId", missingProjectId.toString());
+        result.putArray("unassignedStudents").addObject().put("studentId", missingStudentId.toString())
+                .put("reason", "RANKED_PROJECTS_NOT_FORMED");
+        result.putArray("unassignedProjects").addObject().put("projectId", missingProjectId.toString())
+                .put("reason", "NOT_SELECTED_BY_OPTIMIZATION");
+        StoredRecord unresolvedRun = store.create("allocation_run", null, period.getId().toString(),
+                "COMPLETED", runPayload);
+
+        JsonNode unresolvedResult = getJson("/api/allocation-runs/" + unresolvedRun.getId(), teacherToken)
+                .path("result");
+        JsonNode assignment = unresolvedResult.path("assignments").get(0);
+        assertEquals(missingStudentId.toString(), assignment.path("studentId").asText());
+        assertEquals("Unknown student", assignment.path("studentDisplayName").asText());
+        assertEquals(missingProjectId.toString(), assignment.path("projectId").asText());
+        assertEquals("Unknown project", assignment.path("projectTitle").asText());
+        JsonNode unassignedStudent = unresolvedResult.path("unassignedStudents").get(0);
+        assertEquals(missingStudentId.toString(), unassignedStudent.path("studentId").asText());
+        assertEquals("Unknown student", unassignedStudent.path("studentDisplayName").asText());
+        JsonNode unassignedProject = unresolvedResult.path("unassignedProjects").get(0);
+        assertEquals(missingProjectId.toString(), unassignedProject.path("projectId").asText());
+        assertEquals("Unknown project", unassignedProject.path("projectTitle").asText());
     }
 
     @Test
@@ -125,6 +175,8 @@ class StaffDisplayNamesTest {
                         .header("Authorization", "Bearer " + studentToken))
                 .andExpect(status().isForbidden());
         mockMvc.perform(get("/api/application-periods/{id}/applications", period.getId()))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/allocation-runs/{id}", run.getId()))
                 .andExpect(status().isUnauthorized());
     }
 
