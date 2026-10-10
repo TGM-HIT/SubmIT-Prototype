@@ -76,6 +76,12 @@ class TestingIdeasFixtureTest {
         assertEquals(3, runPayload.path("applications").size());
         assertFalse(runPayload.path("applications").isEmpty());
         assertEquals(3, runPayload.path("result").path("assignments").size());
+        assertEquals(2, runPayload.path("result").path("unassignedStudents").size());
+        for (JsonNode outcome : runPayload.path("result").path("unassignedStudents")) {
+            assertFalse(runPayload.path("result").path("assignments").toString()
+                    .contains(outcome.path("studentId").asText()));
+            assertFalse(outcome.path("reason").asText().isBlank());
+        }
         for (JsonNode projectId : catalogueProjectIds) {
             assertTrue(records.findByTypeAndParentId("confirmed_supervisor", projectId.asText()).isEmpty());
         }

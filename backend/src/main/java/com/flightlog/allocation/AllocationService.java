@@ -7,14 +7,18 @@ import com.flightlog.audit.AuditService;
 import com.flightlog.data.RecordStore;
 import com.flightlog.data.StoredRecord;
 import com.flightlog.security.AuthenticatedUser;
+import com.flightlog.user.UserAccountRepository;
 import com.flightlog.web.ApiDtos.PageResponse;
 import com.flightlog.web.ApiException;
 import jakarta.persistence.EntityNotFoundException;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -30,16 +34,25 @@ public class AllocationService {
     private static final String APPLICATION = "student_application";
     private static final String PROJECT_GROUP = "project_group";
     private static final String FINALIZED = "FINALIZED";
+    private static final String RESULT_FIELD = "result";
+    private static final String ASSIGNMENTS_FIELD = "assignments";
+    private static final String PROJECT_ID_FIELD = "projectId";
+    private static final String STUDENT_ID_FIELD = "studentId";
+    private static final String UNASSIGNED_STUDENTS_FIELD = "unassignedStudents";
+    private static final String UNASSIGNED_PROJECTS_FIELD = "unassignedProjects";
     private static final int MAX_APPLICATIONS = AllocationLimits.MAX_STUDENTS;
 
     private final RecordStore store;
     private final AuditService audit;
     private final AllocationEngine engine;
+    private final UserAccountRepository users;
 
-    public AllocationService(RecordStore store, AuditService audit, AllocationEngine engine) {
+    public AllocationService(RecordStore store, AuditService audit, AllocationEngine engine,
+            UserAccountRepository users) {
         this.store = store;
         this.audit = audit;
         this.engine = engine;
+        this.users = users;
     }
 
     @Transactional
@@ -95,14 +108,14 @@ public class AllocationService {
             throw conflict("This application period is already finalized.");
         }
         ObjectNode payload = store.parse(run);
-        JsonNode assignments = payload.path("result").path("assignments");
+        JsonNode assignments = payload.path(RESULT_FIELD).path(ASSIGNMENTS_FIELD);
         Map<String, List<String>> groups = new LinkedHashMap<>();
         for (JsonNode assignment : assignments) {
-            groups.computeIfAbsent(assignment.path("projectId").asText(), ignored -> new ArrayList<>())
-                    .add(assignment.path("studentId").asText());
+            groups.computeIfAbsent(assignment.path(PROJECT_ID_FIELD).asText(), ignored -> new ArrayList<>())
+                    .add(assignment.path(STUDENT_ID_FIELD).asText());
         }
         for (Map.Entry<String, List<String>> group : groups.entrySet()) {
-            ObjectNode groupPayload = store.object().put("projectId", group.getKey())
+            ObjectNode groupPayload = store.object().put(PROJECT_ID_FIELD, group.getKey())
                     .put("periodId", period.getId().toString()).put("allocationRunId", id.toString());
             ArrayNode students = groupPayload.putArray("studentIds");
             group.getValue().forEach(students::add);
@@ -127,7 +140,7 @@ public class AllocationService {
             List<StoredRecord> applications = readApplications(period.getId());
             snapshot.set("applications", serializeApplications(applications));
             Object result = engine.optimize(projectIds, applications);
-            snapshot.set("result", store.value(result));
+            snapshot.set(RESULT_FIELD, store.value(result));
             store.update(run, "COMPLETED", snapshot);
             store.update(period, "ALLOCATED", periodData);
         } catch (AllocationLimitExceededException | IllegalArgumentException exception) {
@@ -167,7 +180,7 @@ public class AllocationService {
         for (StoredRecord application : applications) {
             ObjectNode choice = choices.addObject();
             choice.put("applicationId", application.getId().toString());
-            choice.put("studentId", application.getOwnerId());
+            choice.put(STUDENT_ID_FIELD, application.getOwnerId());
             choice.set("preferences", store.parse(application).path("preferences").deepCopy());
         }
         return choices;
@@ -208,11 +221,69 @@ public class AllocationService {
     }
 
     private ObjectNode response(StoredRecord record) {
-        ObjectNode result = store.parse(record);
-        result.put("id", record.getId().toString());
-        result.put("status", record.getStatus());
-        result.put("periodId", record.getParentId());
-        return result;
+        ObjectNode response = store.parse(record);
+        response.put("id", record.getId().toString());
+        response.put("status", record.getStatus());
+        response.put("periodId", record.getParentId());
+        JsonNode storedResult = response.path(RESULT_FIELD);
+        if (storedResult.isObject()) {
+            ObjectNode enriched = (ObjectNode) storedResult.deepCopy();
+            addDisplayNames(enriched);
+            response.set(RESULT_FIELD, enriched);
+        }
+        return response;
+    }
+
+    private void addDisplayNames(ObjectNode result) {
+        Set<UUID> studentIds = new HashSet<>();
+        Set<UUID> projectIds = new HashSet<>();
+        collectIds(result.path(ASSIGNMENTS_FIELD), STUDENT_ID_FIELD, studentIds);
+        collectIds(result.path(ASSIGNMENTS_FIELD), PROJECT_ID_FIELD, projectIds);
+        collectIds(result.path(UNASSIGNED_STUDENTS_FIELD), STUDENT_ID_FIELD, studentIds);
+        collectIds(result.path(UNASSIGNED_PROJECTS_FIELD), PROJECT_ID_FIELD, projectIds);
+
+        Map<UUID, String> names = new HashMap<>();
+        users.findAllById(studentIds).forEach(user -> names.put(user.getId(), user.getDisplayName()));
+        Map<UUID, String> titles = new HashMap<>();
+        store.repository().findAllById(projectIds).stream().filter(project -> "idea".equals(project.getType()))
+                .forEach(project -> titles.put(project.getId(), store.parse(project).path("title").asText()));
+
+        addLabels(result.path(ASSIGNMENTS_FIELD), STUDENT_ID_FIELD, "studentDisplayName", names, "Unknown student");
+        addLabels(result.path(ASSIGNMENTS_FIELD), PROJECT_ID_FIELD, "projectTitle", titles, "Unknown project");
+        addLabels(result.path(UNASSIGNED_STUDENTS_FIELD), STUDENT_ID_FIELD, "studentDisplayName", names, "Unknown student");
+        addLabels(result.path(UNASSIGNED_PROJECTS_FIELD), PROJECT_ID_FIELD, "projectTitle", titles, "Unknown project");
+    }
+
+    private void collectIds(JsonNode entries, String field, Set<UUID> ids) {
+        if (entries.isArray()) {
+            entries.forEach(entry -> {
+                UUID id = parseId(entry.path(field).asText());
+                if (id != null) {
+                    ids.add(id);
+                }
+            });
+        }
+    }
+
+    private <T> void addLabels(JsonNode entries, String idField, String labelField, Map<UUID, T> labels,
+            String fallback) {
+        if (entries.isArray()) {
+            entries.forEach(entry -> {
+                if (entry instanceof ObjectNode object) {
+                    UUID id = parseId(entry.path(idField).asText());
+                    String label = id == null ? null : String.valueOf(labels.get(id));
+                    object.put(labelField, label == null || "null".equals(label) || label.isBlank() ? fallback : label);
+                }
+            });
+        }
+    }
+
+    private UUID parseId(String id) {
+        try {
+            return UUID.fromString(id);
+        } catch (IllegalArgumentException exception) {
+            return null;
+        }
     }
 
     private PageResponse<ObjectNode> pageResponse(Page<StoredRecord> records) {

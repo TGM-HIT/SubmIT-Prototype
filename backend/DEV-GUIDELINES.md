@@ -63,4 +63,6 @@ These credentials are for local/testing use only. Never use them in production o
 
 With the `testing` profile, each seeded student also receives two synthetic ideas: one submitted for its initial teacher review, and one with an approved idea review and a submitted specification awaiting teacher review. These fixtures are safe to rerun; existing seeded ideas are left unchanged.
 
+With the same explicit `testing` profile, the backend seeds an allocation preview with three submitted applications over three accepted projects. Its completed run contains an assigned group and unassigned project outcomes. The testing-only preview also adds synthetic unassigned student outcomes to exercise staff label rendering; those entries do not represent optimizer results or alter production behavior.
+
 With the same explicit `testing` profile, the backend also seeds a synthetic allocated group and submitted Formal Application for local teacher-page verification. In the Formal Application page, load project ID `03a00000-0000-4000-8000-000000000001` as `teacher01`. The fixture uses the seeded `student01`–`student03` accounts, contains only invented project text, and is not created in normal runs. It is safe to rerun; the seeded group/application are retained rather than duplicated.

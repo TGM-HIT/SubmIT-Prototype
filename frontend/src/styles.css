@@ -87,6 +87,8 @@ a { color: inherit; }
 .data-row h3 { margin: 0 0 6px; font-size: 14px; }
 .data-row p { margin: 4px 0; font-size: 12px; color: #657288; line-height: 1.55; }
 .row-main { min-width: 0; flex: 1; }
+.staff-display-label { overflow-wrap: anywhere; word-break: break-word; }
+.staff-member-label { max-width: 100%; white-space: normal; overflow-wrap: anywhere; word-break: break-word; }
 .status-badge { display: inline-flex; padding: 5px 8px; background: #eaf0fb; color: #365990; }
 .status-badge.status-open, .status-badge.status-approved, .status-badge.status-accepted_for_applications { background: #e0f5ec; color: #1f6e4b; }
 .status-badge.status-rejected, .status-badge.status-declined, .status-badge.status-failed { background: #fbe8e8; color: #923b42; }

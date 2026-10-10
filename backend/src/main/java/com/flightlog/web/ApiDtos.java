@@ -322,12 +322,13 @@ public final class ApiDtos {
             List<UUID> projectIds) {
     }
 
-    public record PreferenceResponse(UUID projectId, int rank) {
+    public record PreferenceResponse(UUID projectId, int rank, String projectTitle) {
     }
 
     public record StudentApplicationResponse(
             UUID id,
             UUID studentId,
+            String studentDisplayName,
             UUID periodId,
             String status,
             List<PreferenceResponse> preferences) {

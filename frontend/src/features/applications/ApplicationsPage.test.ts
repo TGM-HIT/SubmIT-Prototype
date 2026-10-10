@@ -9,6 +9,7 @@ const api = vi.hoisted(() => ({
   listIdeas: vi.fn(),
   years: vi.fn(),
   createPeriod: vi.fn(),
+  applications: vi.fn(),
 }))
 
 vi.mock('../../api/services', () => ({
@@ -16,6 +17,7 @@ vi.mock('../../api/services', () => ({
     list: api.listPeriods,
     years: api.years,
     create: api.createPeriod,
+    applications: api.applications,
   },
   ideasApi: { list: api.listIdeas },
 }))
@@ -72,6 +74,7 @@ describe('application period configuration', () => {
     })
     api.years.mockResolvedValue({ content: ['2026/2027'] })
     api.createPeriod.mockResolvedValue({ id: 'period-1' })
+    api.applications.mockResolvedValue({ content: [] })
   })
 
   afterEach(() => {
@@ -175,4 +178,39 @@ describe('application period configuration', () => {
     const sharedStyles = readFileSync(resolve(process.cwd(), 'src/styles.css'), 'utf8')
     expect(sharedStyles).toMatch(/\.input,\s*\.select\s*\{\s*height:\s*40px;/)
   })
+  it("shows student names and preference titles without accepted-list fallback", async () => {
+    const applicationId = "11111111-1111-4111-8111-111111111111"
+    const studentId = "22222222-2222-4222-8222-222222222222"
+    const projectId = "33333333-3333-4333-8333-333333333333"
+    const longName = "Jordan" + "ExtremelyLongName".repeat(8)
+    api.listPeriods.mockResolvedValue({
+      content: [{ id: "period-1", schoolYear: "2026/2027", status: "ALLOCATED", projectIds }],
+      page: 0, size: 20, totalElements: 1, totalPages: 1,
+    })
+    api.applications.mockResolvedValue({
+      content: [{
+        id: applicationId,
+        studentId,
+        studentDisplayName: longName,
+        periodId: "period-1",
+        status: "SUBMITTED",
+        preferences: [{ projectId, projectTitle: "Current title outside accepted page", rank: 1 }],
+      }],
+    })
+
+    const page = mountPage()
+    await flushPromises()
+    const summaryButton = page.findAll("button").find((button) => button.text() === "View application summary")
+    expect(summaryButton).toBeDefined()
+    await summaryButton!.trigger("click")
+    await flushPromises()
+
+    expect(page.text()).toContain(`Application · ${longName}`)
+    expect(page.text()).toContain(`Status: Submitted · Student ${longName}`)
+    expect(page.text()).toContain("1. Current title outside accepted page")
+    expect(page.text()).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i)
+    const styles = readFileSync(resolve(process.cwd(), "src/styles.css"), "utf8")
+    expect(styles).toContain(".staff-display-label { overflow-wrap: anywhere; word-break: break-word; }")
+  })
+
 })

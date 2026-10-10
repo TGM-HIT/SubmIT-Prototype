@@ -1,10 +1,12 @@
 package com.flightlog.idea;
 
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.flightlog.allocation.AllocationService;
 import com.flightlog.application.ApplicationPeriodService;
 import com.flightlog.data.RecordStore;
 import com.flightlog.data.StoredRecord;
+import com.flightlog.user.UserAccountRepository;
 import com.flightlog.security.AuthenticatedUser;
 import com.flightlog.user.UserAccount;
 import java.time.Instant;
@@ -28,12 +30,14 @@ public class TestingAllocationPreviewSeeder {
     private final RecordStore store;
     private final ApplicationPeriodService periods;
     private final AllocationService allocations;
+    private final UserAccountRepository users;
 
     public TestingAllocationPreviewSeeder(RecordStore store, ApplicationPeriodService periods,
-            AllocationService allocations) {
+            AllocationService allocations, UserAccountRepository users) {
         this.store = store;
         this.periods = periods;
         this.allocations = allocations;
+        this.users = users;
     }
 
     public void seed(UserAccount admin, List<UserAccount> students, List<UUID> projectIds, UUID fixtureMarker) {
@@ -66,8 +70,25 @@ public class TestingAllocationPreviewSeeder {
                 .filter(run -> "COMPLETED".equals(run.getStatus()))
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("Testing allocation preview did not complete."));
+        addSyntheticUnassignedOutcomes(runRecord, List.of(
+                users.findByUsername("student04").orElseThrow(),
+                users.findByUsername("student05").orElseThrow()), projectIds);
         store.create(FIXTURE_TYPE, runRecord.getId().toString(), fixtureMarker.toString(), "SEEDED",
                 store.object().put("periodId", periodRecord.getId().toString()));
+    }
+
+    private void addSyntheticUnassignedOutcomes(StoredRecord run, List<UserAccount> students,
+            List<UUID> projectIds) {
+        // Testing-only UI coverage: the five-account preview profile cannot naturally leave a student unassigned
+        // with a three-project catalogue. Add clearly synthetic outcomes so staff labels are inspectable.
+        ObjectNode snapshot = store.parse(run);
+        ArrayNode unassigned = (ArrayNode) snapshot.path("result").path("unassignedStudents");
+        for (UserAccount student : students) {
+            ObjectNode outcome = unassigned.addObject().put("studentId", student.getId().toString())
+                    .put("reason", "RANKED_PROJECTS_NOT_FORMED");
+            outcome.set("rankedProjectIds", store.value(projectIds.stream().map(UUID::toString).toList()));
+        }
+        store.update(run, run.getStatus(), snapshot);
     }
 
     private AuthenticatedUser authenticatedUser(UserAccount account) {

@@ -1069,12 +1069,14 @@ export interface components {
             projectId?: string;
             /** Format: int32 */
             rank?: number;
+            projectTitle?: string;
         };
         StudentApplicationResponse: {
             /** Format: uuid */
             id?: string;
             /** Format: uuid */
             studentId?: string;
+            studentDisplayName?: string;
             /** Format: uuid */
             periodId?: string;
             status?: string;

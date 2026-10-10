@@ -59,15 +59,16 @@ public class TestingIdeasFixtureSeeder implements ApplicationRunner {
     }
 
     private void seedAcceptedAllocationPreview() {
-        List<UserAccount> students = List.of(
+        List<UserAccount> projectOwners = List.of(
                 requireAccount("student01", Role.STUDENT),
                 requireAccount("student02", Role.STUDENT),
                 requireAccount("student03", Role.STUDENT));
+        List<UserAccount> students = projectOwners;
         UserAccount teacher = requireAccount("teacher01", Role.TEACHER);
         UserAccount willingTeacher = requireAccount("teacher02", Role.TEACHER);
         List<UUID> ideasForPreview = new java.util.ArrayList<>();
-        for (int index = 0; index < students.size(); index++) {
-            UserAccount student = students.get(index);
+        for (int index = 0; index < projectOwners.size(); index++) {
+            UserAccount student = projectOwners.get(index);
             String stage = "accepted-allocation-" + (index + 1);
             UUID markerId = markerId(student, stage);
             UUID ideaId;

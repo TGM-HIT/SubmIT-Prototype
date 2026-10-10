@@ -24,11 +24,11 @@
       <span class="status-badge" :class="`status-${statusOf(selectedRun).toLowerCase()}`">{{ statusOf(selectedRun) }}</span>
       <p v-if="selectedRun.error" class="error-box">Run did not complete: {{ selectedRun.error }}</p>
       <div v-for="(assignment, index) in assignments(selectedRun)" :key="index" class="data-row">
-        <div class="row-main"><h3>Project {{ assignment.projectId }}</h3><p>{{ assignment.studentIds.length }} students assigned</p><p>Supervisor: {{ supervisors[assignment.projectId] || 'No supervisor assigned' }}</p><p class="muted">Members are shown only to authorized project staff. Group sizes remain within the required 3–5 range.</p></div>
-        <div class="choice-list"><span v-for="student in assignment.studentIds" :key="student" class="status-badge">{{ student }}</span></div>
+        <div class="row-main"><h3 class="staff-display-label">{{ assignment.projectTitle }}</h3><p>{{ assignment.studentIds.length }} students assigned</p><p>Supervisor: {{ supervisors[assignment.projectId] || 'No supervisor assigned' }}</p><p class="muted">Members are shown only to authorized project staff. Group sizes remain within the required 3–5 range.</p></div>
+        <div class="choice-list"><span v-for="student in assignment.studentNames" :key="student" class="status-badge staff-member-label">{{ student }}</span></div>
       </div>
       <h3 class="form-section-title">Unassigned outcomes</h3>
-      <div v-if="unassigned(selectedRun).length" class="choice-list"><p v-for="(entry, index) in unassigned(selectedRun)" :key="index" class="notice">{{ entry.studentId ?? entry.projectId ?? entry.id ?? 'Unassigned' }} · {{ entry.reason ?? entry.explanation ?? 'No reason supplied by the run.' }}</p></div>
+      <div v-if="unassigned(selectedRun).length" class="choice-list"><p v-for="(entry, index) in unassigned(selectedRun)" :key="index" class="notice staff-display-label">{{ entry.studentDisplayName ?? entry.projectTitle ?? 'Unassigned' }} · {{ entry.reason ?? entry.explanation ?? 'No reason supplied by the run.' }}</p></div>
       <p v-else class="muted">The run did not report unassigned students or projects.</p>
     </section>
     <p v-if="task.success.value" class="success-note" role="status">{{ task.success.value }}</p>
@@ -59,23 +59,33 @@ const deadlinePassed = computed(() => Boolean(selectedPeriod.value?.closesAt && 
 function idOf(run: Data): string { return String(run.id ?? '') }
 function statusOf(run: Data): string { return String(run.status ?? 'UNKNOWN').toUpperCase() }
 function date(value?: string): string { return value ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : 'unknown' }
-function assignments(run: Data): { projectId: string; studentIds: string[] }[] {
+function assignments(run: Data): { projectId: string; projectTitle: string; studentIds: string[]; studentNames: string[] }[] {
   const result = run.result
-  if (!result || typeof result !== 'object' || !Array.isArray((result as Data).assignments)) return []
-  const groups = new Map<string, Set<string>>()
+  if (!result || typeof result !== "object" || !Array.isArray((result as Data).assignments)) return []
+  const groups = new Map<string, { title: string; students: Map<string, string> }>()
   for (const assignment of (result as Data).assignments as Data[]) {
-    const projectId = String(assignment.projectId ?? assignment.project ?? '')
+    const projectId = String(assignment.projectId ?? assignment.project ?? "")
     if (!projectId) continue
-    const members = groups.get(projectId) ?? new Set<string>()
+    const group = groups.get(projectId) ?? { title: "Unknown project", students: new Map<string, string>() }
+    if (typeof assignment.projectTitle === "string" && assignment.projectTitle.trim()) group.title = assignment.projectTitle
     const studentIds = Array.isArray(assignment.studentIds) ? assignment.studentIds
       : Array.isArray(assignment.students) ? assignment.students
         : assignment.studentId ? [assignment.studentId] : []
-    for (const studentId of studentIds) members.add(String(studentId))
-    groups.set(projectId, members)
+    for (const studentId of studentIds) {
+      const id = String(studentId)
+      const name = Array.isArray(assignment.studentIds) || Array.isArray(assignment.students)
+        ? "Unknown student"
+        : typeof assignment.studentDisplayName === "string" && assignment.studentDisplayName.trim()
+          ? assignment.studentDisplayName : "Unknown student"
+      group.students.set(id, name)
+    }
+    groups.set(projectId, group)
   }
-  return [...groups.entries()].map(([projectId, students]) => ({
+  return [...groups.entries()].map(([projectId, group]) => ({
     projectId,
-    studentIds: [...students],
+    projectTitle: group.title,
+    studentIds: [...group.students.keys()],
+    studentNames: [...group.students.values()],
   }))
 }
 function unassigned(run: Data): Data[] {
