@@ -29,6 +29,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Bug-06](tickets/done/Bug-06.md) | done | Replace a teacher's existing supervision preference |
 | [Bug-07](tickets/done/Bug-07.md) | done | Align the Clear filters button height in Administration |
 | [Bug-08](tickets/done/Bug-08.md) | done | Allow a withdrawn idea to be edited and submitted again |
+| [Bug-09](tickets/Bug-09.md) | to-do | Show names instead of IDs in application summaries and allocation results |
 
 ### Development
 
