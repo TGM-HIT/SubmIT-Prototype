@@ -43,7 +43,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-05](tickets/done/Dev-05.md) | done | Keep preview data across independent preview invocations |
 | [Dev-06](tickets/done/Dev-06.md) | done | Seed 15 student accounts with meaningful names for testing |
 | [Dev-07](tickets/done/Dev-07.md) | done | Seed multi-group allocation and finalization preview states for student testing |
-| [Dev-08](tickets/Dev-08.md) | to-do | Add an opt-in minimal testing fixture mode without application periods |
+| [Dev-08](tickets/Dev-08.md) | awaiting-human | Add an opt-in minimal testing fixture mode without application periods |
 
 ### Features
 
