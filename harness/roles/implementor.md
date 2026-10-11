@@ -43,7 +43,12 @@ the failure as tooling being absent. If a documented UI setup step fails or
 contradicts an API response, capture the exact browser request and response
 before continuing; do not replace the UI step with a direct API call without
 saying so under "What's uncertain", and classify the discrepancy as OUT OF
-SCOPE only after showing its cause is outside the ticket. Stage only the files you changed for the deliverable, by explicit
+SCOPE only after showing its cause is outside the ticket. If a required manual
+scenario is not reachable with the existing fixture and the ticket allows a
+preview extension, add the extension and capture the scenario; report a required
+scenario as unverified only if the extension is out of scope or cannot be built,
+and say which. Never name a screenshot for a scenario the data does not show.
+Stage only the files you changed for the deliverable, by explicit
 path; never use blanket staging that could include `harness/plan.md`, ticket
 files, or other harness files. If you find a real problem outside the ticket's scope, report
 it under "What's uncertain" on a line starting with "OUT OF SCOPE:" and do not

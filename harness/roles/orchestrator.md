@@ -157,7 +157,9 @@ separate human-acceptance outcome, not an Evaluator pass. Require an
 unambiguous acceptance instruction naming or clearly identifying the current
 implementation. Record the accepted commit SHA, the human's scope/decision,
 and each check that remains unverified in `human-acceptance.md`; preserve all
-Evaluator verdicts unchanged. Only then set the ledger to done. A statement
+Evaluator verdicts unchanged. When items remain unavailable or not checked,
+record them in the run log's closeout line as "accepted with unverified items:
+<list>". Only then set the ledger to done. A statement
 that the change appears fixed, without explicit acceptance, is not enough.
 
 ## Continuing a failed ticket

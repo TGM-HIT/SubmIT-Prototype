@@ -75,7 +75,8 @@ errors. Confirm every acceptance criterion about fallback, failure, boundary,
 or authorization behavior maps to a named mechanical check. Confirm each
 manual-verification fallback names the exact condition that triggers it and
 requires a UI failure to reach a state to be reported with the failing request
-rather than worked around. Documentation-only ticket authoring requires no
+rather than worked around. Confirm each Implementor-performed manual scenario
+is reachable with the fixture the ticket names. Documentation-only ticket authoring requires no
 project build or test run. Report the ticket path, the material requirements captured, any
 clarifications or assumptions, and the checks performed. Do not claim project
 tests or implementation checks were run.

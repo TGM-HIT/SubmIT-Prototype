@@ -5,7 +5,7 @@
 - `to-do`: not started.
 - `in progress`: implementation/evaluation is active.
 - `awaiting-human`: implementation is complete, but one or more acceptance checks need human verification or disposition. This is nonterminal: do not treat it as done or failed.
-- `done`: accepted by an Evaluator pass or by an explicit authorized human acceptance recorded in the run artifacts.
+- `done`: accepted by an Evaluator pass or by an explicit authorized human acceptance recorded in the run artifacts. A human acceptance may leave items unverified; the run log's closeout line lists them.
 - `failed`: explicitly stopped or terminally failed. If the only remaining gap is human-exercisable verification, use `awaiting-human` until the human path is completed or declined. A failed ticket can be continued (revised ticket, new run building on the earlier commits) rather than restarted; the row returns to `in progress` for the continuation run. See "Continuing a failed ticket" in `roles/orchestrator.md`.
 
 ## Tickets
@@ -41,6 +41,8 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-03](tickets/done/Dev-03.md) | done | Give testing accounts meaningful display names |
 | [Dev-04](tickets/done/Dev-04.md) | done | Seed sample ideas and specifications for testing |
 | [Dev-05](tickets/done/Dev-05.md) | done | Keep preview data across independent preview invocations |
+| [Dev-06](tickets/Dev-06.md) | to-do | Seed 15 student accounts with meaningful names for testing |
+| [Dev-07](tickets/Dev-07.md) | to-do | Seed multi-group allocation and finalization preview states for student testing |
 
 ### Features
 
