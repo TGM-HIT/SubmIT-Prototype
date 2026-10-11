@@ -32,7 +32,7 @@ Standard project checks (keep only the blocks matching the ticket's scope; all m
 - <Label each manual item **Implementor-performed** (reachable with the preview tooling and testing profile; name the fixtures or preview extension that create any needed data through the UI) or **human-only** (needs a real device, second browser, or a judgement a script cannot make). Human-only items go straight to the awaiting-human checklist and do not count against the Implementor's pass. Do not expect a multi-actor, multi-viewport walkthrough from the Implementor unless the ticket names what makes it feasible.>
 - <Give reproducible steps using supported tools, roles, profiles, fixtures, and data.>
 - <Specify what must be observed and what evidence to retain, stored under `harness/runs/<run-id>/evidence/` (ignored by Git).>
-- <State how to handle errors or unavailable states; never claim checks that were not performed.>
+- <State how to handle errors or unavailable states; never claim checks that were not performed. State the exact condition that triggers any fallback (for example "the UI cannot reach the state after a documented retry") and require that a UI failure to reach the state be reported with the failing request, not worked around.>
 
 For UI-visible work, use the local browser preview documented in `frontend/DEV-GUIDELINES.md` (not one-off scripts):
 

@@ -39,7 +39,11 @@ to reach the required states (see "Local browser preview" in
 `frontend/DEV-GUIDELINES.md`). Run it once per required viewport. If the command
 itself fails (for example Chrome cannot launch in your environment), include the
 exact command and its error output under "What's uncertain" and do not describe
-the failure as tooling being absent. Stage only the files you changed for the deliverable, by explicit
+the failure as tooling being absent. If a documented UI setup step fails or
+contradicts an API response, capture the exact browser request and response
+before continuing; do not replace the UI step with a direct API call without
+saying so under "What's uncertain", and classify the discrepancy as OUT OF
+SCOPE only after showing its cause is outside the ticket. Stage only the files you changed for the deliverable, by explicit
 path; never use blanket staging that could include `harness/plan.md`, ticket
 files, or other harness files. If you find a real problem outside the ticket's scope, report
 it under "What's uncertain" on a line starting with "OUT OF SCOPE:" and do not

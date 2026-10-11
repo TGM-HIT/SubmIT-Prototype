@@ -72,7 +72,10 @@ leave the ledger unchanged unless explicitly asked.
 Before reporting completion, check the ticket for leftover template
 placeholders, conflicting requirements, ungrounded assumptions, and whitespace
 errors. Confirm every acceptance criterion about fallback, failure, boundary,
-or authorization behavior maps to a named mechanical check. Documentation-only ticket authoring requires no project build or test
-run. Report the ticket path, the material requirements captured, any
+or authorization behavior maps to a named mechanical check. Confirm each
+manual-verification fallback names the exact condition that triggers it and
+requires a UI failure to reach a state to be reported with the failing request
+rather than worked around. Documentation-only ticket authoring requires no
+project build or test run. Report the ticket path, the material requirements captured, any
 clarifications or assumptions, and the checks performed. Do not claim project
 tests or implementation checks were run.
