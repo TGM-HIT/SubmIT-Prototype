@@ -1,6 +1,7 @@
 package com.flightlog.user;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -47,7 +48,7 @@ class TestingAccountsConfigurationTest {
     private ApplicationRunner seeder;
 
     @Test
-    void createsTwelveAccountsWithSharedEncodedPasswordAndUsableRoleBearingLogins() throws Exception {
+    void createsTwentyTwoAccountsWithSharedEncodedPasswordAndUsableRoleBearingLogins() throws Exception {
         List<UserAccount> accounts = users.findAll();
         Map<String, String> expectedDisplayNames = Map.ofEntries(
                 Map.entry("student01", "Emily Carter"),
@@ -55,6 +56,16 @@ class TestingAccountsConfigurationTest {
                 Map.entry("student03", "Sofia Ramirez"),
                 Map.entry("student04", "Liam Foster"),
                 Map.entry("student05", "Ava Mitchell"),
+                Map.entry("student06", "Maya Thompson"),
+                Map.entry("student07", "Ethan Brooks"),
+                Map.entry("student08", "Isabella Nguyen"),
+                Map.entry("student09", "Lucas Bennett"),
+                Map.entry("student10", "Amara Johnson"),
+                Map.entry("student11", "Oliver Kim"),
+                Map.entry("student12", "Zara Patel"),
+                Map.entry("student13", "Theo Martinez"),
+                Map.entry("student14", "Nina Wallace"),
+                Map.entry("student15", "Caleb Rivera"),
                 Map.entry("teacher01", "Olivia Chen"),
                 Map.entry("teacher02", "Marcus Reed"),
                 Map.entry("teacher03", "Priya Shah"),
@@ -63,9 +74,9 @@ class TestingAccountsConfigurationTest {
                 Map.entry("admin01", "Grace Morgan"),
                 Map.entry("admin02", "Samuel Wright"));
         Set<String> expectedUsernames = expectedDisplayNames.keySet();
-        assertEquals(12, accounts.size());
+        assertEquals(22, accounts.size());
         assertEquals(expectedUsernames, accounts.stream().map(UserAccount::getUsername).collect(Collectors.toSet()));
-        assertEquals(5, accounts.stream().filter(account -> account.getRole() == Role.STUDENT).count());
+        assertEquals(15, accounts.stream().filter(account -> account.getRole() == Role.STUDENT).count());
         assertEquals(5, accounts.stream().filter(account -> account.getRole() == Role.TEACHER).count());
         assertEquals(2, accounts.stream().filter(account -> account.getRole() == Role.ADMIN).count());
         assertEquals(expectedDisplayNames.size(),
@@ -74,6 +85,7 @@ class TestingAccountsConfigurationTest {
         for (UserAccount account : accounts) {
             assertEquals(expectedDisplayNames.get(account.getUsername()), account.getDisplayName());
             assertEquals(expectedRole(account.getUsername()), account.getRole());
+            assertFalse(account.getDisplayName().matches("(?i)^(student|teacher|admin(istrator)?)\\s*[-#:]?\\s*\\d+$"));
             assertNotEquals(TEST_PASSWORD, account.getPasswordHash());
             assertTrue(passwordEncoder.matches(TEST_PASSWORD, account.getPasswordHash()));
             mockMvc.perform(post("/api/auth/login")
@@ -90,13 +102,13 @@ class TestingAccountsConfigurationTest {
     @Test
     void onlySeededAdministratorsCanReachTheAdministratorUserList() throws Exception {
         for (String username : List.of("admin01", "admin02")) {
-            mockMvc.perform(get("/api/users").header("Authorization", "Bearer " + loginToken(username)))
+            mockMvc.perform(get("/api/users?size=100").header("Authorization", "Bearer " + loginToken(username)))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.content.length()").value(12));
+                    .andExpect(jsonPath("$.content.length()").value(22));
         }
 
         for (String username : List.of("student01", "teacher01")) {
-            mockMvc.perform(get("/api/users").header("Authorization", "Bearer " + loginToken(username)))
+            mockMvc.perform(get("/api/users?size=100").header("Authorization", "Bearer " + loginToken(username)))
                     .andExpect(status().isForbidden());
         }
     }
@@ -135,10 +147,44 @@ class TestingAccountsConfigurationTest {
         seeder.run(startupArguments);
 
         List<UserAccount> accountsAfterRestart = users.findAll();
-        assertEquals(12, accountsAfterRestart.size());
+        assertEquals(22, accountsAfterRestart.size());
         for (UserAccount account : accountsAfterRestart) {
             assertEquals(originalIds.get(account.getUsername()), account.getId());
             assertEquals(originalHashes.get(account.getUsername()), account.getPasswordHash());
+        }
+    }
+
+    @Test
+    void rerunningAgainstOnlyTheOriginalAccountsAddsExactlyTheTenNewStudents() throws Exception {
+        Set<String> newUsernames = Set.of("student06", "student07", "student08", "student09", "student10",
+                "student11", "student12", "student13", "student14", "student15");
+        List<UserAccount> originalAccounts = users.findAll().stream()
+                .filter(account -> !newUsernames.contains(account.getUsername()))
+                .toList();
+        Set<String> expectedOriginalUsernames = Set.of("student01", "student02", "student03", "student04",
+                "student05", "teacher01", "teacher02", "teacher03", "teacher04", "teacher05",
+                "admin01", "admin02");
+        assertEquals(expectedOriginalUsernames, originalAccounts.stream().map(UserAccount::getUsername)
+                .collect(Collectors.toSet()));
+        List<java.util.UUID> newAccountIds = users.findAll().stream()
+                .filter(account -> newUsernames.contains(account.getUsername()))
+                .map(UserAccount::getId)
+                .toList();
+
+        users.deleteAllById(newAccountIds);
+        assertEquals(12, users.count());
+        seeder.run(new DefaultApplicationArguments(new String[0]));
+
+        List<UserAccount> afterRerun = users.findAll();
+        assertEquals(22, afterRerun.size());
+        assertEquals(newUsernames, afterRerun.stream().map(UserAccount::getUsername)
+                .filter(newUsernames::contains).collect(Collectors.toSet()));
+        for (UserAccount original : originalAccounts) {
+            UserAccount unchanged = users.findByUsername(original.getUsername()).orElseThrow();
+            assertEquals(original.getId(), unchanged.getId());
+            assertEquals(original.getDisplayName(), unchanged.getDisplayName());
+            assertEquals(original.getRole(), unchanged.getRole());
+            assertEquals(original.getPasswordHash(), unchanged.getPasswordHash());
         }
     }
 

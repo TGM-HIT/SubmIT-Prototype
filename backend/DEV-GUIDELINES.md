@@ -53,11 +53,11 @@ To seed local workflow accounts, explicitly activate the `testing` Spring profil
 
 All seeded accounts use the testing-only password `testing-password`:
 
-| Role | Usernames |
+| Role | Account (username — display name) |
 | --- | --- |
-| `STUDENT` | `student01`, `student02`, `student03`, `student04`, `student05` |
-| `TEACHER` | `teacher01`, `teacher02`, `teacher03`, `teacher04`, `teacher05` |
-| `ADMIN` | `admin01`, `admin02` |
+| `STUDENT` | `student01` — Emily Carter; `student02` — Noah Bennett; `student03` — Sofia Ramirez; `student04` — Liam Foster; `student05` — Ava Mitchell; `student06` — Maya Thompson; `student07` — Ethan Brooks; `student08` — Isabella Nguyen; `student09` — Lucas Bennett; `student10` — Amara Johnson; `student11` — Oliver Kim; `student12` — Zara Patel; `student13` — Theo Martinez; `student14` — Nina Wallace; `student15` — Caleb Rivera |
+| `TEACHER` | `teacher01` — Olivia Chen; `teacher02` — Marcus Reed; `teacher03` — Priya Shah; `teacher04` — Daniel Brooks; `teacher05` — Elena Torres |
+| `ADMIN` | `admin01` — Grace Morgan; `admin02` — Samuel Wright |
 
 These credentials are for local/testing use only. Never use them in production or expose them to a public environment. The accounts are not seeded unless the `testing` profile is active.
 

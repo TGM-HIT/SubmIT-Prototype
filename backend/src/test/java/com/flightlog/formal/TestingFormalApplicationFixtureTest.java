@@ -110,7 +110,7 @@ class TestingFormalApplicationFixtureTest {
                 TestingFormalApplicationFixtureConfiguration.PROJECT_ID.toString()).size());
         assertEquals(1, records.findByTypeAndParentId("formal_application",
                 TestingFormalApplicationFixtureConfiguration.PROJECT_ID.toString()).size());
-        assertEquals(12, users.count());
+        assertEquals(22, users.count());
         List<String> seededStudentIds = List.of("student01", "student02", "student03").stream()
                 .map(username -> users.findByUsername(username).orElseThrow().getId().toString())
                 .toList();
