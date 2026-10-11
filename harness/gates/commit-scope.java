@@ -10,6 +10,8 @@ class CommitScope {
     };
     static final String[] ALLOWED_FILES = {
         ".gitignore",
+        ".env.example",
+        "Makefile",
         "frontend/index.html",
         "frontend/package.json",
         "frontend/DEV-GUIDELINES.md",
