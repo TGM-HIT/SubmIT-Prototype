@@ -13,9 +13,12 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.flightlog.data.RecordStore;
 import com.flightlog.data.StoredRecordRepository;
+import com.flightlog.user.UserAccountRepository;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -47,6 +50,97 @@ class TestingIdeasFixtureTest {
     private RecordStore store;
     @Autowired
     private TestingIdeasFixtureSeeder seeder;
+    @Autowired
+    private UserAccountRepository users;
+
+    @Test
+    void multiGroupPreviewHasFixedGroupsPreliminaryAndFinalStatesAndIsIdempotent() {
+        UUID fixtureMarker = UUID.nameUUIDFromBytes(
+                "testing-allocation-preview:period".getBytes(StandardCharsets.UTF_8));
+        var scenario = records.findByTypeAndParentId("testing_multi_group_allocation_preview",
+                fixtureMarker.toString()).stream().findFirst().orElseThrow();
+        JsonNode fixture = store.parse(scenario);
+        String preliminaryPeriodId = fixture.path("preliminaryPeriodId").asText();
+        String finalPeriodId = fixture.path("finalPeriodId").asText();
+        var preliminaryPeriod = records.findById(UUID.fromString(preliminaryPeriodId)).orElseThrow();
+        var finalPeriod = records.findById(UUID.fromString(finalPeriodId)).orElseThrow();
+        var preliminaryRun = records.findById(UUID.fromString(fixture.path("preliminaryRunId").asText())).orElseThrow();
+        var finalRun = records.findById(UUID.fromString(fixture.path("finalRunId").asText())).orElseThrow();
+        assertEquals("2026/2027", fixture.path("schoolYear").asText());
+        assertEquals("ALLOCATED", preliminaryPeriod.getStatus());
+        assertEquals("COMPLETED", preliminaryRun.getStatus());
+        assertEquals("FINALIZED", finalPeriod.getStatus());
+        assertEquals("FINALIZED", finalRun.getStatus());
+        assertEquals(7, records.findByTypeAndParentId("student_application", preliminaryPeriodId).size());
+        assertEquals(7, records.findByTypeAndParentId("student_application", finalPeriodId).size());
+
+        Set<String> firstGroup = Set.of("student06", "student07", "student08");
+        Set<String> secondGroup = Set.of("student09", "student10", "student11");
+        Map<String, Set<String>> preliminaryGroups = groupsByProject(
+                store.parse(preliminaryRun).path("result").path("assignments"));
+        assertEquals(Set.of(firstGroup, secondGroup), new HashSet<>(preliminaryGroups.values()));
+        JsonNode unassigned = store.parse(preliminaryRun).path("result").path("unassignedStudents");
+        assertTrue(java.util.stream.StreamSupport.stream(unassigned.spliterator(), false)
+                .map(outcome -> users.findById(UUID.fromString(outcome.path("studentId").asText()))
+                        .orElseThrow().getUsername())
+                .anyMatch("student12"::equals));
+        assertEquals(2, preliminaryGroups.size());
+
+        Map<String, Set<String>> finalizedGroups = new HashMap<>();
+        for (var group : records.findByType("project_group", org.springframework.data.domain.PageRequest.of(0, 100))) {
+            JsonNode payload = store.parse(group);
+            if (finalPeriodId.equals(payload.path("periodId").asText())
+                    && finalRun.getId().toString().equals(payload.path("allocationRunId").asText())) {
+                Set<String> members = new HashSet<>();
+                payload.path("studentIds").forEach(id -> members.add(users.findById(UUID.fromString(id.asText()))
+                        .orElseThrow().getUsername()));
+                finalizedGroups.put(payload.path("projectId").asText(), members);
+            }
+        }
+        assertEquals(new HashSet<>(Set.of(firstGroup, secondGroup)), new HashSet<>(finalizedGroups.values()));
+        assertEquals(preliminaryGroups.values().stream().map(HashSet::new).collect(java.util.stream.Collectors.toSet()),
+                finalizedGroups.values().stream().map(HashSet::new).collect(java.util.stream.Collectors.toSet()));
+
+        String preliminarySnapshot = preliminaryRun.getPayload();
+        String finalizedSnapshot = finalRun.getPayload();
+        long ideaCount = records.findByType("idea", org.springframework.data.domain.PageRequest.of(0, 100))
+                .getTotalElements();
+        String originalPreviewPeriodId = store.parse(records.findByTypeAndParentId(
+                "testing_idea_fixture", fixtureMarker.toString()).get(0)).path("periodId").asText();
+        var originalPreviewPeriod = records.findById(UUID.fromString(originalPreviewPeriodId)).orElseThrow();
+        var originalPreviewRun = records.findByTypeAndParentId("allocation_run", originalPreviewPeriodId).stream()
+                .filter(run -> "COMPLETED".equals(run.getStatus())).findFirst().orElseThrow();
+        String originalPreviewSnapshot = originalPreviewRun.getPayload();
+        seeder.run(new DefaultApplicationArguments(new String[0]));
+        assertEquals(1, records.findByTypeAndParentId("testing_multi_group_allocation_preview",
+                fixtureMarker.toString()).size());
+        assertEquals(7, records.findByTypeAndParentId("student_application", preliminaryPeriodId).size());
+        assertEquals(7, records.findByTypeAndParentId("student_application", finalPeriodId).size());
+        assertEquals(1, records.findByTypeAndParentId("allocation_run", preliminaryPeriodId).size());
+        assertEquals(1, records.findByTypeAndParentId("allocation_run", finalPeriodId).size());
+        assertEquals(2, records.findByType("project_group", org.springframework.data.domain.PageRequest.of(0, 100))
+                .stream().filter(group -> finalPeriodId.equals(store.parse(group).path("periodId").asText())
+                        && finalRun.getId().toString().equals(store.parse(group).path("allocationRunId").asText()))
+                .count());
+        assertEquals(ideaCount, records.findByType("idea", org.springframework.data.domain.PageRequest.of(0, 100))
+                .getTotalElements());
+        assertEquals(preliminarySnapshot, records.findById(preliminaryRun.getId()).orElseThrow().getPayload());
+        assertEquals(finalizedSnapshot, records.findById(finalRun.getId()).orElseThrow().getPayload());
+        assertEquals("ALLOCATED", records.findById(originalPreviewPeriod.getId()).orElseThrow().getStatus());
+        assertEquals(originalPreviewSnapshot, records.findById(originalPreviewRun.getId()).orElseThrow().getPayload());
+        assertEquals(2, finalizedGroups.size());
+    }
+
+    private Map<String, Set<String>> groupsByProject(JsonNode assignments) {
+        Map<String, Set<String>> groups = new HashMap<>();
+        assignments.forEach(assignment -> {
+            String projectId = assignment.path("projectId").asText();
+            String username = users.findById(UUID.fromString(assignment.path("studentId").asText()))
+                    .orElseThrow().getUsername();
+            groups.computeIfAbsent(projectId, ignored -> new HashSet<>()).add(username);
+        });
+        return groups;
+    }
 
     @Test
     void allocationPreviewContainsSubmittedApplicationsAndServiceGeneratedCompletedRun() {
@@ -118,7 +212,7 @@ class TestingIdeasFixtureTest {
     void exposesTwoValidWorkflowIdeasPerStudentToOwnersAndTeachers() throws Exception {
         String teacherToken = login("teacher01");
         JsonNode teacherList = getIdeas(teacherToken);
-        assertEquals(13, teacherList.path("totalElements").asInt());
+        assertEquals(20, teacherList.path("totalElements").asInt());
         Set<String> teacherIdeaIds = new HashSet<>();
 
         for (String username : STUDENTS) {

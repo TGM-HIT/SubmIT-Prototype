@@ -27,6 +27,10 @@ public class TestingIdeasFixtureSeeder implements ApplicationRunner {
     private static final String FIXTURE_TYPE = "testing_idea_fixture";
     private static final String SCHOOL_YEAR = "2026-2027";
     private static final String APPLICATION_SCHOOL_YEAR = "2026/2027";
+    private static final String DECISION_FIELD = "decision";
+    private static final String FEEDBACK_FIELD = "feedback";
+    private static final int MULTI_GROUP_PADDING_PROJECT_COUNT = 7;
+    private static final int FIRST_PADDING_STUDENT_NUMBER = 6;
     private static final List<String> STUDENT_USERNAMES = List.of(
             "student01", "student02", "student03", "student04", "student05");
 
@@ -89,8 +93,8 @@ public class TestingIdeasFixtureSeeder implements ApplicationRunner {
 
                 setCaller(teacher);
                 ideas.review(authenticatedUser(teacher), idea.id(), false,
-                        store.object().put("decision", "APPROVE_FOR_SPECIFICATION")
-                                .put("feedback", "Synthetic project approved for specification."));
+                        store.object().put(DECISION_FIELD, "APPROVE_FOR_SPECIFICATION")
+                                .put(FEEDBACK_FIELD, "Synthetic project approved for specification."));
 
                 setCaller(student);
                 ideas.saveSpecification(authenticatedUser(student), idea.id(), specificationPayload(student));
@@ -98,8 +102,8 @@ public class TestingIdeasFixtureSeeder implements ApplicationRunner {
 
                 setCaller(teacher);
                 ideas.review(authenticatedUser(teacher), idea.id(), true,
-                        store.object().put("decision", "ACCEPT_FOR_APPLICATIONS")
-                                .put("feedback", "Synthetic project accepted for the application catalogue."));
+                        store.object().put(DECISION_FIELD, "ACCEPT_FOR_APPLICATIONS")
+                                .put(FEEDBACK_FIELD, "Synthetic project accepted for the application catalogue."));
                 ideaId = idea.id();
                 markSeeded(markerId, ideaId);
             }
@@ -114,6 +118,48 @@ public class TestingIdeasFixtureSeeder implements ApplicationRunner {
             allocationPreview.seed(admin, students, ideasForPreview, periodMarker);
         }
         allocationPreview.seedStudentAssignmentStates(admin, periodMarker, ideasForPreview);
+        List<UUID> multiGroupProjects = new java.util.ArrayList<>(ideasForPreview);
+        multiGroupProjects.addAll(seedMultiGroupPaddingProjects());
+        allocationPreview.seedMultiGroupScenario(admin, multiGroupProjects, periodMarker);
+    }
+
+    private List<UUID> seedMultiGroupPaddingProjects() {
+        UserAccount teacher = requireAccount("teacher01", Role.TEACHER);
+        List<UUID> projectIds = new java.util.ArrayList<>();
+        for (int index = 0; index < MULTI_GROUP_PADDING_PROJECT_COUNT; index++) {
+            UserAccount student = requireAccount(String.format("student%02d", index + FIRST_PADDING_STUDENT_NUMBER), Role.STUDENT);
+            UUID markerId = markerId(student, "multi-group-padding-project");
+            UUID ideaId;
+            if (isSeeded(markerId)) {
+                ideaId = seededIdeaId(markerId);
+            } else {
+                setCaller(student);
+                ObjectNode payload = store.object()
+                        .put("title", "Synthetic multi-group preference option " + (index + 1))
+                        .put("description", "A synthetic filler project with entirely fictional classroom material.")
+                        .put("intendedOutcome", "A fictional worksheet used only to preview ranked preferences.")
+                        .put("schoolYear", APPLICATION_SCHOOL_YEAR);
+                payload.set("scopePoints", store.value(List.of("Use fictional worksheet data")));
+                payload.set("learningTopics", store.value(List.of("Fair testing")));
+                IdeaResponse idea = ideas.create(authenticatedUser(student), payload);
+                ideas.submit(authenticatedUser(student), idea.id());
+                setCaller(teacher);
+                ideas.review(authenticatedUser(teacher), idea.id(), false,
+                        store.object().put(DECISION_FIELD, "APPROVE_FOR_SPECIFICATION")
+                                .put(FEEDBACK_FIELD, "Synthetic testing-only preference option approved."));
+                setCaller(student);
+                ideas.saveSpecification(authenticatedUser(student), idea.id(), specificationPayload(student));
+                ideas.submitSpecification(authenticatedUser(student), idea.id());
+                setCaller(teacher);
+                ideas.review(authenticatedUser(teacher), idea.id(), true,
+                        store.object().put(DECISION_FIELD, "ACCEPT_FOR_APPLICATIONS")
+                                .put(FEEDBACK_FIELD, "Synthetic testing-only preference option accepted."));
+                ideaId = idea.id();
+                markSeeded(markerId, ideaId);
+            }
+            projectIds.add(ideaId);
+        }
+        return List.copyOf(projectIds);
     }
 
     private UUID seededIdeaId(UUID markerId) {
@@ -154,8 +200,8 @@ public class TestingIdeasFixtureSeeder implements ApplicationRunner {
 
         setCaller(teacher);
         ObjectNode approval = store.object()
-                .put("decision", "APPROVE_FOR_SPECIFICATION")
-                .put("feedback", "The synthetic idea is ready for specification work.");
+                .put(DECISION_FIELD, "APPROVE_FOR_SPECIFICATION")
+                .put(FEEDBACK_FIELD, "The synthetic idea is ready for specification work.");
         ideas.review(authenticatedUser(teacher), idea.id(), false, approval);
 
         setCaller(student);

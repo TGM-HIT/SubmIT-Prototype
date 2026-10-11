@@ -11,11 +11,14 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.flightlog.data.RecordStore;
 import com.flightlog.data.StoredRecord;
+import com.flightlog.data.StoredRecordRepository;
 import com.flightlog.user.UserAccount;
 import com.flightlog.user.UserAccountRepository;
 import java.time.Instant;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -39,6 +42,8 @@ class StudentPeriodAssignmentApiTest {
     private RecordStore store;
     @Autowired
     private UserAccountRepository users;
+    @Autowired
+    private StoredRecordRepository records;
 
     private UserAccount student;
     private UserAccount member;
@@ -171,6 +176,53 @@ class StudentPeriodAssignmentApiTest {
     }
 
     @Test
+    void seededMultiGroupPeriodsExposeOnlyEachStudentsOwnGroupThroughPublicApi() throws Exception {
+        UUID markerId = UUID.nameUUIDFromBytes(
+                "testing-allocation-preview:period".getBytes(java.nio.charset.StandardCharsets.UTF_8));
+        var fixtureRecord = records.findByTypeAndParentId("testing_multi_group_allocation_preview",
+                markerId.toString()).stream().findFirst().orElseThrow();
+        JsonNode fixture = store.parse(fixtureRecord);
+        UUID preliminaryId = UUID.fromString(fixture.path("preliminaryPeriodId").asText());
+        UUID finalId = UUID.fromString(fixture.path("finalPeriodId").asText());
+        List<String> firstGroup = List.of("student06", "student07", "student08");
+        List<String> secondGroup = List.of("student09", "student10", "student11");
+
+        String firstGroupProject = verifySeededGroup("student06", preliminaryId, firstGroup, secondGroup, "PRELIMINARY");
+        String secondGroupProject = verifySeededGroup("student11", preliminaryId, secondGroup, firstGroup, "PRELIMINARY");
+        org.junit.jupiter.api.Assertions.assertNotEquals(firstGroupProject, secondGroupProject);
+        org.junit.jupiter.api.Assertions.assertEquals(firstGroupProject,
+                verifySeededGroup("student06", finalId, firstGroup, secondGroup, "FINAL"));
+        org.junit.jupiter.api.Assertions.assertEquals(secondGroupProject,
+                verifySeededGroup("student11", finalId, secondGroup, firstGroup, "FINAL"));
+
+        String unassignedToken = login("student12");
+        JsonNode preliminaryUnassigned = periodResponse(unassignedToken, preliminaryId).path("studentAssignment");
+        JsonNode finalUnassigned = periodResponse(unassignedToken, finalId).path("studentAssignment");
+        org.junit.jupiter.api.Assertions.assertEquals("NOT_ASSIGNED_PRELIMINARY",
+                preliminaryUnassigned.path("state").asText());
+        org.junit.jupiter.api.Assertions.assertEquals("NOT_ASSIGNED_FINAL", finalUnassigned.path("state").asText());
+        org.junit.jupiter.api.Assertions.assertTrue(preliminaryUnassigned.path("groupMembers").isEmpty());
+        org.junit.jupiter.api.Assertions.assertTrue(finalUnassigned.path("groupMembers").isEmpty());
+    }
+
+    private String verifySeededGroup(String username, UUID periodId, List<String> ownGroup,
+            List<String> otherGroup, String expectedState) throws Exception {
+        JsonNode assignment = periodResponse(login(username), periodId).path("studentAssignment");
+        org.junit.jupiter.api.Assertions.assertEquals(expectedState, assignment.path("state").asText());
+        Set<String> expectedNames = new HashSet<>();
+        ownGroup.forEach(account -> expectedNames.add(users.findByUsername(account).orElseThrow().getDisplayName()));
+        Set<String> otherNames = new HashSet<>();
+        otherGroup.forEach(account -> otherNames.add(users.findByUsername(account).orElseThrow().getDisplayName()));
+        Set<String> visibleNames = new HashSet<>(assignment.path("groupMembers").findValuesAsText("displayName"));
+        org.junit.jupiter.api.Assertions.assertEquals(expectedNames, visibleNames);
+        org.junit.jupiter.api.Assertions.assertTrue(java.util.Collections.disjoint(visibleNames, otherNames));
+        org.junit.jupiter.api.Assertions.assertEquals(1,
+                assignment.path("groupMembers").findValues("self").stream().filter(JsonNode::booleanValue).count());
+        org.junit.jupiter.api.Assertions.assertFalse(assignment.path("projectTitle").asText().isBlank());
+        return assignment.path("projectTitle").asText();
+    }
+
+    @Test
     void studentCannotReadStaffApplicationOrAllocationResources() throws Exception {
         String periodId = UUID.randomUUID().toString();
         String runId = UUID.randomUUID().toString();
@@ -215,8 +267,12 @@ class StudentPeriodAssignmentApiTest {
     }
 
     private JsonNode periodResponse(UUID periodId) throws Exception {
+        return periodResponse(studentToken, periodId);
+    }
+
+    private JsonNode periodResponse(String token, UUID periodId) throws Exception {
         MvcResult result = mockMvc.perform(get("/api/application-periods")
-                        .header("Authorization", "Bearer " + studentToken))
+                        .header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk()).andReturn();
         for (JsonNode period : objectMapper.readTree(result.getResponse().getContentAsString()).path("content")) {
             if (periodId.toString().equals(period.path("id").asText())) {

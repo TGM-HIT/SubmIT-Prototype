@@ -36,6 +36,9 @@ class TestingAccountsInactiveProfileTest {
         assertFalse(applicationContext.containsBean("seedTestingAccounts"));
         assertFalse(applicationContext.containsBean("seedTestingFormalApplicationFixture"));
         assertFalse(applicationContext.containsBean("testingIdeasFixtureSeeder"));
+        assertFalse(applicationContext.containsBean("testingAllocationPreviewSeeder"));
+        assertTrue(records.findByType("testing_multi_group_allocation_preview",
+                org.springframework.data.domain.PageRequest.of(0, 20)).isEmpty());
         assertTrue(records.findByType("idea", org.springframework.data.domain.PageRequest.of(0, 20)).isEmpty());
         assertTrue(records.findByTypeAndParentId("project_group",
                 TestingFormalApplicationFixtureConfiguration.PROJECT_ID.toString()).isEmpty());
