@@ -41,7 +41,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-03](tickets/done/Dev-03.md) | done | Give testing accounts meaningful display names |
 | [Dev-04](tickets/done/Dev-04.md) | done | Seed sample ideas and specifications for testing |
 | [Dev-05](tickets/done/Dev-05.md) | done | Keep preview data across independent preview invocations |
-| [Dev-06](tickets/Dev-06.md) | to-do | Seed 15 student accounts with meaningful names for testing |
+| [Dev-06](tickets/done/Dev-06.md) | done | Seed 15 student accounts with meaningful names for testing |
 | [Dev-07](tickets/Dev-07.md) | to-do | Seed multi-group allocation and finalization preview states for student testing |
 
 ### Features
