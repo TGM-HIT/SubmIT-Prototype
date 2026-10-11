@@ -76,7 +76,12 @@ or authorization behavior maps to a named mechanical check. Confirm each
 manual-verification fallback names the exact condition that triggers it and
 requires a UI failure to reach a state to be reported with the failing request
 rather than worked around. Confirm each Implementor-performed manual scenario
-is reachable with the fixture the ticket names. Documentation-only ticket authoring requires no
+is reachable with the fixture the ticket names. Confirm every file the ticket
+requires changing is allowed by `harness/gates/commit-scope.java`; if a
+deliverable is outside the allowed set (for example `Makefile`, `.env.example`
+or another root config file), add a "Scope-gate allowances" bullet under "Scope
+and contract" naming the exact paths, so the Orchestrator's narrow allowlist
+change is expected rather than discovered. Documentation-only ticket authoring requires no
 project build or test run. Report the ticket path, the material requirements captured, any
 clarifications or assumptions, and the checks performed. Do not claim project
 tests or implementation checks were run.

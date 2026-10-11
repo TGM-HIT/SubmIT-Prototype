@@ -56,7 +56,10 @@ unchecked items; do not infer success from a general statement, an
 expanded-select/mock check when native behavior is required, or absent
 evidence. Re-run applicable mechanical checks. Before a `pass`, run the full
 standard checks listed in the ticket (backend `./gradlew test`, not a `--tests`
-filter; the full frontend `npm test`). Targeted runs may support a `revise` but
+filter; the full frontend `npm test`). Run the backend suite with
+`./gradlew test --rerun-tasks` (or `cleanTest test`): a task reported
+`UP-TO-DATE` has not been re-executed, so do not quote its report totals as your
+own observation. Targeted runs may support a `revise` but
 never a `pass`. Report the totals you observed. Return `pass` only when the
 ticket's required acceptance is established; return `awaiting-human` for
 remaining human-exercisable items or `revise` for a concrete code change.

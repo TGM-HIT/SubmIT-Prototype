@@ -24,7 +24,7 @@ evidence, and status.
 
 | # | Acceptance criterion (prefilled) | Why human verification is needed (prefilled) | View/state, steps, role/data (prefilled) | Requested evidence (prefilled) | What I observed | Evidence path or why none | Status: verified / unavailable / not checked |
 |---|---|---|---|---|---|---|---|
-| 1 | {{unmet-criterion-1}} | {{human-only-reason-1}} | {{specific-steps-role-data-1}} | {{evidence-request-1}} |  |  |  |
+| 1 | {{unmet-criterion-1}} | {{human-only-reason-1}} | {{specific-steps-role-data-1}} | {{evidence-request-1}}; save one screenshot per view/account as `harness/runs/{{original-run-id}}/evidence/<account>-<view>.png` (for example `{{example-evidence-file-1}}`); each must show the signed-in account |  |  |  |
 
 Add or remove rows to exactly match the unresolved criteria supplied by the
 Evaluator. Record every unavailable or unperformed item; do not omit it.

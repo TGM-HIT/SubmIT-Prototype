@@ -153,7 +153,10 @@ to save its complete verdict there before returning. A pass closes the
 ticket as done; an `awaiting-human` verdict returns it to `awaiting-human` with
 a newly prepared checklist. If the Evaluator identifies a concrete code change,
 resume the normal Implementor/gate/Evaluator loop, subject to the three-cycle
-limit. Keep continuation artifacts in the ignored run folder and commit tracked
+limit. Before dispatching the Evaluator on a human record, check that every
+evidence path the human named exists in the paused run's folder; pass any
+missing or differently named file to the Evaluator as a discrepancy in the
+dispatch prompt. Keep continuation artifacts in the ignored run folder and commit tracked
 ledger or ticket changes separately at closeout.
 
 An authorized user may instead explicitly accept the current implementation
