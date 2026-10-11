@@ -43,8 +43,46 @@
               </template>
             </section>
             <div v-if="isStudent" class="choice-list application-catalogue">
-              <details v-for="(projectId, index) in period.projectIds ?? []" :key="projectId" class="choice-item">
+              <details v-for="(projectId, index) in period.projectIds ?? []" :key="projectId" class="choice-item" @toggle="onProjectToggle($event, period.id ?? '', projectId)">
                 <summary>Accepted project {{ index + 1 }} · {{ projectTitle(period, projectId) }}</summary>
+                <div v-if="catalogueDetail(period.id ?? '', projectId)?.loading" class="catalogue-detail loading">Loading project details…</div>
+                <div v-else-if="catalogueDetail(period.id ?? '', projectId)?.error" class="catalogue-detail error-box" role="alert">
+                  {{ catalogueDetail(period.id ?? '', projectId)?.error }}
+                  <button class="button button-secondary button-small" type="button" @click.stop="loadProjectDetails(period.id ?? '', projectId)">Retry</button>
+                </div>
+                <div v-else-if="catalogueDetail(period.id ?? '', projectId)?.data" class="catalogue-detail">
+                  <div class="catalogue-detail-section">
+                    <h4>Project summary</h4>
+                    <dl class="catalogue-detail-list">
+                      <div><dt>School year</dt><dd>{{ catalogueDetail(period.id ?? '', projectId)?.data?.schoolYear || 'Not stated' }}</dd></div>
+                      <div><dt>Intended outcome</dt><dd>{{ catalogueDetail(period.id ?? '', projectId)?.data?.intendedOutcome || 'Not stated' }}</dd></div>
+                    </dl>
+                  </div>
+                  <div class="catalogue-detail-section">
+                    <h4>Idea</h4>
+                    <p>{{ catalogueDetail(period.id ?? '', projectId)?.data?.description || 'No description available.' }}</p>
+                    <ul v-if="(catalogueDetail(period.id ?? '', projectId)?.data?.scopePoints ?? []).length">
+                      <li v-for="item in catalogueDetail(period.id ?? '', projectId)?.data?.scopePoints ?? []" :key="item">{{ item }}</li>
+                    </ul>
+                    <p v-if="!(catalogueDetail(period.id ?? '', projectId)?.data?.scopePoints ?? []).length" class="muted">No initial scope points were supplied.</p>
+                    <p><strong>Learning topics:</strong> {{ (catalogueDetail(period.id ?? '', projectId)?.data?.learningTopics ?? []).join(', ') || 'Not specified' }}</p>
+                  </div>
+                  <div v-if="catalogueDetail(period.id ?? '', projectId)?.data?.specification" class="catalogue-detail-section">
+                    <h4>Specification</h4>
+                    <dl class="catalogue-detail-list">
+                      <div><dt>Objectives</dt><dd>{{ (catalogueDetail(period.id ?? '', projectId)?.data?.specification?.objectives ?? []).join('; ') || 'Not specified' }}</dd></div>
+                      <div><dt>Intended users</dt><dd>{{ (catalogueDetail(period.id ?? '', projectId)?.data?.specification?.intendedUsers ?? []).join('; ') || 'Not specified' }}</dd></div>
+                      <div><dt>Requirements</dt><dd>{{ (catalogueDetail(period.id ?? '', projectId)?.data?.specification?.requirements ?? []).join('; ') || 'Not specified' }}</dd></div>
+                      <div><dt>Deliverables</dt><dd>{{ (catalogueDetail(period.id ?? '', projectId)?.data?.specification?.deliverables ?? []).join('; ') || 'Not specified' }}</dd></div>
+                      <div><dt>Scope</dt><dd>{{ catalogueDetail(period.id ?? '', projectId)?.data?.specification?.scope || 'Not specified' }}</dd></div>
+                      <div><dt>Dependencies or resources</dt><dd>{{ (catalogueDetail(period.id ?? '', projectId)?.data?.specification?.dependencies ?? []).join('; ') || 'Not specified' }}</dd></div>
+                    </dl>
+                  </div>
+                  <div v-else class="catalogue-detail-section">
+                    <h4>Specification</h4>
+                    <p class="muted">No specification is currently available for this project.</p>
+                  </div>
+                </div>
                 <RouterLink class="button button-secondary button-small" :to="`/archive/${projectId}`">Browse approved archive</RouterLink>
               </details>
             </div>
@@ -97,6 +135,8 @@ import AsyncPanel from '../../components/AsyncPanel.vue'
 type Period = components['schemas']['ApplicationPeriodResponse']
 type Idea = components['schemas']['IdeaResponse']
 type Application = components['schemas']['StudentApplicationResponse']
+type CatalogueProject = components['schemas']['CatalogueProjectResponse']
+type CatalogueProjectState = { loading: boolean, error?: string, data?: CatalogueProject }
 const auth = useAuthStore()
 const isStudent = computed(() => auth.user?.role === 'STUDENT')
 const isAdmin = computed(() => auth.user?.role === 'ADMIN')
@@ -109,6 +149,7 @@ const currentApplications = ref<Record<string, Application>>({})
 const rankedIds = ref<Record<string, string[]>>({})
 const periodEditor = ref(false)
 const projectToAdd = ref('')
+const catalogueDetails = ref<Record<string, CatalogueProjectState>>({})
 const applicationSummary = ref<Page<Application> | null>(null)
 const summaryPeriod = ref('')
 const periodForm = reactive({ schoolYear: '', opensAt: '', closesAt: '', projectIds: [] as string[] })
@@ -152,6 +193,31 @@ function date(value?: string): string {
 }
 function projectTitle(period: Period, id?: string): string {
   return period.projectTitles?.find((project) => project.projectId === id)?.title || 'Unknown project'
+}
+function catalogueDetailKey(periodId: string, projectId: string): string {
+  return `${periodId}:${projectId}`
+}
+function catalogueDetail(periodId: string, projectId: string): CatalogueProjectState | undefined {
+  return catalogueDetails.value[catalogueDetailKey(periodId, projectId)]
+}
+function onProjectToggle(event: Event, periodId: string, projectId: string): void {
+  const details = event.target as HTMLDetailsElement | null
+  if (!details || !details.open) return
+  void loadProjectDetails(periodId, projectId)
+}
+async function loadProjectDetails(periodId: string, projectId: string): Promise<void> {
+  const key = catalogueDetailKey(periodId, projectId)
+  if (catalogueDetails.value[key]?.loading) return
+  catalogueDetails.value[key] = { loading: true, error: 'Loading project details…' }
+  try {
+    const response = await periodsApi.projectDetails(periodId, projectId)
+    catalogueDetails.value[key] = { loading: false, data: response as CatalogueProject }
+  } catch (error) {
+    const message = error instanceof ApiError && error.status === 404
+      ? 'This project is not available right now. Please try again.'
+      : 'We could not load this project. Please try again.'
+    catalogueDetails.value[key] = { loading: false, error: message }
+  }
 }
 function periodEditable(period: Period): boolean {
   return period.status === 'OPEN' && Boolean(period.closesAt)
@@ -262,4 +328,41 @@ onMounted(() => void load())
   min-width: 0;
   overflow-wrap: anywhere;
 }
+.catalogue-detail {
+  margin-top: 0.75rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.catalogue-detail.loading,
+.catalogue-detail.error-box {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+.catalogue-detail-section + .catalogue-detail-section {
+  margin-top: 1rem;
+}
+.catalogue-detail-list {
+  display: grid;
+  gap: 0.5rem;
+  margin: 0;
+}
+.catalogue-detail-list div {
+  display: grid;
+  gap: 0.15rem;
+}
+.catalogue-detail-list dt {
+  font-weight: 600;
+}
+.catalogue-detail-list dd {
+  margin: 0;
+}
+.catalogue-detail ul {
+  margin: 0.5rem 0 0;
+  padding-left: 1.25rem;
+}
+.catalogue-detail p { margin: 0.5rem 0 0; }
 </style>

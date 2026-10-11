@@ -5,6 +5,7 @@ import com.flightlog.security.AuthenticatedUser;
 import com.flightlog.web.ApiDtos.ApplicationPeriodResponse;
 import com.flightlog.web.ApiDtos.PageResponse;
 import com.flightlog.web.ApiDtos.ApplicationPeriodRequest;
+import com.flightlog.web.ApiDtos.CatalogueProjectResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -57,6 +58,12 @@ public class ApplicationPeriodController {
     public ApplicationPeriodResponse getPeriod(@AuthenticationPrincipal AuthenticatedUser caller,
             @PathVariable UUID id) {
         return service.get(caller, id);
+    }
+
+    @GetMapping("/api/application-periods/{periodId}/catalogue/{projectId}")
+    public CatalogueProjectResponse getCatalogueProject(@AuthenticationPrincipal AuthenticatedUser caller,
+            @PathVariable UUID periodId, @PathVariable UUID projectId) {
+        return service.getCatalogueProject(caller, periodId, projectId);
     }
 
     @PutMapping("/api/application-periods/{id}")

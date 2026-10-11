@@ -12,6 +12,7 @@ const api = vi.hoisted(() => ({
   createPeriod: vi.fn(),
   applications: vi.fn(),
   myApplication: vi.fn(),
+  projectDetails: vi.fn(),
   createApplication: vi.fn(),
   updateApplication: vi.fn(),
   withdrawApplication: vi.fn(),
@@ -25,6 +26,7 @@ vi.mock('../../api/services', () => ({
     create: api.createPeriod,
     applications: api.applications,
     myApplication: api.myApplication,
+    projectDetails: api.projectDetails,
     createApplication: api.createApplication,
     updateApplication: api.updateApplication,
     withdrawApplication: api.withdrawApplication,
@@ -78,6 +80,23 @@ describe('application period configuration', () => {
       size: 20,
       totalElements: 0,
       totalPages: 0,
+    })
+    api.projectDetails.mockResolvedValue({
+      id: '11111111-1111-4111-8111-111111111111',
+      title: 'Solar design',
+      description: 'A sustainable project',
+      intendedOutcome: 'Reduce energy waste',
+      scopePoints: ['Prototype', 'Measure usage'],
+      learningTopics: ['Design', 'Systems'],
+      schoolYear: '2026/2027',
+      specification: {
+        objectives: ['Reduce energy use'],
+        intendedUsers: ['Students'],
+        requirements: ['Sensor'],
+        deliverables: ['Report'],
+        scope: 'Build a prototype',
+        dependencies: ['Power supply'],
+      },
     })
     api.listIdeas.mockResolvedValue({
       content: projectIds.map((id, index) => ({
@@ -270,6 +289,50 @@ describe("student catalogue project titles", () => {
     "33333333-3333-4333-8333-333333333333",
   ]
   const titles = ["Solar design", "Water quality", "CommunityGarden".repeat(8)]
+
+  it("loads project details for each open catalogue item and keeps the rest of the page usable", async () => {
+    api.role = "STUDENT"
+    api.listIdeas.mockResolvedValue({ content: [] })
+    api.listPeriods.mockResolvedValue({
+      content: [{
+        id: "period-open", schoolYear: "2026/2027", status: "OPEN",
+        opensAt: new Date(Date.now() - 3600000).toISOString(),
+        closesAt: new Date(Date.now() + 3600000).toISOString(), projectIds: ids,
+        projectTitles: ids.map((projectId, index) => ({ projectId, title: titles[index] })),
+      }],
+      page: 0, size: 20, totalElements: 1, totalPages: 1,
+    })
+    api.projectDetails.mockResolvedValue({
+      id: ids[0],
+      title: titles[0],
+      description: 'A project that makes sense to compare',
+      intendedOutcome: 'Help students',
+      scopePoints: ['Prototype', 'Test'],
+      learningTopics: ['Design'],
+      schoolYear: '2026/2027',
+      specification: {
+        objectives: ['Build a small prototype'],
+        intendedUsers: ['Learners'],
+        requirements: ['A working plan'],
+        deliverables: ['Prototype'],
+        scope: 'Build and test the idea.',
+        dependencies: ['Hardware'],
+      },
+    })
+    api.myApplication.mockRejectedValue(new ApiError("not found", 404))
+
+    const page = mountPage()
+    await flushPromises()
+
+    const firstDetail = page.findAll('details')[0]
+    firstDetail.element.open = true
+    await firstDetail.trigger('toggle')
+    await flushPromises()
+
+    expect(page.text()).toContain('Project summary')
+    expect(page.text()).toContain('Build and test the idea.')
+    expect(page.text()).toContain('Accepted project 2 · Water quality')
+  })
 
   it("uses open-period titles for catalogue and ranking controls while preserving ranking actions", async () => {
     api.role = "STUDENT"

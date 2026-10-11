@@ -76,6 +76,9 @@ export const periodsApi = {
   myApplication(periodId: string): Promise<StudentApplicationResponse> {
     return json(`/api/application-periods/${encodeURIComponent(periodId)}/applications/me`)
   },
+  projectDetails(periodId: string, projectId: string): Promise<Data> {
+    return json(`/api/application-periods/${encodeURIComponent(periodId)}/catalogue/${encodeURIComponent(projectId)}`)
+  },
   applications(periodId: string, page: number): Promise<Page<StudentApplicationResponse>> {
     return json(`/api/application-periods/${encodeURIComponent(periodId)}/applications?${pageQuery(page)}`)
   },

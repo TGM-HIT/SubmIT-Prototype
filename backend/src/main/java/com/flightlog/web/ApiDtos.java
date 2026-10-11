@@ -329,6 +329,26 @@ public final class ApiDtos {
             StudentAssignmentResponse studentAssignment) {
     }
 
+    public record CatalogueSpecificationResponse(
+            List<String> objectives,
+            List<String> intendedUsers,
+            List<String> requirements,
+            List<String> deliverables,
+            String scope,
+            List<String> dependencies) {
+    }
+
+    public record CatalogueProjectResponse(
+            UUID id,
+            String title,
+            String description,
+            String intendedOutcome,
+            List<String> scopePoints,
+            List<String> learningTopics,
+            String schoolYear,
+            CatalogueSpecificationResponse specification) {
+    }
+
     public record ProjectTitleResponse(UUID projectId, String title) {
     }
 

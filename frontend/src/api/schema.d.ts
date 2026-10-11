@@ -749,6 +749,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/application-periods/{periodId}/catalogue/{projectId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["getCatalogueProject"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/application-periods/{periodId}/applications/me": {
         parameters: {
             query?: never;
@@ -1545,6 +1561,25 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
+        };
+        CatalogueProjectResponse: {
+            /** Format: uuid */
+            id?: string;
+            title?: string;
+            description?: string;
+            intendedOutcome?: string;
+            scopePoints?: string[];
+            learningTopics?: string[];
+            schoolYear?: string;
+            specification?: components["schemas"]["CatalogueSpecificationResponse"];
+        };
+        CatalogueSpecificationResponse: {
+            objectives?: string[];
+            intendedUsers?: string[];
+            requirements?: string[];
+            deliverables?: string[];
+            scope?: string;
+            dependencies?: string[];
         };
         PageResponseStudentApplicationResponse: {
             content?: components["schemas"]["StudentApplicationResponse"][];
@@ -3191,6 +3226,29 @@ export interface operations {
                 };
                 content: {
                     "application/octet-stream": string;
+                };
+            };
+        };
+    };
+    getCatalogueProject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                periodId: string;
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CatalogueProjectResponse"];
                 };
             };
         };

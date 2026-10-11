@@ -96,6 +96,40 @@ class StudentCatalogueProjectTitlesTest {
     }
 
     @Test
+    void studentsCanReadOpenCatalogueProjectDetailsOnlyForCataloguedProjects() throws Exception {
+        ObjectNode specificationPayload = store.object();
+        specificationPayload.put("scope", "Prototype and evaluate a solar power monitoring system.");
+        specificationPayload.putArray("objectives").add("Build a solar prototype");
+        specificationPayload.putArray("intendedUsers").add("Students and teachers");
+        specificationPayload.putArray("requirements").add("Weather sensor");
+        specificationPayload.putArray("deliverables").add("Prototype and report");
+        specificationPayload.putArray("dependencies").add("Basic electrical components");
+        StoredRecord specification = store.create("specification", ownerId, ideas.get(0).getId().toString(),
+                "SPECIFICATION_SUBMITTED", specificationPayload);
+
+        JsonNode detail = getJson("/api/application-periods/" + openPeriod.getId() + "/catalogue/" + ideas.get(0).getId(), studentToken);
+        org.junit.jupiter.api.Assertions.assertEquals("Solar project", detail.path("title").asText());
+        org.junit.jupiter.api.Assertions.assertEquals("private solar description", detail.path("description").asText());
+        org.junit.jupiter.api.Assertions.assertEquals("Private outcome", detail.path("intendedOutcome").asText());
+        org.junit.jupiter.api.Assertions.assertEquals("Build a solar prototype", detail.path("specification").path("objectives").get(0).asText());
+        org.junit.jupiter.api.Assertions.assertFalse(detail.toString().contains(ownerId));
+
+        StoredRecord closed = period("CLOSED", Instant.now().minusSeconds(7200), Instant.now().minusSeconds(60),
+                List.of(ideas.get(0).getId().toString()));
+        mockMvc.perform(get("/api/application-periods/{periodId}/catalogue/{projectId}", closed.getId(), ideas.get(0).getId())
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(get("/api/application-periods/{periodId}/catalogue/{projectId}", openPeriod.getId(), ideas.get(0).getId())
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/application-periods/{periodId}/catalogue/{projectId}", openPeriod.getId(), ideas.get(0).getId()))
+                .andExpect(status().isUnauthorized());
+        org.junit.jupiter.api.Assertions.assertFalse(detail.toString().contains("submitter"));
+        org.junit.jupiter.api.Assertions.assertFalse(detail.toString().contains("review"));
+        org.junit.jupiter.api.Assertions.assertFalse(detail.toString().contains("revisionId"));
+    }
+
+    @Test
     void unknownAndNonAcceptedProjectsNeverRevealTitlesAndClosedCataloguesHideTitles() throws Exception {
         List<StoredRecord> hiddenIdeas = new ArrayList<>();
         for (String status : List.of("IDEA_DRAFT", "IDEA_SUBMITTED", "DECLINED", "WITHDRAWN")) {

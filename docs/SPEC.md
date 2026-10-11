@@ -45,7 +45,7 @@ An initial idea includes:
 - The expected learning topics or skills involved, if known.
 - The student submitter and the intended school year.
 
-The full specification expands the idea with objectives, intended users, functional requirements or feature descriptions, expected deliverables, a proposed scope, and known dependencies or resources. It remains linked to the original idea and preserves the submitted revision history.
+The full specification expands the idea with objectives, intended users, functional requirements or feature descriptions, expected deliverables, a proposed scope, and known dependencies or resources. It remains linked to the original idea and preserves the submitted revision history. While an application period is open, students may read the title, idea description, intended outcome, scope points, learning topics, and accepted specification for each project in that period's catalogue so they can make an informed ranking decision; they do not gain access to other students' private idea data or teacher review details outside that open catalogue.
 
 An idea has one submitting student. An accepted project may be joined by students through the application process; submitting an idea does not reserve a place in its eventual group.
 

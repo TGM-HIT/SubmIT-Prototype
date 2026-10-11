@@ -7,6 +7,8 @@ import com.flightlog.data.StoredRecord;
 import com.flightlog.user.UserAccount;
 import com.flightlog.user.UserAccountRepository;
 import com.flightlog.web.ApiDtos.ApplicationPeriodResponse;
+import com.flightlog.web.ApiDtos.CatalogueProjectResponse;
+import com.flightlog.web.ApiDtos.CatalogueSpecificationResponse;
 import com.flightlog.web.ApiDtos.PageResponse;
 import com.flightlog.web.ApiDtos.PreferenceResponse;
 import com.flightlog.web.ApiDtos.ProjectTitleResponse;
@@ -81,6 +83,19 @@ class ApplicationResponseMapper {
         });
         return new StudentApplicationResponse(record.getId(), UUID.fromString(record.getOwnerId()), displayName,
                 UUID.fromString(record.getParentId()), record.getStatus(), List.copyOf(preferences));
+    }
+
+    CatalogueProjectResponse catalogueProject(StoredRecord idea, StoredRecord specification) {
+        ObjectNode payload = store.parse(idea);
+        return new CatalogueProjectResponse(
+                idea.getId(),
+                payload.path(TITLE).asText(),
+                payload.path("description").asText(),
+                payload.path("intendedOutcome").asText(),
+                strings(payload, "scopePoints"),
+                strings(payload, "learningTopics"),
+                payload.path("schoolYear").asText(),
+                specification == null ? null : specificationResponse(specification));
     }
 
     PageResponse<ApplicationPeriodResponse> periods(Page<StoredRecord> records, UUID studentId) {
@@ -246,6 +261,20 @@ class ApplicationResponseMapper {
         } catch (IllegalArgumentException exception) {
             return null;
         }
+    }
+
+    private CatalogueSpecificationResponse specificationResponse(StoredRecord record) {
+        ObjectNode payload = store.parse(record);
+        return new CatalogueSpecificationResponse(
+                strings(payload, "objectives"), strings(payload, "intendedUsers"),
+                strings(payload, "requirements"), strings(payload, "deliverables"),
+                payload.path("scope").asText(), strings(payload, "dependencies"));
+    }
+
+    private List<String> strings(ObjectNode payload, String field) {
+        List<String> values = new ArrayList<>();
+        payload.path(field).forEach(node -> values.add(node.asText()));
+        return List.copyOf(values);
     }
 
     private record GroupAssignment(String projectId, List<String> memberIds) {
