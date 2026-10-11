@@ -716,18 +716,49 @@ function connectCdp(url) {
 
 export function collectBrowserErrors(client) {
   const errors = []
+  const requests = new Map()
   client.onEvent(({ method, params }) => {
     if (method === 'Runtime.exceptionThrown') {
-      errors.push(`console exception: ${params.exceptionDetails?.text ?? 'uncaught exception'}`)
+      const details = params.exceptionDetails
+      const location = details?.url ? ` at ${details.url}:${details.lineNumber ?? 0}:${details.columnNumber ?? 0}` : ''
+      errors.push(`console exception: ${details?.text ?? 'uncaught exception'}${location}`)
     } else if (method === 'Runtime.consoleAPICalled' && params.type === 'error') {
       const text = (params.args ?? []).map((argument) => argument.value ?? argument.description ?? '').join(' ')
-      errors.push(`console.error: ${text}`)
+      const frame = params.stackTrace?.callFrames?.[0]
+      const location = frame?.url ? ` at ${frame.url}:${frame.lineNumber ?? 0}:${frame.columnNumber ?? 0}` : ''
+      errors.push(`console.error: ${text}${location}`)
     } else if (method === 'Log.entryAdded' && params.entry?.level === 'error') {
-      errors.push(`browser log: ${params.entry.text}`)
+      const entry = params.entry
+      const location = entry.url ? ` at ${entry.url}:${entry.lineNumber ?? 0}` : ''
+      errors.push(`browser log: ${entry.text}${location}`)
+    } else if (method === 'Network.requestWillBeSent') {
+      requests.set(params.requestId, {
+        url: params.request.url,
+        method: params.request.method,
+        resourceType: params.type,
+        initiatorType: params.initiator?.type,
+        initiatorUrl: params.initiator?.url,
+        initiatorFunction: params.initiator?.stack?.callFrames?.[0]?.functionName,
+        initiatorFrameUrl: params.initiator?.stack?.callFrames?.[0]?.url,
+        redirectFrom: params.redirectResponse?.url,
+      })
+    } else if (method === 'Network.responseReceived') {
+      const request = requests.get(params.requestId)
+      if (request) {
+        request.responseStatus = params.response.status
+        request.responseUrl = params.response.url
+      }
+      if (params.response.status >= 400) {
+        errors.push(`request returned HTTP ${params.response.status}: ${params.response.url}`)
+      }
+    } else if (method === 'Network.loadingFinished') {
+      const request = requests.get(params.requestId)
+      if (request) request.loadingFinished = true
     } else if (method === 'Network.loadingFailed') {
-      errors.push(`request failed: ${params.errorText} (${params.requestId})`)
-    } else if (method === 'Network.responseReceived' && params.response.status >= 400) {
-      errors.push(`request returned HTTP ${params.response.status}: ${params.response.url}`)
+      const request = requests.get(params.requestId)
+      const initiator = request?.initiatorFrameUrl || request?.initiatorUrl || request?.initiatorFunction
+        || request?.initiatorType || 'unknown'
+      errors.push(`request failed: ${params.errorText}; url=${request?.url ?? 'unknown'}; method=${request?.method ?? 'unknown'}; type=${request?.resourceType ?? 'unknown'}; initiator=${initiator}; responseStatus=${request?.responseStatus ?? 'none'}; responseUrl=${request?.responseUrl ?? 'none'}; loadingFinished=${Boolean(request?.loadingFinished)}; canceled=${Boolean(params.canceled)}; blockedReason=${params.blockedReason ?? 'none'}; requestId=${params.requestId}`)
     }
   })
   return errors

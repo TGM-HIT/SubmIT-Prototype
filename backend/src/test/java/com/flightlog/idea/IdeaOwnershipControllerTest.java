@@ -70,6 +70,9 @@ class IdeaOwnershipControllerTest {
                 .andExpect(jsonPath("$.owners.length()").value(2));
         mockMvc.perform(post("/api/ideas/{id}/submit", id).header("Authorization", bearer(collaboratorToken)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("IDEA_SUBMITTED"));
+        mockMvc.perform(get("/api/ideas?status=IDEA_SUBMITTED&size=100")
+                        .header("Authorization", bearer(collaboratorToken)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content[?(@.id == '" + id + "')]").isNotEmpty());
         mockMvc.perform(post("/api/ideas/{id}/reviews", id).header("Authorization", bearer(teacherToken))
                         .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(
                                 Map.of("decision", "REQUEST_REVISION", "feedback", "Clarify the project."))))
@@ -119,6 +122,23 @@ class IdeaOwnershipControllerTest {
     @Test
     void creatorCanAddLaterAndCollaboratorCanLeaveButCannotManageOwners() throws Exception {
         String id = create(List.of());
+        mockMvc.perform(post("/api/ideas/{id}/submit", id).header("Authorization", bearer(creatorToken)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("IDEA_SUBMITTED"));
+        mockMvc.perform(post("/api/ideas/{id}/reviews", id).header("Authorization", bearer(teacherToken))
+                        .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(
+                                Map.of("decision", "APPROVE_FOR_SPECIFICATION", "feedback", "Proceed."))))
+                .andExpect(status().isCreated());
+        Map<String, Object> specification = Map.of("objectives", List.of("Progress a shared idea"),
+                "intendedUsers", List.of("Students"), "requirements", List.of("Persist the specification"),
+                "deliverables", List.of("A project"), "scope", "Build and verify", "dependencies", List.of("Accounts"));
+        mockMvc.perform(put("/api/ideas/{id}/specification", id).header("Authorization", bearer(creatorToken))
+                        .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(specification)))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/ideas/{id}/specification/submit", id)
+                        .header("Authorization", bearer(creatorToken)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("SPECIFICATION_SUBMITTED"));
+        JsonNode beforeLeave = objectMapper.readTree(getIdea(id, creatorToken).andReturn()
+                .getResponse().getContentAsString());
         mockMvc.perform(post("/api/ideas/{id}/owners", id).header("Authorization", bearer(creatorToken))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of("studentId", collaboratorId))))
@@ -154,11 +174,240 @@ class IdeaOwnershipControllerTest {
                 .andExpect(status().isForbidden());
         mockMvc.perform(get("/api/ideas?size=100").header("Authorization", bearer(collaboratorToken)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.content[?(@.id == '" + id + "')]").isEmpty());
-        getIdea(id, creatorToken).andExpect(status().isOk()).andExpect(jsonPath("$.owners.length()").value(1));
+        JsonNode afterLeave = objectMapper.readTree(getIdea(id, creatorToken).andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString());
+        org.junit.jupiter.api.Assertions.assertEquals(beforeLeave.path("status"), afterLeave.path("status"));
+        org.junit.jupiter.api.Assertions.assertEquals(beforeLeave.path("title"), afterLeave.path("title"));
+        org.junit.jupiter.api.Assertions.assertEquals(beforeLeave.path("description"), afterLeave.path("description"));
+        org.junit.jupiter.api.Assertions.assertEquals(beforeLeave.path("reviews"), afterLeave.path("reviews"));
+        org.junit.jupiter.api.Assertions.assertEquals(beforeLeave.path("specification"), afterLeave.path("specification"));
+        org.junit.jupiter.api.Assertions.assertEquals(1, afterLeave.path("owners").size());
         List<String> ownerActions = records.repository().findByTypeAndParentId("audit", id).stream()
                 .map(StoredRecord::getStatus).toList();
         assertTrue(ownerActions.contains("IDEA_OWNER_ADDED"), ownerActions.toString());
         assertTrue(ownerActions.contains("IDEA_OWNER_LEFT"), ownerActions.toString());
+    }
+
+    @Test
+    void multiOwnerIdeaCompletesAcceptanceSupervisionCatalogueAllocationAndFormalApplication() throws Exception {
+        List<String> cohort = List.of("student01", "student02", "student03", "student04", "student05",
+                "student06", "student07", "student08", "student09");
+        Map<String, String> tokens = new java.util.LinkedHashMap<>();
+        for (String username : cohort) {
+            tokens.put(username, username.equals("student01") ? creatorToken
+                    : username.equals("student02") ? collaboratorToken : login(username));
+        }
+        MvcResult created = mockMvc.perform(post("/api/ideas").header("Authorization", bearer(creatorToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(idea("Downstream shared project", List.of(collaboratorId)))))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.owners.length()").value(2)).andReturn();
+        String ideaId = objectMapper.readTree(created.getResponse().getContentAsString()).path("id").asText();
+        mockMvc.perform(post("/api/ideas/{id}/submit", ideaId).header("Authorization", bearer(creatorToken)))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/ideas/{id}/reviews", ideaId).header("Authorization", bearer(teacherToken))
+                        .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(
+                                Map.of("decision", "APPROVE_FOR_SPECIFICATION", "feedback", "Proceed to specification."))))
+                .andExpect(status().isCreated());
+        Map<String, Object> specification = Map.of("objectives", List.of("Develop a multi-owner project"),
+                "intendedUsers", List.of("Students"), "requirements", List.of("Application period"),
+                "deliverables", List.of("A working group project"), "scope", "Build and evaluate",
+                "dependencies", List.of("Student collaboration"));
+        mockMvc.perform(put("/api/ideas/{id}/specification", ideaId).header("Authorization", bearer(collaboratorToken))
+                        .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(specification)))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/ideas/{id}/specification/submit", ideaId)
+                        .header("Authorization", bearer(creatorToken)))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/ideas/{id}/specification/reviews", ideaId)
+                        .header("Authorization", bearer(teacherToken)).contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("decision", "ACCEPT_FOR_APPLICATIONS",
+                                "feedback", "Accepted for the application period.", "workSize", 3,
+                                "curriculumRelevance", 3, "technicalComplexity", 3, "feasibility", 3,
+                                "learningValue", 3, "resourceNeeds", 3, "riskAndDependencies", 3))))
+                .andExpect(status().isCreated());
+        getIdea(ideaId, creatorToken).andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ACCEPTED_FOR_APPLICATIONS"))
+                .andExpect(jsonPath("$.owners.length()").value(2));
+
+        String teacherId = users.findByUsername("teacher01").orElseThrow().getId().toString();
+        mockMvc.perform(put("/api/ideas/{id}/supervisor", ideaId).header("Authorization", bearer(adminToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("teacherId", teacherId))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.teacherId").value(teacherId));
+        List<StoredRecord> confirmed = records.repository().findByTypeAndParentId("confirmed_supervisor", ideaId);
+        org.junit.jupiter.api.Assertions.assertEquals(1, confirmed.size());
+        org.junit.jupiter.api.Assertions.assertEquals(teacherId, records.parse(confirmed.get(0)).path("teacherId").asText());
+
+        String creatorName = "Downstream shared project";
+        StoredRecord secondProject = records.create("idea", users.findByUsername("student10").orElseThrow().getId().toString(),
+                null, "ACCEPTED_FOR_APPLICATIONS", records.object().put("title", "Supporting project two")
+                        .put("description", "Catalogue scenario").put("intendedOutcome", "Support allocation")
+                        .put("schoolYear", "2026/2027"));
+        StoredRecord thirdProject = records.create("idea", users.findByUsername("student11").orElseThrow().getId().toString(),
+                null, "ACCEPTED_FOR_APPLICATIONS", records.object().put("title", "Supporting project three")
+                        .put("description", "Catalogue scenario").put("intendedOutcome", "Support allocation")
+                        .put("schoolYear", "2026/2027"));
+        List<String> projectIds = List.of(ideaId, secondProject.getId().toString(), thirdProject.getId().toString());
+        String opensAt = java.time.Instant.now().minusSeconds(60).toString();
+        String closesAt = java.time.Instant.now().plusSeconds(3600).toString();
+        MvcResult periodResult = mockMvc.perform(post("/api/application-periods")
+                        .header("Authorization", bearer(adminToken)).contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("schoolYear", "2026/2027", "opensAt", opensAt,
+                                "closesAt", closesAt, "projectIds", projectIds))))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.status").value("OPEN"))
+                .andExpect(jsonPath("$.projectIds[0]").value(ideaId)).andReturn();
+        String periodId = objectMapper.readTree(periodResult.getResponse().getContentAsString()).path("id").asText();
+        mockMvc.perform(get("/api/application-periods/{periodId}/catalogue/{projectId}", periodId, ideaId)
+                        .header("Authorization", bearer(tokens.get("student03"))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.id").value(ideaId))
+                .andExpect(jsonPath("$.title").value(creatorName));
+
+        for (String username : cohort) {
+            mockMvc.perform(post("/api/application-periods/{periodId}/applications", periodId)
+                            .header("Authorization", bearer(tokens.get(username))).contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(Map.of("projectIds", projectIds))))
+                    .andExpect(status().isCreated()).andExpect(jsonPath("$.preferences.length()").value(3));
+        }
+        StoredRecord period = records.get("application_period", UUID.fromString(periodId));
+        var periodPayload = records.parse(period);
+        periodPayload.put("closesAt", java.time.Instant.now().minusSeconds(1).toString());
+        records.update(period, period.getStatus(), periodPayload);
+        MvcResult runResult = mockMvc.perform(post("/api/application-periods/{periodId}/allocation-runs", periodId)
+                        .header("Authorization", bearer(adminToken)))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.status").value("COMPLETED"))
+                .andExpect(jsonPath("$.periodId").value(periodId))
+                .andExpect(jsonPath("$.result.assignments[?(@.projectId == '" + ideaId + "')]").isNotEmpty())
+                .andReturn();
+        JsonNode run = objectMapper.readTree(runResult.getResponse().getContentAsString());
+        String runId = run.path("id").asText();
+        List<String> allocatedStudents = new java.util.ArrayList<>();
+        run.path("result").path("assignments").forEach(assignment -> {
+            if (ideaId.equals(assignment.path("projectId").asText())) {
+                allocatedStudents.add(assignment.path("studentId").asText());
+            }
+        });
+        org.junit.jupiter.api.Assertions.assertTrue(allocatedStudents.size() >= 3 && allocatedStudents.size() <= 5,
+                "target project assignments " + allocatedStudents);
+        mockMvc.perform(post("/api/allocation-runs/{id}/finalize", runId).header("Authorization", bearer(adminToken)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("FINALIZED"));
+        List<StoredRecord> groups = records.repository().findByTypeAndParentId("project_group", ideaId);
+        StoredRecord group = groups.stream().filter(candidate -> periodId.equals(records.parse(candidate).path("periodId").asText()))
+                .findFirst().orElseThrow();
+        JsonNode groupData = records.parse(group);
+        org.junit.jupiter.api.Assertions.assertEquals("ALLOCATED", group.getStatus());
+        org.junit.jupiter.api.Assertions.assertEquals(ideaId, group.getParentId());
+        org.junit.jupiter.api.Assertions.assertEquals(ideaId, groupData.path("projectId").asText());
+        org.junit.jupiter.api.Assertions.assertEquals(runId, groupData.path("allocationRunId").asText());
+        org.junit.jupiter.api.Assertions.assertEquals(allocatedStudents.size(), groupData.path("studentIds").size());
+        org.junit.jupiter.api.Assertions.assertEquals(new java.util.HashSet<>(allocatedStudents),
+                java.util.stream.StreamSupport.stream(groupData.path("studentIds").spliterator(), false)
+                        .map(JsonNode::asText).collect(java.util.stream.Collectors.toSet()));
+        List<StoredRecord> scenarioApplications = records.repository().findByTypeAndParentId("student_application", periodId);
+        org.junit.jupiter.api.Assertions.assertEquals(cohort.size(), scenarioApplications.size());
+        org.junit.jupiter.api.Assertions.assertTrue(scenarioApplications.stream().allMatch(application -> cohort.stream()
+                .anyMatch(username -> users.findByUsername(username).orElseThrow().getId().toString()
+                        .equals(application.getOwnerId()))));
+        org.junit.jupiter.api.Assertions.assertTrue(scenarioApplications.stream().allMatch(application -> {
+            List<String> rankedIds = new java.util.ArrayList<>();
+            records.parse(application).path("preferences").forEach(preference ->
+                    rankedIds.add(preference.path("projectId").asText()));
+            return rankedIds.equals(projectIds);
+        }), "every persisted application must rank the three catalogued projects from this scenario");
+        StoredRecord persistedRun = records.get("allocation_run", UUID.fromString(runId));
+        org.junit.jupiter.api.Assertions.assertEquals(periodId, persistedRun.getParentId());
+        org.junit.jupiter.api.Assertions.assertEquals("FINALIZED", persistedRun.getStatus());
+
+        List<Map<String, Object>> individualTopics = new java.util.ArrayList<>();
+        List<Map<String, Object>> concerns = new java.util.ArrayList<>();
+        List<Map<String, Object>> results = new java.util.ArrayList<>();
+        for (JsonNode studentId : groupData.path("studentIds")) {
+            String id = studentId.asText();
+            individualTopics.add(Map.of("studentId", id, "topic", "Individual topic"));
+            concerns.add(Map.of("studentId", id, "text", "Individual investigation concern"));
+            results.add(Map.of("studentId", id, "text", "Individual planned result"));
+        }
+        String groupApplicantToken = tokens.entrySet().stream().filter(entry -> users.findByUsername(entry.getKey())
+                .orElseThrow().getId().toString().equals(groupData.path("studentIds").get(0).asText()))
+                .map(Map.Entry::getValue).findFirst().orElseThrow();
+        Map<String, Object> formalRequest = Map.of("topic", "Formal application for shared project",
+                "individualTopics", individualTopics, "initialSituation", "An allocated group will develop a proposal.",
+                "investigationConcerns", concerns, "objective", "Complete the group project successfully.",
+                "plannedResults", results, "milestones", List.of(Map.of("text", "Submit the proposal", "date", "2026-12-01")),
+                "cooperationPartner", "");
+        MvcResult formalResult = mockMvc.perform(post("/api/projects/{projectId}/formal-applications", ideaId)
+                        .header("Authorization", bearer(groupApplicantToken)).contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(formalRequest)))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.status").value("DRAFT"))
+                .andExpect(jsonPath("$.projectId").value(ideaId)).andReturn();
+        String formalId = objectMapper.readTree(formalResult.getResponse().getContentAsString()).path("id").asText();
+        StoredRecord persistedFormal = records.get("formal_application", UUID.fromString(formalId));
+        org.junit.jupiter.api.Assertions.assertEquals(ideaId, persistedFormal.getParentId());
+        org.junit.jupiter.api.Assertions.assertEquals("DRAFT", persistedFormal.getStatus());
+        mockMvc.perform(post("/api/formal-applications/{id}/submit", formalId)
+                        .header("Authorization", bearer(groupApplicantToken)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("SUBMITTED"));
+        mockMvc.perform(post("/api/formal-applications/{id}/reviews", formalId)
+                        .header("Authorization", bearer(teacherToken)).contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("decision", "APPROVE", "feedback", "Approved."))))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.decision").value("APPROVE"));
+        mockMvc.perform(get("/api/projects/{projectId}/formal-applications", ideaId)
+                        .header("Authorization", bearer(teacherToken)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.id").value(formalId))
+                .andExpect(jsonPath("$.status").value("APPROVED"));
+        org.junit.jupiter.api.Assertions.assertEquals("APPROVED",
+                records.get("formal_application", UUID.fromString(formalId)).getStatus());
+        List<StoredRecord> formalReviews = records.repository().findByTypeAndParentId("formal_application_review", formalId);
+        org.junit.jupiter.api.Assertions.assertEquals(1, formalReviews.size());
+        org.junit.jupiter.api.Assertions.assertEquals(formalId, formalReviews.get(0).getParentId());
+
+        Map<String, List<String>> beforeOwnerChange = downstreamRecordSnapshot(ideaId, periodId, formalId);
+        StoredRecord ideaBeforeOwnerChange = records.get("idea", UUID.fromString(ideaId));
+        String ideaStatusBeforeOwnerChange = ideaBeforeOwnerChange.getStatus();
+        JsonNode ideaContentBeforeOwnerChange = records.parse(ideaBeforeOwnerChange).deepCopy();
+        ((com.fasterxml.jackson.databind.node.ObjectNode) ideaContentBeforeOwnerChange).remove("ownerIds");
+        String addedOwner = users.findByUsername("student12").orElseThrow().getId().toString();
+        mockMvc.perform(post("/api/ideas/{id}/owners", ideaId).header("Authorization", bearer(creatorToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("studentId", addedOwner))))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.owners.length()").value(3));
+        Map<String, List<String>> afterOwnerChange = downstreamRecordSnapshot(ideaId, periodId, formalId);
+        org.junit.jupiter.api.Assertions.assertEquals(beforeOwnerChange, afterOwnerChange,
+                "owner changes must not mutate supervisor, period, applications, allocation, group, reviews, specification, or formal application records");
+        StoredRecord ideaAfterOwnerChange = records.get("idea", UUID.fromString(ideaId));
+        JsonNode ideaContentAfterOwnerChange = records.parse(ideaAfterOwnerChange).deepCopy();
+        ((com.fasterxml.jackson.databind.node.ObjectNode) ideaContentAfterOwnerChange).remove("ownerIds");
+        org.junit.jupiter.api.Assertions.assertEquals(ideaStatusBeforeOwnerChange, ideaAfterOwnerChange.getStatus());
+        org.junit.jupiter.api.Assertions.assertEquals(ideaContentBeforeOwnerChange, ideaContentAfterOwnerChange,
+                "owner change may update ownerIds only, not idea content");
+        getIdea(ideaId, creatorToken).andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ACCEPTED_FOR_APPLICATIONS"))
+                .andExpect(jsonPath("$.title").value(creatorName))
+                .andExpect(jsonPath("$.specification.objectives[0]").value("Develop a multi-owner project"))
+                .andExpect(jsonPath("$.reviews.length()").value(2));
+    }
+
+    private Map<String, List<String>> downstreamRecordSnapshot(String ideaId, String periodId, String formalId) {
+        Map<String, List<String>> snapshot = new java.util.TreeMap<>();
+        for (String type : List.of("confirmed_supervisor", "review", "specification")) {
+            snapshot.put(type, records.repository().findByTypeAndParentId(type, ideaId).stream()
+                    .map(this::recordSnapshot).sorted().toList());
+        }
+        for (String type : List.of("student_application", "allocation_run")) {
+            snapshot.put(type, records.repository().findByTypeAndParentId(type, periodId).stream()
+                    .map(this::recordSnapshot).sorted().toList());
+        }
+        snapshot.put("application_period", List.of(recordSnapshot(records.get("application_period", UUID.fromString(periodId)))));
+        snapshot.put("project_group", records.repository().findByTypeAndParentId("project_group", ideaId).stream()
+                .map(this::recordSnapshot).sorted().toList());
+        snapshot.put("formal_application", List.of(recordSnapshot(records.get("formal_application", UUID.fromString(formalId)))));
+        snapshot.put("formal_application_review", records.repository().findByTypeAndParentId("formal_application_review", formalId)
+                .stream().map(this::recordSnapshot).sorted().toList());
+        return snapshot;
+    }
+
+    private String recordSnapshot(StoredRecord record) {
+        return String.join("|", record.getId().toString(), record.getType(), record.getParentId(),
+                record.getOwnerId(), record.getStatus(), record.getPayload());
     }
 
     @Test
@@ -169,11 +418,21 @@ class IdeaOwnershipControllerTest {
                         .header("Authorization", bearer(creatorToken))).andReturn().getResponse().getContentAsString())
                 .path("totalElements").asInt();
         for (List<String> ids : List.of(List.of(creatorId), List.of(collaboratorId, collaboratorId),
-                List.of(teacherId), List.of(missingId), List.of("student02", "student03", "student04", "student05", "student06"))) {
+                List.of(teacherId), List.of(missingId))) {
             mockMvc.perform(post("/api/ideas").header("Authorization", bearer(creatorToken))
                             .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(idea("Invalid", ids))))
                     .andExpect(status().isBadRequest());
         }
+        List<String> fiveSeededStudents = List.of("student02", "student03", "student04", "student05", "student06")
+                .stream().map(username -> users.findByUsername(username).orElseThrow().getId().toString()).toList();
+        mockMvc.perform(post("/api/ideas").header("Authorization", bearer(creatorToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(idea("Too many actual collaborators", fiveSeededStudents))))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(post("/api/ideas").header("Authorization", bearer(creatorToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(idea("Malformed collaborator ID", List.of("not-a-uuid")))))
+                .andExpect(status().isBadRequest());
         int ideaCountAfter = objectMapper.readTree(mockMvc.perform(get("/api/ideas?size=100")
                         .header("Authorization", bearer(creatorToken))).andReturn().getResponse().getContentAsString())
                 .path("totalElements").asInt();

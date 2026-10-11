@@ -479,7 +479,12 @@ test('surfaces browser console errors and failed/HTTP-error requests', () => {
     onEvent(listener) {
       listener({ method: 'Runtime.consoleAPICalled', params: { type: 'error', args: [{ value: 'broken UI' }] } })
       listener({ method: 'Runtime.exceptionThrown', params: { exceptionDetails: { text: 'uncaught' } } })
-      listener({ method: 'Network.loadingFailed', params: { errorText: 'net::ERR_FAILED', requestId: '1' } })
+      listener({ method: 'Network.requestWillBeSent', params: {
+        requestId: '1', type: 'Fetch', request: { url: 'http://localhost/api/canceled', method: 'GET' },
+        initiator: { type: 'script', stack: { callFrames: [{ functionName: 'loadIdeas', url: 'http://localhost/src/ideas.js' }] } },
+      } })
+      listener({ method: 'Network.responseReceived', params: { requestId: '1', response: { status: 204, url: 'http://localhost/api/canceled' } } })
+      listener({ method: 'Network.loadingFailed', params: { errorText: 'net::ERR_FAILED', requestId: '1', canceled: true } })
       listener({
         method: 'Network.responseReceived',
         params: { response: { status: 503, url: 'http://localhost/api/example' } },
@@ -489,6 +494,11 @@ test('surfaces browser console errors and failed/HTTP-error requests', () => {
   assert.match(errors.join('\n'), /console.error: broken UI/)
   assert.match(errors.join('\n'), /console exception: uncaught/)
   assert.match(errors.join('\n'), /request failed: net::ERR_FAILED/)
+  assert.match(errors.join('\n'), /url=http:\/\/localhost\/api\/canceled/)
+  assert.match(errors.join('\n'), /initiator=http:\/\/localhost\/src\/ideas.js/)
+  assert.match(errors.join('\n'), /canceled=true/)
+  assert.match(errors.join('\n'), /responseStatus=204/)
+  assert.match(errors.join('\n'), /loadingFinished=false/)
   assert.match(errors.join('\n'), /HTTP 503: http:\/\/localhost\/api\/example/)
 })
 

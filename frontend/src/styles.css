@@ -171,3 +171,7 @@ a { color: inherit; }
   min-width: 0;
   overflow-wrap: anywhere;
 }
+.owner-list li .button {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
