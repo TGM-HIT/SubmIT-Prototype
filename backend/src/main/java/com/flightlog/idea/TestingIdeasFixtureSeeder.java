@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.UUID;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.Order;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -38,13 +39,16 @@ public class TestingIdeasFixtureSeeder implements ApplicationRunner {
     private final RecordStore store;
     private final IdeaService ideas;
     private final TestingAllocationPreviewSeeder allocationPreview;
+    private final String fixtureMode;
 
     public TestingIdeasFixtureSeeder(UserAccountRepository users, RecordStore store, IdeaService ideas,
-            TestingAllocationPreviewSeeder allocationPreview) {
+            TestingAllocationPreviewSeeder allocationPreview,
+            @Value("${DADB_TESTING_MINIMAL_FIXTURES:}") String fixtureMode) {
         this.users = users;
         this.store = store;
         this.ideas = ideas;
         this.allocationPreview = allocationPreview;
+        this.fixtureMode = fixtureMode;
     }
 
     @Override
@@ -56,7 +60,9 @@ public class TestingIdeasFixtureSeeder implements ApplicationRunner {
                 seedSubmittedIdea(student);
                 seedSpecifiedIdea(student);
             }
-            seedAcceptedAllocationPreview();
+            if (!"true".equals(fixtureMode)) {
+                seedAcceptedAllocationPreview();
+            }
         } finally {
             SecurityContextHolder.clearContext();
         }

@@ -18,7 +18,8 @@ import org.springframework.test.context.ActiveProfiles;
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:h2:mem:testingaccountsinactive;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE",
         "DADB_BOOTSTRAPADMIN_USERNAME=existing-bootstrap-admin",
-        "DADB_BOOTSTRAPADMIN_PASSWORD=existing-bootstrap-password"
+        "DADB_BOOTSTRAPADMIN_PASSWORD=existing-bootstrap-password",
+        "DADB_TESTING_MINIMAL_FIXTURES=true"
 })
 @ActiveProfiles("default")
 class TestingAccountsInactiveProfileTest {
@@ -40,6 +41,9 @@ class TestingAccountsInactiveProfileTest {
         assertTrue(records.findByType("testing_multi_group_allocation_preview",
                 org.springframework.data.domain.PageRequest.of(0, 20)).isEmpty());
         assertTrue(records.findByType("idea", org.springframework.data.domain.PageRequest.of(0, 20)).isEmpty());
+        assertTrue(records.findByType("application_period", org.springframework.data.domain.PageRequest.of(0, 20)).isEmpty());
+        assertTrue(records.findByType("student_application", org.springframework.data.domain.PageRequest.of(0, 20)).isEmpty());
+        assertTrue(records.findByType("allocation_run", org.springframework.data.domain.PageRequest.of(0, 20)).isEmpty());
         assertTrue(records.findByTypeAndParentId("project_group",
                 TestingFormalApplicationFixtureConfiguration.PROJECT_ID.toString()).isEmpty());
         assertTrue(records.findByTypeAndParentId("formal_application",

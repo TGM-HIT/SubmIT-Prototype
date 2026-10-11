@@ -11,9 +11,11 @@ endif
 
 BACKEND  := backend
 FRONTEND := frontend
+FRONTEND_DEV := cd $(FRONTEND) && (npm ci || npm install) && npm run dev
 
 .PHONY: help env install build build-backend build-frontend test test-backend test-frontend \
-        check run run-testing run-backend run-backend-testing run-frontend openapi clean
+        check run run-testing run-testing-minimal testing-stack run-backend run-backend-testing \
+        run-frontend openapi clean
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z_-]+:.*##/ {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
@@ -50,10 +52,15 @@ run: env ## Start backend and frontend dev server (Ctrl+C stops both)
 	$(MAKE) --no-print-directory run-frontend & \
 	wait
 
-run-testing: env ## Start backend (Spring profile "testing") and frontend dev server (Ctrl+C stops both)
+run-testing: TESTING_FIXTURE_ENV=env -u DADB_TESTING_MINIMAL_FIXTURES
+run-testing-minimal: TESTING_FIXTURE_ENV=env DADB_TESTING_MINIMAL_FIXTURES=true
+run-testing: testing-stack ## Start backend with full testing fixtures and frontend dev server
+run-testing-minimal: testing-stack ## Start testing backend with minimal fixtures and frontend dev server
+
+testing-stack: env
 	@trap 'kill 0' INT TERM EXIT; \
-	$(MAKE) --no-print-directory run-backend-testing & \
-	$(MAKE) --no-print-directory run-frontend & \
+	(cd $(BACKEND) && $(TESTING_FIXTURE_ENV) ./gradlew bootRun --args='--spring.profiles.active=testing') & \
+	($(FRONTEND_DEV)) & \
 	wait
 
 run-backend: ## Start the backend on :8080
@@ -61,10 +68,10 @@ run-backend: ## Start the backend on :8080
 	cd $(BACKEND) && ./gradlew bootRun
 
 run-backend-testing: ## Start the backend on :8080 with the testing profile (seeded accounts)
-	cd $(BACKEND) && ./gradlew bootRun --args='--spring.profiles.active=testing'
+	cd $(BACKEND) && env -u DADB_TESTING_MINIMAL_FIXTURES ./gradlew bootRun --args='--spring.profiles.active=testing'
 
-run-frontend: install ## Start the Vite dev server
-	cd $(FRONTEND) && npm run dev
+run-frontend: ## Install dependencies and start the Vite dev server
+	$(FRONTEND_DEV)
 
 openapi: ## Regenerate contracts/openapi.yaml
 	cd $(BACKEND) && ./gradlew generateOpenApi
