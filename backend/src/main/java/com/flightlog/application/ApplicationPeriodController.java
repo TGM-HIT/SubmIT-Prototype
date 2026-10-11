@@ -48,14 +48,15 @@ public class ApplicationPeriodController {
     }
 
     @GetMapping("/api/application-periods")
-    public PageResponse<ApplicationPeriodResponse> listPeriods(@RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
-        return service.list(Math.max(page, 0), normalizeSize(size));
+    public PageResponse<ApplicationPeriodResponse> listPeriods(@AuthenticationPrincipal AuthenticatedUser caller,
+            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
+        return service.list(caller, Math.max(page, 0), normalizeSize(size));
     }
 
     @GetMapping("/api/application-periods/{id}")
-    public ApplicationPeriodResponse getPeriod(@PathVariable UUID id) {
-        return service.get(id);
+    public ApplicationPeriodResponse getPeriod(@AuthenticationPrincipal AuthenticatedUser caller,
+            @PathVariable UUID id) {
+        return service.get(caller, id);
     }
 
     @PutMapping("/api/application-periods/{id}")

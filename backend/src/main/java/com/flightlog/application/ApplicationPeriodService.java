@@ -73,13 +73,14 @@ public class ApplicationPeriodService {
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<com.flightlog.web.ApiDtos.ApplicationPeriodResponse> list(int page, int size) {
-        return mapper.periods(store.page(PERIOD, null, null, PageRequest.of(page, size)));
+    public PageResponse<com.flightlog.web.ApiDtos.ApplicationPeriodResponse> list(AuthenticatedUser caller, int page, int size) {
+        return mapper.periods(store.page(PERIOD, null, null, PageRequest.of(page, size)),
+                caller.role() == Role.STUDENT);
     }
 
     @Transactional(readOnly = true)
-    public com.flightlog.web.ApiDtos.ApplicationPeriodResponse get(UUID id) {
-        return mapper.period(findPeriod(id));
+    public com.flightlog.web.ApiDtos.ApplicationPeriodResponse get(AuthenticatedUser caller, UUID id) {
+        return mapper.period(findPeriod(id), caller.role() == Role.STUDENT);
     }
 
     @Transactional
@@ -116,7 +117,7 @@ public class ApplicationPeriodService {
         StoredRecord application = store.create(APPLICATION, caller.id().toString(),
                 periodId.toString(), "SUBMITTED", payload);
         audit.record(caller, "APPLICATION_SUBMITTED", APPLICATION, application.getId());
-        return mapper.application(application);
+        return mapper.studentApplication(application, mapper.studentProjectTitles(period));
     }
 
     @Transactional(readOnly = true)
@@ -126,7 +127,8 @@ public class ApplicationPeriodService {
         StoredRecord application = store.repository().findByTypeAndParentIdAndOwnerId(APPLICATION,
                 periodId.toString(), caller.id().toString())
                 .orElseThrow(() -> new EntityNotFoundException("Application was not found."));
-        return mapper.application(application);
+        StoredRecord period = findPeriod(periodId);
+        return mapper.studentApplication(application, mapper.studentProjectTitles(period));
     }
 
     @Transactional(readOnly = true)
@@ -153,7 +155,7 @@ public class ApplicationPeriodService {
                 application.getStatus(), store.parse(application));
         store.update(application, "SUBMITTED", payload);
         audit.record(caller, "APPLICATION_UPDATED", APPLICATION, id);
-        return mapper.application(application);
+        return mapper.studentApplication(application, mapper.studentProjectTitles(period));
     }
 
     @Transactional

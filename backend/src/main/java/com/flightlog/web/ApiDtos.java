@@ -319,7 +319,11 @@ public final class ApiDtos {
             Instant opensAt,
             Instant closesAt,
             String status,
-            List<UUID> projectIds) {
+            List<UUID> projectIds,
+            @JsonInclude(JsonInclude.Include.NON_NULL) List<ProjectTitleResponse> projectTitles) {
+    }
+
+    public record ProjectTitleResponse(UUID projectId, String title) {
     }
 
     public record PreferenceResponse(UUID projectId, int rank, String projectTitle) {

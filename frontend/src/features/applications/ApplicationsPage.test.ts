@@ -2,6 +2,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { ApiError } from "../../api/client"
 import ApplicationsPage from './ApplicationsPage.vue'
 
 const api = vi.hoisted(() => ({
@@ -10,6 +11,11 @@ const api = vi.hoisted(() => ({
   years: vi.fn(),
   createPeriod: vi.fn(),
   applications: vi.fn(),
+  myApplication: vi.fn(),
+  createApplication: vi.fn(),
+  updateApplication: vi.fn(),
+  withdrawApplication: vi.fn(),
+  role: 'ADMIN',
 }))
 
 vi.mock('../../api/services', () => ({
@@ -18,12 +24,16 @@ vi.mock('../../api/services', () => ({
     years: api.years,
     create: api.createPeriod,
     applications: api.applications,
+    myApplication: api.myApplication,
+    createApplication: api.createApplication,
+    updateApplication: api.updateApplication,
+    withdrawApplication: api.withdrawApplication,
   },
   ideasApi: { list: api.listIdeas },
 }))
 
 vi.mock('../../stores/auth', () => ({
-  useAuthStore: () => ({ user: { role: 'ADMIN' } }),
+  useAuthStore: () => ({ user: { role: api.role } }),
 }))
 
 const projectIds = ['project-1', 'project-2', 'project-3']
@@ -57,6 +67,11 @@ async function selectCompleteForm(page: ReturnType<typeof mountPage>) {
 
 describe('application period configuration', () => {
   beforeEach(() => {
+    api.role = 'ADMIN'
+    api.myApplication.mockResolvedValue({ preferences: [] })
+    api.createApplication.mockResolvedValue({ id: 'application-1', preferences: [] })
+    api.updateApplication.mockResolvedValue({ id: 'application-1', preferences: [] })
+    api.withdrawApplication.mockResolvedValue(undefined)
     api.listPeriods.mockResolvedValue({
       content: [],
       page: 0,
@@ -246,4 +261,118 @@ describe('application period configuration', () => {
     expect(page.text()).not.toContain(projectId)
   })
 
+})
+
+describe("student catalogue project titles", () => {
+  const ids = [
+    "11111111-1111-4111-8111-111111111111",
+    "22222222-2222-4222-8222-222222222222",
+    "33333333-3333-4333-8333-333333333333",
+  ]
+  const titles = ["Solar design", "Water quality", "CommunityGarden".repeat(8)]
+
+  it("uses open-period titles for catalogue and ranking controls while preserving ranking actions", async () => {
+    api.role = "STUDENT"
+    api.listIdeas.mockResolvedValue({ content: [] })
+    api.myApplication.mockRejectedValue(new ApiError("not found", 404))
+    api.listPeriods.mockResolvedValue({
+      content: [{
+        id: "period-open", schoolYear: "2026/2027", status: "OPEN",
+        opensAt: new Date(Date.now() - 3600000).toISOString(),
+        closesAt: new Date(Date.now() + 3600000).toISOString(), projectIds: ids,
+        projectTitles: ids.map((projectId, index) => ({ projectId, title: titles[index] })),
+      }],
+      page: 0, size: 20, totalElements: 1, totalPages: 1,
+    })
+    api.createApplication.mockResolvedValue({ id: "application-1", preferences: [] })
+    vi.stubGlobal("confirm", () => true)
+
+    const page = mountPage()
+    await flushPromises()
+
+    expect(api.listIdeas).not.toHaveBeenCalled()
+    expect(page.findAll("summary").map((summary) => summary.text())).toEqual([
+      "Accepted project 1 · Solar design",
+      "Accepted project 2 · Water quality",
+      `Accepted project 3 · ${titles[2]}`,
+    ])
+    const selector = page.get("#add-project-period-open")
+    expect(selector.findAll("option").map((option) => option.text())).toEqual([
+      "Choose a project…", ...titles,
+    ])
+    expect(page.text()).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i)
+    const pageSource = readFileSync(resolve(process.cwd(), "src/features/applications/ApplicationsPage.vue"), "utf8")
+    expect(pageSource).toContain(".application-catalogue summary")
+    expect(pageSource).toContain(".application-ranking .choice-item > span:first-child")
+    expect(pageSource).toContain("overflow-wrap: anywhere;")
+
+    for (const id of ids) {
+      await selector.setValue(id)
+      await page.findAll("button").find((button) => button.text() === "Add choice")!.trigger("click")
+    }
+    const ariaLabels = page.findAll("button").map((button) => button.attributes("aria-label")).filter(Boolean) as string[]
+    expect(ariaLabels).toEqual(expect.arrayContaining(titles.flatMap((title) =>
+      [`Move ${title} higher`, `Move ${title} lower`])))
+    expect(ariaLabels.join(" "))
+      .not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i)
+    const rankNames = () => page.findAll(".choice-actions").map((row) => row.element.parentElement?.firstElementChild?.textContent?.trim())
+    expect(rankNames()).toEqual(["1. Solar design", "2. Water quality", `3. ${titles[2]}`])
+    const moveHigher = page.findAll("button").find((button) =>
+      button.attributes("aria-label") === "Move Water quality higher")!
+    expect(moveHigher.attributes("aria-label")).toBe("Move Water quality higher")
+    await moveHigher.trigger("click")
+    expect(rankNames()).toEqual(["1. Water quality", "2. Solar design", `3. ${titles[2]}`])
+    await page.findAll(".choice-actions")[2].findAll("button")[2].trigger("click")
+    expect(rankNames()).toHaveLength(2)
+    await selector.setValue(ids[2])
+    await page.findAll("button").find((button) => button.text() === "Add choice")!.trigger("click")
+    await page.findAll("button").find((button) => button.text() === "Submit ranked application")!.trigger("click")
+    await flushPromises()
+    expect(api.createApplication).toHaveBeenCalledWith("period-open", { projectIds: [ids[1], ids[0], ids[2]] })
+    expect(page.text()).not.toContain(ids.join(" "))
+  })
+
+  it("renders the students saved application from current open-period catalogue titles", async () => {
+    api.role = "STUDENT"
+    api.listIdeas.mockResolvedValue({ content: [] })
+    api.listPeriods.mockResolvedValue({
+      content: [{
+        id: "period-open", schoolYear: "2026/2027", status: "OPEN",
+        opensAt: new Date(Date.now() - 3600000).toISOString(),
+        closesAt: new Date(Date.now() + 3600000).toISOString(), projectIds: ids,
+        projectTitles: ids.map((projectId, index) => ({ projectId, title: titles[index] })),
+      }],
+      page: 0, size: 20, totalElements: 1, totalPages: 1,
+    })
+    api.myApplication.mockResolvedValue({
+      id: "application-saved",
+      preferences: ids.map((projectId, index) => ({ projectId, rank: index + 1, projectTitle: "Stale UUID fallback" })),
+    })
+    const page = mountPage()
+    await flushPromises()
+    expect(page.findAll(".application-ranking .choice-item").map((row) =>
+      row.element.firstElementChild?.textContent?.trim())).toEqual(titles.map((title, index) => `${index + 1}. ${title}`))
+    expect(page.text()).not.toContain("Stale UUID fallback")
+    expect(page.text()).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i)
+  })
+
+  it("shows a neutral title when the server cannot resolve a catalogue project", async () => {
+    api.role = "STUDENT"
+    api.listIdeas.mockResolvedValue({ content: [] })
+    api.listPeriods.mockResolvedValue({
+      content: [{
+        id: "period-open", schoolYear: "2026/2027", status: "OPEN",
+        opensAt: new Date(Date.now() - 3600000).toISOString(),
+        closesAt: new Date(Date.now() + 3600000).toISOString(), projectIds: [ids[0]],
+        projectTitles: [{ projectId: ids[0], title: "Unknown project" }],
+      }],
+      page: 0, size: 20, totalElements: 1, totalPages: 1,
+    })
+    const page = mountPage()
+    await flushPromises()
+    expect(page.text()).toContain("Accepted project 1 · Unknown project")
+    expect(page.findAll("#add-project-period-open option").map((option) => option.text()))
+      .toEqual(["Choose a project…", "Unknown project"])
+    expect(page.text()).not.toContain(ids[0])
+  })
 })

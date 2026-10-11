@@ -1100,6 +1100,12 @@ export interface components {
             closesAt?: string;
             status?: string;
             projectIds?: string[];
+            projectTitles?: components["schemas"]["ProjectTitleResponse"][];
+        };
+        ProjectTitleResponse: {
+            /** Format: uuid */
+            projectId?: string;
+            title?: string;
         };
         /** @description Teacher assessment of one student against one criterion of a rubric version. */
         StudentGradeRequest: {

@@ -31,24 +31,22 @@
             <h3>{{ period.schoolYear }} <span class="status-badge" :class="`status-${period.status?.toLowerCase()}`">{{ readable(period.status) }}</span></h3>
             <p>Opens {{ date(period.opensAt) }} · Deadline {{ date(period.closesAt) }}</p>
             <p>{{ period.projectIds?.length ?? 0 }} accepted projects in catalogue</p>
-            <div v-if="isStudent" class="choice-list">
+            <div v-if="isStudent" class="choice-list application-catalogue">
               <details v-for="(projectId, index) in period.projectIds ?? []" :key="projectId" class="choice-item">
-                <summary>Accepted project {{ index + 1 }} · {{ projectTitle(projectId) }}</summary>
-                <p class="muted">Project reference: {{ projectId }}. Details and review information are shown only when the server authorizes access.</p>
+                <summary>Accepted project {{ index + 1 }} · {{ projectTitle(period, projectId) }}</summary>
                 <RouterLink class="button button-secondary button-small" :to="`/archive/${projectId}`">Browse approved archive</RouterLink>
               </details>
             </div>
             <template v-if="isStudent && periodEditable(period)">
-              <p class="notice">The period response exposes accepted project IDs. If a project description is unavailable below, confirm the approved project catalogue with your teacher before ranking.</p>
-              <div class="choice-list">
+              <div class="choice-list application-ranking">
                 <p class="muted">Select at least three distinct projects. Rank changes use accessible move buttons. The system starts allocation automatically at the deadline.</p>
                 <div v-for="id in rankedIds[period.id ?? ''] ?? []" :key="id" class="choice-item">
-                  <span><strong>{{ rankOf(period.id ?? '', id) }}.</strong> {{ projectTitle(id) }}</span>
-                  <span class="choice-actions"><button class="button button-secondary button-small" type="button" :aria-label="`Move ${projectTitle(id)} higher`" :disabled="rankOf(period.id ?? '', id) === 1" @click="moveChoice(period.id ?? '', id, -1)">↑</button><button class="button button-secondary button-small" type="button" :aria-label="`Move ${projectTitle(id)} lower`" :disabled="rankOf(period.id ?? '', id) === (rankedIds[period.id ?? '']?.length ?? 0)" @click="moveChoice(period.id ?? '', id, 1)">↓</button><button class="button button-secondary button-small" type="button" @click="removeChoice(period.id ?? '', id)">Remove</button></span>
+                  <span><strong>{{ rankOf(period.id ?? '', id) }}.</strong> {{ projectTitle(period, id) }}</span>
+                  <span class="choice-actions"><button class="button button-secondary button-small" type="button" :aria-label="`Move ${projectTitle(period, id)} higher`" :disabled="rankOf(period.id ?? '', id) === 1" @click="moveChoice(period.id ?? '', id, -1)">↑</button><button class="button button-secondary button-small" type="button" :aria-label="`Move ${projectTitle(period, id)} lower`" :disabled="rankOf(period.id ?? '', id) === (rankedIds[period.id ?? '']?.length ?? 0)" @click="moveChoice(period.id ?? '', id, 1)">↓</button><button class="button button-secondary button-small" type="button" @click="removeChoice(period.id ?? '', id)">Remove</button></span>
                 </div>
               </div>
               <div class="toolbar stack">
-                <div class="field"><label class="label" :for="`add-project-${period.id}`">Add accepted project</label><select :id="`add-project-${period.id}`" v-model="projectToAdd" class="select"><option value="">Choose a project…</option><option v-for="id in period.projectIds ?? []" :key="id" :value="id" :disabled="(rankedIds[period.id ?? ''] ?? []).includes(id)">{{ projectTitle(id) }}</option></select></div>
+                <div class="field"><label class="label" :for="`add-project-${period.id}`">Add accepted project</label><select :id="`add-project-${period.id}`" v-model="projectToAdd" class="select"><option value="">Choose a project…</option><option v-for="id in period.projectIds ?? []" :key="id" :value="id" :disabled="(rankedIds[period.id ?? ''] ?? []).includes(id)">{{ projectTitle(period, id) }}</option></select></div>
                 <button class="button button-secondary" type="button" @click="addChoice(period.id ?? '')">Add choice</button>
               </div>
               <div class="actions"><button class="button" type="button" :disabled="(rankedIds[period.id ?? '']?.length ?? 0) < 3 || task.loading.value" @click="saveApplication(period)">{{ applicationFor(period.id ?? '') ? 'Save ranking changes' : 'Submit ranked application' }}</button><button v-if="applicationFor(period.id ?? '')" class="button button-danger" type="button" @click="withdrawApplication(period)">Withdraw</button></div>
@@ -133,8 +131,8 @@ function readable(value?: string): string {
 function date(value?: string): string {
   return value ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : 'Not set'
 }
-function projectTitle(id?: string): string {
-  return acceptedIdeas.value.find((idea) => idea.id === id)?.title ?? `Project ${id ?? 'unknown'}`
+function projectTitle(period: Period, id?: string): string {
+  return period.projectTitles?.find((project) => project.projectId === id)?.title || 'Unknown project'
 }
 function periodEditable(period: Period): boolean {
   return period.status === 'OPEN' && Boolean(period.closesAt)
@@ -166,7 +164,9 @@ function moveChoice(periodId: string, projectId: string, direction: number): voi
 async function load(page = 0): Promise<void> {
   await task.run(async () => {
     const [periodResult, ideaResult, yearResult] = await Promise.all([
-      periodsApi.list(page), ideasApi.list(0, 'ACCEPTED_FOR_APPLICATIONS', 100), periodsApi.years(),
+      periodsApi.list(page),
+      isStudent.value ? Promise.resolve({ content: [] as Idea[] }) : ideasApi.list(0, 'ACCEPTED_FOR_APPLICATIONS', 100),
+      periodsApi.years(),
     ])
     periods.value = periodResult
     acceptedIdeas.value = ideaResult.content.filter((idea) => idea.status === 'ACCEPTED_FOR_APPLICATIONS')
@@ -223,3 +223,16 @@ async function loadApplications(period: Period): Promise<void> {
 }
 onMounted(() => void load())
 </script>
+
+<style scoped>
+.application-catalogue .choice-item,
+.application-ranking .choice-item {
+  min-width: 0;
+}
+
+.application-catalogue summary,
+.application-ranking .choice-item > span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+</style>
