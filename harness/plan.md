@@ -30,7 +30,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Bug-07](tickets/done/Bug-07.md) | done | Align the Clear filters button height in Administration |
 | [Bug-08](tickets/done/Bug-08.md) | done | Allow a withdrawn idea to be edited and submitted again |
 | [Bug-09](tickets/done/Bug-09.md) | done | Show names instead of IDs in application summaries and allocation results |
-| [Bug-10](tickets/Bug-10.md) | to-do | Show project titles instead of UUIDs to students in an open application period |
+| [Bug-10](tickets/done/Bug-10.md) | done | Show project titles instead of UUIDs to students in an open application period |
 
 ### Development
 
