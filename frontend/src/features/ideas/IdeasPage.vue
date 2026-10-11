@@ -4,7 +4,7 @@
       <div>
         <p class="page-intro">Follow each submission from initial idea through teacher review and full specification. Idea approval permits specification work; it is not acceptance into the student catalogue.</p>
       </div>
-      <button v-if="isStudent" class="button" type="button" @click="startCreate">＋ New idea</button>
+      <button v-if="isStudent" id="new-idea-button" class="button" type="button" @click="startCreate">＋ New idea</button>
     </div>
 
     <form v-if="editorOpen" class="panel stack" @submit.prevent="saveIdea">
@@ -15,6 +15,17 @@
       </div>
       <div class="field"><label class="label" for="idea-description">Description · up to 5,000 characters</label><textarea id="idea-description" v-model="ideaForm.description" class="textarea" maxlength="5000" required /><span class="metric">{{ ideaForm.description.length }}/5000</span></div>
       <div class="field"><label class="label" for="idea-outcome">Intended outcome · up to 2,000 characters</label><textarea id="idea-outcome" v-model="ideaForm.intendedOutcome" class="textarea" maxlength="2000" required /><span class="metric">{{ ideaForm.intendedOutcome.length }}/2000</span></div>
+      <fieldset v-if="!editingId" class="panel stack collaborator-picker">
+        <legend class="form-section-title">Collaborators ({{ createOwners.length + 1 }}/5 owners)</legend>
+        <label class="label" for="collaborator-lookup">Find students by display name</label>
+        <input id="collaborator-lookup" v-model="studentQuery" class="input" autocomplete="off" placeholder="Search students" />
+        <p v-if="studentLookupLoading" class="muted" role="status">Searching students…</p>
+        <p v-else-if="studentLookupError" class="field-error" role="alert">{{ studentLookupError }} <button class="button button-secondary button-small" type="button" @click="searchStudents">Retry</button></p>
+        <p v-else-if="studentQuery && !studentLookup.length" class="muted">No students found.</p>
+        <div v-if="studentLookup.length" class="choice-list"><button v-for="student in studentLookup" :key="student.id" :data-student-name="student.displayName" class="button button-secondary button-small" type="button" :disabled="createOwners.length >= 4 || createOwners.some(owner => owner.id === student.id)" @click="addCreateOwner(student)">{{ student.displayName }} · Add</button></div>
+        <p v-if="createOwners.length > 0" class="muted">{{ createOwners.map(owner => owner.displayName).join(', ') }} <button v-for="owner in createOwners" :key="owner.id" type="button" class="text-button" :aria-label="`Remove ${owner.displayName}`" @click="removeCreateOwner(owner.id)">Remove</button></p>
+        <p v-if="createOwners.length >= 4" class="muted">The maximum of five owners has been reached.</p>
+      </fieldset>
       <div class="grid grid-2">
         <div class="field"><label class="label" for="scope">Initial scope points · one per line</label><textarea id="scope" v-model="scopeText" class="textarea" required /><span class="muted">Describe a few assessable features or scope points.</span></div>
         <div class="field"><label class="label" for="learning">Learning topics · one per line</label><textarea id="learning" v-model="learningText" class="textarea" /><span class="muted">Optional, up to 50 topics of 200 characters each.</span></div>
@@ -51,7 +62,7 @@
             <div class="row-main">
               <h3>{{ idea.title }}</h3>
               <p>{{ idea.description }}</p>
-              <p>School year {{ idea.schoolYear }} <span v-if="canSeeOwner"> · Submitted by {{ idea.ownerDisplayName }}</span></p>
+              <p>School year {{ idea.schoolYear }} <span v-if="canSeeOwner"> · Submitted by {{ idea.ownerDisplayName }} · Owners: {{ (idea.owners ?? []).map(owner => owner.displayName).join(', ') || idea.ownerDisplayName }}</span></p>
               <p v-if="isTeacher && idea.ownSupervisionPreference" class="muted supervision-summary">
                 <strong>Your supervision preference:</strong> {{ preferenceLabel(idea.ownSupervisionPreference) }}
               </p>
@@ -73,7 +84,23 @@
 
     <ModalDialog v-if="detailsOpen && selectedIdea" title="Idea details &amp; history" :return-focus="detailsReturnFocus" @close="closeDetails">
       <section class="stack">
-      <div class="page-heading"><div><h2 class="section-title">{{ selectedIdea.title }} · history</h2><p class="muted">Submission and decisions remain visible as the project changes stage.</p></div><button class="button button-secondary button-small" @click="closeDetails">Close details</button></div>
+      <div class="page-heading"><div><h2 class="section-title">{{ selectedIdea.title }} · history</h2><p class="muted">Submission and decisions remain visible as the project changes stage.</p></div><button id="close-details-button" class="button button-secondary button-small" @click="closeDetails">Close details</button></div>
+      <section class="owner-section" aria-label="Idea owners">
+        <h3 class="form-section-title">Owners ({{ selectedIdea.owners?.length ?? 1 }}/5)</h3>
+        <ul class="owner-list"><li v-for="owner in selectedIdea.owners ?? fallbackOwners(selectedIdea)" :key="owner.id">{{ owner.displayName }}<span v-if="owner.creator"> · Creator</span>
+          <button v-if="isCreator(selectedIdea) && !owner.creator" class="button button-danger button-small" type="button" :aria-label="`Remove ${owner.displayName}`" @click="requestOwnerConfirmation('remove', selectedIdea, owner.id, $event)">Remove</button>
+        </li></ul>
+        <template v-if="isCreator(selectedIdea)">
+          <label class="label" for="details-collaborator-lookup">Add a student</label>
+          <input id="details-collaborator-lookup" v-model="studentQuery" class="input" autocomplete="off" placeholder="Search by display name" />
+          <p v-if="studentLookupLoading" class="muted" role="status">Searching students…</p>
+          <p v-else-if="studentLookupError" class="field-error" role="alert">{{ studentLookupError }} <button class="button button-secondary button-small" type="button" @click="searchStudents">Retry</button></p>
+          <p v-else-if="studentQuery && !studentLookup.length" class="muted">No students found.</p>
+          <div class="choice-list"><button v-for="student in studentLookup" :key="student.id" :data-student-name="student.displayName" class="button button-secondary button-small" type="button" :disabled="(selectedIdea.owners?.length ?? 1) >= 5 || selectedIdea.owners?.some(owner => owner.id === student.id)" @click="addOwner(selectedIdea, student)">{{ student.displayName }} · Add</button></div>
+          <p v-if="(selectedIdea.owners?.length ?? 1) >= 5" class="muted">The maximum of five owners has been reached.</p>
+        </template>
+        <button v-else-if="isStudent && isOwner(selectedIdea)" id="leave-idea-button" class="button button-danger button-small" type="button" @click="requestOwnerConfirmation('leave', selectedIdea, undefined, $event)">Leave idea</button>
+      </section>
       <div class="grid grid-2">
         <div><p class="eyebrow">PROJECT DESCRIPTION</p><p class="muted">{{ selectedIdea.description }}</p><p><strong>Intended outcome</strong><br />{{ selectedIdea.intendedOutcome }}</p><p><strong>Initial scope</strong></p><ul class="muted"><li v-for="point in selectedIdea.scopePoints ?? []" :key="point">{{ point }}</li></ul></div>
         <div><p class="eyebrow">LIFECYCLE</p><p><span class="status-badge">{{ readable(selectedIdea.status) }}</span></p><p class="notice">{{ lifecycleMessage(selectedIdea.status) }}</p><div v-if="selectedIdea.specification"><strong>Specification</strong><p class="muted">Objectives: {{ selectedIdea.specification.objectives?.join(' · ') }}</p><p class="muted">Scope: {{ selectedIdea.specification.scope }}</p></div></div>
@@ -83,7 +110,7 @@
       <p v-else class="muted">No teacher decisions have been recorded.</p>
       <h3 v-if="selectedIdea.supervisionPreferences?.length" class="form-section-title">Recorded supervision preferences</h3>
       <div v-for="entry in selectedIdea.supervisionPreferences ?? []" :key="entry.id" class="choice-item"><span>{{ entry.teacherDisplayName }} · {{ preferenceLabel(entry.preference) }}</span><span class="muted">{{ entry.note }}</span></div>
-      <div v-if="isStudent && canSpecify(selectedIdea)" class="actions"><button class="button" @click="startSpecification">{{ selectedIdea.status === 'WITHDRAWN' ? 'Edit full specification' : 'Develop full specification' }}</button><button v-if="selectedIdea.status === 'IDEA_APPROVED_FOR_SPECIFICATION'" class="button button-secondary" @click="submitSpecification">Submit specification for acceptance review</button></div>
+      <div v-if="isStudent && canSpecify(selectedIdea)" class="actions"><button id="develop-specification" class="button" @click="startSpecification">{{ selectedIdea.status === 'WITHDRAWN' ? 'Edit full specification' : 'Develop full specification' }}</button><button v-if="selectedIdea.status === 'IDEA_APPROVED_FOR_SPECIFICATION'" id="submit-specification" class="button button-secondary" @click="submitSpecification">Submit specification for acceptance review</button></div>
       <div v-if="isTeacher && canReview(selectedIdea)" class="actions"><button id="review-from-details" class="button" type="button" @click="openReview($event)">Review {{ selectedIdea.status === 'SPECIFICATION_SUBMITTED' ? 'specification' : 'idea' }}</button></div>
       <form v-if="isTeacher && !['IDEA_DRAFT','WITHDRAWN','DECLINED'].includes(selectedIdea.status ?? '')" class="panel stack" @submit.prevent="savePreference">
         <h3 class="form-section-title">Your supervision preference</h3>
@@ -112,14 +139,20 @@
       </form>
       </section>
     </ModalDialog>
+
+    <ModalDialog v-if="ownerConfirmation" :title="ownerConfirmation.type === 'leave' ? 'Leave this idea?' : 'Remove collaborator?'" :return-focus="ownerConfirmationReturnFocus" @close="ownerConfirmation = null">
+      <p class="muted">{{ ownerConfirmation.type === 'leave' ? 'You will immediately lose access to this idea and it will disappear from your list.' : 'This student will immediately lose access to the idea and its specification.' }}</p>
+      <div class="actions"><button id="confirm-owner-change" class="button button-danger" type="button" @click="confirmOwnerChange">{{ ownerConfirmation.type === 'leave' ? 'Leave idea' : 'Remove collaborator' }}</button><button class="button button-secondary" type="button" @click="ownerConfirmation = null">Cancel</button></div>
+    </ModalDialog>
     <p v-if="task.success.value" class="success-note" role="status">{{ task.success.value }}</p>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import type { components } from '../../api/schema'
 import { adminApi, ideasApi, periodsApi } from '../../api/services'
+import { ApiError } from '../../api/client'
 import type { Page } from '../../api/client'
 import { useAuthStore } from '../../stores/auth'
 import { useTask } from '../../composables/useTask'
@@ -129,6 +162,8 @@ import TextListField from './TextListField.vue'
 
 type Idea = components['schemas']['IdeaResponse']
 type User = components['schemas']['UserResponse']
+type StudentChoice = components['schemas']['StudentLookupResponse']
+type Owner = components['schemas']['IdeaOwnerResponse']
 type IdeaOverview = Idea & { ownSupervisionPreference?: string }
 type IdeaInput = components['schemas']['IdeaRequest']
 type Review = components['schemas']['ReviewResponse']
@@ -166,6 +201,16 @@ const preferenceNote = ref('')
 const teacherId = ref('')
 const refusalAcknowledged = ref(false)
 const teachers = ref<User[]>([])
+const createOwners = ref<StudentChoice[]>([])
+const studentQuery = ref('')
+const studentLookup = ref<StudentChoice[]>([])
+const studentLookupLoading = ref(false)
+const studentLookupError = ref('')
+let studentLookupRequest = 0
+const ownerConfirmation = ref<{ type: 'remove' | 'leave'; idea: Idea; studentId?: string } | null>(null)
+const ownerConfirmationReturnFocus = ref<HTMLElement | null>(null)
+let ownerAccessPoll: number | undefined
+let ownerAccessCheck: Promise<void> | null = null
 const scopeText = ref('')
 const learningText = ref('')
 const ideaForm = reactive({ title: '', description: '', intendedOutcome: '', schoolYear: '' })
@@ -206,6 +251,90 @@ const selectedTeacherRefusal = computed(() => {
   return { teacher, note: preferenceEntry?.note }
 })
 
+function fallbackOwners(idea: Idea): Owner[] {
+  return [{ id: idea.ownerId, displayName: idea.ownerDisplayName, creator: true }]
+}
+function isOwner(idea: Idea): boolean {
+  return Boolean(auth.user?.id && (idea.owners ?? fallbackOwners(idea)).some(owner => owner.id === auth.user?.id))
+}
+function isCreator(idea: Idea): boolean {
+  return Boolean(auth.user?.id && idea.creatorId === auth.user.id)
+}
+async function searchStudents(): Promise<void> {
+  const requestId = ++studentLookupRequest
+  const query = studentQuery.value
+  studentLookup.value = []
+  studentLookupLoading.value = true
+  studentLookupError.value = ''
+  try {
+    const result = await ideasApi.lookupStudents(query)
+    if (requestId !== studentLookupRequest || query !== studentQuery.value) return
+    const ownedIds = selectedIdea.value?.owners?.map(owner => owner.id) ?? []
+    studentLookup.value = result.content.filter(student => student.id !== auth.user?.id && !ownedIds.includes(student.id))
+  } catch (error) {
+    if (requestId !== studentLookupRequest) return
+    studentLookupError.value = error instanceof Error ? error.message : 'Unable to search students.'
+  } finally {
+    if (requestId === studentLookupRequest) studentLookupLoading.value = false
+  }
+}
+function addCreateOwner(student: StudentChoice): void {
+  if (createOwners.value.length < 4 && !createOwners.value.some(owner => owner.id === student.id)) createOwners.value.push(student)
+}
+function removeCreateOwner(id?: string): void { createOwners.value = createOwners.value.filter(owner => owner.id !== id) }
+async function addOwner(idea: Idea, student: StudentChoice): Promise<void> {
+  if (!idea.id || !isCreator(idea)) return
+  const result = await task.run(() => ideasApi.addOwner(idea.id!, student.id ?? ''), 'Collaborator added.')
+  if (result) {
+    selectedIdea.value = result
+    await load(page.value.page)
+    studentQuery.value = ''
+    await searchStudents()
+    await nextTick()
+    document.getElementById('details-collaborator-lookup')?.focus()
+  }
+}
+function stopOwnerAccessPoll(): void {
+  if (ownerAccessPoll !== undefined) window.clearInterval(ownerAccessPoll)
+  ownerAccessPoll = undefined
+}
+function requestOwnerConfirmation(type: 'remove' | 'leave', idea: Idea, studentId?: string, event?: MouseEvent): void {
+  stopOwnerAccessPoll()
+  ownerConfirmationReturnFocus.value = event?.currentTarget instanceof HTMLElement ? event.currentTarget : null
+  ownerConfirmation.value = { type, idea, studentId }
+}
+async function confirmOwnerChange(): Promise<void> {
+  const pending = ownerConfirmation.value
+  if (!pending?.idea.id) return
+  stopOwnerAccessPoll()
+  if (ownerAccessCheck) await ownerAccessCheck
+  if (!detailsOpen.value) return
+  if (pending.type === 'remove' && pending.studentId) {
+    const result = await task.run(() => ideasApi.removeOwner(pending.idea.id!, pending.studentId!), 'Collaborator removed.')
+    if (result) {
+      selectedIdea.value = result
+      ownerConfirmation.value = null
+      await load(page.value.page)
+      task.success.value = 'Collaborator removed.'
+      await nextTick()
+      document.getElementById('details-collaborator-lookup')?.focus()
+    }
+    return
+  }
+  if (pending.type === 'leave') {
+    const result = await task.run(async () => { await ideasApi.leave(pending.idea.id!); return true })
+    if (result) {
+      ownerConfirmation.value = null
+      detailsOpen.value = false
+      selectedIdea.value = null
+      await load(page.value.page)
+      task.success.value = 'You left the idea.'
+      await nextTick()
+      if (isStudent.value) document.getElementById('new-idea-button')?.focus()
+      else document.getElementById('status-filter')?.focus()
+    }
+  }
+}
 function readable(value?: string): string {
   return (value ?? 'Unknown').replaceAll('_', ' ').toLowerCase().replace(/^./, (char) => char.toUpperCase())
 }
@@ -349,6 +478,9 @@ function startCreate(): void {
   Object.assign(ideaForm, { title: '', description: '', intendedOutcome: '', schoolYear: schoolYears.value[0] ?? '' })
   scopeText.value = ''
   learningText.value = ''
+  createOwners.value = []
+  studentQuery.value = ''
+  studentLookup.value = []
   editorOpen.value = true
 }
 function editIdea(idea: Idea): void {
@@ -362,7 +494,7 @@ function listFrom(text: string): string[] {
   return text.split('\n').map((entry) => entry.trim()).filter(Boolean)
 }
 async function saveIdea(): Promise<void> {
-  const input: IdeaInput = { ...ideaForm, scopePoints: listFrom(scopeText.value), learningTopics: listFrom(learningText.value) }
+  const input: IdeaInput = { ...ideaForm, scopePoints: listFrom(scopeText.value), learningTopics: listFrom(learningText.value), collaboratorIds: editingId.value ? [] : createOwners.value.map(owner => owner.id ?? '') }
   const result = await task.run(() => editingId.value ? ideasApi.update(editingId.value, input) : ideasApi.create(input), 'Idea draft saved.')
   if (result) { editorOpen.value = false; await load(page.value.page) }
 }
@@ -511,6 +643,28 @@ watch(statusFilter, () => {
   }
   void load(0)
 })
+watch(studentQuery, () => { void searchStudents() })
+watch(() => Boolean(detailsOpen.value && isStudent.value && selectedIdea.value?.id && !isCreator(selectedIdea.value) && !ownerConfirmation.value), (active) => {
+  stopOwnerAccessPoll()
+  if (!active || !selectedIdea.value?.id) return
+  const ideaId = selectedIdea.value.id
+  ownerAccessPoll = window.setInterval(() => {
+    if (ownerAccessCheck) return
+    ownerAccessCheck = (async () => {
+      try {
+        await ideasApi.get(ideaId)
+      } catch (error) {
+        if (!(error instanceof ApiError) || ![403, 404].includes(error.status)) return
+        closeDetails()
+        await load(page.value.page)
+        await nextTick()
+        document.getElementById('new-idea-button')?.focus()
+      }
+    })().finally(() => { ownerAccessCheck = null })
+  }, 2000)
+})
+onUnmounted(stopOwnerAccessPoll)
+
 onMounted(async () => {
   const [years] = await Promise.all([
     task.run(() => periodsApi.years()),

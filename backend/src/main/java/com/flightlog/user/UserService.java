@@ -6,6 +6,7 @@ import com.flightlog.audit.AuditService;
 import com.flightlog.web.ApiDtos.PageResponse;
 import com.flightlog.web.ApiDtos.DisplayNameRequest;
 import com.flightlog.web.ApiDtos.UserResponse;
+import com.flightlog.web.ApiDtos.StudentLookupResponse;
 import com.flightlog.web.ApiException;
 import java.util.Locale;
 import java.util.UUID;
@@ -35,6 +36,18 @@ public class UserService {
         Page<UserAccount> result = users.findByFilters(role, search, PageRequest.of(page, size, Sort.by("id")));
         return new PageResponse<>(result.map(authService::toResponse).getContent(), result.getNumber(),
                 result.getSize(), result.getTotalElements(), result.getTotalPages());
+    }
+
+    @Transactional(readOnly = true)
+    public PageResponse<StudentLookupResponse> lookupStudents(AuthenticatedUser caller, int page, int size,
+            String query) {
+        requireRole(caller, Role.STUDENT);
+        String search = query == null || query.isBlank() ? null
+                : query.strip().toLowerCase(Locale.ROOT).replace("!", "!!").replace("%", "!%").replace("_", "!_");
+        Page<UserAccount> result = users.findStudentsByDisplayName(Role.STUDENT, search,
+                PageRequest.of(page, size, Sort.by("id")));
+        return new PageResponse<>(result.map(user -> new StudentLookupResponse(user.getId(), user.getDisplayName()))
+                .getContent(), result.getNumber(), result.getSize(), result.getTotalElements(), result.getTotalPages());
     }
 
     private String normalizeSearch(String query) {

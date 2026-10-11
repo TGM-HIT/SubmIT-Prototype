@@ -58,7 +58,8 @@ public final class ApiDtos {
             @NotBlank @Size(max = 2000) String intendedOutcome,
             @NotEmpty List<@NotBlank @Size(max = 1000) String> scopePoints,
             @Size(max = 50) List<@NotBlank @Size(max = 200) String> learningTopics,
-            @NotBlank @Size(max = 20) String schoolYear) {
+            @NotBlank @Size(max = 20) String schoolYear,
+            @Size(max = 4, message = "An idea can have at most five owners including its creator.") List<@NotNull UUID> collaboratorIds) {
     }
 
     public record SpecificationRequest(
@@ -295,9 +296,20 @@ public final class ApiDtos {
     public record SupervisorResponse(UUID id, UUID teacherId, String status) {
     }
 
+    public record IdeaOwnerResponse(UUID id, String displayName, boolean creator) {
+    }
+
+    public record StudentLookupResponse(UUID id, String displayName) {
+    }
+
+    public record IdeaOwnerRequest(@NotNull UUID studentId) {
+    }
+
     public record IdeaResponse(
             UUID id,
             UUID ownerId,
+            UUID creatorId,
+            List<IdeaOwnerResponse> owners,
             @Schema(description = "Current account display name; included only in authorized idea responses.")
             String ownerDisplayName,
             String status,

@@ -5,6 +5,7 @@ import com.flightlog.security.Role;
 import com.flightlog.web.ApiDtos.ApiErrorResponse;
 import com.flightlog.web.ApiDtos.PageResponse;
 import com.flightlog.web.ApiDtos.RoleRequest;
+import com.flightlog.web.ApiDtos.StudentLookupResponse;
 import com.flightlog.web.ApiDtos.UserResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -47,6 +48,13 @@ public class UserController {
             @RequestParam(required = false) Role role,
             @RequestParam(required = false) String q) {
         return userService.list(caller, Math.max(page, 0), normalizeSize(size), role, q);
+    }
+
+    @GetMapping("/students")
+    public PageResponse<StudentLookupResponse> lookupStudents(@AuthenticationPrincipal AuthenticatedUser caller,
+            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String q) {
+        return userService.lookupStudents(caller, Math.max(page, 0), normalizeSize(size), q);
     }
 
     @PatchMapping("/{id}/role")

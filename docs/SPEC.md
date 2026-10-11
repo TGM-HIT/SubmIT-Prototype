@@ -8,11 +8,11 @@ The application helps students propose, develop, and join group projects for the
 
 ## 2. People and Roles
 
-- A `STUDENT` can submit project ideas, develop an approved idea into full specifications, and apply to accepted projects.
+- A `STUDENT` can create and own project ideas, collaborate on ideas owned by other students, develop an approved idea into full specifications, and apply to accepted projects.
 - A `TEACHER` can review ideas and full specifications, provide ratings and feedback, make approval and acceptance decisions, and record their supervision interest.
 - An `ADMIN` can manage accounts, school-year application periods, supervisor assignments, rubric versions, and project allocation runs. Administrators do not replace teacher decisions about project quality or acceptance.
 
-Each account has one role. Users must be authenticated to access application data. Students can edit their own idea or specification only while it is a draft or has been returned for revision. Teachers can review project submissions.
+Each account has one role. Users must be authenticated to access application data. Students who own an idea can edit its idea or specification only while it is a draft or has been returned for revision; existing withdrawn-idea rules also apply. Teachers can review project submissions.
 
 Each account has a required display name distinct from its unique login username. Registration requires a nonblank name; leading and trailing whitespace is trimmed, and the trimmed value must be at most 120 characters. A signed-in user may change their own name, and an administrator may change any account's name without changing its username, password, or role. The authenticated workspace and administrator account list show account names while retaining usernames for identification.
 
@@ -47,7 +47,7 @@ An initial idea includes:
 
 The full specification expands the idea with objectives, intended users, functional requirements or feature descriptions, expected deliverables, a proposed scope, and known dependencies or resources. It remains linked to the original idea and preserves the submitted revision history. While an application period is open, students may read the title, idea description, intended outcome, scope points, learning topics, and accepted specification for each project in that period's catalogue so they can make an informed ranking decision; they do not gain access to other students' private idea data or teacher review details outside that open catalogue.
 
-An idea has one submitting student. An accepted project may be joined by students through the application process; submitting an idea does not reserve a place in its eventual group.
+An idea has a student creator and may have up to four additional student collaborators (five owners total). Every owner may read and edit the idea and its full specification under the existing lifecycle rules. Only the creator may add or remove other collaborators; a collaborator may leave, but the creator cannot be removed or leave. Owner changes do not alter submission content or lifecycle state. An accepted project may be joined by students through the application process; submitting an idea does not reserve a place in its eventual group.
 
 For a submitted idea, teachers may approve specification work, request a revision, or decline it. A revision request or decline requires non-empty written feedback; ratings are optional, and any ratings supplied use the existing 1-to-5 scale. Decisions and feedback are retained in the authorized idea history, with only ratings actually recorded for each idea-review entry shown.
 

@@ -24,6 +24,12 @@ public interface UserAccountRepository extends JpaRepository<UserAccount, UUID> 
             + "order by user.id")
     Page<UserAccount> findByFilters(@Param("role") Role role, @Param("search") String search, Pageable pageable);
 
+    @Query("select user from UserAccount user where user.role = :role "
+            + "and (:search is null or lower(user.displayName) like concat('%', :search, '%') escape '!') "
+            + "order by lower(user.displayName), user.id")
+    Page<UserAccount> findStudentsByDisplayName(@Param("role") Role role, @Param("search") String search,
+            Pageable pageable);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select user from UserAccount user where user.role = :role")
     List<UserAccount> findAllByRoleForUpdate(@Param("role") Role role);

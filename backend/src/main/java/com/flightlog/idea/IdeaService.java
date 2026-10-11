@@ -10,8 +10,6 @@ import com.flightlog.security.Role;
 import com.flightlog.web.ApiDtos;
 import com.flightlog.web.ApiException;
 import java.util.UUID;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
@@ -35,12 +33,15 @@ public class IdeaService {
     private final AuditService audit;
     private final IdeaResponseMapper mapper;
     private final IdeaRules rules;
+    private final IdeaOwnership ownership;
 
-    public IdeaService(RecordStore store, AuditService audit, IdeaResponseMapper mapper, IdeaRules rules) {
+    public IdeaService(RecordStore store, AuditService audit, IdeaResponseMapper mapper, IdeaRules rules,
+            IdeaOwnership ownership) {
         this.store = store;
         this.audit = audit;
         this.mapper = mapper;
         this.rules = rules;
+        this.ownership = ownership;
     }
 
     @Transactional
@@ -48,17 +49,12 @@ public class IdeaService {
     public ApiDtos.IdeaResponse create(AuthenticatedUser caller, JsonNode request) {
         ObjectNode payload = rules.object(request);
         validateIdeaPayload(payload);
-        StoredRecord record = store.create(IDEA, caller.id().toString(), null, IDEA_DRAFT, payload);
+        ObjectNode storedPayload = ownership.prepareCreate(payload, caller.id());
+        StoredRecord record = store.create(IDEA, caller.id().toString(), null, IDEA_DRAFT, storedPayload);
         audit.record(caller, "IDEA_CREATED", IDEA, record.getId());
+        ownership.ownerIds(record).stream().filter(ownerId -> !ownerId.equals(caller.id()))
+                .forEach(ownerId -> audit.record(caller, "IDEA_OWNER_ADDED", IDEA, record.getId()));
         return mapper.response(record, false);
-    }
-
-    @Transactional(readOnly = true)
-    public ApiDtos.PageResponse<ApiDtos.IdeaResponse> list(
-            AuthenticatedUser caller, String status, int page, int size) {
-        Page<StoredRecord> records = findIdeas(caller, status, PageRequest.of(page, size));
-        return new ApiDtos.PageResponse<>(mapper.responses(records.getContent(), caller.role()), records.getNumber(),
-                records.getSize(), records.getTotalElements(), records.getTotalPages());
     }
 
     @Transactional(readOnly = true)
@@ -77,6 +73,7 @@ public class IdeaService {
         rejectGenericLifecycleForWithdrawnSpecification(idea);
         ObjectNode payload = rules.object(request);
         validateIdeaPayload(payload);
+        ownership.preserveOwners(idea, payload);
         store.update(idea, WITHDRAWN.equals(idea.getStatus()) ? IDEA_DRAFT : idea.getStatus(), payload);
         audit.record(caller, "IDEA_UPDATED", IDEA, id);
         return mapper.response(idea, false);
@@ -183,6 +180,18 @@ public class IdeaService {
         return mapper.response(idea, false);
     }
 
+    public ApiDtos.IdeaResponse addOwner(AuthenticatedUser caller, UUID id, UUID studentId) {
+        return ownership.addOwner(caller, id, studentId);
+    }
+
+    public ApiDtos.IdeaResponse removeOwner(AuthenticatedUser caller, UUID id, UUID studentId) {
+        return ownership.removeOwner(caller, id, studentId);
+    }
+
+    public void leave(AuthenticatedUser caller, UUID id) {
+        ownership.leave(caller, id);
+    }
+
     private void validateIdeaPayload(ObjectNode payload) {
         rules.text(payload, "title");
         rules.text(payload, "description");
@@ -224,21 +233,6 @@ public class IdeaService {
                         "Idea was not found."));
     }
 
-    private Page<StoredRecord> findIdeas(AuthenticatedUser caller, String status, PageRequest page) {
-        boolean hasStatus = status != null && !status.isBlank();
-        if (caller.role() == Role.STUDENT) {
-            if (hasStatus) {
-                return store.repository().findByTypeAndOwnerIdAndStatus(IDEA,
-                        caller.id().toString(), status, page);
-            }
-            return store.page(IDEA, caller.id().toString(), null, page);
-        }
-        if (hasStatus) {
-            return store.repository().findByTypeAndStatus(IDEA, status, page);
-        }
-        return store.page(IDEA, null, null, page);
-    }
-
     private void requireVisible(AuthenticatedUser caller, StoredRecord idea) {
         if (caller.role() == Role.STUDENT) {
             requireOwner(caller, idea);
@@ -246,7 +240,7 @@ public class IdeaService {
     }
 
     private void requireOwner(AuthenticatedUser caller, StoredRecord record) {
-        if (!caller.id().toString().equals(record.getOwnerId())) {
+        if (!ownership.ownerIds(record).contains(caller.id())) {
             throw new org.springframework.security.access.AccessDeniedException("This resource belongs to another user.");
         }
     }

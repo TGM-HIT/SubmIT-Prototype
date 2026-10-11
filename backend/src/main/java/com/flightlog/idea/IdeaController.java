@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.flightlog.security.AuthenticatedUser;
 import com.flightlog.web.ApiDtos.IdeaResponse;
 import com.flightlog.web.ApiDtos.IdeaRequest;
-import com.flightlog.web.ApiDtos.PageResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -17,7 +16,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -41,14 +39,6 @@ public class IdeaController {
     public IdeaResponse create(@AuthenticationPrincipal AuthenticatedUser caller,
             @Valid @RequestBody IdeaRequest request) {
         return ideaService.create(caller, objectMapper.valueToTree(request));
-    }
-
-    @GetMapping
-    public PageResponse<IdeaResponse> list(@AuthenticationPrincipal AuthenticatedUser caller,
-            @RequestParam(required = false) String status,
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
-        return ideaService.list(caller, status, Math.max(page, 0), normalizeSize(size));
     }
 
     @GetMapping("/{id}")

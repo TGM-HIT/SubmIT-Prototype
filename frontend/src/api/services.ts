@@ -27,6 +27,20 @@ export const ideasApi = {
     if (status) query.set('status', status)
     return json(`/api/ideas?${query}`)
   },
+  lookupStudents(query: string, page = 0): Promise<Page<components['schemas']['StudentLookupResponse']>> {
+    const params = new URLSearchParams(pageQuery(page, 20))
+    if (query.trim()) params.set('q', query.trim())
+    return json(`/api/users/students?${params}`)
+  },
+  addOwner(id: string, studentId: string): Promise<IdeaResponse> {
+    return json(`/api/ideas/${encodeURIComponent(id)}/owners`, 'POST', { studentId })
+  },
+  removeOwner(id: string, studentId: string): Promise<IdeaResponse> {
+    return json(`/api/ideas/${encodeURIComponent(id)}/owners/${encodeURIComponent(studentId)}`, 'DELETE')
+  },
+  leave(id: string): Promise<void> {
+    return json(`/api/ideas/${encodeURIComponent(id)}/owners/me`, 'DELETE')
+  },
   get(id: string): Promise<IdeaResponse> {
     return json(`/api/ideas/${encodeURIComponent(id)}`)
   },

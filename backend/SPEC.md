@@ -33,16 +33,20 @@ An application period records its school year, opening and closing timestamps, e
 
 ### Ideas and project specifications
 
-- `POST /api/ideas` creates an idea draft for the authenticated student.
-- `GET /api/ideas` returns a paginated list filtered by supported status, school year, and owner criteria; visibility follows role permissions. Each visible idea includes its owner's current account display name alongside the existing owner ID.
-- `GET /api/ideas/{id}` returns an idea and its current specification, review history, ratings, and supervision preferences as visible to the caller. The owner, each review author, and each preference teacher include their current account display name alongside their existing IDs; these names are included only in the same authorized idea responses as their corresponding user references.
+- `POST /api/ideas` creates an idea draft for the authenticated student and may include up to four student `collaboratorIds` (IDs from the narrow student lookup).
+- `GET /api/ideas` returns a paginated list filtered by supported status, school year, and owner criteria; visibility follows role permissions. Each visible idea includes the creator and all owners with their current display names and IDs; the legacy `ownerId` and `ownerDisplayName` continue to identify the creator.
+- `GET /api/ideas/{id}` returns an idea and its current specification, review history, ratings, and supervision preferences as visible to the caller. The creator and every owner, each review author, and each preference teacher include their current account display name alongside their existing IDs; these names are included only in the same authorized idea responses as their corresponding user references.
 - `PUT /api/ideas/{id}` updates a student's draft, an idea returned for revision, or their withdrawn idea.
 - `POST /api/ideas/{id}/submit` submits an owned draft, returned idea, or withdrawn idea for teacher review.
 - `PUT /api/ideas/{id}/specification` creates or updates the full specification after idea approval.
 - `POST /api/ideas/{id}/specification/submit` submits the full specification for acceptance review.
 - `POST /api/ideas/{id}/withdraw` withdraws an eligible student-owned submission.
+- `POST /api/ideas/{id}/owners` adds a student collaborator for the creator.
+- `DELETE /api/ideas/{id}/owners/{studentId}` removes a collaborator for the creator.
+- `DELETE /api/ideas/{id}/owners/me` lets a collaborator leave.
+- `GET /api/users/students` returns a paginated display-name-only student lookup to authenticated students (optional display-name substring `q`).
 
-Idea requests validate the required title, description, intended outcome, initial scope points, learning topics, and school year. Full specifications validate the objectives, users, requirements or features, deliverables, scope, and known dependencies or resource needs. Students may edit only their own drafts, withdrawn ideas, or submissions returned for revision; editing a withdrawn idea returns it to draft. Submitted content is immutable until a teacher returns it for revision.
+Idea requests validate the required title, description, intended outcome, initial scope points, learning topics, and school year. Full specifications validate the objectives, users, requirements or features, deliverables, scope, and known dependencies or resource needs. All student owners may read the idea and its specification, history, ratings and feedback, and may edit, submit, resubmit, and withdraw the idea and its specification under the existing lifecycle. The creator is the legacy idea `ownerId`; `owners` identifies the creator and collaborators. Only the creator may add or remove collaborators; only a collaborator may leave; additions accept student accounts only and are limited to five owners total. Owner changes record `IDEA_OWNER_ADDED`, `IDEA_OWNER_REMOVED`, or `IDEA_OWNER_LEFT` audit events and do not affect public archive responses. Students may edit only owned drafts, withdrawn ideas, or submissions returned for revision; editing a withdrawn idea returns it to draft. Submitted content is immutable until a teacher returns it for revision.
 
 ### Reviews, ratings, and supervision preferences
 

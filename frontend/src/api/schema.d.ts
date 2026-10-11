@@ -360,6 +360,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ideas/{id}/owners": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["add"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/grading-rubrics": {
         parameters: {
             query?: never;
@@ -572,6 +588,22 @@ export interface paths {
          * @description Optional role and q parameters filter by role and case-insensitive username or display-name substring before pagination. Blank q is ignored; % and _ are literal search characters.
          */
         get: operations["list_5"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/users/students": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["lookupStudents"];
         put?: never;
         post?: never;
         delete?: never;
@@ -797,6 +829,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ideas/{id}/owners/{studentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["remove"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ideas/{id}/owners/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["leave"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -923,12 +987,22 @@ export interface components {
             scopePoints: string[];
             learningTopics?: string[];
             schoolYear: string;
+            collaboratorIds?: string[];
+        };
+        IdeaOwnerResponse: {
+            /** Format: uuid */
+            id?: string;
+            displayName?: string;
+            creator?: boolean;
         };
         IdeaResponse: {
             /** Format: uuid */
             id?: string;
             /** Format: uuid */
             ownerId?: string;
+            /** Format: uuid */
+            creatorId?: string;
+            owners?: components["schemas"]["IdeaOwnerResponse"][];
             /** @description Current account display name; included only in authorized idea responses. */
             ownerDisplayName?: string;
             status?: string;
@@ -1277,6 +1351,10 @@ export interface components {
             riskAndDependencies?: number;
             recommendation?: string;
         };
+        IdeaOwnerRequest: {
+            /** Format: uuid */
+            studentId: string;
+        };
         /** @description Explicitly configured weighted-average rule; no formula exists unless configured here. */
         AggregationRuleDto: {
             id: string;
@@ -1437,6 +1515,22 @@ export interface components {
             totalElements?: number;
             /** Format: int32 */
             totalPages?: number;
+        };
+        PageResponseStudentLookupResponse: {
+            content?: components["schemas"]["StudentLookupResponse"][];
+            /** Format: int32 */
+            page?: number;
+            /** Format: int32 */
+            size?: number;
+            /** Format: int64 */
+            totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
+        };
+        StudentLookupResponse: {
+            /** Format: uuid */
+            id?: string;
+            displayName?: string;
         };
         PageResponseString: {
             content?: string[];
@@ -2459,6 +2553,32 @@ export interface operations {
             };
         };
     };
+    add: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IdeaOwnerRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["IdeaResponse"];
+                };
+            };
+        };
+    };
     list_2: {
         parameters: {
             query?: {
@@ -2968,6 +3088,30 @@ export interface operations {
             };
         };
     };
+    lookupStudents: {
+        parameters: {
+            query?: {
+                page?: number;
+                size?: number;
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PageResponseStudentLookupResponse"];
+                };
+            };
+        };
+    };
     schoolYears: {
         parameters: {
             query?: {
@@ -3296,6 +3440,49 @@ export interface operations {
                         [key: string]: unknown;
                     };
                 };
+            };
+        };
+    };
+    remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                studentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["IdeaResponse"];
+                };
+            };
+        };
+    };
+    leave: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

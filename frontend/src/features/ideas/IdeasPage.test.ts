@@ -9,6 +9,11 @@ const api = vi.hoisted(() => ({
   get: vi.fn(),
   review: vi.fn(),
   update: vi.fn(),
+  create: vi.fn(),
+  lookupStudents: vi.fn(),
+  addOwner: vi.fn(),
+  removeOwner: vi.fn(),
+  leave: vi.fn(),
   submit: vi.fn(),
   submitSpecification: vi.fn(),
   specification: vi.fn(),
@@ -23,6 +28,11 @@ vi.mock('../../api/services', () => ({
   ideasApi: {
     list: api.list,
     get: api.get,
+    create: api.create,
+    lookupStudents: api.lookupStudents,
+    addOwner: api.addOwner,
+    removeOwner: api.removeOwner,
+    leave: api.leave,
     update: api.update,
     submit: api.submit,
     review: api.review,
@@ -46,6 +56,8 @@ const idea = (status: string) => ({
   status,
   ownerId: 'student-1',
   ownerDisplayName: 'Student One',
+  creatorId: 'student-1',
+  owners: [{ id: 'student-1', displayName: 'Student One', creator: true }],
   scopePoints: ['A scope point'],
   learningTopics: [],
   reviews: [],
@@ -90,6 +102,11 @@ beforeEach(() => {
   api.get.mockImplementation(async (id: string) => idea(id.replace('idea-', '')))
   api.review.mockResolvedValue({ decision: 'APPROVE_FOR_SPECIFICATION' })
   api.update.mockResolvedValue({})
+  api.create.mockResolvedValue({})
+  api.lookupStudents.mockResolvedValue({ content: [{ id: 'student-2', displayName: 'Student Two' }], page: 0, size: 20, totalElements: 1, totalPages: 1 })
+  api.addOwner.mockImplementation(async (id: string) => ({ ...idea('IDEA_DRAFT'), id, owners: [idea('IDEA_DRAFT').owners[0], { id: 'student-2', displayName: 'Student Two', creator: false }] }))
+  api.removeOwner.mockResolvedValue(idea('IDEA_DRAFT'))
+  api.leave.mockResolvedValue(undefined)
   api.submit.mockResolvedValue({})
   api.supervision.mockResolvedValue({})
   api.assignSupervisor.mockResolvedValue({})
@@ -1047,6 +1064,202 @@ describe('IdeasPage review and details dialogs', () => {
     await page.get('[role="dialog"]').trigger('keydown', { key: 'Escape' })
     await flushPromises()
     expect(document.body.querySelector('[role="dialog"]')).toBeNull()
+    page.unmount()
+  })
+})
+
+
+describe('IdeasPage collaboration owners', () => {
+  it('allows selecting a collaborator at creation and submits the collaborator ID', async () => {
+    state.id = 'student-1'
+    const page = mountPage()
+    await flushPromises()
+    await page.get('#new-idea-button').trigger('click')
+    await page.get('#collaborator-lookup').setValue('Student Two')
+    await flushPromises()
+    const add = page.findAll('button').find(button => button.text().includes('Student Two'))
+    expect(add).toBeDefined()
+    await add!.trigger('click')
+    expect(page.text()).toContain('Collaborators (2/5 owners)')
+    await page.get('[aria-label="Remove Student Two"]').trigger('click')
+    expect(page.text()).toContain('Collaborators (1/5 owners)')
+    await page.get('#collaborator-lookup').setValue('Student Two')
+    await flushPromises()
+    const addAgain = page.findAll('button').find(button => button.text().includes('Student Two'))
+    await addAgain!.trigger('click')
+    await page.get('form').trigger('submit')
+    await flushPromises()
+    expect(api.create).toHaveBeenCalledWith(expect.objectContaining({ collaboratorIds: ['student-2'] }))
+    page.unmount()
+  })
+
+  it('shows every owner to staff and exposes creator-only owner management to creators', async () => {
+    state.id = 'student-1'
+    api.get.mockResolvedValue({ ...idea('IDEA_DRAFT'), owners: [
+      { id: 'student-1', displayName: 'Student One', creator: true },
+      { id: 'student-2', displayName: 'Student Two', creator: false },
+    ] })
+    api.list.mockResolvedValue(pageIdeas('IDEA_DRAFT'))
+    const page = mountPage()
+    await flushPromises()
+    await page.get('article.data-row').find('button').trigger('click')
+    await flushPromises()
+    expect(page.text()).toContain('Student One')
+    expect(page.text()).toContain('Student Two')
+    expect(page.text()).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i)
+    expect(page.text()).toContain('Add a student')
+    expect(page.text()).toContain('Remove')
+    page.unmount()
+  })
+
+  it('hides owner management controls from a collaborator', async () => {
+    state.id = 'student-2'
+    api.list.mockResolvedValue(pageIdeas('IDEA_DRAFT'))
+    api.get.mockResolvedValue({ ...idea('IDEA_DRAFT'), owners: [
+      { id: 'student-1', displayName: 'Student One', creator: true },
+      { id: 'student-2', displayName: 'Student Two', creator: false },
+    ] })
+    const page = mountPage()
+    await flushPromises()
+    await page.get('article.data-row').find('button').trigger('click')
+    await flushPromises()
+    expect(page.text()).toContain('Leave idea')
+    expect(page.text()).not.toContain('Add a student')
+    expect(page.find('[aria-label="Remove Student One"]').exists()).toBe(false)
+    page.unmount()
+  })
+
+  it('shows owner names to teachers and administrators without owner controls', async () => {
+    for (const role of ['TEACHER', 'ADMIN']) {
+      state.role = role
+      state.id = `${role.toLowerCase()}-1`
+      api.list.mockResolvedValue({ ...pageIdeas('IDEA_SUBMITTED'), content: [{ ...idea('IDEA_SUBMITTED'), owners: [
+        { id: 'student-1', displayName: 'Student One', creator: true },
+        { id: 'student-2', displayName: 'Student Two', creator: false },
+      ] }] })
+      const page = mountPage()
+      await flushPromises()
+      expect(page.get('article.data-row').text()).toContain('Student One')
+      expect(page.get('article.data-row').text()).toContain('Student Two')
+      expect(page.text()).not.toContain('Leave idea')
+      page.unmount()
+    }
+  })
+})
+
+
+describe('IdeasPage collaboration access changes', () => {
+  it('lets the creator add and remove collaborators and refreshes details and list', async () => {
+    state.id = 'student-1'
+    api.list.mockResolvedValue(pageIdeas('IDEA_DRAFT'))
+    const shared = { ...idea('IDEA_DRAFT'), owners: [
+      { id: 'student-1', displayName: 'Student One', creator: true },
+      { id: 'student-2', displayName: 'Student Two', creator: false },
+    ] }
+    api.get.mockResolvedValue(shared)
+    api.lookupStudents.mockResolvedValue({ content: [{ id: 'student-3', displayName: 'Student Three' }], page: 0, size: 20, totalElements: 1, totalPages: 1 })
+    api.addOwner.mockResolvedValue({ ...shared, owners: [...shared.owners, { id: 'student-3', displayName: 'Student Three', creator: false }] })
+    api.removeOwner.mockResolvedValue(idea('IDEA_DRAFT'))
+    const page = mountPage()
+    await flushPromises()
+    await page.get('article.data-row').find('button').trigger('click')
+    await flushPromises()
+    await page.get('#details-collaborator-lookup').setValue('Student Two')
+    await flushPromises()
+    const add = page.findAll('button').find(button => button.text().includes('Student Three'))
+    expect(add).toBeDefined()
+    await add!.trigger('click')
+    await flushPromises()
+    expect(api.addOwner).toHaveBeenCalledWith('idea-IDEA_DRAFT', 'student-3')
+    expect(api.list).toHaveBeenCalledTimes(2)
+    await page.get('[aria-label="Remove Student Three"]').trigger('click')
+    expect(page.text()).toContain('Remove collaborator?')
+    await page.get('#confirm-owner-change').trigger('click')
+    await flushPromises()
+    expect(api.removeOwner).toHaveBeenCalledWith('idea-IDEA_DRAFT', 'student-3')
+    expect(api.list).toHaveBeenCalledTimes(3)
+    expect(document.activeElement?.id).toBe('details-collaborator-lookup')
+    page.unmount()
+  })
+
+  it('confirms collaborator leaving, closes the stale detail view and refreshes the student list', async () => {
+    state.id = 'student-2'
+    api.list.mockResolvedValueOnce(pageIdeas('IDEA_DRAFT')).mockResolvedValue(pageIdeas())
+    api.get.mockResolvedValue({ ...idea('IDEA_DRAFT'), owners: [
+      { id: 'student-1', displayName: 'Student One', creator: true },
+      { id: 'student-2', displayName: 'Student Two', creator: false },
+    ] })
+    const page = mountPage()
+    await flushPromises()
+    await page.get('article.data-row').find('button').trigger('click')
+    await flushPromises()
+    expect(page.text()).toContain('Leave idea')
+    await page.findAll('button').find(button => button.text() === 'Leave idea')!.trigger('click')
+    expect(page.text()).toContain('Leave this idea?')
+    await page.get('#confirm-owner-change').trigger('click')
+    await flushPromises()
+    expect(api.leave).toHaveBeenCalledWith('idea-IDEA_DRAFT')
+    expect(api.list).toHaveBeenCalledTimes(2)
+    expect(page.text()).not.toContain('A IDEA_DRAFT idea')
+    expect(page.text()).not.toContain('Owners (')
+    expect(document.activeElement?.id).toBe('new-idea-button')
+    vi.unstubAllGlobals()
+    page.unmount()
+  })
+
+  it('clears stale lookup results while a newer display-name search is loading', async () => {
+    let resolveSearch: ((value: { content: Array<{ id: string; displayName: string }>; page: number; size: number; totalElements: number; totalPages: number }) => void) | undefined
+    api.lookupStudents.mockResolvedValueOnce({ content: [{ id: 'student-2', displayName: 'Student Two' }], page: 0, size: 20, totalElements: 1, totalPages: 1 })
+    api.lookupStudents.mockImplementationOnce(() => new Promise(resolve => { resolveSearch = resolve }))
+    const page = mountPage()
+    await flushPromises()
+    await page.get('#new-idea-button').trigger('click')
+    await page.get('#collaborator-lookup').setValue('Student Two')
+    await flushPromises()
+    expect(page.text()).toContain('Student Two · Add')
+    await page.get('#collaborator-lookup').setValue('Sofia')
+    expect(page.text()).toContain('Searching students…')
+    expect(page.text()).not.toContain('Student Two · Add')
+    resolveSearch?.({ content: [{ id: 'student-3', displayName: 'Sofia Ramirez' }], page: 0, size: 20, totalElements: 1, totalPages: 1 })
+    await flushPromises()
+    expect(page.text()).toContain('Sofia Ramirez · Add')
+    page.unmount()
+  })
+
+  it('shows the five-owner cap and disables more selections', async () => {
+    api.lookupStudents.mockResolvedValue({ content: [
+      { id: 'student-2', displayName: 'Student Two' },
+      { id: 'student-3', displayName: 'Student Three' },
+      { id: 'student-4', displayName: 'Student Four' },
+      { id: 'student-5', displayName: 'Student Five' },
+      { id: 'student-6', displayName: 'Student Six' },
+    ], page: 0, size: 20, totalElements: 5, totalPages: 1 })
+    const page = mountPage()
+    await flushPromises()
+    await page.get('#new-idea-button').trigger('click')
+    await page.get('#collaborator-lookup').setValue('Student')
+    await flushPromises()
+    for (const student of ['Two', 'Three', 'Four', 'Five']) {
+      await page.get(`[data-student-name="Student ${student}"]`).trigger('click')
+    }
+    expect(page.text()).toContain('Collaborators (5/5 owners)')
+    expect(page.text()).toContain('The maximum of five owners has been reached.')
+    expect(page.get('[data-student-name="Student Six"]').attributes('disabled')).toBeDefined()
+    page.unmount()
+  })
+
+  it('shows empty and retry lookup states', async () => {
+    const page = mountPage()
+    await flushPromises()
+    await page.get('#new-idea-button').trigger('click')
+    api.lookupStudents.mockResolvedValueOnce({ content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 })
+    await page.get('#collaborator-lookup').setValue('Nobody')
+    await flushPromises()
+    expect(page.text()).toContain('No students found.')
+    api.lookupStudents.mockRejectedValueOnce(new Error('lookup failed'))
+    await page.get('#collaborator-lookup').setValue('Retry query')
+    await flushPromises()
+    expect(page.text()).toContain('Retry')
     page.unmount()
   })
 })

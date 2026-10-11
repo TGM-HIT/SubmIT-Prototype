@@ -7,6 +7,7 @@ import com.flightlog.security.Role;
 import com.flightlog.user.UserAccount;
 import com.flightlog.user.UserAccountRepository;
 import com.flightlog.web.ApiDtos.IdeaResponse;
+import com.flightlog.web.ApiDtos.IdeaOwnerResponse;
 import com.flightlog.web.ApiDtos.ReviewResponse;
 import com.flightlog.web.ApiDtos.SpecificationResponse;
 import com.flightlog.web.ApiDtos.SupervisionPreferenceResponse;
@@ -24,6 +25,7 @@ class IdeaResponseMapper {
     private static final String SPECIFICATION = "specification";
     private static final String REVIEW = "review";
     private static final String SUPERVISION = "supervision_preference";
+    private static final String OWNER_IDS = "ownerIds";
 
     private record ResponseContext(Map<UUID, String> names, String supervisorDisplayName) {
     }
@@ -45,6 +47,7 @@ class IdeaResponseMapper {
         List<StoredRecord> preferences = includeHistory ? currentPreferences(record) : List.of();
         Set<UUID> userIds = new java.util.LinkedHashSet<>();
         userIds.add(UUID.fromString(record.getOwnerId()));
+        ownerIds(record).forEach(userIds::add);
         reviews.stream().map(child -> UUID.fromString(child.getOwnerId())).forEach(userIds::add);
         preferences.stream().map(child -> UUID.fromString(child.getOwnerId())).forEach(userIds::add);
         return response(record, includeHistory, reviews, preferences,
@@ -69,7 +72,9 @@ class IdeaResponseMapper {
             preferences = preferenceRecords.stream().map(preference -> supervisionResponse(preference, names)).toList();
         }
         UUID ownerId = UUID.fromString(record.getOwnerId());
-        return new IdeaResponse(record.getId(), ownerId, names.get(ownerId), record.getStatus(),
+        List<IdeaOwnerResponse> owners = ownerIds(record).stream()
+                .map(id -> new IdeaOwnerResponse(id, names.get(id), id.equals(ownerId))).toList();
+        return new IdeaResponse(record.getId(), ownerId, ownerId, owners, names.get(ownerId), record.getStatus(),
                 payload.path("title").asText(), payload.path("description").asText(),
                 payload.path("intendedOutcome").asText(), strings(payload, "scopePoints"),
                 strings(payload, "learningTopics"), payload.path("schoolYear").asText(),
@@ -77,13 +82,29 @@ class IdeaResponseMapper {
     }
 
     List<IdeaResponse> responses(List<StoredRecord> records, Role viewerRole) {
-        Set<UUID> ownerIds = records.stream().map(record -> UUID.fromString(record.getOwnerId()))
+        Set<UUID> ownerIds = records.stream().flatMap(record -> ownerIds(record).stream())
                 .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
         Map<UUID, String> names = displayNames(ownerIds);
         return records.stream()
                 .map(record -> response(record, false, List.of(), List.of(),
                         new ResponseContext(names, supervisorDisplayName(record, viewerRole))))
                 .toList();
+    }
+
+    private List<UUID> ownerIds(StoredRecord record) {
+        UUID creator = UUID.fromString(record.getOwnerId());
+        List<UUID> ids = new ArrayList<>();
+        ids.add(creator);
+        var storedOwners = store.parse(record).path(OWNER_IDS);
+        if (storedOwners.isArray()) {
+            storedOwners.forEach(value -> {
+                UUID id = UUID.fromString(value.asText());
+                if (!ids.contains(id)) {
+                    ids.add(id);
+                }
+            });
+        }
+        return ids;
     }
 
     private String supervisorDisplayName(StoredRecord idea, Role viewerRole) {
