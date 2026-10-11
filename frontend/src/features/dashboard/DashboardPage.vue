@@ -27,6 +27,14 @@
             <div class="row-main">
               <h3>{{ period.schoolYear }}</h3>
               <p>{{ date(period.opensAt) }} – {{ date(period.closesAt) }}</p>
+            <div v-if="isStudent" class="student-assignment-summary">
+              <p v-if="period.studentAssignment?.state === 'PRELIMINARY'"><strong>Preliminary assignment:</strong> {{ period.studentAssignment.projectTitle }}</p>
+              <p v-else-if="period.studentAssignment?.state === 'FINAL'"><strong>Final assignment:</strong> {{ period.studentAssignment.projectTitle }}</p>
+              <p v-else-if="period.studentAssignment?.state === 'NO_RESULT'"><strong>Application:</strong> {{ readable(period.studentApplicationStatus) }} · No allocation result yet</p>
+              <p v-else-if="period.studentAssignment">{{ assignmentSummary(period.studentAssignment.state) }}</p>
+              <p v-else><strong>Application:</strong> {{ period.studentApplicationStatus === 'NOT_SUBMITTED' ? 'No application submitted' : readable(period.studentApplicationStatus) }}</p>
+              <RouterLink to="/applications">View Applications</RouterLink>
+            </div>
             </div>
             <span class="status-badge" :class="`status-${period.status?.toLowerCase()}`">{{ readable(period.status) }}</span>
           </div>
@@ -64,6 +72,7 @@ const years = ref<string[]>([])
 const periods = ref<Page<Period>>({ content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 })
 const ideas = ref<Page<Idea>>({ content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 })
 const openPeriod = computed(() => periods.value.content.find((item) => item.status === 'OPEN'))
+const isStudent = computed(() => auth.user?.role === 'STUDENT')
 const roleHint = computed(() => auth.user?.role === 'STUDENT' ? 'Your ideas and submissions' : 'Submissions requiring attention')
 const actions = computed(() => {
   const items = []
@@ -77,6 +86,12 @@ const actions = computed(() => {
 
 function date(value?: string): string {
   return value ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : 'Date not set'
+}
+function assignmentSummary(state?: string): string {
+  if (state === 'NO_RESULT') return 'No allocation result yet'
+  if (state === 'NOT_ASSIGNED_PRELIMINARY') return 'Not assigned in the preliminary allocation'
+  if (state === 'NOT_ASSIGNED_FINAL') return 'Not assigned in the final allocation'
+  return 'No assignment yet'
 }
 function readable(value?: string): string {
   return (value ?? 'Unknown').replaceAll('_', ' ').toLowerCase().replace(/^./, (s) => s.toUpperCase())
@@ -95,3 +110,7 @@ async function load(): Promise<void> {
 }
 onMounted(load)
 </script>
+
+<style scoped>
+.student-assignment-summary { margin-top: 0.5rem; overflow-wrap: anywhere; }
+</style>

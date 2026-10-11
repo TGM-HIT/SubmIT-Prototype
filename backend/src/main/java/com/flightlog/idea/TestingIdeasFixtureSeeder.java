@@ -109,11 +109,11 @@ public class TestingIdeasFixtureSeeder implements ApplicationRunner {
         }
 
         UUID periodMarker = allocationPreviewMarker();
-        if (isSeeded(periodMarker)) {
-            return;
-        }
         UserAccount admin = requireAccount("admin01", Role.ADMIN);
-        allocationPreview.seed(admin, students, ideasForPreview, periodMarker);
+        if (!isSeeded(periodMarker)) {
+            allocationPreview.seed(admin, students, ideasForPreview, periodMarker);
+        }
+        allocationPreview.seedStudentAssignmentStates(admin, periodMarker, ideasForPreview);
     }
 
     private UUID seededIdeaId(UUID markerId) {

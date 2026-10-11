@@ -77,6 +77,46 @@ public class TestingAllocationPreviewSeeder {
                 store.object().put("periodId", periodRecord.getId().toString()));
     }
 
+    public void seedStudentAssignmentStates(UserAccount admin, UUID fixtureMarker, List<UUID> projectIds) {
+        if (!store.repository().findByTypeAndParentId("testing_student_assignment_preview",
+                fixtureMarker.toString()).isEmpty()) {
+            return;
+        }
+        UserAccount unassigned = users.findByUsername("student04").orElseThrow();
+        UserAccount waiting = users.findByUsername("student05").orElseThrow();
+        StoredRecord unassignedPeriod = previewPeriod(admin, unassigned, projectIds, "ALLOCATED", true);
+        previewPeriod(admin, waiting, projectIds, "CLOSED", false);
+        store.create("testing_student_assignment_preview", admin.getId().toString(), fixtureMarker.toString(),
+                "SEEDED", store.object().put("unassignedPeriodId", unassignedPeriod.getId().toString()));
+    }
+
+    private StoredRecord previewPeriod(UserAccount admin, UserAccount student, List<UUID> projectIds,
+            String periodStatus, boolean completedRun) {
+        String schoolYear = completedRun ? "2027/2028" : "2028/2029";
+        ObjectNode periodPayload = store.object().put("schoolYear", schoolYear)
+                .put("opensAt", Instant.now().minusSeconds(ONE_DAY_SECONDS).toString())
+                .put("closesAt", Instant.now().minusSeconds(1).toString());
+        periodPayload.set("projectIds", store.value(projectIds));
+        StoredRecord period = store.create("application_period", admin.getId().toString(), null, periodStatus,
+                periodPayload);
+        ObjectNode applicationPayload = store.object();
+        ArrayNode preferences = applicationPayload.putArray("preferences");
+        for (int index = 0; index < projectIds.size(); index++) {
+            preferences.addObject().put("projectId", projectIds.get(index).toString()).put("rank", index + 1);
+        }
+        store.create("student_application", student.getId().toString(), period.getId().toString(), "SUBMITTED",
+                applicationPayload);
+        if (completedRun) {
+            ObjectNode snapshot = store.object();
+            ObjectNode result = snapshot.putObject("result");
+            result.putArray("assignments");
+            result.putArray("unassignedStudents").addObject().put("studentId", student.getId().toString())
+                    .put("reason", "SYNTHETIC_PREVIEW_UNASSIGNED");
+            store.create("allocation_run", admin.getId().toString(), period.getId().toString(), "COMPLETED", snapshot);
+        }
+        return period;
+    }
+
     private void addSyntheticUnassignedOutcomes(StoredRecord run, List<UserAccount> students,
             List<UUID> projectIds) {
         // Testing-only UI coverage: the five-account preview profile cannot naturally leave a student unassigned

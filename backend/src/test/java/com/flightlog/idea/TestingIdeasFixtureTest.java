@@ -88,6 +88,33 @@ class TestingIdeasFixtureTest {
     }
 
     @Test
+    void assignmentPreviewAddsSyntheticUnassignedAndNoResultStudents() throws Exception {
+        String unassignedToken = login("student04");
+        JsonNode unassignedPeriods = objectMapper.readTree(mockMvc.perform(get("/api/application-periods")
+                        .header("Authorization", "Bearer " + unassignedToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).path("content");
+        JsonNode unassignedPeriod = findPeriod(unassignedPeriods);
+        assertEquals("NOT_ASSIGNED_PRELIMINARY", unassignedPeriod.path("studentAssignment").path("state").asText());
+
+        String waitingToken = login("student05");
+        JsonNode waitingPeriods = objectMapper.readTree(mockMvc.perform(get("/api/application-periods")
+                        .header("Authorization", "Bearer " + waitingToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).path("content");
+        JsonNode waitingPeriod = findPeriod(waitingPeriods);
+        assertEquals("NO_RESULT", waitingPeriod.path("studentAssignment").path("state").asText());
+    }
+
+    private JsonNode findPeriod(JsonNode periods) {
+        for (JsonNode period : periods) {
+            if ("SUBMITTED".equals(period.path("studentApplicationStatus").asText())
+                    && period.path("studentAssignment").isObject()) {
+                return period;
+            }
+        }
+        throw new AssertionError("Student assignment preview period was not seeded.");
+    }
+
+    @Test
     void exposesTwoValidWorkflowIdeasPerStudentToOwnersAndTeachers() throws Exception {
         String teacherToken = login("teacher01");
         JsonNode teacherList = getIdeas(teacherToken);

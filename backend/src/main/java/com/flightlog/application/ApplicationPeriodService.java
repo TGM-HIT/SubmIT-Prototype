@@ -75,12 +75,13 @@ public class ApplicationPeriodService {
     @Transactional(readOnly = true)
     public PageResponse<com.flightlog.web.ApiDtos.ApplicationPeriodResponse> list(AuthenticatedUser caller, int page, int size) {
         return mapper.periods(store.page(PERIOD, null, null, PageRequest.of(page, size)),
-                caller.role() == Role.STUDENT);
+                caller.role() == Role.STUDENT ? caller.id() : null);
     }
 
     @Transactional(readOnly = true)
     public com.flightlog.web.ApiDtos.ApplicationPeriodResponse get(AuthenticatedUser caller, UUID id) {
-        return mapper.period(findPeriod(id), caller.role() == Role.STUDENT);
+        return mapper.period(findPeriod(id), caller.role() == Role.STUDENT,
+                caller.role() == Role.STUDENT ? caller.id() : null);
     }
 
     @Transactional

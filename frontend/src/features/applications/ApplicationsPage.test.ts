@@ -329,6 +329,8 @@ describe("student catalogue project titles", () => {
     await page.findAll("button").find((button) => button.text() === "Submit ranked application")!.trigger("click")
     await flushPromises()
     expect(api.createApplication).toHaveBeenCalledWith("period-open", { projectIds: [ids[1], ids[0], ids[2]] })
+    expect(page.text()).toContain("Your application: Submitted")
+    expect(page.text()).toContain("Assignment: No result yet")
     expect(page.text()).not.toContain(ids.join(" "))
   })
 
@@ -354,6 +356,53 @@ describe("student catalogue project titles", () => {
       row.element.firstElementChild?.textContent?.trim())).toEqual(titles.map((title, index) => `${index + 1}. ${title}`))
     expect(page.text()).not.toContain("Stale UUID fallback")
     expect(page.text()).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i)
+  })
+
+  it("shows private preliminary, final, unassigned and no-result states without identifiers", async () => {
+    api.role = "STUDENT"
+    api.listIdeas.mockResolvedValue({ content: [] })
+    api.listPeriods.mockResolvedValue({
+      content: [
+        { id: "period-pre", schoolYear: "2026/2027", status: "ALLOCATED", projectIds: [],
+          studentApplicationStatus: "SUBMITTED", studentAssignment: { state: "PRELIMINARY", projectTitle: "Solar design", preferenceRank: 1,
+            groupMembers: [{ displayName: "Alex Student", self: true }, { displayName: "Casey Member", self: false }] } },
+        { id: "period-final", schoolYear: "2025/2026", status: "FINALIZED", projectIds: [],
+          studentApplicationStatus: "SUBMITTED", studentAssignment: { state: "FINAL", projectTitle: "Water quality", groupMembers: [] } },
+        { id: "period-unassigned", schoolYear: "2024/2025", status: "ALLOCATED", projectIds: [],
+          studentApplicationStatus: "SUBMITTED", studentAssignment: { state: "NOT_ASSIGNED_PRELIMINARY", groupMembers: [] } },
+        { id: "period-waiting", schoolYear: "2023/2024", status: "CLOSED", projectIds: [],
+          studentApplicationStatus: "SUBMITTED", studentAssignment: { state: "NO_RESULT", groupMembers: [] } },
+        { id: "period-withdrawn", schoolYear: "2022/2023", status: "CLOSED", projectIds: [],
+          studentApplicationStatus: "WITHDRAWN" },
+      ], page: 0, size: 20, totalElements: 4, totalPages: 1,
+    })
+    const page = mountPage()
+    await flushPromises()
+    expect(page.text()).toContain("Submitted")
+    expect(page.text()).toContain("Preliminary assignment · Solar design")
+    expect(page.text()).toContain("may change when the administrator finalizes")
+    expect(page.text()).toContain("Final assignment · Water quality")
+    expect(page.text()).toContain("Not assigned (preliminary)")
+    expect(page.text()).toContain("No result yet")
+    expect(page.text()).toContain("Withdrawn")
+    expect(page.text()).toContain("Alex Student (you)")
+    expect(page.text()).toContain("Casey Member")
+    expect(page.text()).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i)
+  })
+
+  it("does not show the student result panel to teachers or administrators", async () => {
+    api.listPeriods.mockResolvedValue({ content: [{ id: "staff-period", schoolYear: "2026/2027",
+      status: "FINALIZED", projectIds: [], studentApplicationStatus: "SUBMITTED",
+      studentAssignment: { state: "FINAL", projectTitle: "Private student project", groupMembers: [] } }],
+      page: 0, size: 20, totalElements: 1, totalPages: 1 })
+    for (const role of ["TEACHER", "ADMIN"]) {
+      api.role = role
+      const page = mountPage()
+      await flushPromises()
+      expect(page.find(".student-period-result").exists()).toBe(false)
+      expect(page.text()).not.toContain("Private student project")
+      page.unmount()
+    }
   })
 
   it("shows a neutral title when the server cannot resolve a catalogue project", async () => {

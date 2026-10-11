@@ -320,13 +320,36 @@ public final class ApiDtos {
             Instant closesAt,
             String status,
             List<UUID> projectIds,
-            @JsonInclude(JsonInclude.Include.NON_NULL) List<ProjectTitleResponse> projectTitles) {
+            @JsonInclude(JsonInclude.Include.NON_NULL) List<ProjectTitleResponse> projectTitles,
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "Present only to the authenticated student; status of that student's application, or NOT_SUBMITTED.")
+            String studentApplicationStatus,
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "Present only for the authenticated student's own submitted application.")
+            StudentAssignmentResponse studentAssignment) {
     }
 
     public record ProjectTitleResponse(UUID projectId, String title) {
     }
 
     public record PreferenceResponse(UUID projectId, int rank, String projectTitle) {
+    }
+
+    public record StudentAssignmentResponse(
+            @Schema(description = "NO_RESULT, PRELIMINARY, FINAL, NOT_ASSIGNED_PRELIMINARY, or NOT_ASSIGNED_FINAL.",
+                    allowableValues = {"NO_RESULT", "PRELIMINARY", "FINAL", "NOT_ASSIGNED_PRELIMINARY",
+                            "NOT_ASSIGNED_FINAL"})
+            String state,
+            @Schema(description = "Current project title; present only when assigned.") String projectTitle,
+            @Schema(description = "The caller's rank for the assigned project, when present in their application.")
+            Integer preferenceRank,
+            @Schema(description = "Current display names of this assigned project's group only; contains no IDs.")
+            List<StudentGroupMemberResponse> groupMembers) {
+    }
+
+    public record StudentGroupMemberResponse(
+            @Schema(description = "Current account display name, or Unknown student.") String displayName,
+            @Schema(description = "True only for the authenticated caller.") boolean self) {
     }
 
     public record StudentApplicationResponse(

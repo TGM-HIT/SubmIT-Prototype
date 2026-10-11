@@ -67,12 +67,16 @@ Only teachers may review or record supervision preferences. A decision must be v
 
 An application contains at least three distinct project IDs, ordered by preference rank. Every project must be accepted and included in the period's catalogue. The service rejects create, update, or withdrawal requests after the deadline or when the period is not open. A student has at most one application per period. The authorized staff list also returns each student's current display name and each preference's current project title alongside the unchanged IDs; the student's own response may include those same values for only their own application.
 
+Authenticated student reads of `GET /api/application-periods` and `GET /api/application-periods/{id}` add `studentApplicationStatus`, containing only the caller's application status or `NOT_SUBMITTED`, and a `studentAssignment` only when the caller has a submitted application. These properties are omitted from staff responses; periods with no caller application expose no assignment data.
+
 ### Allocation
 
 - `POST /api/application-periods/{periodId}/allocation-runs` starts a new or replacement allocation run for `ADMIN` after the deadline and before finalization. The system starts the initial run automatically at the deadline.
 - `GET /api/application-periods/{periodId}/allocation-runs` returns paginated run history for `TEACHER` and `ADMIN`.
 - `GET /api/allocation-runs/{id}` returns run status, summary, and result for `TEACHER` and `ADMIN`. The authorized run response resolves current student display names and project titles alongside the unchanged result IDs at read time; these labels are not stored in or used to mutate the immutable run snapshot.
 - `POST /api/allocation-runs/{id}/finalize` finalizes an allocation for `ADMIN`.
+
+The student-only period projection distinguishes `NO_RESULT`, `PRELIMINARY`, `FINAL`, `NOT_ASSIGNED_PRELIMINARY`, and `NOT_ASSIGNED_FINAL`. Preliminary state is based on the most recent completed run; final state is based on the finalized run's stored project group. Assigned responses resolve the current project title and current display names only for members of that student's assigned group, marking the caller; optional rank is the caller's own preference. It does not include member IDs, optimizer reasons, other students' preferences or application data, or runs/groups for periods without the caller's own submitted application. Student access to staff allocation and application-list endpoints remains forbidden.
 
 An allocation run uses an immutable snapshot of eligible applications and projects. It assigns each student at most once, enforces a group size of three to five inclusive, and optimizes first for the number of assigned students and then for ranked preference satisfaction. The result includes each project's assigned students, preference outcomes, unassigned students, and explanations for unassigned projects or students. Failed or incomplete runs expose their status and error details; they must not appear successful. An administrator may start a replacement run before finalization. A finalized run cannot be overwritten.
 

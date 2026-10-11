@@ -326,6 +326,12 @@ class IdeaReviewControllerTest {
         org.junit.jupiter.api.Assertions.assertFalse(response.getResponse().getContentAsString()
                 .contains(student.getDisplayName()));
         org.junit.jupiter.api.Assertions.assertFalse(response.getResponse().getContentAsString().contains("teacher01"));
+        org.junit.jupiter.api.Assertions.assertFalse(response.getResponse().getContentAsString()
+                .contains("studentAssignment"));
+        org.junit.jupiter.api.Assertions.assertFalse(response.getResponse().getContentAsString()
+                .contains("PRELIMINARY"));
+        org.junit.jupiter.api.Assertions.assertFalse(response.getResponse().getContentAsString()
+                .contains("FINAL"));
     }
 
     @Test

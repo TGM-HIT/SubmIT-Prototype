@@ -17,7 +17,7 @@ Provide authenticated views for:
 - Teacher supervision-preference controls for each project, including wants to supervise, willing to supervise, not willing, and not available states with an optional note.
 - Accepted project catalogue views with project details, supervisor-confirmation status, and project review information visible to authorized users.
 - Student application views for browsing accepted projects and submitting a ranked list of at least three distinct choices.
-- Student views for editing or withdrawing an application before the deadline, and for viewing allocation results after they are released.
+- Student views for editing or withdrawing an application before the deadline, and for viewing their own application status and allocation result. Applications shows each period's submission status, preliminary/final or unassigned state, current project title and only the assigned group's current display names (marking the caller); Overview shows a concise per-period assignment or application summary linking to Applications. Preliminary assignments are explicitly subject to finalization or a replacement run. Students never see IDs, usernames, optimizer reasons, or other students' application/preference data.
 - Group views for drafting, submitting, and revising the official formal project application after allocation.
 - Teacher views for reviewing formal project applications and approving, requesting revisions, or declining them with feedback.
 - Project progress views for teachers to record and review ongoing individual and group grades against the active rubric, and to record project metric observations.

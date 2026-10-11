@@ -31,6 +31,17 @@
             <h3>{{ period.schoolYear }} <span class="status-badge" :class="`status-${period.status?.toLowerCase()}`">{{ readable(period.status) }}</span></h3>
             <p>Opens {{ date(period.opensAt) }} · Deadline {{ date(period.closesAt) }}</p>
             <p>{{ period.projectIds?.length ?? 0 }} accepted projects in catalogue</p>
+            <section v-if="isStudent" class="student-period-result" aria-label="Your application result">
+              <p><strong>Your application:</strong> {{ period.studentApplicationStatus === 'NOT_SUBMITTED' ? 'No application submitted' : readable(period.studentApplicationStatus) }}</p>
+              <template v-if="period.studentAssignment">
+                <p><strong>Assignment:</strong> {{ assignmentLabel(period.studentAssignment.state) }}<template v-if="period.studentAssignment.projectTitle"> · {{ period.studentAssignment.projectTitle }}</template></p>
+                <p v-if="period.studentAssignment.state === 'PRELIMINARY'" class="muted">This is preliminary and may change when the administrator finalizes the allocation or starts a replacement run.</p>
+                <p v-if="period.studentAssignment.preferenceRank">Your preference rank: {{ period.studentAssignment.preferenceRank }}</p>
+                <ul v-if="period.studentAssignment.groupMembers?.length" class="group-member-list" aria-label="Students assigned to this project">
+                  <li v-for="(member, index) in period.studentAssignment.groupMembers" :key="`${member.displayName}-${index}`">{{ member.displayName }}<strong v-if="member.self"> (you)</strong></li>
+                </ul>
+              </template>
+            </section>
             <div v-if="isStudent" class="choice-list application-catalogue">
               <details v-for="(projectId, index) in period.projectIds ?? []" :key="projectId" class="choice-item">
                 <summary>Accepted project {{ index + 1 }} · {{ projectTitle(period, projectId) }}</summary>
@@ -52,7 +63,7 @@
               <div class="actions"><button class="button" type="button" :disabled="(rankedIds[period.id ?? '']?.length ?? 0) < 3 || task.loading.value" @click="saveApplication(period)">{{ applicationFor(period.id ?? '') ? 'Save ranking changes' : 'Submit ranked application' }}</button><button v-if="applicationFor(period.id ?? '')" class="button button-danger" type="button" @click="withdrawApplication(period)">Withdraw</button></div>
             </template>
             <template v-else-if="isStudent && period.status !== 'OPEN'">
-              <p class="notice">This period is {{ readable(period.status).toLowerCase() }}. Preference changes are locked. Review released allocation information in the Allocation area when available.</p>
+              <p class="notice">This period is {{ readable(period.status).toLowerCase() }}. Preference changes are locked. Your application and assignment status are shown above.</p>
             </template>
           </div>
           <div class="actions" v-if="isTeacher || isAdmin"><button class="button button-secondary button-small" @click="loadApplications(period)">View application summary</button><RouterLink v-if="isAdmin" class="button button-secondary button-small" to="/allocation">Allocation runs</RouterLink></div>
@@ -127,6 +138,14 @@ const periodValidationMessages = computed(() => {
 
 function readable(value?: string): string {
   return (value ?? 'Unknown').replaceAll('_', ' ').toLowerCase().replace(/^./, (char) => char.toUpperCase())
+}
+function assignmentLabel(state?: string): string {
+  if (state === 'NO_RESULT') return 'No result yet'
+  if (state === 'NOT_ASSIGNED_PRELIMINARY') return 'Not assigned (preliminary)'
+  if (state === 'NOT_ASSIGNED_FINAL') return 'Not assigned (final)'
+  if (state === 'PRELIMINARY') return 'Preliminary assignment'
+  if (state === 'FINAL') return 'Final assignment'
+  return 'No assignment information'
 }
 function date(value?: string): string {
   return value ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : 'Not set'
@@ -207,7 +226,11 @@ async function saveApplication(period: Period): Promise<void> {
   const result = await task.run(() => existing
     ? periodsApi.updateApplication(existing.id ?? '', input)
     : periodsApi.createApplication(id, input), 'Ranked application saved.')
-  if (result) currentApplications.value[id] = result
+  if (result) {
+    currentApplications.value[id] = result
+    period.studentApplicationStatus = result.status ?? 'SUBMITTED'
+    period.studentAssignment = { state: 'NO_RESULT', groupMembers: [] }
+  }
 }
 async function withdrawApplication(period: Period): Promise<void> {
   const application = applicationFor(period.id ?? '')
@@ -215,6 +238,8 @@ async function withdrawApplication(period: Period): Promise<void> {
   const result = await task.run(() => periodsApi.withdrawApplication(application.id!), 'Application withdrawn.')
   if (result === undefined && task.error.value) return
   delete currentApplications.value[period.id ?? '']
+  period.studentApplicationStatus = 'WITHDRAWN'
+  period.studentAssignment = undefined
   rankedIds.value[period.id ?? ''] = []
 }
 async function loadApplications(period: Period): Promise<void> {
@@ -225,6 +250,8 @@ onMounted(() => void load())
 </script>
 
 <style scoped>
+.student-period-result { margin: 0.75rem 0; overflow-wrap: anywhere; }
+.group-member-list { padding-left: 1.25rem; overflow-wrap: anywhere; }
 .application-catalogue .choice-item,
 .application-ranking .choice-item {
   min-width: 0;

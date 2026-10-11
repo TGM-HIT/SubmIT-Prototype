@@ -1101,11 +1101,37 @@ export interface components {
             status?: string;
             projectIds?: string[];
             projectTitles?: components["schemas"]["ProjectTitleResponse"][];
+            /** @description Present only to the authenticated student; status of that student's application, or NOT_SUBMITTED. */
+            studentApplicationStatus?: string;
+            /** @description Present only for the authenticated student's own submitted application. */
+            studentAssignment?: components["schemas"]["StudentAssignmentResponse"];
         };
         ProjectTitleResponse: {
             /** Format: uuid */
             projectId?: string;
             title?: string;
+        };
+        StudentAssignmentResponse: {
+            /**
+             * @description NO_RESULT, PRELIMINARY, FINAL, NOT_ASSIGNED_PRELIMINARY, or NOT_ASSIGNED_FINAL.
+             * @enum {string}
+             */
+            state?: "NO_RESULT" | "PRELIMINARY" | "FINAL" | "NOT_ASSIGNED_PRELIMINARY" | "NOT_ASSIGNED_FINAL";
+            /** @description Current project title; present only when assigned. */
+            projectTitle?: string;
+            /**
+             * Format: int32
+             * @description The caller's rank for the assigned project, when present in their application.
+             */
+            preferenceRank?: number;
+            /** @description Current display names of this assigned project's group only; contains no IDs. */
+            groupMembers?: components["schemas"]["StudentGroupMemberResponse"][];
+        };
+        StudentGroupMemberResponse: {
+            /** @description Current account display name, or Unknown student. */
+            displayName?: string;
+            /** @description True only for the authenticated caller. */
+            self?: boolean;
         };
         /** @description Teacher assessment of one student against one criterion of a rubric version. */
         StudentGradeRequest: {
