@@ -20,6 +20,7 @@ state, or provide an evidence index that maps each filename to both. Before
 handoff, compare each label or index entry with the captured image so the
 recorded viewport and state are accurate. Treat identifiable Chrome/macOS
 host diagnostics (for example CVDisplayLink/Mach-port, certificate-store,
+certificate parsing such as "Failed parsing subjectAltName" or "Failed parsing extensions",
 GPU/network-service, GCM registration, and process-teardown messages) as
 environment noise rather than application uncertainty only when the preview
 completes and page-console and request checks show no related application

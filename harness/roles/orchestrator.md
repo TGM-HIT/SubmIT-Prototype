@@ -15,7 +15,8 @@ The plan index is grouped into Bug, Dev, and Features tables; search every
 group for an existing row rather than assuming a single ticket table.
 
 Once preflight exits 0, mint a run id of the form <ticket-id>-<yyyymmdd-hhmm>
-from the clock, create harness/runs/<run-id>/, and open the run log there. Write
+from the clock, create harness/runs/<run-id>/, and open the run log there as
+`harness/runs/<run-id>/run.log` (this exact file name for every run). Write
 that log as you go, on disk, not at the end.
 
 At each step of your loop, overwrite harness/runs/<run-id>/heartbeat with one
