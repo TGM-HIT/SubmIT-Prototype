@@ -65,7 +65,11 @@ report anything as done. If the ticket's requested behavior or presentation
 already meets its requirements on the current branch, do not make a redundant
 change or commit just to create a diff. Instead, report a no-op/resolved
 finding, the exact HEAD SHA inspected, criterion-by-criterion evidence, and
-which required checks you ran or could not run. The Evaluator decides whether
+which required checks you ran or could not run. A no-op/resolved handoff is
+valid only when every acceptance criterion is verified as met and every
+standard check in the ticket passes. If a check fails or a required test is
+missing, fix it as part of the ticket, or report it as blocked with the exact
+failing command; never file a no-op. The Evaluator decides whether
 the evidence establishes acceptance. Otherwise, once the checks pass, commit
 your change on the current branch.
 

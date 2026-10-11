@@ -60,7 +60,11 @@ java harness/gates/commit-scope.java <changed-paths>. If the handoff is a
 no-op/resolved finding with no implementation commit, use the exact HEAD SHA
 reported by the Implementor, create an empty changed-paths file in the run
 folder, and run the same gate; an empty list is an intentional no-op, not a
-missing gate input. Record the SHA and no-op outcome. A non-zero exit from
+missing gate input. Record the SHA and no-op outcome. For a non-no-op pass,
+`git rev-parse HEAD` must differ from the previous pass's SHA and `git status
+--short` must show no uncommitted paths other than `harness/plan.md`; otherwise
+send the work back to the Implementor to commit it. Record the new SHA in the
+log. A non-zero exit from
 either gate stops the run: a failed completeness gate sends the handoff back
 to a fresh Implementor with the missing heading and exact requested handoff
 path. Never dispatch the Evaluator past a failed gate.
@@ -257,6 +261,12 @@ Evaluator verdict event. Evaluator dispatch entries identify the pass and
 requested evaluation artifact path; they do not have an implementation commit
 SHA. At closeout, verify that every Evaluator verdict has a preceding dispatch
 event and that the heartbeat was updated at each Evaluator dispatch and verdict.
+
+Before writing the footer, list the run folder and check the log against it. Each
+`handoff-N.md` needs an Implementor dispatch bullet with a SHA and two gate
+bullets. Each `evaluation-N.md` needs a dispatch bullet and a verdict bullet. The
+Metrics counts must equal the number of those files. Put the SPEC CHANGE section
+after the last bullet and before Metrics, and label the token figure "estimate".
 
 End the run log with a mandatory `## Metrics` footer for every outcome,
 including failed, stopped, and paused runs: Implementor passes, revise cycles,

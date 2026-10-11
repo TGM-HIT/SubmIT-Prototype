@@ -54,7 +54,10 @@ all handoffs and prior evaluator verdicts, and the completed
 human observations or evidence. Preserve the distinction between checked and
 unchecked items; do not infer success from a general statement, an
 expanded-select/mock check when native behavior is required, or absent
-evidence. Re-run applicable mechanical checks. Return `pass` only when the
+evidence. Re-run applicable mechanical checks. Before a `pass`, run the full
+standard checks listed in the ticket (backend `./gradlew test`, not a `--tests`
+filter; the full frontend `npm test`). Targeted runs may support a `revise` but
+never a `pass`. Report the totals you observed. Return `pass` only when the
 ticket's required acceptance is established; return `awaiting-human` for
 remaining human-exercisable items or `revise` for a concrete code change.
 

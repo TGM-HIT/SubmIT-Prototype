@@ -56,7 +56,7 @@ For UI-visible work, use the local browser preview documented in `frontend/DEV-G
 
 ## Optional: Current-state triage
 
-<For follow-up or regression tickets, require inspecting the current implementation before editing. Name the views/states to reproduce, how to record results, and whether a documented no-op is acceptable if the issue is already resolved. Remove this section when not applicable.>
+<For follow-up or regression tickets, require inspecting the current implementation before editing. Name the views/states to reproduce, how to record results, and whether a documented no-op is acceptable if the issue is already resolved (a no-op is valid only when every acceptance criterion is met and every standard check passes). Remove this section when not applicable.>
 
 ## Optional: Specification changes
 
