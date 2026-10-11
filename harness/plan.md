@@ -59,6 +59,6 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Feature-09](tickets/done/Feature-09.md) | done | Allow application periods without confirmed supervisors |
 | [Feature-10](tickets/done/Feature-10.md) | done | Let administrators assign any teacher as supervisor, warning for explicit refusals |
 | [Feature-11](tickets/done/Feature-11.md) | done | Show students their application status and project assignment |
-| [Feature-12](tickets/Feature-12.md) | to-do | Show students the specifications of projects they can select |
+| [Feature-12](tickets/done/Feature-12.md) | done | Show students the specifications of projects they can select |
 | [Feature-13](tickets/Feature-13.md) | to-do | Let several students own and edit an idea and its specification |
 | [Feature-14](tickets/Feature-14.md) | to-do | Let teachers submit ideas that follow the normal feedback and acceptance process |
