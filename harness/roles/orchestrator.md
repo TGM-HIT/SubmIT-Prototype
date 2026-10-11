@@ -239,7 +239,10 @@ the ignored run folder.
 
 The in-progress ledger edit stays uncommitted until closeout. Tell the
 Implementor in every dispatch prompt to stage only its own deliverable paths and
-never `harness/plan.md`.
+never `harness/plan.md`. Also tell every Implementor and Evaluator in its
+dispatch prompt: "`harness/plan.md` is expected to be modified by the
+Orchestrator's in-progress ledger edit. Ignore it; do not stage, revert or
+report it."
 
 Keep a run log as you go: the ticket, what you dispatched, the gate results, the
 verdicts you got back, and any escalation. Write each step as one Markdown bullet in the form
@@ -296,11 +299,21 @@ preflight stopped before a run folder existed. Use `Outcome: awaiting-human` and
     Ticket: <ticket-id>
     Run folder: <exact harness/runs/... path or none>
     Outcome: <done|failed|stopped|awaiting-human>
-    Ledger: <done|failed|awaiting-human|unchanged>
+    Ledger: <done|failed|awaiting-human|in-progress|unchanged>
     Terminal commit: <full commit sha>
     Tree: <clean|dirty>
     Spec changes: <none|comma-separated SPEC.md paths, each with a one-line reason>
     Follow-ups: <none|one-line summary of each OUT OF SCOPE finding>
+
+If you must end after the run folder exists and before closeout, first append a
+`stopped` bullet with the reason to the run log, then report the real run
+folder, `Outcome: stopped`, `Ledger: in-progress`, and the real tree state.
+`none` and `unchanged` are valid only when preflight stopped the run.
+
+Resuming an interrupted run: when given an existing run folder whose log has no
+closeout, continue in that folder. Read the last log step and the saved handoff
+and evaluation artifacts, re-run only the unfinished step, and add a `resumed`
+bullet to the log.
 
 Derive the block from the repository after closeout. It is the boundary another
 coordinator and the Learner consume; do not make them reconstruct it from prose.
