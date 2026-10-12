@@ -114,6 +114,53 @@ class AllocationSupervisorIndependenceTest {
                 .andExpect(jsonPath("$.result.assignments.length()").value(9));
     }
 
+    @Test
+    void allocationTreatsTeacherOwnedIdeaLikeEquivalentStudentOwnedIdea() throws Exception {
+        List<String> teacherProjectIds = new ArrayList<>();
+        List<String> studentProjectIds = new ArrayList<>();
+        for (int index = 0; index < 3; index++) {
+            teacherProjectIds.add(createAcceptedProject(index, "Equivalent", "teacher01"));
+            studentProjectIds.add(createAcceptedProject(index, "Equivalent", "student01"));
+        }
+        for (String projectId : teacherProjectIds) {
+            assertEquals(0, store.repository().findByTypeAndParentId("confirmed_supervisor", projectId).size());
+        }
+        for (String projectId : studentProjectIds) {
+            assertEquals(0, store.repository().findByTypeAndParentId("confirmed_supervisor", projectId).size());
+        }
+        Instant opensAt = Instant.now().minusSeconds(86_400);
+        Instant closesAt = Instant.now().minusSeconds(60);
+        StoredRecord teacherPeriod = createPeriod(teacherProjectIds, opensAt, closesAt);
+        StoredRecord studentPeriod = createPeriod(studentProjectIds, opensAt, closesAt);
+        for (String username : List.of("student01", "student02", "student03", "student04",
+                "student05", "teacher01", "teacher02", "teacher03", "teacher04")) {
+            String applicantId = users.findByUsername(username).orElseThrow().getId().toString();
+            createApplication(teacherPeriod, applicantId, teacherProjectIds);
+            createApplication(studentPeriod, applicantId, studentProjectIds);
+        }
+
+        allocationService.startDuePeriods();
+
+        JsonNode teacherResult = resultFor(teacherPeriod);
+        JsonNode studentResult = resultFor(studentPeriod);
+        assertNotNull(teacherResult);
+        assertNotNull(studentResult);
+        assertEquals(studentResult, normalizeProjectIds(teacherResult, teacherProjectIds, studentProjectIds));
+
+        String token = loginAdmin();
+        MvcResult teacherRuns = mockMvc.perform(get("/api/application-periods/{periodId}/allocation-runs",
+                        teacherPeriod.getId())
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0].projectIds.length()").value(3))
+                .andReturn();
+        JsonNode snapshot = objectMapper.readTree(teacherRuns.getResponse().getContentAsString())
+                .path("content").get(0);
+        List<String> snapshotProjectIds = new ArrayList<>();
+        snapshot.path("projectIds").forEach(project -> snapshotProjectIds.add(project.asText()));
+        assertEquals(teacherProjectIds, snapshotProjectIds);
+    }
+
     private String createAcceptedProject(int index, String setName, String author) {
         StoredRecord idea = store.create("idea",
                 users.findByUsername(author).orElseThrow().getId().toString(),
@@ -282,11 +329,15 @@ class AllocationSupervisorIndependenceTest {
     }
 
     private StoredRecord createPeriod(List<String> projectIds) {
+        return createPeriod(projectIds, Instant.now().minusSeconds(86_400), Instant.now().minusSeconds(60));
+    }
+
+    private StoredRecord createPeriod(List<String> projectIds, Instant opensAt, Instant closesAt) {
         ArrayNode ids = store.object().arrayNode();
         projectIds.forEach(ids::add);
         ObjectNode payload = store.object().put("schoolYear", "2026/2027")
-                .put("opensAt", Instant.now().minusSeconds(86_400).toString())
-                .put("closesAt", Instant.now().minusSeconds(60).toString());
+                .put("opensAt", opensAt.toString())
+                .put("closesAt", closesAt.toString());
         payload.set("projectIds", ids);
         return store.create("application_period", users.findByUsername("admin01").orElseThrow()
                 .getId().toString(), null, "OPEN", payload);

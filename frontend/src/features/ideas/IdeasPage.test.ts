@@ -410,6 +410,7 @@ describe('IdeasPage overview supervision preferences', () => {
   it('allows a teacher author to edit and submit a specification after approval', async () => {
     state.role = 'TEACHER'
     state.id = 'teacher-1'
+    let lifecycle = 'IDEA_APPROVED_FOR_SPECIFICATION'
     const approved = {
       ...idea('IDEA_APPROVED_FOR_SPECIFICATION'),
       ownerId: 'teacher-1',
@@ -418,10 +419,14 @@ describe('IdeasPage overview supervision preferences', () => {
       owners: [{ id: 'teacher-1', displayName: 'Teacher One', creator: true }],
       teacherIdea: true,
     }
-    api.list.mockResolvedValue({ ...pageIdeas(), content: [approved], totalElements: 1 })
-    api.get.mockResolvedValue(approved)
+    const currentIdea = () => ({ ...approved, status: lifecycle })
+    api.list.mockImplementation(async () => ({ ...pageIdeas(), content: [currentIdea()], totalElements: 1 }))
+    api.get.mockImplementation(async () => currentIdea())
     api.specification.mockResolvedValue({})
-    api.submitSpecification.mockResolvedValue({})
+    api.submitSpecification.mockImplementation(async () => {
+      lifecycle = 'SPECIFICATION_SUBMITTED'
+      return { status: lifecycle }
+    })
     const page = mountPage()
     await flushPromises()
     await page.get('[id^="details-button-"]').trigger('click')
@@ -433,6 +438,14 @@ describe('IdeasPage overview supervision preferences', () => {
     await specificationForm.trigger('submit')
     await flushPromises()
     expect(api.specification).toHaveBeenCalledWith(approved.id, expect.objectContaining({ scope: 'Teacher-authored scope' }))
+    await page.get('[id^="details-button-"]').trigger('click')
+    await flushPromises()
+    vi.stubGlobal('confirm', () => true)
+    await page.get('#submit-specification').trigger('click')
+    await flushPromises()
+    expect(api.submitSpecification).toHaveBeenCalledWith(approved.id)
+    expect(api.list).toHaveBeenCalledTimes(3)
+    expect(page.get('article.data-row').text()).toContain('Specification submitted')
     page.unmount()
   })
 
