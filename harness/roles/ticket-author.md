@@ -30,6 +30,13 @@ ignored before requiring them in a ticket; distinguish regenerating and
 reviewing an artifact from committing it, and specify a commit only when
 repository conventions call for tracking that output. Keep tests and
 verification proportional to the scope; do not require irrelevant checks.
+For every acceptance criterion that makes a comparative claim (for example,
+"like", "the same as", "equivalent", or "unchanged compared with"), name the
+comparison baseline and the factors that must be held constant, and identify
+the one behavior or condition being varied. When requesting a product-SPEC
+change, inspect all occurrences of the affected rule and related role or
+ownership terms throughout each named SPEC file, not only the named paragraph.
+Require that the resulting specifications contain no contradictory statements.
 
 When a ticket changes or depends on extending existing documented developer
 tooling, inspect its owning usage guidance. Include a minimal documentation

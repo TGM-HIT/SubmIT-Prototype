@@ -8,6 +8,7 @@
 
 - <Define what must change and where.>
 - <State required behavior, constraints, compatibility, and explicit exclusions.>
+- <For comparative acceptance criteria, name the baseline, factors held constant, and the behavior/condition varied. For SPEC changes, check related statements throughout each named SPEC file for contradictions. Remove this bullet if neither applies.>
 - <List real prerequisites, dependencies, or setup/data needed. Remove this bullet if none.>
 - <Scope-gate allowances: name any required deliverable path outside `harness/gates/commit-scope.java`'s allowed set (for example `Makefile`, `.env.example`). Remove this bullet if none.>
 - <For UI work, define relevant roles, routes, states, and responsive expectations. For API work, identify behavior/contracts and generation requirements. For interactive UI, also state the success-path end state: visible result, refreshed data, and keyboard focus.>
