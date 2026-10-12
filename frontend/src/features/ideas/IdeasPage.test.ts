@@ -15,6 +15,7 @@ const api = vi.hoisted(() => ({
   removeOwner: vi.fn(),
   leave: vi.fn(),
   submit: vi.fn(),
+  withdraw: vi.fn(),
   submitSpecification: vi.fn(),
   specification: vi.fn(),
   supervision: vi.fn(),
@@ -35,6 +36,7 @@ vi.mock('../../api/services', () => ({
     leave: api.leave,
     update: api.update,
     submit: api.submit,
+    withdraw: api.withdraw,
     review: api.review,
     supervision: api.supervision,
     assignSupervisor: api.assignSupervisor,
@@ -79,6 +81,7 @@ function pageUsers(content: Array<{ id: string; displayName: string; role: strin
 }
 
 function mountPage() {
+  if (!state.id && state.role === 'STUDENT') state.id = 'student-1'
   return mount(IdeasPage, {
     attachTo: document.body,
     global: {
@@ -91,10 +94,12 @@ function mountPage() {
 }
 
 afterEach(() => {
+  vi.unstubAllGlobals()
   document.body.innerHTML = ''
 })
 
 beforeEach(() => {
+  vi.resetAllMocks()
   state.role = 'STUDENT'
   state.id = undefined
   api.years.mockResolvedValue({ content: ['2026/2027'] })
@@ -108,6 +113,7 @@ beforeEach(() => {
   api.removeOwner.mockResolvedValue(idea('IDEA_DRAFT'))
   api.leave.mockResolvedValue(undefined)
   api.submit.mockResolvedValue({})
+  api.withdraw.mockResolvedValue({})
   api.supervision.mockResolvedValue({})
   api.assignSupervisor.mockResolvedValue({})
   api.users.mockResolvedValue(pageUsers([
@@ -271,6 +277,187 @@ describe('IdeasPage overview supervision preferences', () => {
     expect(buttons).not.toContain('Edit')
     expect(buttons).not.toContain('Submit')
     page.unmount()
+  })
+
+  it('lets a teacher author create and edit ideas without offering collaboration', async () => {
+    state.role = 'TEACHER'
+    state.id = 'teacher-1'
+    api.list.mockResolvedValue(pageIdeas())
+    const page = mountPage()
+    await flushPromises()
+
+    expect(page.find('#new-idea-button').exists()).toBe(true)
+    await page.get('#new-idea-button').trigger('click')
+    expect(page.find('#collaborator-lookup').exists()).toBe(false)
+    await page.get('#idea-title').setValue('Teacher project')
+    await page.get('#idea-description').setValue('A project proposed by a teacher.')
+    await page.get('#idea-outcome').setValue('A useful prototype.')
+    await page.get('#school-year').setValue('2026/2027')
+    await page.get('#scope').setValue('Build the prototype')
+    await page.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(api.create).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'Teacher project',
+      collaboratorIds: [],
+    }))
+    page.unmount()
+  })
+
+  it('navigates to a newly created idea when pagination places it beyond the first page', async () => {
+    state.role = 'TEACHER'
+    state.id = 'teacher-1'
+    const created = {
+      ...idea('IDEA_DRAFT'),
+      id: 'idea-new-teacher',
+      title: 'Newest teacher proposal',
+      ownerId: 'teacher-1',
+      creatorId: 'teacher-1',
+      owners: [{ id: 'teacher-1', displayName: 'Teacher One', creator: true }],
+      teacherIdea: true,
+    }
+    api.list.mockResolvedValueOnce(pageIdeas())
+      .mockResolvedValueOnce({ ...pageIdeas('IDEA_DRAFT'), content: [], totalElements: 21, totalPages: 2 })
+      .mockResolvedValueOnce({ ...pageIdeas('IDEA_DRAFT'), content: [created], page: 1, totalElements: 21, totalPages: 2 })
+    api.create.mockResolvedValue(created)
+    const page = mountPage()
+    await flushPromises()
+    await page.get('#new-idea-button').trigger('click')
+    await page.get('#idea-title').setValue(created.title)
+    await page.get('#idea-description').setValue('An idea that appears beyond the first page.')
+    await page.get('#idea-outcome').setValue('Keep the successful result immediately reachable.')
+    await page.get('#school-year').setValue('2026/2027')
+    await page.get('#scope').setValue('Find the newly created idea')
+    await page.get('form').trigger('submit')
+    await flushPromises()
+
+    expect(api.list).toHaveBeenCalledTimes(3)
+    expect(page.get('article.data-row').text()).toContain(created.title)
+    expect(page.get('article.data-row').text()).toContain('Teacher idea')
+    page.unmount()
+  })
+
+  it('offers teacher authors lifecycle controls but explains and hides self-review', async () => {
+    state.role = 'TEACHER'
+    state.id = 'teacher-1'
+    const ownSubmitted = {
+      ...idea('IDEA_SUBMITTED'),
+      ownerId: 'teacher-1',
+      creatorId: 'teacher-1',
+      ownerDisplayName: 'Teacher One',
+      owners: [{ id: 'teacher-1', displayName: 'Teacher One', creator: true }],
+      teacherIdea: true,
+    }
+    api.list.mockResolvedValue({ ...pageIdeas(), content: [ownSubmitted], totalElements: 1 })
+    api.get.mockResolvedValue(ownSubmitted)
+    const page = mountPage()
+    await flushPromises()
+
+    const row = page.get('article.data-row')
+    expect(row.find('.teacher-idea-label').text()).toBe('Teacher idea')
+    expect(row.find('.teacher-idea-label').text()).not.toMatch(/[0-9a-f]{8}-[0-9a-f-]{27,}/i)
+    expect(row.text()).toContain('You cannot review your own idea.')
+    expect(row.find('button').text()).toBe('Details & history')
+    await row.get('[id^="details-button-"]').trigger('click')
+    await flushPromises()
+    expect(page.find('[role="dialog"] .teacher-idea-label').text()).toBe('Teacher idea')
+    expect(page.find('[role="dialog"] .teacher-idea-label').text()).not.toMatch(/[0-9a-f]{8}-[0-9a-f-]{27,}/i)
+    expect(page.text()).toContain('You cannot review your own idea or specification.')
+    expect(page.find('#review-from-details').exists()).toBe(false)
+    page.unmount()
+  })
+
+  it('lets a teacher author edit, submit, and withdraw their own withdrawn idea', async () => {
+    state.role = 'TEACHER'
+    state.id = 'teacher-1'
+    const withdrawn = {
+      ...idea('WITHDRAWN'),
+      ownerId: 'teacher-1',
+      creatorId: 'teacher-1',
+      owners: [{ id: 'teacher-1', displayName: 'Teacher One', creator: true }],
+      teacherIdea: true,
+    }
+    const submitted = { ...withdrawn, status: 'IDEA_SUBMITTED' }
+    const resultPage = (record: typeof withdrawn) => ({ ...pageIdeas(), content: [record], totalElements: 1 })
+    api.list.mockResolvedValueOnce(resultPage(withdrawn))
+      .mockResolvedValueOnce(resultPage(withdrawn))
+      .mockResolvedValueOnce(resultPage(submitted))
+      .mockResolvedValue(pageIdeas())
+    api.update.mockResolvedValue(withdrawn)
+    api.submit.mockResolvedValue(submitted)
+    api.withdraw.mockResolvedValue(withdrawn)
+    const page = mountPage()
+    await flushPromises()
+    const row = page.get('article.data-row')
+    await row.findAll('button').find((button) => button.text() === 'Edit')!.trigger('click')
+    await page.get('#idea-title').setValue('Updated teacher idea')
+    await page.get('form').trigger('submit')
+    await flushPromises()
+    expect(api.update).toHaveBeenCalledWith(withdrawn.id, expect.objectContaining({ title: 'Updated teacher idea' }))
+
+    vi.stubGlobal('confirm', () => true)
+    const refreshedRow = page.get('article.data-row')
+    await refreshedRow.findAll('button').find((button) => button.text() === 'Submit')!.trigger('click')
+    await flushPromises()
+    await page.get('article.data-row').findAll('button').find((button) => button.text() === 'Withdraw')!.trigger('click')
+    await flushPromises()
+    expect(api.submit).toHaveBeenCalledWith(withdrawn.id)
+    expect(api.withdraw).toHaveBeenCalledWith(withdrawn.id)
+    vi.unstubAllGlobals()
+    page.unmount()
+  })
+
+  it('allows a teacher author to edit and submit a specification after approval', async () => {
+    state.role = 'TEACHER'
+    state.id = 'teacher-1'
+    const approved = {
+      ...idea('IDEA_APPROVED_FOR_SPECIFICATION'),
+      ownerId: 'teacher-1',
+      creatorId: 'teacher-1',
+      ownerDisplayName: 'Teacher One',
+      owners: [{ id: 'teacher-1', displayName: 'Teacher One', creator: true }],
+      teacherIdea: true,
+    }
+    api.list.mockResolvedValue({ ...pageIdeas(), content: [approved], totalElements: 1 })
+    api.get.mockResolvedValue(approved)
+    api.specification.mockResolvedValue({})
+    api.submitSpecification.mockResolvedValue({})
+    const page = mountPage()
+    await flushPromises()
+    await page.get('[id^="details-button-"]').trigger('click')
+    await flushPromises()
+    expect(page.find('#develop-specification').exists()).toBe(true)
+    await page.get('#develop-specification').trigger('click')
+    await page.get('#spec-scope').setValue('Teacher-authored scope')
+    const specificationForm = page.findAll('form').find((form) => form.find('#spec-scope').exists())!
+    await specificationForm.trigger('submit')
+    await flushPromises()
+    expect(api.specification).toHaveBeenCalledWith(approved.id, expect.objectContaining({ scope: 'Teacher-authored scope' }))
+    page.unmount()
+  })
+
+  it('shows the teacher idea label to administrators and no author controls to students', async () => {
+    const teacherIdea = { ...idea('IDEA_DRAFT'), teacherIdea: true }
+    api.list.mockResolvedValue({ ...pageIdeas(), content: [teacherIdea], totalElements: 1 })
+    api.get.mockResolvedValue(teacherIdea)
+    state.role = 'ADMIN'
+    const administrator = mountPage()
+    await flushPromises()
+    expect(administrator.find('#new-idea-button').exists()).toBe(false)
+    expect(administrator.get('article.data-row').text()).toContain('Teacher idea')
+    await administrator.get('[id^="details-button-"]').trigger('click')
+    await flushPromises()
+    expect(administrator.find('[role="dialog"] .teacher-idea-label').text()).toBe('Teacher idea')
+    administrator.unmount()
+
+    state.role = 'STUDENT'
+    state.id = 'student-1'
+    api.list.mockResolvedValue(pageIdeas('IDEA_DRAFT'))
+    const student = mountPage()
+    await flushPromises()
+    expect(student.find('#new-idea-button').exists()).toBe(true)
+    expect(student.get('article.data-row').text()).not.toContain('Teacher idea')
+    student.unmount()
   })
 
   it.each(['TEACHER', 'ADMIN'])(
@@ -1010,6 +1197,7 @@ describe('IdeasPage review and details dialogs', () => {
 
     page.unmount()
     state.role = 'TEACHER'
+    state.id = 'teacher-1'
     api.list.mockResolvedValue(pageIdeas('IDEA_SUBMITTED'))
     api.get.mockResolvedValue(idea('IDEA_SUBMITTED'))
     const teacherPage = mountPage()

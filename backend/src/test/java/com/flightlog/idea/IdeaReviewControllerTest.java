@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.flightlog.data.RecordStore;
+import com.flightlog.security.Role;
 import com.flightlog.user.UserAccount;
 import com.flightlog.user.UserAccountRepository;
 import java.util.HashMap;
@@ -440,6 +441,299 @@ class IdeaReviewControllerTest {
         getIdea(ideaId, studentToken)
                 .andExpect(jsonPath("$.status").value("IDEA_NEEDS_REVISION"))
                 .andExpect(jsonPath("$.reviews.length()").value(1));
+    }
+
+    @Test
+    void teacherAuthorsFollowTheAuthorLifecycleAndCannotReviewTheirOwnIdeaOrSpecification() throws Exception {
+        String ideaId = createIdea("Teacher-authored project", teacherToken);
+        getIdea(ideaId, teacherToken).andExpect(status().isOk())
+                .andExpect(jsonPath("$.teacherIdea").value(true))
+                .andExpect(jsonPath("$.owners.length()").value(1))
+                .andExpect(jsonPath("$.ownerDisplayName").value("Olivia Chen"));
+
+        mockMvc.perform(put("/api/ideas/{id}", ideaId)
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(ideaRequest("Edited teacher project"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.title").value("Edited teacher project"));
+        mockMvc.perform(post("/api/ideas/{id}/submit", ideaId)
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isOk());
+        review(ideaId, Map.of("decision", "REQUEST_REVISION", "feedback", "Self-review is forbidden."),
+                teacherToken).andExpect(status().isForbidden());
+        getIdea(ideaId, teacherToken).andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("IDEA_SUBMITTED"))
+                .andExpect(jsonPath("$.reviews.length()").value(0));
+
+        mockMvc.perform(post("/api/ideas/{id}/withdraw", ideaId)
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("WITHDRAWN"));
+        mockMvc.perform(put("/api/ideas/{id}", ideaId)
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(ideaRequest("Resubmitted teacher project"))))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/ideas/{id}/submit", ideaId)
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isOk());
+        review(ideaId, Map.of("decision", "APPROVE_FOR_SPECIFICATION", "feedback", "Proceed."),
+                otherTeacherToken).andExpect(status().isCreated());
+
+        mockMvc.perform(put("/api/ideas/{id}/specification", ideaId)
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(specificationRequest("Initial scope"))))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/ideas/{id}/specification/submit", ideaId)
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/ideas/{id}/specification/reviews", ideaId)
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                Map.of("decision", "ACCEPT_FOR_APPLICATIONS", "feedback", "Self-acceptance is forbidden."))))
+                .andExpect(status().isForbidden());
+        getIdea(ideaId, teacherToken).andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("SPECIFICATION_SUBMITTED"))
+                .andExpect(jsonPath("$.reviews.length()").value(1));
+
+        mockMvc.perform(post("/api/ideas/{id}/specification/reviews", ideaId)
+                        .header("Authorization", "Bearer " + otherTeacherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                specificationReviewRequest("REQUEST_REVISION", "Clarify the scope."))))
+                .andExpect(status().isCreated());
+        mockMvc.perform(put("/api/ideas/{id}/specification", ideaId)
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(specificationRequest("Revised scope"))))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/ideas/{id}/specification/submit", ideaId)
+                        .header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/ideas/{id}/specification/reviews", ideaId)
+                        .header("Authorization", "Bearer " + otherTeacherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                specificationReviewRequest("ACCEPT_FOR_APPLICATIONS", "Ready."))))
+                .andExpect(status().isCreated());
+        getIdea(ideaId, teacherToken).andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ACCEPTED_FOR_APPLICATIONS"))
+                .andExpect(jsonPath("$.teacherIdea").value(true))
+                .andExpect(jsonPath("$.ownerDisplayName").value("Olivia Chen"))
+                .andExpect(jsonPath("$.specification.scope").value("Revised scope"))
+                .andExpect(jsonPath("$.reviews.length()").value(3));
+        renameDisplayName(adminToken, users.findByUsername("teacher01").orElseThrow().getId().toString(),
+                "Teacher Author Updated");
+        getIdea(ideaId, teacherToken).andExpect(status().isOk())
+                .andExpect(jsonPath("$.ownerDisplayName").value("Teacher Author Updated"));
+        preference(ideaId, teacherToken, "WANTS_TO_SUPERVISE", "Interested in this idea.")
+                .andExpect(status().isOk());
+        getIdea(ideaId, teacherToken).andExpect(status().isOk())
+                .andExpect(jsonPath("$.confirmedSupervisorDisplayName").doesNotExist());
+        String secondTeacherId = users.findByUsername("teacher02").orElseThrow().getId().toString();
+        assignSupervisor(ideaId, adminToken, secondTeacherId).andExpect(status().isOk());
+        getIdea(ideaId, teacherToken).andExpect(status().isOk())
+                .andExpect(jsonPath("$.confirmedSupervisorDisplayName").value("Marcus Reed"));
+
+        mockMvc.perform(get("/api/ideas?size=100").header("Authorization", "Bearer " + teacherToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[?(@.id == '" + ideaId + "')].teacherIdea")
+                        .value(org.hamcrest.Matchers.hasItem(true)));
+        getIdea(ideaId, adminToken).andExpect(status().isOk())
+                .andExpect(jsonPath("$.teacherIdea").value(true));
+        getIdea(ideaId, studentToken).andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/ideas?size=100").header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[?(@.id == '" + ideaId + "')]").isEmpty());
+
+        assertAudited(ideaId, "IDEA_CREATED");
+        assertAudited(ideaId, "IDEA_UPDATED");
+        assertAudited(ideaId, "IDEA_SUBMITTED");
+        assertAudited(ideaId, "IDEA_WITHDRAWN");
+
+        UserAccount author = users.findByUsername("teacher01").orElseThrow();
+        Role currentRole = author.getRole();
+        try {
+            author.setRole(Role.ADMIN);
+            users.saveAndFlush(author);
+            getIdea(ideaId, teacherToken).andExpect(status().isOk())
+                    .andExpect(jsonPath("$.teacherIdea").value(false))
+                    .andExpect(jsonPath("$.ownerDisplayName").value("Teacher Author Updated"));
+        } finally {
+            author.setRole(currentRole);
+            users.saveAndFlush(author);
+        }
+    }
+
+    @Test
+    void teacherIdeaAuthorizationsRemainOwnerScopedAndStudentResponsesExposeNoTeacherLabel() throws Exception {
+        String ideaId = createIdea("Teacher authorization boundaries", teacherToken);
+        String specification = objectMapper.writeValueAsString(specificationRequest("A scope"));
+        String idea = objectMapper.writeValueAsString(ideaRequest("Attempted change"));
+        mockMvc.perform(put("/api/ideas/{id}", ideaId).header("Authorization", "Bearer " + otherTeacherToken)
+                        .contentType(MediaType.APPLICATION_JSON).content(idea))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/ideas/{id}/submit", ideaId).header("Authorization", "Bearer " + otherTeacherToken))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/ideas/{id}/withdraw", ideaId).header("Authorization", "Bearer " + otherTeacherToken))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(put("/api/ideas/{id}/specification", ideaId)
+                        .header("Authorization", "Bearer " + otherTeacherToken)
+                        .contentType(MediaType.APPLICATION_JSON).content(specification))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/ideas/{id}/specification/submit", ideaId)
+                        .header("Authorization", "Bearer " + otherTeacherToken))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(put("/api/ideas/{id}", ideaId).header("Authorization", "Bearer " + studentToken)
+                        .contentType(MediaType.APPLICATION_JSON).content(idea))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/ideas/{id}/submit", ideaId)
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/ideas/{id}/withdraw", ideaId)
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(put("/api/ideas/{id}/specification", ideaId)
+                        .header("Authorization", "Bearer " + studentToken)
+                        .contentType(MediaType.APPLICATION_JSON).content(specification))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/ideas/{id}/specification/submit", ideaId)
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/ideas").header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON).content(idea))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(put("/api/ideas/{id}", ideaId).header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON).content(idea))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/ideas/{id}/submit", ideaId)
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/ideas/{id}/withdraw", ideaId)
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(put("/api/ideas/{id}/specification", ideaId)
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON).content(specification))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/ideas/{id}/specification/submit", ideaId)
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isForbidden());
+        review(ideaId, Map.of("decision", "DECLINE", "feedback", "Admins cannot review."),
+                adminToken).andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/ideas").contentType(MediaType.APPLICATION_JSON).content(idea))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(put("/api/ideas/{id}", ideaId)
+                        .contentType(MediaType.APPLICATION_JSON).content(idea))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/api/ideas/{id}/submit", ideaId)).andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/api/ideas/{id}/withdraw", ideaId)).andExpect(status().isUnauthorized());
+        mockMvc.perform(put("/api/ideas/{id}/specification", ideaId)
+                        .contentType(MediaType.APPLICATION_JSON).content(specification))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(post("/api/ideas/{id}/specification/submit", ideaId))
+                .andExpect(status().isUnauthorized());
+        getIdea(ideaId, studentToken).andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/ideas/{id}/owners", ideaId)
+                        .header("Authorization", "Bearer " + studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "studentId", users.findByUsername("student02").orElseThrow().getId()))))
+                .andExpect(status().isForbidden());
+
+        String studentIdea = createIdea("Student-authored project", studentToken);
+        getIdea(studentIdea, studentToken).andExpect(status().isOk())
+                .andExpect(jsonPath("$.teacherIdea").doesNotExist());
+        mockMvc.perform(put("/api/ideas/{id}", studentIdea).header("Authorization", "Bearer " + otherTeacherToken)
+                        .contentType(MediaType.APPLICATION_JSON).content(idea))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/ideas/{id}/submit", studentIdea)
+                        .header("Authorization", "Bearer " + otherTeacherToken))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/ideas/{id}/withdraw", studentIdea)
+                        .header("Authorization", "Bearer " + otherTeacherToken))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(put("/api/ideas/{id}/specification", studentIdea)
+                        .header("Authorization", "Bearer " + otherTeacherToken)
+                        .contentType(MediaType.APPLICATION_JSON).content(specification))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/ideas/{id}/specification/submit", studentIdea)
+                        .header("Authorization", "Bearer " + otherTeacherToken))
+                .andExpect(status().isForbidden());
+        String teacherId = users.findByUsername("teacher02").orElseThrow().getId().toString();
+        mockMvc.perform(post("/api/ideas").header("Authorization", "Bearer " + studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(ideaRequestWithCollaborator(
+                                "Reject teacher collaborator", teacherId))))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(post("/api/ideas").header("Authorization", "Bearer " + teacherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                ideaRequestWithCollaborator("Teacher idea has one owner",
+                                        users.findByUsername("student02").orElseThrow().getId().toString()))))
+                .andExpect(status().isBadRequest());
+    }
+
+    private void assertAudited(String ideaId, String action) {
+        boolean recorded = store.repository()
+                .findByTypeAndReferenceTypeAndParentId("audit", "idea", ideaId,
+                        org.springframework.data.domain.PageRequest.of(0, 100))
+                .getContent().stream()
+                .map(store::parse)
+                .anyMatch(entry -> action.equals(entry.path("action").asText()));
+        org.junit.jupiter.api.Assertions.assertTrue(recorded, "Expected audit action " + action);
+    }
+
+    private String createIdea(String title, String token) throws Exception {
+        MvcResult created = mockMvc.perform(post("/api/ideas")
+                        .header("Authorization", "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(ideaRequest(title))))
+                .andExpect(status().isCreated())
+                .andReturn();
+        return objectMapper.readTree(created.getResponse().getContentAsString()).path("id").asText();
+    }
+
+    private Map<String, Object> ideaRequest(String title) {
+        return Map.of(
+                "title", title,
+                "description", "A teacher-authored project proposal.",
+                "intendedOutcome", "A complete and useful project.",
+                "scopePoints", java.util.List.of("Build a working prototype."),
+                "learningTopics", java.util.List.of("Engineering"),
+                "schoolYear", "2026/2027");
+    }
+
+    private Map<String, Object> ideaRequestWithCollaborator(String title, String collaboratorId) {
+        Map<String, Object> request = new LinkedHashMap<>(ideaRequest(title));
+        request.put("collaboratorIds", java.util.List.of(collaboratorId));
+        return request;
+    }
+
+    private Map<String, Object> specificationRequest(String scope) {
+        return Map.of(
+                "objectives", java.util.List.of("Deliver a prototype."),
+                "intendedUsers", java.util.List.of("Students"),
+                "requirements", java.util.List.of("Usable interface"),
+                "deliverables", java.util.List.of("Working demonstrator"),
+                "scope", scope,
+                "dependencies", java.util.List.of("None"));
+    }
+
+    private Map<String, Object> specificationReviewRequest(String decision, String feedback) {
+        return Map.of(
+                "decision", decision,
+                "feedback", feedback,
+                "workSize", 3,
+                "curriculumRelevance", 4,
+                "technicalComplexity", 3,
+                "feasibility", 4,
+                "learningValue", 5,
+                "resourceNeeds", 2,
+                "riskAndDependencies", 2);
     }
 
     private String submitIdea(String title) throws Exception {

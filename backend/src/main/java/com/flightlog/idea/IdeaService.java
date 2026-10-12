@@ -45,16 +45,16 @@ public class IdeaService {
     }
 
     @Transactional
-    @PreAuthorize("hasRole('STUDENT')")
+    @PreAuthorize("hasAnyRole('STUDENT', 'TEACHER')")
     public ApiDtos.IdeaResponse create(AuthenticatedUser caller, JsonNode request) {
         ObjectNode payload = rules.object(request);
         validateIdeaPayload(payload);
-        ObjectNode storedPayload = ownership.prepareCreate(payload, caller.id());
+        ObjectNode storedPayload = ownership.prepareCreate(payload, caller.id(), caller.role());
         StoredRecord record = store.create(IDEA, caller.id().toString(), null, IDEA_DRAFT, storedPayload);
         audit.record(caller, "IDEA_CREATED", IDEA, record.getId());
         ownership.ownerIds(record).stream().filter(ownerId -> !ownerId.equals(caller.id()))
                 .forEach(ownerId -> audit.record(caller, "IDEA_OWNER_ADDED", IDEA, record.getId()));
-        return mapper.response(record, false);
+        return mapper.response(record, false, caller.role());
     }
 
     @Transactional(readOnly = true)
@@ -65,7 +65,7 @@ public class IdeaService {
     }
 
     @Transactional
-    @PreAuthorize("hasRole('STUDENT')")
+    @PreAuthorize("hasAnyRole('STUDENT', 'TEACHER')")
     public ApiDtos.IdeaResponse update(AuthenticatedUser caller, UUID id, JsonNode request) {
         StoredRecord idea = findIdea(id);
         requireOwner(caller, idea);
@@ -76,11 +76,11 @@ public class IdeaService {
         ownership.preserveOwners(idea, payload);
         store.update(idea, WITHDRAWN.equals(idea.getStatus()) ? IDEA_DRAFT : idea.getStatus(), payload);
         audit.record(caller, "IDEA_UPDATED", IDEA, id);
-        return mapper.response(idea, false);
+        return mapper.response(idea, false, caller.role());
     }
 
     @Transactional
-    @PreAuthorize("hasRole('STUDENT')")
+    @PreAuthorize("hasAnyRole('STUDENT', 'TEACHER')")
     public ApiDtos.IdeaResponse submit(AuthenticatedUser caller, UUID id) {
         StoredRecord idea = findIdea(id);
         requireOwner(caller, idea);
@@ -90,11 +90,11 @@ public class IdeaService {
         validateIdeaPayload(payload);
         store.update(idea, IDEA_SUBMITTED, payload);
         audit.record(caller, "IDEA_SUBMITTED", IDEA, id);
-        return mapper.response(idea, false);
+        return mapper.response(idea, false, caller.role());
     }
 
     @Transactional
-    @PreAuthorize("hasRole('STUDENT')")
+    @PreAuthorize("hasAnyRole('STUDENT', 'TEACHER')")
     public ApiDtos.SpecificationResponse saveSpecification(AuthenticatedUser caller, UUID id, JsonNode request) {
         StoredRecord idea = findIdea(id);
         requireOwner(caller, idea);
@@ -126,7 +126,7 @@ public class IdeaService {
     }
 
     @Transactional
-    @PreAuthorize("hasRole('STUDENT')")
+    @PreAuthorize("hasAnyRole('STUDENT', 'TEACHER')")
     public ApiDtos.SpecificationResponse submitSpecification(AuthenticatedUser caller, UUID id) {
         StoredRecord idea = findIdea(id);
         requireOwner(caller, idea);
@@ -146,6 +146,9 @@ public class IdeaService {
     public ApiDtos.ReviewResponse review(
             AuthenticatedUser caller, UUID id, boolean specificationReview, JsonNode request) {
         StoredRecord idea = findIdea(id);
+        if (caller.id().toString().equals(idea.getOwnerId())) {
+            throw new org.springframework.security.access.AccessDeniedException("Authors cannot review their own ideas.");
+        }
         ObjectNode payload = rules.object(request);
         String decision = rules.text(payload, "decision");
         rules.text(payload, "feedback");
@@ -169,7 +172,7 @@ public class IdeaService {
     }
 
     @Transactional
-    @PreAuthorize("hasRole('STUDENT')")
+    @PreAuthorize("hasAnyRole('STUDENT', 'TEACHER')")
     public ApiDtos.IdeaResponse withdraw(AuthenticatedUser caller, UUID id) {
         StoredRecord idea = findIdea(id);
         requireOwner(caller, idea);
@@ -177,7 +180,7 @@ public class IdeaService {
                 SPEC_SUBMITTED, SPEC_NEEDS_REVISION);
         store.update(idea, "WITHDRAWN", store.parse(idea));
         audit.record(caller, "IDEA_WITHDRAWN", IDEA, id);
-        return mapper.response(idea, false);
+        return mapper.response(idea, false, caller.role());
     }
 
     public ApiDtos.IdeaResponse addOwner(AuthenticatedUser caller, UUID id, UUID studentId) {

@@ -5,6 +5,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.flightlog.data.RecordStore;
 import com.flightlog.user.UserAccountRepository;
@@ -76,6 +77,25 @@ class ApplicationPeriodSupervisorTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("OPEN"))
                 .andExpect(jsonPath("$.projectIds.length()").value(3));
+    }
+
+    @Test
+    void acceptedTeacherAuthoredIdeaIsEligibleForAnApplicationPeriod() throws Exception {
+        String teacherId = users.findByUsername("teacher01").orElseThrow().getId().toString();
+        String teacherIdeaId = createAcceptedIdea(teacherId);
+        List<String> catalogue = List.of(projectIds.get(0), teacherIdeaId, projectIds.get(1));
+
+        MvcResult created = mockMvc.perform(post("/api/application-periods")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(period(
+                                "2026/2027", Instant.now().minusSeconds(60).toString(),
+                                Instant.now().plusSeconds(86_400).toString(), catalogue))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.projectIds.length()").value(3))
+                .andReturn();
+        JsonNode response = objectMapper.readTree(created.getResponse().getContentAsString());
+        org.junit.jupiter.api.Assertions.assertTrue(response.path("projectIds").toString().contains(teacherIdeaId));
     }
 
     @Test

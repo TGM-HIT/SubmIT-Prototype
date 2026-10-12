@@ -320,6 +320,9 @@ public final class ApiDtos {
             List<String> learningTopics,
             String schoolYear,
             @JsonInclude(JsonInclude.Include.NON_NULL) String confirmedSupervisorDisplayName,
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "Whether the current author account is a teacher; included only in staff responses.")
+            Boolean teacherIdea,
             SpecificationResponse specification,
             List<ReviewResponse> reviews,
             List<SupervisionPreferenceResponse> supervisionPreferences) {

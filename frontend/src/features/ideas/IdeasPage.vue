@@ -4,7 +4,7 @@
       <div>
         <p class="page-intro">Follow each submission from initial idea through teacher review and full specification. Idea approval permits specification work; it is not acceptance into the student catalogue.</p>
       </div>
-      <button v-if="isStudent" id="new-idea-button" class="button" type="button" @click="startCreate">＋ New idea</button>
+      <button v-if="canAuthor" id="new-idea-button" class="button" type="button" @click="startCreate">＋ New idea</button>
     </div>
 
     <form v-if="editorOpen" class="panel stack" @submit.prevent="saveIdea">
@@ -15,7 +15,7 @@
       </div>
       <div class="field"><label class="label" for="idea-description">Description · up to 5,000 characters</label><textarea id="idea-description" v-model="ideaForm.description" class="textarea" maxlength="5000" required /><span class="metric">{{ ideaForm.description.length }}/5000</span></div>
       <div class="field"><label class="label" for="idea-outcome">Intended outcome · up to 2,000 characters</label><textarea id="idea-outcome" v-model="ideaForm.intendedOutcome" class="textarea" maxlength="2000" required /><span class="metric">{{ ideaForm.intendedOutcome.length }}/2000</span></div>
-      <fieldset v-if="!editingId" class="panel stack collaborator-picker">
+      <fieldset v-if="!editingId && isStudent" class="panel stack collaborator-picker">
         <legend class="form-section-title">Collaborators ({{ createOwners.length + 1 }}/5 owners)</legend>
         <label class="label" for="collaborator-lookup">Find students by display name</label>
         <input id="collaborator-lookup" v-model="studentQuery" class="input" autocomplete="off" placeholder="Search students" />
@@ -61,6 +61,7 @@
           <article v-for="idea in visibleIdeas" :key="idea.id" class="data-row">
             <div class="row-main">
               <h3>{{ idea.title }}</h3>
+              <span v-if="idea.teacherIdea" class="status-badge teacher-idea-label">Teacher idea</span>
               <p>{{ idea.description }}</p>
               <p>School year {{ idea.schoolYear }} <span v-if="canSeeOwner"> · Submitted by {{ idea.ownerDisplayName }} · Owners: {{ (idea.owners ?? []).map(owner => owner.displayName).join(', ') || idea.ownerDisplayName }}</span></p>
               <p v-if="isTeacher && idea.ownSupervisionPreference" class="muted supervision-summary">
@@ -70,10 +71,11 @@
             </div>
             <div class="actions">
               <button :id="`details-button-${idea.id}`" data-review-focus-fallback class="button button-secondary button-small" type="button" @click="openDetails(idea, $event)">Details &amp; history</button>
-              <button v-if="isTeacher && canReview(idea)" :id="`review-button-${idea.id}`" class="button button-small" type="button" @click="startReview(idea, $event)">Review</button>
-              <button v-if="isStudent && editable(idea) && !hasWithdrawnSpecification(idea)" class="button button-secondary button-small" type="button" @click="editIdea(idea)">Edit</button>
-              <button v-if="isStudent && editable(idea) && !hasWithdrawnSpecification(idea)" class="button button-small" type="button" @click="submitIdea(idea, $event)">Submit</button>
-              <button v-if="isStudent && canWithdraw(idea)" class="button button-danger button-small" type="button" @click="withdrawIdea(idea)">Withdraw</button>
+              <button v-if="isTeacher && canReview(idea) && !isCreator(idea)" :id="`review-button-${idea.id}`" class="button button-small" type="button" @click="startReview(idea, $event)">Review</button>
+              <span v-if="isTeacher && canReview(idea) && isCreator(idea)" class="muted">You cannot review your own idea.</span>
+              <button v-if="isAuthor(idea) && editable(idea) && !hasWithdrawnSpecification(idea)" class="button button-secondary button-small" type="button" @click="editIdea(idea)">Edit</button>
+              <button v-if="isAuthor(idea) && editable(idea) && !hasWithdrawnSpecification(idea)" class="button button-small" type="button" @click="submitIdea(idea, $event)">Submit</button>
+              <button v-if="isAuthor(idea) && canWithdraw(idea)" class="button button-danger button-small" type="button" @click="withdrawIdea(idea)">Withdraw</button>
             </div>
           </article>
         </div>
@@ -84,13 +86,13 @@
 
     <ModalDialog v-if="detailsOpen && selectedIdea" title="Idea details &amp; history" :return-focus="detailsReturnFocus" @close="closeDetails">
       <section class="stack">
-      <div class="page-heading"><div><h2 class="section-title">{{ selectedIdea.title }} · history</h2><p class="muted">Submission and decisions remain visible as the project changes stage.</p></div><button id="close-details-button" class="button button-secondary button-small" @click="closeDetails">Close details</button></div>
+      <div class="page-heading"><div><h2 class="section-title">{{ selectedIdea.title }} · history</h2><span v-if="selectedIdea.teacherIdea" class="status-badge teacher-idea-label">Teacher idea</span><p class="muted">Submission and decisions remain visible as the project changes stage.</p></div><button id="close-details-button" class="button button-secondary button-small" @click="closeDetails">Close details</button></div>
       <section class="owner-section" aria-label="Idea owners">
         <h3 class="form-section-title">Owners ({{ selectedIdea.owners?.length ?? 1 }}/5)</h3>
         <ul class="owner-list"><li v-for="owner in selectedIdea.owners ?? fallbackOwners(selectedIdea)" :key="owner.id">{{ owner.displayName }}<span v-if="owner.creator"> · Creator</span>
           <button v-if="isCreator(selectedIdea) && !owner.creator" class="button button-danger button-small" type="button" :aria-label="`Remove ${owner.displayName}`" @click="requestOwnerConfirmation('remove', selectedIdea, owner.id, $event)">Remove</button>
         </li></ul>
-        <template v-if="isCreator(selectedIdea)">
+        <template v-if="isCreator(selectedIdea) && isStudent">
           <label class="label" for="details-collaborator-lookup">Add a student</label>
           <input id="details-collaborator-lookup" v-model="studentQuery" class="input" autocomplete="off" placeholder="Search by display name" />
           <p v-if="studentLookupLoading" class="muted" role="status">Searching students…</p>
@@ -110,8 +112,9 @@
       <p v-else class="muted">No teacher decisions have been recorded.</p>
       <h3 v-if="selectedIdea.supervisionPreferences?.length" class="form-section-title">Recorded supervision preferences</h3>
       <div v-for="entry in selectedIdea.supervisionPreferences ?? []" :key="entry.id" class="choice-item"><span>{{ entry.teacherDisplayName }} · {{ preferenceLabel(entry.preference) }}</span><span class="muted">{{ entry.note }}</span></div>
-      <div v-if="isStudent && canSpecify(selectedIdea)" class="actions"><button id="develop-specification" class="button" @click="startSpecification">{{ selectedIdea.status === 'WITHDRAWN' ? 'Edit full specification' : 'Develop full specification' }}</button><button v-if="selectedIdea.status === 'IDEA_APPROVED_FOR_SPECIFICATION'" id="submit-specification" class="button button-secondary" @click="submitSpecification">Submit specification for acceptance review</button></div>
-      <div v-if="isTeacher && canReview(selectedIdea)" class="actions"><button id="review-from-details" class="button" type="button" @click="openReview($event)">Review {{ selectedIdea.status === 'SPECIFICATION_SUBMITTED' ? 'specification' : 'idea' }}</button></div>
+      <div v-if="isAuthor(selectedIdea) && canSpecify(selectedIdea)" class="actions"><button id="develop-specification" class="button" @click="startSpecification">{{ selectedIdea.status === 'WITHDRAWN' ? 'Edit full specification' : 'Develop full specification' }}</button><button v-if="selectedIdea.status === 'IDEA_APPROVED_FOR_SPECIFICATION'" id="submit-specification" class="button button-secondary" @click="submitSpecification">Submit specification for acceptance review</button></div>
+      <div v-if="isTeacher && canReview(selectedIdea) && !isCreator(selectedIdea)" class="actions"><button id="review-from-details" class="button" type="button" @click="openReview($event)">Review {{ selectedIdea.status === 'SPECIFICATION_SUBMITTED' ? 'specification' : 'idea' }}</button></div>
+      <p v-if="isTeacher && canReview(selectedIdea) && isCreator(selectedIdea)" class="muted" role="note">You cannot review your own idea or specification.</p>
       <form v-if="isTeacher && !['IDEA_DRAFT','WITHDRAWN','DECLINED'].includes(selectedIdea.status ?? '')" class="panel stack" @submit.prevent="savePreference">
         <h3 class="form-section-title">Your supervision preference</h3>
         <div class="grid grid-2"><div class="field"><label class="label" for="preference">Preference</label><select id="preference" v-model="preference" class="select"><option value="WANTS_TO_SUPERVISE">Wants to supervise</option><option value="WILLING_TO_SUPERVISE">Willing to supervise</option><option value="NOT_WILLING_TO_SUPERVISE">Not willing</option><option value="NOT_AVAILABLE">Not available</option></select></div><div class="field"><label class="label" for="preference-note">Optional note</label><input id="preference-note" v-model="preferenceNote" class="input" maxlength="2000" /></div></div><button class="button button-secondary" :disabled="task.loading.value">Save preference</button>
@@ -180,6 +183,7 @@ const task = useTask()
 const isStudent = computed(() => auth.user?.role === 'STUDENT')
 const isTeacher = computed(() => auth.user?.role === 'TEACHER')
 const isAdmin = computed(() => auth.user?.role === 'ADMIN')
+const canAuthor = computed(() => isStudent.value || isTeacher.value)
 const canSeeOwner = computed(() => !isStudent.value)
 const page = ref<Page<IdeaOverview>>({ content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 })
 const schoolYears = ref<string[]>([])
@@ -259,6 +263,9 @@ function isOwner(idea: Idea): boolean {
 }
 function isCreator(idea: Idea): boolean {
   return Boolean(auth.user?.id && idea.creatorId === auth.user.id)
+}
+function isAuthor(idea: Idea): boolean {
+  return isStudent.value ? isOwner(idea) : isTeacher.value && isCreator(idea)
 }
 async function searchStudents(): Promise<void> {
   const requestId = ++studentLookupRequest
@@ -495,8 +502,20 @@ function listFrom(text: string): string[] {
 }
 async function saveIdea(): Promise<void> {
   const input: IdeaInput = { ...ideaForm, scopePoints: listFrom(scopeText.value), learningTopics: listFrom(learningText.value), collaboratorIds: editingId.value ? [] : createOwners.value.map(owner => owner.id ?? '') }
-  const result = await task.run(() => editingId.value ? ideasApi.update(editingId.value, input) : ideasApi.create(input), 'Idea draft saved.')
-  if (result) { editorOpen.value = false; await load(page.value.page) }
+  const wasEditing = Boolean(editingId.value)
+  const result = await task.run(() => wasEditing ? ideasApi.update(editingId.value, input) : ideasApi.create(input), 'Idea draft saved.')
+  if (!result) return
+  editorOpen.value = false
+  if (wasEditing) {
+    await load(page.value.page)
+    return
+  }
+  await load(0)
+  if (!result.id || page.value.content.some((idea) => idea.id === result.id)) return
+  for (let index = 1; index < page.value.totalPages; index += 1) {
+    await load(index)
+    if (page.value.content.some((idea) => idea.id === result.id) || task.error.value) return
+  }
 }
 async function submitIdea(idea: Idea, event?: MouseEvent): Promise<void> {
   void event

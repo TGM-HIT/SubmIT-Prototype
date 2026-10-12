@@ -50,9 +50,15 @@ class AllocationSupervisorIndependenceTest {
         List<String> supervisorFreeProjectIds = new ArrayList<>();
         List<String> supervisedProjectIds = new ArrayList<>();
         for (int index = 0; index < 3; index++) {
-            supervisorFreeProjectIds.add(createAcceptedProject(index, "Supervisor-free"));
-            supervisedProjectIds.add(createAcceptedProject(index, "Supervised"));
+            String author = index == 0 ? "teacher01" : "student01";
+            supervisorFreeProjectIds.add(createAcceptedProject(index, "Supervisor-free", author));
+            supervisedProjectIds.add(createAcceptedProject(index, "Supervised", "student01"));
         }
+        StoredRecord teacherIdea = store.repository().findById(UUID.fromString(supervisorFreeProjectIds.get(0)))
+                .orElseThrow();
+        assertEquals(users.findByUsername("teacher01").orElseThrow().getId().toString(), teacherIdea.getOwnerId());
+        assertEquals(0, store.repository().findByTypeAndParentId(
+                "confirmed_supervisor", teacherIdea.getId().toString()).size());
 
         StoredRecord withoutSupervisors = createPeriod(supervisorFreeProjectIds);
         StoredRecord withSupervisors = createPeriod(supervisedProjectIds);
@@ -108,9 +114,9 @@ class AllocationSupervisorIndependenceTest {
                 .andExpect(jsonPath("$.result.assignments.length()").value(9));
     }
 
-    private String createAcceptedProject(int index, String setName) {
+    private String createAcceptedProject(int index, String setName, String author) {
         StoredRecord idea = store.create("idea",
-                users.findByUsername("student01").orElseThrow().getId().toString(),
+                users.findByUsername(author).orElseThrow().getId().toString(),
                 null, "ACCEPTED_FOR_APPLICATIONS",
                 store.object().put("title", setName + " allocation project " + index)
                         .put("schoolYear", "2026/2027"));

@@ -12,7 +12,7 @@ Provide authenticated views for:
 
 - A dashboard showing the current school year, application period dates and status, and the user's relevant next actions.
 - Paginated project ideas with filters for school year and lifecycle status.
-- Student views for creating and editing idea drafts, tracking review feedback, developing full specifications after approval, submitting revisions, and viewing decision history.
+- Student and teacher-author views for creating and editing idea drafts, tracking review feedback, developing full specifications after approval, submitting revisions, and viewing decision history. Teacher-authored ideas are single-owner.
 - Teacher review queues for ideas and full specifications, with submission details, review history, decision actions, written feedback, and structured ratings.
 - Teacher supervision-preference controls for each project, including wants to supervise, willing to supervise, not willing, and not available states with an optional note.
 - Accepted project catalogue views with project details, supervisor-confirmation status, and project review information visible to authorized users.
@@ -37,6 +37,7 @@ Registration collects a required account name distinct from the username. Signed
 
 - `ADMIN` sees user and role management, application-period configuration, allocation-run, and finalization controls.
 - `TEACHER` sees review queues, rating and decision controls, supervision preferences, authorized application and allocation results, formal-application review, student-grading, project-metric, and final-grading controls.
+- `TEACHER` can create and manage their own ideas and specifications under the student author lifecycle, but cannot review or decide their own submissions; explain the unavailable self-review action. Teacher-authored ideas are labelled "Teacher idea" for teachers and administrators.
 - `STUDENT` sees controls to manage ideas they own (including ideas created by a collaborator), full specifications, preference applications, and (after allocation) their group's formal application and project artefacts. Student identity, group membership, and grades are never exposed through the public archive.
 - Hide or disable actions that the current user's role or resource state does not permit. The backend remains authoritative and may reject stale or unauthorized actions.
 
@@ -46,9 +47,9 @@ Every list supports pagination and clearly exposes loading, empty, error, and re
 
 The UI must make the following behavior clear:
 
-- A student starts with a concise idea submission containing a title, description, intended outcome, initial scope points, learning topics, and school year.
-- Submitting an idea sends it to a teacher for review and locks student editing until the teacher requests revision or approves it for full specification.
-- Approval allows the student to submit full specifications but does not mean the project is accepted into the application catalogue.
+- A student or teacher author starts with a concise idea submission containing a title, description, intended outcome, initial scope points, learning topics, and school year.
+- Submitting an idea sends it to teacher review and locks author editing until the teacher requests revision or approves it for full specification.
+- Approval allows the author to submit full specifications but does not mean the project is accepted into the application catalogue.
 - A full specification includes objectives, intended users, features or requirements, deliverables, proposed scope, and known resources or dependencies.
 - Teacher decisions and comments remain visible as review history. Clearly distinguish approval for full specification, acceptance for applications, revision requests, and declines.
 - In Ideas & reviews, show every idea owner by current display name and identify the creator; students may search the display-name-only student lookup, choose collaborators at idea creation, and creators may add/remove collaborators in details while collaborators may leave. Confirm destructive owner changes, refresh owner/student lists, return focus to the lookup after add/remove and to the Ideas primary action after leaving, and close a departed collaborator’s detail view. Keep the UI readable on mobile with long owner names wrapping. Identify review authors, and teachers with recorded supervision preferences by their current account display names rather than IDs; administrators also see eligible teachers by display name in Confirm supervisor. Keep IDs for internal matching and preference status, review context, and notes visible.

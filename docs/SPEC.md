@@ -9,10 +9,10 @@ The application helps students propose, develop, and join group projects for the
 ## 2. People and Roles
 
 - A `STUDENT` can create and own project ideas, collaborate on ideas owned by other students, develop an approved idea into full specifications, and apply to accepted projects.
-- A `TEACHER` can review ideas and full specifications, provide ratings and feedback, make approval and acceptance decisions, and record their supervision interest.
+- A `TEACHER` can create and own single-owner ideas, develop approved ideas into full specifications, review other users' ideas and full specifications, provide ratings and feedback, make approval and acceptance decisions, and record their supervision interest. Teachers cannot review their own ideas.
 - An `ADMIN` can manage accounts, school-year application periods, supervisor assignments, rubric versions, and project allocation runs. Administrators do not replace teacher decisions about project quality or acceptance.
 
-Each account has one role. Users must be authenticated to access application data. Students who own an idea can edit its idea or specification only while it is a draft or has been returned for revision; existing withdrawn-idea rules also apply. Teachers can review project submissions.
+Each account has one role. Users must be authenticated to access application data. An idea's student or teacher author can edit its idea or specification only while it is a draft or has been returned for revision; existing withdrawn-idea rules also apply. Teachers can review other users' project submissions.
 
 Each account has a required display name distinct from its unique login username. Registration requires a nonblank name; leading and trailing whitespace is trimmed, and the trimmed value must be at most 120 characters. A signed-in user may change their own name, and an administrator may change any account's name without changing its username, password, or role. The authenticated workspace and administrator account list show account names while retaining usernames for identification.
 
@@ -20,13 +20,13 @@ Each account has a required display name distinct from its unique login username
 
 An idea follows these stages:
 
-1. **Idea draft:** A student creates a concise proposal describing the project and its initial specifications.
-2. **Idea submitted:** The proposal is sent for teacher review and can no longer be edited by the student until it is returned or approved.
-3. **Needs revision:** A teacher returns the idea with feedback. The student may revise and resubmit it.
-4. **Idea approved:** A teacher authorizes the student to develop full project specifications. This is permission to elaborate the idea, not yet acceptance into the project application round.
-5. **Specification submitted:** The student submits the developed specifications for teacher review.
+1. **Idea draft:** A student or teacher creates a concise proposal describing the project and its initial specifications.
+2. **Idea submitted:** The proposal is sent for teacher review and can no longer be edited by its author until it is returned or approved.
+3. **Needs revision:** A teacher returns the idea with feedback. Its author may revise and resubmit it.
+4. **Idea approved:** A teacher authorizes the author to develop full project specifications. This is permission to elaborate the idea, not yet acceptance into the project application round.
+5. **Specification submitted:** The author submits the developed specifications for review by another teacher.
 6. **Accepted for applications:** A teacher accepts the fully specified project into the school-year project catalogue. Only accepted projects can appear in student applications.
-7. **Not proceeding / withdrawn:** Teachers may decline an idea or full specification with an explanation; a student may withdraw their own proposal before project allocation.
+7. **Not proceeding / withdrawn:** Teachers may decline an idea or full specification with an explanation; its author may withdraw their own proposal before project allocation.
 8. **Applications closed / allocation running:** At the configured deadline, applications close automatically and the system starts the student-to-project allocation.
 9. **Groups allocated / finalized:** The allocation run completes and an administrator reviews and finalizes the result.
 10. **Formal project application:** Once a group is formed, its students submit the official project application for teacher review. The form records the project topic, each student's individual topic and planned result, the initial situation to change, scientific investigation concerns, the project objective, dated milestones, and an optional cooperation partner.

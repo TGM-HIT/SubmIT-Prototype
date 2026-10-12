@@ -23,6 +23,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class IdeaOwnership {
     private static final String IDEA = "idea";
     private static final String OWNER_IDS = "ownerIds";
+    private static final String COLLABORATOR_IDS = "collaboratorIds";
     private static final int MAX_OWNERS = 5;
     private final RecordStore store;
     private final AuditService audit;
@@ -36,10 +37,14 @@ public class IdeaOwnership {
         this.users = users;
     }
 
-    ObjectNode prepareCreate(ObjectNode request, UUID creator) {
+    ObjectNode prepareCreate(ObjectNode request, UUID creator, Role creatorRole) {
+        if (creatorRole == Role.TEACHER && request.path(COLLABORATOR_IDS).isArray()
+                && !request.path(COLLABORATOR_IDS).isEmpty()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Teacher ideas have one owner and cannot have collaborators.");
+        }
         List<UUID> collaborators = requestedCollaborators(request, creator);
         ObjectNode payload = request.deepCopy();
-        payload.remove("collaboratorIds");
+        payload.remove(COLLABORATOR_IDS);
         List<UUID> owners = new ArrayList<>();
         owners.add(creator);
         owners.addAll(collaborators);
@@ -48,7 +53,7 @@ public class IdeaOwnership {
     }
 
     void preserveOwners(StoredRecord idea, ObjectNode payload) {
-        payload.remove("collaboratorIds");
+        payload.remove(COLLABORATOR_IDS);
         payload.set(OWNER_IDS, store.value(ownerIds(idea).stream().map(UUID::toString).toList()));
     }
 
@@ -120,9 +125,9 @@ public class IdeaOwnership {
     }
 
     private List<UUID> requestedCollaborators(ObjectNode request, UUID creator) {
-        JsonNode requested = request.path("collaboratorIds");
+        JsonNode requested = request.path(COLLABORATOR_IDS);
         if (!requested.isMissingNode() && !requested.isNull() && !requested.isArray()) {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "collaboratorIds must be a list of student IDs.");
+            throw new ApiException(HttpStatus.BAD_REQUEST, COLLABORATOR_IDS + " must be a list of student IDs.");
         }
         List<UUID> ids = new ArrayList<>();
         if (requested.isArray()) {

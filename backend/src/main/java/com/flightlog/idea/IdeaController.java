@@ -35,7 +35,7 @@ public class IdeaController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Create an idea draft for the authenticated student.")
+    @Operation(summary = "Create an idea draft for the authenticated student or teacher.")
     public IdeaResponse create(@AuthenticationPrincipal AuthenticatedUser caller,
             @Valid @RequestBody IdeaRequest request) {
         return ideaService.create(caller, objectMapper.valueToTree(request));
@@ -47,7 +47,7 @@ public class IdeaController {
     }
 
     @PutMapping("/{id}")
-    @Operation(summary = "Update an idea draft, returned idea, or withdrawn idea owned by the student.")
+    @Operation(summary = "Update an idea draft, returned idea, or withdrawn idea owned by the authenticated author.")
     public IdeaResponse update(@AuthenticationPrincipal AuthenticatedUser caller, @PathVariable UUID id,
             @Valid @RequestBody IdeaRequest request) {
         return ideaService.update(caller, id, objectMapper.valueToTree(request));

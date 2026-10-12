@@ -27,7 +27,7 @@ class IdeaResponseMapper {
     private static final String SUPERVISION = "supervision_preference";
     private static final String OWNER_IDS = "ownerIds";
 
-    private record ResponseContext(Map<UUID, String> names, String supervisorDisplayName) {
+    private record ResponseContext(Map<UUID, String> names, String supervisorDisplayName, Role viewerRole) {
     }
 
     private final RecordStore store;
@@ -51,12 +51,13 @@ class IdeaResponseMapper {
         reviews.stream().map(child -> UUID.fromString(child.getOwnerId())).forEach(userIds::add);
         preferences.stream().map(child -> UUID.fromString(child.getOwnerId())).forEach(userIds::add);
         return response(record, includeHistory, reviews, preferences,
-                new ResponseContext(displayNames(userIds), supervisorDisplayName(record, viewerRole)));
+                new ResponseContext(displayNames(userIds), supervisorDisplayName(record, viewerRole), viewerRole));
     }
 
     private IdeaResponse response(StoredRecord record, boolean includeHistory, List<StoredRecord> reviewRecords,
             List<StoredRecord> preferenceRecords, ResponseContext context) {
         Map<UUID, String> names = context.names();
+        Role viewerRole = context.viewerRole();
         ObjectNode payload = store.parse(record);
         SpecificationResponse specification = null;
         List<ReviewResponse> reviews = List.of();
@@ -74,11 +75,15 @@ class IdeaResponseMapper {
         UUID ownerId = UUID.fromString(record.getOwnerId());
         List<IdeaOwnerResponse> owners = ownerIds(record).stream()
                 .map(id -> new IdeaOwnerResponse(id, names.get(id), id.equals(ownerId))).toList();
+        Boolean teacherIdea = null;
+        if (viewerRole != null && viewerRole != Role.STUDENT) {
+            teacherIdea = users.findById(ownerId).map(UserAccount::getRole).orElse(null) == Role.TEACHER;
+        }
         return new IdeaResponse(record.getId(), ownerId, ownerId, owners, names.get(ownerId), record.getStatus(),
                 payload.path("title").asText(), payload.path("description").asText(),
                 payload.path("intendedOutcome").asText(), strings(payload, "scopePoints"),
                 strings(payload, "learningTopics"), payload.path("schoolYear").asText(),
-                context.supervisorDisplayName(), specification, reviews, preferences);
+                context.supervisorDisplayName(), teacherIdea, specification, reviews, preferences);
     }
 
     List<IdeaResponse> responses(List<StoredRecord> records, Role viewerRole) {
@@ -87,7 +92,7 @@ class IdeaResponseMapper {
         Map<UUID, String> names = displayNames(ownerIds);
         return records.stream()
                 .map(record -> response(record, false, List.of(), List.of(),
-                        new ResponseContext(names, supervisorDisplayName(record, viewerRole))))
+                        new ResponseContext(names, supervisorDisplayName(record, viewerRole), viewerRole)))
                 .toList();
     }
 

@@ -30,7 +30,7 @@ export interface paths {
             cookie?: never;
         };
         get: operations["get"];
-        /** Update an idea draft, returned idea, or withdrawn idea owned by the student. */
+        /** Update an idea draft, returned idea, or withdrawn idea owned by the authenticated author. */
         put: operations["update"];
         post?: never;
         delete?: never;
@@ -271,7 +271,7 @@ export interface paths {
         };
         get: operations["list_1"];
         put?: never;
-        /** Create an idea draft for the authenticated student. */
+        /** Create an idea draft for the authenticated student or teacher. */
         post: operations["create_1"];
         delete?: never;
         options?: never;
@@ -1013,6 +1013,8 @@ export interface components {
             learningTopics?: string[];
             schoolYear?: string;
             confirmedSupervisorDisplayName?: string;
+            /** @description Whether the current author account is a teacher; included only in staff responses. */
+            teacherIdea?: boolean;
             specification?: components["schemas"]["SpecificationResponse"];
             reviews?: components["schemas"]["ReviewResponse"][];
             supervisionPreferences?: components["schemas"]["SupervisionPreferenceResponse"][];
