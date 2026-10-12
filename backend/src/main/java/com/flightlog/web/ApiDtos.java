@@ -222,7 +222,11 @@ public final class ApiDtos {
     }
 
     public record ApplicationPeriodRequest(
-            @NotBlank @Size(max = 100) @Schema(description = "Administrator-set period label; trimmed, required, and at most 100 characters.") String label,
+            @NotBlank @Size(min = 1, max = 100)
+            @Schema(minLength = 1, maxLength = 100,
+                    description = "Required administrator-set period label; trimmed, non-blank after trimming, "
+                            + "and at most 100 characters. Blank or whitespace-only values are rejected.")
+            String label,
             @NotBlank @Size(max = 20) String schoolYear,
             @NotNull Instant opensAt,
             @NotNull Instant closesAt,
@@ -331,7 +335,10 @@ public final class ApiDtos {
 
     public record ApplicationPeriodResponse(
             UUID id,
-            @NotNull @Schema(description = "Period label; legacy records without a label are presented using their school year.")
+            @NotNull
+            @Schema(maxLength = 100,
+                    description = "Period label; legacy records without a label are presented using their "
+                            + "school year. At most 100 characters.")
             String label,
             String schoolYear,
             Instant opensAt,
