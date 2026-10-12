@@ -59,6 +59,7 @@ async function openForm() {
 }
 
 async function selectCompleteForm(page: ReturnType<typeof mountPage>) {
+  await page.get('#period-label').setValue('  Browser check  ')
   await page.get('#period-year').setValue('2026/2027')
   await page.get('#opens').setValue('2026-10-10T09:00')
   await page.get('#closes').setValue('2026-10-20T17:00')
@@ -120,10 +121,20 @@ describe('application period configuration', () => {
     await page.get('#period-year').setValue('')
 
     expect(page.get('button[type="submit"]').attributes('disabled')).toBeDefined()
+    expect(page.text()).toContain('Enter a period label.')
     expect(page.text()).toContain('Choose a school year.')
     expect(page.text()).toContain('Enter a valid opening date and time.')
     expect(page.text()).toContain('Enter a valid closing date and time.')
     expect(page.text()).toContain('Select at least three accepted projects.')
+  })
+
+  it('requires a non-blank label before enabling creation', async () => {
+    const page = await openForm()
+    await page.get('#period-label').setValue('   ')
+    await selectCompleteForm(page)
+    await page.get('#period-label').setValue('   ')
+    expect(page.get('button[type="submit"]').attributes('disabled')).toBeDefined()
+    expect(page.text()).toContain('Enter a period label.')
   })
 
   it('explains when the closing date is not later than the opening date', async () => {
@@ -148,6 +159,7 @@ describe('application period configuration', () => {
     await flushPromises()
 
     expect(api.createPeriod).toHaveBeenCalledWith({
+      label: 'Browser check',
       schoolYear: '2026/2027',
       opensAt: new Date('2026-10-10T09:00').toISOString(),
       closesAt: new Date('2026-10-20T17:00').toISOString(),
@@ -182,6 +194,29 @@ describe('application period configuration', () => {
     expect(page.text()).toContain('Remove projects that are not accepted for the selected school year.')
   })
 
+  it('shows the label and school year in period rows, falling back for legacy responses', async () => {
+    api.listPeriods.mockResolvedValue({ content: [
+      { id: 'labelled', label: 'Autumn intake', schoolYear: '2026/2027', status: 'CLOSED', projectIds: [] },
+      { id: 'legacy', schoolYear: '2025/2026', status: 'CLOSED', projectIds: [] },
+    ], page: 0, size: 20, totalElements: 2, totalPages: 1 })
+    const page = mountPage()
+    await flushPromises()
+    expect(page.text()).toContain('Autumn intake')
+    expect(page.text()).toContain('School year 2026/2027')
+    expect(page.text()).toContain('2025/2026')
+  })
+
+  it('shows period labels and school-year secondary text for a student', async () => {
+    api.role = 'STUDENT'
+    api.listPeriods.mockResolvedValue({ content: [
+      { id: 'student-period', label: 'Waiting for result', schoolYear: '2028/2029', status: 'CLOSED', projectIds: [] },
+    ], page: 0, size: 20, totalElements: 1, totalPages: 1 })
+    const page = mountPage()
+    await flushPromises()
+    expect(page.text()).toContain('Waiting for result')
+    expect(page.text()).toContain('School year 2028/2029')
+  })
+
   it('renders the native school-year selector with shared styling and binds its selection', async () => {
     const page = await openForm()
     const selector = page.get<HTMLSelectElement>('#period-year')
@@ -203,8 +238,8 @@ describe('application period configuration', () => {
     const year = page.get('#period-year')
     const controls = year.element.parentElement?.parentElement
 
-    expect(controls?.classList.contains('grid-3')).toBe(true)
-    expect(controls?.querySelectorAll('.field')).toHaveLength(3)
+    expect(controls?.classList.contains('grid-2')).toBe(true)
+    expect(controls?.querySelectorAll('.field')).toHaveLength(4)
     expect(year.classes()).toContain('select')
     expect(controls?.querySelector('#opens')?.classList.contains('input')).toBe(true)
     expect(controls?.querySelector('#closes')?.classList.contains('input')).toBe(true)

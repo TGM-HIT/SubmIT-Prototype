@@ -17,6 +17,7 @@ public class ApplicationPeriodService {
     private static final String APPLICATION = "student_application";
     private static final String APPLICATION_REVISION = "student_application_revision";
     private static final String PROJECT_IDS = "projectIds";
+    private static final String LABEL = "label";
     private static final String SCHOOL_YEAR = "schoolYear";
     private static final String OPENS_AT = "opensAt";
     private static final String CLOSES_AT = "closesAt";
@@ -205,6 +206,12 @@ public class ApplicationPeriodService {
                     "Request body must be a JSON object.");
         }
         var payload = (ObjectNode) request.deepCopy();
+        var label = text(payload, LABEL).trim();
+        if (label.isBlank() || label.length() > 100) {
+            throw new ApiException(
+                    org.springframework.http.HttpStatus.BAD_REQUEST,
+                    "label must contain 1 to 100 non-blank characters.");
+        }
         var schoolYear = text(payload, SCHOOL_YEAR);
         var openingAt = instant(payload, OPENS_AT);
         var closingAt = instant(payload, CLOSES_AT);
@@ -213,6 +220,7 @@ public class ApplicationPeriodService {
                     org.springframework.http.HttpStatus.BAD_REQUEST,
                     CLOSES_AT + " must be later than " + OPENS_AT + ".");
         }
+        payload.put(LABEL, label);
         payload.put(SCHOOL_YEAR, schoolYear);
         payload.put(OPENS_AT, openingAt.toString());
         payload.put(CLOSES_AT, closingAt.toString());

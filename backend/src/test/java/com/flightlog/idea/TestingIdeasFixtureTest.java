@@ -54,7 +54,7 @@ class TestingIdeasFixtureTest {
     private UserAccountRepository users;
 
     @Test
-    void multiGroupPreviewHasFixedGroupsPreliminaryAndFinalStatesAndIsIdempotent() {
+    void multiGroupPreviewHasFixedGroupsPreliminaryAndFinalStatesAndIsIdempotent() throws Exception {
         UUID fixtureMarker = UUID.nameUUIDFromBytes(
                 "testing-allocation-preview:period".getBytes(StandardCharsets.UTF_8));
         var scenario = records.findByTypeAndParentId("testing_multi_group_allocation_preview",
@@ -67,10 +67,23 @@ class TestingIdeasFixtureTest {
         var preliminaryRun = records.findById(UUID.fromString(fixture.path("preliminaryRunId").asText())).orElseThrow();
         var finalRun = records.findById(UUID.fromString(fixture.path("finalRunId").asText())).orElseThrow();
         assertEquals("2026/2027", fixture.path("schoolYear").asText());
+        assertEquals("2026/2027", store.parse(preliminaryPeriod).path("schoolYear").asText());
+        assertEquals("2026/2027", store.parse(finalPeriod).path("schoolYear").asText());
+        assertEquals("Multi-group preliminary", store.parse(preliminaryPeriod).path("label").asText());
+        assertEquals("Multi-group finalized", store.parse(finalPeriod).path("label").asText());
         assertEquals("ALLOCATED", preliminaryPeriod.getStatus());
         assertEquals("COMPLETED", preliminaryRun.getStatus());
         assertEquals("FINALIZED", finalPeriod.getStatus());
         assertEquals("FINALIZED", finalRun.getStatus());
+        for (String username : List.of("student06", "student09", "student12")) {
+            JsonNode visiblePeriods = objectMapper.readTree(mockMvc.perform(get("/api/application-periods")
+                            .header("Authorization", "Bearer " + login(username)))
+                    .andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).path("content");
+            assertTrue(java.util.stream.StreamSupport.stream(visiblePeriods.spliterator(), false)
+                    .anyMatch(period -> "Multi-group preliminary".equals(period.path("label").asText())));
+            assertTrue(java.util.stream.StreamSupport.stream(visiblePeriods.spliterator(), false)
+                    .anyMatch(period -> "Multi-group finalized".equals(period.path("label").asText())));
+        }
         assertEquals(7, records.findByTypeAndParentId("student_application", preliminaryPeriodId).size());
         assertEquals(7, records.findByTypeAndParentId("student_application", finalPeriodId).size());
 
@@ -105,6 +118,8 @@ class TestingIdeasFixtureTest {
         String finalizedSnapshot = finalRun.getPayload();
         long ideaCount = records.findByType("idea", org.springframework.data.domain.PageRequest.of(0, 100))
                 .getTotalElements();
+        long periodCount = records.findByType("application_period", org.springframework.data.domain.PageRequest.of(0, 100))
+                .getTotalElements();
         String originalPreviewPeriodId = store.parse(records.findByTypeAndParentId(
                 "testing_idea_fixture", fixtureMarker.toString()).get(0)).path("periodId").asText();
         var originalPreviewPeriod = records.findById(UUID.fromString(originalPreviewPeriodId)).orElseThrow();
@@ -124,6 +139,8 @@ class TestingIdeasFixtureTest {
                 .count());
         assertEquals(ideaCount, records.findByType("idea", org.springframework.data.domain.PageRequest.of(0, 100))
                 .getTotalElements());
+        assertEquals(periodCount, records.findByType("application_period",
+                org.springframework.data.domain.PageRequest.of(0, 100)).getTotalElements());
         assertEquals(preliminarySnapshot, records.findById(preliminaryRun.getId()).orElseThrow().getPayload());
         assertEquals(finalizedSnapshot, records.findById(finalRun.getId()).orElseThrow().getPayload());
         assertEquals("ALLOCATED", records.findById(originalPreviewPeriod.getId()).orElseThrow().getStatus());
@@ -151,6 +168,8 @@ class TestingIdeasFixtureTest {
         String periodId = store.parse(fixture).path("periodId").asText();
         var period = records.findById(UUID.fromString(periodId)).orElseThrow();
         assertEquals("ALLOCATED", period.getStatus());
+        assertEquals("Allocation preview", store.parse(period).path("label").asText());
+        assertEquals("2026/2027", store.parse(period).path("schoolYear").asText());
 
         List<com.flightlog.data.StoredRecord> applications =
                 records.findByTypeAndParentId("student_application", periodId);
@@ -189,6 +208,8 @@ class TestingIdeasFixtureTest {
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).path("content");
         JsonNode unassignedPeriod = findPeriod(unassignedPeriods);
         assertEquals("NOT_ASSIGNED_PRELIMINARY", unassignedPeriod.path("studentAssignment").path("state").asText());
+        assertEquals("Unassigned student", unassignedPeriod.path("label").asText());
+        assertEquals("2027/2028", unassignedPeriod.path("schoolYear").asText());
 
         String waitingToken = login("student05");
         JsonNode waitingPeriods = objectMapper.readTree(mockMvc.perform(get("/api/application-periods")
@@ -196,6 +217,8 @@ class TestingIdeasFixtureTest {
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).path("content");
         JsonNode waitingPeriod = findPeriod(waitingPeriods);
         assertEquals("NO_RESULT", waitingPeriod.path("studentAssignment").path("state").asText());
+        assertEquals("Waiting for result", waitingPeriod.path("label").asText());
+        assertEquals("2028/2029", waitingPeriod.path("schoolYear").asText());
     }
 
     private JsonNode findPeriod(JsonNode periods) {

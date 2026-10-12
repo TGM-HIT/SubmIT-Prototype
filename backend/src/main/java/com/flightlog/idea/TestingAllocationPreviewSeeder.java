@@ -60,6 +60,7 @@ public class TestingAllocationPreviewSeeder {
         Instant openedAt = Instant.now().minusSeconds(OPENING_LEAD_SECONDS);
         Instant closingAt = Instant.now().plusSeconds(ONE_DAY_SECONDS);
         ObjectNode periodRequest = store.object()
+                .put("label", "Allocation preview")
                 .put(SCHOOL_YEAR_FIELD, SCHOOL_YEAR)
                 .put("opensAt", openedAt.toString())
                 .put(CLOSES_AT_FIELD, closingAt.toString());
@@ -106,10 +107,13 @@ public class TestingAllocationPreviewSeeder {
         List<UserAccount> secondGroup = usernames("student09", "student10", "student11");
         UserAccount unassigned = users.findByUsername("student12").orElseThrow();
 
-        StoredRecord preliminaryPeriod = seedMultiGroupPeriod(admin, projectIds, firstGroup, secondGroup, unassigned);
+        List<UserAccount> groupedStudents = java.util.stream.Stream.concat(firstGroup.stream(), secondGroup.stream()).toList();
+        StoredRecord preliminaryPeriod = seedMultiGroupPeriod(admin, projectIds, groupedStudents, unassigned,
+                "Multi-group preliminary");
         StoredRecord preliminaryRun = completeDueRun(preliminaryPeriod);
 
-        StoredRecord finalPeriod = seedMultiGroupPeriod(admin, projectIds, firstGroup, secondGroup, unassigned);
+        StoredRecord finalPeriod = seedMultiGroupPeriod(admin, projectIds, groupedStudents, unassigned,
+                "Multi-group finalized");
         StoredRecord finalRun = completeDueRun(finalPeriod);
         setCaller(admin);
         allocations.finalizeRun(authenticatedUser(admin), finalRun.getId());
@@ -129,10 +133,10 @@ public class TestingAllocationPreviewSeeder {
     }
 
     private StoredRecord seedMultiGroupPeriod(UserAccount admin, List<UUID> projectIds,
-            List<UserAccount> firstGroup, List<UserAccount> secondGroup, UserAccount unassigned) {
+            List<UserAccount> groupedStudents, UserAccount unassigned, String label) {
         Instant openedAt = Instant.now().minusSeconds(OPENING_LEAD_SECONDS);
         Instant closingAt = Instant.now().plusSeconds(ONE_DAY_SECONDS);
-        ObjectNode periodRequest = store.object().put(SCHOOL_YEAR_FIELD, SCHOOL_YEAR)
+        ObjectNode periodRequest = store.object().put("label", label).put(SCHOOL_YEAR_FIELD, SCHOOL_YEAR)
                 .put("opensAt", openedAt.toString()).put(CLOSES_AT_FIELD, closingAt.toString());
         periodRequest.set(PROJECT_IDS_FIELD, store.value(projectIds));
         setCaller(admin);
@@ -145,12 +149,12 @@ public class TestingAllocationPreviewSeeder {
         List<List<Integer>> secondFillers = List.of(List.of(FIRST_FILLER_PROJECT_INDEX, SECOND_FILLER_PROJECT_INDEX),
                 List.of(THIRD_FILLER_PROJECT_INDEX, FOURTH_FILLER_PROJECT_INDEX),
                 List.of(FIFTH_FILLER_PROJECT_INDEX, SEVENTH_FILLER_PROJECT_INDEX));
-        for (int index = 0; index < firstGroup.size(); index++) {
-            submitApplication(firstGroup.get(index), response.id(), List.of(projectIds.get(FIRST_GROUP_PROJECT_INDEX),
+        for (int index = 0; index < 3; index++) {
+            submitApplication(groupedStudents.get(index), response.id(), List.of(projectIds.get(FIRST_GROUP_PROJECT_INDEX),
                     projectIds.get(firstFillers.get(index).get(0)), projectIds.get(firstFillers.get(index).get(1))));
         }
-        for (int index = 0; index < secondGroup.size(); index++) {
-            submitApplication(secondGroup.get(index), response.id(), List.of(projectIds.get(SECOND_GROUP_PROJECT_INDEX),
+        for (int index = 0; index < 3; index++) {
+            submitApplication(groupedStudents.get(index + 3), response.id(), List.of(projectIds.get(SECOND_GROUP_PROJECT_INDEX),
                     projectIds.get(secondFillers.get(index).get(0)), projectIds.get(secondFillers.get(index).get(1))));
         }
         submitApplication(unassigned, response.id(), List.of(projectIds.get(SIXTH_FILLER_PROJECT_INDEX),
@@ -201,7 +205,8 @@ public class TestingAllocationPreviewSeeder {
     private StoredRecord previewPeriod(UserAccount admin, UserAccount student, List<UUID> projectIds,
             String periodStatus, boolean completedRun) {
         String schoolYear = completedRun ? "2027/2028" : "2028/2029";
-        ObjectNode periodPayload = store.object().put(SCHOOL_YEAR_FIELD, schoolYear)
+        ObjectNode periodPayload = store.object().put("label", completedRun ? "Unassigned student" : "Waiting for result")
+                .put(SCHOOL_YEAR_FIELD, schoolYear)
                 .put("opensAt", Instant.now().minusSeconds(ONE_DAY_SECONDS).toString())
                 .put(CLOSES_AT_FIELD, Instant.now().minusSeconds(1).toString());
         periodPayload.set(PROJECT_IDS_FIELD, store.value(projectIds));

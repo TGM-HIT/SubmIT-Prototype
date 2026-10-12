@@ -56,7 +56,8 @@ class StaffDisplayNamesTest {
         studentToken = login("student01");
         firstProject = idea("Solar design project");
         secondProject = idea("Water quality project");
-        ObjectNode periodData = store.object().put("schoolYear", "2026/2027");
+        ObjectNode periodData = store.object().put("label", "Staff display period")
+                .put("schoolYear", "2026/2027");
         ArrayNode catalogue = periodData.putArray("projectIds");
         catalogue.add(firstProject.getId().toString()).add(secondProject.getId().toString());
         period = store.create("application_period", null, null, "ALLOCATED", periodData);

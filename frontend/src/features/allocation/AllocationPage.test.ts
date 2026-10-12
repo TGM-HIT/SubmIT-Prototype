@@ -40,7 +40,7 @@ describe('allocation supervisor display', () => {
   beforeEach(() => {
     state.role = 'TEACHER'
     api.listPeriods.mockResolvedValue({
-      content: [{ id: 'period-1', schoolYear: '2026/2027', status: 'ALLOCATED' }],
+      content: [{ id: 'period-1', label: 'Allocation preview', schoolYear: '2026/2027', status: 'ALLOCATED' }],
     })
     api.listRuns.mockResolvedValue({
       content: [{ id: 'run-1', status: 'COMPLETED' }],
@@ -61,6 +61,16 @@ describe('allocation supervisor display', () => {
 
   afterEach(() => {
     vi.clearAllMocks()
+  })
+
+  it('identifies periods by label with the school year in the selector and selected view', async () => {
+    state.role = 'ADMIN'
+    const page = mountPage()
+    await flushPromises()
+    expect(page.get('#period-select').text()).toContain('Allocation preview · 2026/2027 · ALLOCATED')
+    await page.get('#period-select').setValue('period-1')
+    await flushPromises()
+    expect(page.text()).toContain('Selected period: Allocation preview · school year 2026/2027')
   })
 
   it('shows missing supervisors to teachers in allocation results without exposing an assignment control', async () => {

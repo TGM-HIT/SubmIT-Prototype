@@ -1175,6 +1175,8 @@ export interface components {
             preferences?: components["schemas"]["PreferenceResponse"][];
         };
         ApplicationPeriodRequest: {
+            /** @description Administrator-set period label; trimmed, required, and at most 100 characters. */
+            label: string;
             schoolYear: string;
             /** Format: date-time */
             opensAt: string;
@@ -1185,6 +1187,8 @@ export interface components {
         ApplicationPeriodResponse: {
             /** Format: uuid */
             id?: string;
+            /** @description Period label; legacy records without a label are presented using their school year. */
+            label: string;
             schoolYear?: string;
             /** Format: date-time */
             opensAt?: string;

@@ -25,7 +25,8 @@
           <p v-if="!periods.content?.length" class="empty">Application periods will appear here when configured.</p>
           <div v-for="period in periods.content" :key="period.id" class="data-row">
             <div class="row-main">
-              <h3>{{ period.schoolYear }}</h3>
+              <h3>{{ period.label || period.schoolYear }}</h3>
+              <p>School year {{ period.schoolYear }}</p>
               <p>{{ date(period.opensAt) }} – {{ date(period.closesAt) }}</p>
             <div v-if="isStudent" class="student-assignment-summary">
               <p v-if="period.studentAssignment?.state === 'PRELIMINARY'"><strong>Preliminary assignment:</strong> {{ period.studentAssignment.projectTitle }}</p>

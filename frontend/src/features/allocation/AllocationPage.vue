@@ -3,9 +3,10 @@
     <p class="page-intro">The initial run starts automatically at the application deadline. Authorized staff can review immutable snapshots, inspect outcomes, and administrators may rerun before finalization.</p>
     <div class="panel">
       <div class="toolbar">
-        <div class="field"><label class="label" for="period-select">Application period</label><select id="period-select" v-model="periodId" class="select" @change="() => loadRuns()"><option value="">Select a period…</option><option v-for="period in periods" :key="period.id" :value="period.id">{{ period.schoolYear }} · {{ period.status }}</option></select></div>
+        <div class="field"><label class="label" for="period-select">Application period</label><select id="period-select" v-model="periodId" class="select" @change="() => loadRuns()"><option value="">Select a period…</option><option v-for="period in periods" :key="period.id" :value="period.id">{{ period.label || period.schoolYear }} · {{ period.schoolYear }} · {{ period.status }}</option></select></div>
         <button v-if="auth.user?.role === 'ADMIN' && selectedPeriod && selectedPeriod.status !== 'FINALIZED'" class="button" type="button" :disabled="!deadlinePassed || task.loading.value" @click="startReplacement">Start replacement run</button>
       </div>
+      <p v-if="selectedPeriod" class="notice">Selected period: {{ selectedPeriod.label || selectedPeriod.schoolYear }} · school year {{ selectedPeriod.schoolYear }}</p>
       <p v-if="selectedPeriod && !deadlinePassed" class="notice">The deadline is {{ date(selectedPeriod.closesAt) }}. Allocation cannot be started early.</p>
       <p class="notice">Every allocated group must contain 3–5 students, and each student can be assigned at most once. Failed or incomplete runs remain clearly marked.</p>
       <AsyncPanel :loading="task.loading.value" :error="task.error.value" @retry="loadRuns">

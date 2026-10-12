@@ -252,7 +252,7 @@ class IdeaOwnershipControllerTest {
         String closesAt = java.time.Instant.now().plusSeconds(3600).toString();
         MvcResult periodResult = mockMvc.perform(post("/api/application-periods")
                         .header("Authorization", bearer(adminToken)).contentType(MediaType.APPLICATION_JSON)
-                        .content(objectMapper.writeValueAsString(Map.of("schoolYear", "2026/2027", "opensAt", opensAt,
+                        .content(objectMapper.writeValueAsString(Map.of("label", "Ownership test period", "schoolYear", "2026/2027", "opensAt", opensAt,
                                 "closesAt", closesAt, "projectIds", projectIds))))
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.status").value("OPEN"))
                 .andExpect(jsonPath("$.projectIds[0]").value(ideaId)).andReturn();

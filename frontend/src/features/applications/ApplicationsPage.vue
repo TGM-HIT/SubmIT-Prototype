@@ -3,7 +3,8 @@
     <p class="page-intro">Browse accepted projects and submit one ranked preference list. Applications are editable only while the school-year period is open and before its deadline.</p>
     <form v-if="isAdmin && periodEditor" class="panel stack" @submit.prevent="createPeriod">
       <h2 class="section-title">Configure an application period</h2>
-      <div class="grid grid-3">
+      <div class="grid grid-2">
+        <div class="field"><label class="label" for="period-label">Label</label><input id="period-label" v-model="periodForm.label" class="input" maxlength="100" required /></div>
         <div class="field"><label class="label" for="period-year">School year</label><select id="period-year" v-model="periodForm.schoolYear" class="select" required><option value="">Choose a school year…</option><option v-for="year in years" :key="year" :value="year">{{ year }}</option></select></div>
         <div class="field"><label class="label" for="opens">Opens at</label><input id="opens" v-model="periodForm.opensAt" class="input" type="datetime-local" required /></div>
         <div class="field"><label class="label" for="closes">Closes at</label><input id="closes" v-model="periodForm.closesAt" class="input" type="datetime-local" required /></div>
@@ -28,7 +29,8 @@
       <div v-if="periods.content.length" class="data-list">
         <article v-for="period in periods.content" :key="period.id" class="data-row">
           <div class="row-main">
-            <h3>{{ period.schoolYear }} <span class="status-badge" :class="`status-${period.status?.toLowerCase()}`">{{ readable(period.status) }}</span></h3>
+            <h3>{{ period.label || period.schoolYear }} <span class="status-badge" :class="`status-${period.status?.toLowerCase()}`">{{ readable(period.status) }}</span></h3>
+            <p>School year {{ period.schoolYear }}</p>
             <p>Opens {{ date(period.opensAt) }} · Deadline {{ date(period.closesAt) }}</p>
             <p>{{ period.projectIds?.length ?? 0 }} accepted projects in catalogue</p>
             <section v-if="isStudent" class="student-period-result" aria-label="Your application result">
@@ -112,7 +114,7 @@
     </AsyncPanel>
 
     <section v-if="applicationSummary" class="panel stack">
-      <div class="page-heading"><h2 class="section-title">Application summary · {{ summaryPeriod }}</h2><button class="button button-secondary button-small" @click="applicationSummary = null">Close summary</button></div>
+      <div class="page-heading"><h2 class="section-title">Application summary · {{ summaryPeriod.label }} <span class="muted">({{ summaryPeriod.schoolYear }})</span></h2><button class="button button-secondary button-small" @click="applicationSummary = null">Close summary</button></div>
       <div v-if="applicationSummary.content.length" class="data-list">
         <article v-for="entry in applicationSummary.content" :key="entry.id" class="data-row"><div class="row-main"><h3 class="staff-display-label">Application · {{ entry.studentDisplayName || 'Unknown student' }}</h3><p class="staff-display-label">Status: {{ readable(entry.status) }} · Student {{ entry.studentDisplayName || 'Unknown student' }}</p><p class="staff-display-label">Preferences: {{ entry.preferences?.map((choice) => `${choice.rank}. ${choice.projectTitle || 'Unknown project'}`).join(" → ") }}</p></div></article>
       </div>
@@ -151,10 +153,12 @@ const periodEditor = ref(false)
 const projectToAdd = ref('')
 const catalogueDetails = ref<Record<string, CatalogueProjectState>>({})
 const applicationSummary = ref<Page<Application> | null>(null)
-const summaryPeriod = ref('')
-const periodForm = reactive({ schoolYear: '', opensAt: '', closesAt: '', projectIds: [] as string[] })
+const summaryPeriod = ref({ label: '', schoolYear: '' })
+const periodForm = reactive({ label: '', schoolYear: '', opensAt: '', closesAt: '', projectIds: [] as string[] })
 const periodValidationMessages = computed(() => {
   const messages: string[] = []
+  if (!periodForm.label.trim()) messages.push('Enter a period label.')
+  else if (periodForm.label.trim().length > 100) messages.push('The period label must be at most 100 characters.')
   if (!periodForm.schoolYear) messages.push('Choose a school year.')
   else if (!years.value.includes(periodForm.schoolYear)) messages.push('Choose a school year from the available options.')
 
@@ -275,6 +279,7 @@ async function load(page = 0): Promise<void> {
 async function createPeriod(): Promise<void> {
   if (periodValidationMessages.value.length) return
   const payload: components['schemas']['ApplicationPeriodRequest'] = {
+    label: periodForm.label.trim(),
     schoolYear: periodForm.schoolYear,
     opensAt: new Date(periodForm.opensAt).toISOString(),
     closesAt: new Date(periodForm.closesAt).toISOString(),
@@ -309,7 +314,7 @@ async function withdrawApplication(period: Period): Promise<void> {
   rankedIds.value[period.id ?? ''] = []
 }
 async function loadApplications(period: Period): Promise<void> {
-  summaryPeriod.value = period.schoolYear ?? 'Selected period'
+  summaryPeriod.value = { label: period.label || period.schoolYear || 'Selected period', schoolYear: period.schoolYear || '' }
   applicationSummary.value = await task.run(() => periodsApi.applications(period.id ?? '', 0)) ?? null
 }
 onMounted(() => void load())

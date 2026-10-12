@@ -222,6 +222,7 @@ public final class ApiDtos {
     }
 
     public record ApplicationPeriodRequest(
+            @NotBlank @Size(max = 100) @Schema(description = "Administrator-set period label; trimmed, required, and at most 100 characters.") String label,
             @NotBlank @Size(max = 20) String schoolYear,
             @NotNull Instant opensAt,
             @NotNull Instant closesAt,
@@ -330,6 +331,8 @@ public final class ApiDtos {
 
     public record ApplicationPeriodResponse(
             UUID id,
+            @NotNull @Schema(description = "Period label; legacy records without a label are presented using their school year.")
+            String label,
             String schoolYear,
             Instant opensAt,
             Instant closesAt,

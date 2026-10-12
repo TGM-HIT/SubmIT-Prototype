@@ -28,7 +28,7 @@ describe('Overview layout groups', () => {
 
   it('shows each student their assignment summary with an Applications link', async () => {
     api.periods.mockResolvedValue({ content: [
-      { id: 'preliminary', schoolYear: '2026/2027', status: 'ALLOCATED',
+      { id: 'preliminary', label: 'Multi-group preliminary', schoolYear: '2026/2027', status: 'ALLOCATED',
         studentApplicationStatus: 'SUBMITTED', studentAssignment: { state: 'PRELIMINARY', projectTitle: 'Solar design' } },
       { id: 'final', schoolYear: '2025/2026', status: 'FINALIZED',
         studentApplicationStatus: 'SUBMITTED', studentAssignment: { state: 'FINAL', projectTitle: 'Water quality' } },
@@ -40,6 +40,8 @@ describe('Overview layout groups', () => {
     ], totalElements: 5 })
     const page = mount(DashboardPage, { global: { stubs: { AsyncPanel: { template: '<div><slot /></div>' }, RouterLink: { template: '<a :href="to"><slot /></a>', props: ['to'] } } } })
     await flushPromises()
+    expect(page.text()).toContain('Multi-group preliminary')
+    expect(page.text()).toContain('School year 2026/2027')
     expect(page.text()).toContain('Preliminary assignment: Solar design')
     expect(page.text()).toContain('Final assignment: Water quality')
     expect(page.text()).toContain('No application submitted')

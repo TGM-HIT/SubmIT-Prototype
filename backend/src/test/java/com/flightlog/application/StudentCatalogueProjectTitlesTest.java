@@ -62,6 +62,7 @@ class StudentCatalogueProjectTitlesTest {
     void openPeriodExposesOnlyCurrentTitlesAndStudentsCanUseThemForTheirOwnApplication() throws Exception {
         JsonNode response = getJson("/api/application-periods?size=100", studentToken);
         JsonNode period = findPeriod(response, openPeriod.getId());
+        org.junit.jupiter.api.Assertions.assertEquals("Catalogue period", period.path("label").asText());
         assertTitles(period, List.of("Solar project", "Water project", "Garden project"));
         for (JsonNode title : period.path("projectTitles")) {
             assertEqualsFields(title, List.of("projectId", "title"));
@@ -201,8 +202,8 @@ class StudentCatalogueProjectTitlesTest {
     }
 
     private StoredRecord period(String status, Instant opensAt, Instant closesAt, List<String> projectIds) {
-        ObjectNode payload = store.object().put("schoolYear", "2026/2027")
-                .put("opensAt", opensAt.toString()).put("closesAt", closesAt.toString());
+        ObjectNode payload = store.object().put("label", "Catalogue period")
+                .put("schoolYear", "2026/2027").put("opensAt", opensAt.toString()).put("closesAt", closesAt.toString());
         ArrayNode ids = payload.putArray("projectIds");
         projectIds.forEach(ids::add);
         return store.create("application_period", null, null, status, payload);

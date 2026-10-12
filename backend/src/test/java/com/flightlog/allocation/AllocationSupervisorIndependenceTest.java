@@ -335,8 +335,8 @@ class AllocationSupervisorIndependenceTest {
     private StoredRecord createPeriod(List<String> projectIds, Instant opensAt, Instant closesAt) {
         ArrayNode ids = store.object().arrayNode();
         projectIds.forEach(ids::add);
-        ObjectNode payload = store.object().put("schoolYear", "2026/2027")
-                .put("opensAt", opensAt.toString())
+        ObjectNode payload = store.object().put("label", "Allocation independence")
+                .put("schoolYear", "2026/2027").put("opensAt", opensAt.toString())
                 .put("closesAt", closesAt.toString());
         payload.set("projectIds", ids);
         return store.create("application_period", users.findByUsername("admin01").orElseThrow()

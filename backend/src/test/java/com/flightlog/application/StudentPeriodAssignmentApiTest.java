@@ -77,6 +77,7 @@ class StudentPeriodAssignmentApiTest {
         users.save(member);
         store.update(project, project.getStatus(), objectMapper.createObjectNode().put("title", "Renamed project"));
         JsonNode preliminary = periodResponse(preliminaryPeriod);
+        org.junit.jupiter.api.Assertions.assertEquals("Student assignment period", preliminary.path("label").asText());
         org.junit.jupiter.api.Assertions.assertEquals("SUBMITTED", preliminary.path("studentApplicationStatus").asText());
         JsonNode preliminaryAssignment = preliminary.path("studentAssignment");
         org.junit.jupiter.api.Assertions.assertEquals("PRELIMINARY", preliminaryAssignment.path("state").asText());
@@ -283,7 +284,8 @@ class StudentPeriodAssignmentApiTest {
     }
 
     private UUID createPeriod(UUID projectId, String status) {
-        ObjectNode payload = objectMapper.createObjectNode().put("schoolYear", "2026/2027")
+        ObjectNode payload = objectMapper.createObjectNode().put("label", "Student assignment period")
+                .put("schoolYear", "2026/2027")
                 .put("opensAt", Instant.now().minusSeconds(86_400).toString())
                 .put("closesAt", Instant.now().minusSeconds(60).toString());
         payload.putArray("projectIds").add(projectId.toString());

@@ -60,7 +60,12 @@ class ApplicationResponseMapper {
         StoredRecord ownApplication = studentId == null ? null : store.repository()
                 .findByTypeAndParentIdAndOwnerId(APPLICATION, record.getId().toString(), studentId.toString())
                 .orElse(null);
-        return new ApplicationPeriodResponse(record.getId(), data.path("schoolYear").asText(),
+        String schoolYear = data.path("schoolYear").asText();
+        String label = data.path("label").asText(schoolYear);
+        if (label.isBlank()) {
+            label = schoolYear;
+        }
+        return new ApplicationPeriodResponse(record.getId(), label, schoolYear,
                 Instant.parse(data.path(OPENS_AT).asText()), Instant.parse(data.path(CLOSES_AT).asText()),
                 record.getStatus(), List.copyOf(projects), studentView ? projectTitles(record) : null,
                 studentId == null ? null : ownApplication == null ? "NOT_SUBMITTED" : ownApplication.getStatus(),
