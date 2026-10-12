@@ -64,3 +64,9 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Feature-13](tickets/done/Feature-13.md) | done | Let several students own and edit an idea and its specification |
 | [Feature-14](tickets/Feature-14.md) | to-do | Let teachers submit ideas that follow the normal feedback and acceptance process |
 | [Feature-15](tickets/Feature-15.md) | to-do | Let administrators give each application period its own label |
+
+### Optimizations
+
+| Ticket | Status | Specification |
+|--------|--------|---------------|
+| [Optimization-01](tickets/Optimization-01.md) | to-do | Query student-owned ideas without scanning the full catalogue |
