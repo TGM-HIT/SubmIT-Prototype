@@ -322,7 +322,9 @@ authorized human acceptance, failed on a terminal ticket failure, or leave it
 awaiting-human for a paused run. When setting a ticket to done, move its
 specification from `harness/tickets/<ticket-id>.md` to
 `harness/tickets/done/<ticket-id>.md` and update the plan link in the same
-tracked closeout commit. Create the `done/` directory if necessary. Also repair
+tracked closeout commit. Rewrite the moved ticket's relative links so they resolve
+from `harness/tickets/done/`, in that same commit. Create the `done/` directory
+if necessary. Also repair
 the run log's ticket link, and any other links in retained run artifacts that
 point to the moved specification, so they resolve from the run folder. Do not
 move failed or awaiting-human tickets; they remain open at the root ticket

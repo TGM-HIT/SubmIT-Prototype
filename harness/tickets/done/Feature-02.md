@@ -15,7 +15,7 @@ As a user, I want an account name in addition to my username, so that the applic
 - The testing profile must assign stable, readable names to all seeded students and teachers (for example, `Student 01` and `Teacher 01`). The bootstrap administrator's name is `Administrator`. Preserve the testing profile boundary and its existing account-seeding behavior.
 - There are no legacy users: this is a new installation with an empty user database. Do not add a migration, backfill, compatibility fallback, or legacy-user test. No new dependencies or test-only production behavior.
 - Treat the name as account data: do not add it to unauthenticated public-archive responses or metadata. Preserve existing archive publication and redaction behavior, and do not broaden the set of users or account data visible to any role.
-- Update [docs/SPEC.md](../../docs/SPEC.md), [backend/SPEC.md](../../backend/SPEC.md), and [frontend/SPEC.md](../../frontend/SPEC.md) to describe the account name, validation, editing permissions, and visible UI behavior. Declare any specification changes in the handoff. Do not edit generated API artifacts by hand.
+- Update [docs/SPEC.md](../../../docs/SPEC.md), [backend/SPEC.md](../../../backend/SPEC.md), and [frontend/SPEC.md](../../../frontend/SPEC.md) to describe the account name, validation, editing permissions, and visible UI behavior. Declare any specification changes in the handoff. Do not edit generated API artifacts by hand.
 
 ## Mechanical checks (the Evaluator re-runs)
 
@@ -34,15 +34,15 @@ Standard project checks:
 
 ## One-time manual verification (in addition to automated tests)
 
-- **Implementor-performed:** Use the local browser preview and testing-profile accounts documented in [frontend/DEV-GUIDELINES.md](../../frontend/DEV-GUIDELINES.md) and [backend/DEV-GUIDELINES.md](../../backend/DEV-GUIDELINES.md). Register a new student with a name, then confirm the name appears in the authenticated shell and remains distinct from the username.
+- **Implementor-performed:** Use the local browser preview and testing-profile accounts documented in [frontend/DEV-GUIDELINES.md](../../../frontend/DEV-GUIDELINES.md) and [backend/DEV-GUIDELINES.md](../../../backend/DEV-GUIDELINES.md). Register a new student with a name, then confirm the name appears in the authenticated shell and remains distinct from the username.
 - **Implementor-performed:** As a student and a teacher, change the signed-in account's name. Confirm the saved name appears immediately in the account/profile area and shell, and remains after navigating away and back. Confirm the editor closes and keyboard focus returns to its Edit name control after save; cancel also closes without saving and restores focus. Check that a rejected save leaves the entered value available to correct.
 - **Implementor-performed:** Sign in as a locally configured bootstrap administrator. Change another account's name from user management and confirm the updated name appears in that row and the target account's profile after signing in as that account. Confirm the editor closes and focus returns to its Edit name control after save or cancel, and that changing the name does not change the target's role.
 - **Implementor-performed:** Check the affected registration, profile, shell, and user-management states at desktop and mobile viewports. Investigate and report browser-console or failed-request errors; store screenshots outside version control. Use only testing-profile or newly registered local test data.
 - The authorization and invalid-input cases are covered by automated API tests; no separate human-only verification is required.
 
-For UI-visible work, use the local browser preview documented in [frontend/DEV-GUIDELINES.md](../../frontend/DEV-GUIDELINES.md) (not one-off scripts):
+For UI-visible work, use the local browser preview documented in [frontend/DEV-GUIDELINES.md](../../../frontend/DEV-GUIDELINES.md) (not one-off scripts):
 
-- Authenticate with the testing accounts and profile documented in [backend/DEV-GUIDELINES.md](../../backend/DEV-GUIDELINES.md); do not hard-code credentials.
+- Authenticate with the testing accounts and profile documented in [backend/DEV-GUIDELINES.md](../../../backend/DEV-GUIDELINES.md); do not hard-code credentials.
 - Capture desktop and mobile viewports for every affected state; store screenshots outside version control.
 - Investigate any console or failed-request errors and report them.
 - If a state cannot be reached, make a minimal reusable extension to the preview tooling rather than a one-off workaround.
@@ -57,5 +57,5 @@ For UI-visible work, use the local browser preview documented in [frontend/DEV-G
 - The testing profile seeds named student and teacher accounts, and the configured bootstrap administrator is named `Administrator`; no test accounts are created outside the testing profile.
 - The authenticated shell displays the account name. The profile editor and administrator user-management editor show the persisted value, provide an understandable saved/error state, and update visible account state after success without a logout or reload. Save and cancel close the editor and return keyboard focus to its Edit name control; cancel does not save a pending change.
 - Account names are not added to unauthenticated public-archive responses or metadata; existing archive publication/redaction, account visibility, and role-management behavior remain unchanged.
-- [docs/SPEC.md](../../docs/SPEC.md), [backend/SPEC.md](../../backend/SPEC.md), and [frontend/SPEC.md](../../frontend/SPEC.md) document the changed behavior; the OpenAPI contract and frontend API types are generated and reviewed when required, never hand-edited.
+- [docs/SPEC.md](../../../docs/SPEC.md), [backend/SPEC.md](../../../backend/SPEC.md), and [frontend/SPEC.md](../../../frontend/SPEC.md) document the changed behavior; the OpenAPI contract and frontend API types are generated and reviewed when required, never hand-edited.
 - Backend and frontend regression tests cover the cases above, and all applicable standard project checks pass. Existing behavior outside the stated scope remains unchanged; no unrelated cleanups or unperformed checks are claimed.

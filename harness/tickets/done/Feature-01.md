@@ -13,7 +13,7 @@ As a teacher reviewing a submitted idea, I can decline it or request revisions w
 - Limit the behavior change to idea reviews (`POST /api/ideas/{id}/reviews`). Full-specification reviews and their validation/display behavior are out of scope.
 - Legacy data is out of scope: at this stage of development the database contains no review entries created before this feature, so no migration, backfill, or backward-compatible identification of older entries is required. Review entries that carry no recognizable review type need no special handling beyond not breaking the history display. Do not add legacy-handling code or tests. Full-specification reviews recorded by the current code must still render exactly as before.
 - No new dependencies or test-only production behavior. Use the existing local testing profile and accounts for manual verification.
-- Update [docs/SPEC.md](../../docs/SPEC.md), [backend/SPEC.md](../../backend/SPEC.md), and [frontend/SPEC.md](../../frontend/SPEC.md) as needed to document the required feedback, optional ratings for idea declines and revision requests, and history display. Declare any specification changes in the handoff. Do not edit generated API artifacts by hand.
+- Update [docs/SPEC.md](../../../docs/SPEC.md), [backend/SPEC.md](../../../backend/SPEC.md), and [frontend/SPEC.md](../../../frontend/SPEC.md) as needed to document the required feedback, optional ratings for idea declines and revision requests, and history display. Declare any specification changes in the handoff. Do not edit generated API artifacts by hand.
 
 ## Mechanical checks (the Evaluator re-runs)
 
@@ -32,7 +32,7 @@ Standard project checks:
 
 ## One-time manual verification (in addition to automated tests)
 
-- Use the documented local browser preview and testing profile from [frontend/DEV-GUIDELINES.md](../../frontend/DEV-GUIDELINES.md) and [backend/DEV-GUIDELINES.md](../../backend/DEV-GUIDELINES.md); use the documented student and teacher test accounts without hard-coding credentials.
+- Use the documented local browser preview and testing profile from [frontend/DEV-GUIDELINES.md](../../../frontend/DEV-GUIDELINES.md) and [backend/DEV-GUIDELINES.md](../../../backend/DEV-GUIDELINES.md); use the documented student and teacher test accounts without hard-coding credentials.
 - As a student, create and submit at least three ideas. As a teacher, request revisions on one with written feedback and no ratings, decline another with written feedback and no ratings, and record a review with ratings on the third. Confirm each decision succeeds, the form remains usable at desktop and mobile widths, and the resulting idea status and review history refresh.
 - As the student submitter, open each idea's details/history. Confirm the revision request and declines and their written feedback are visible, ratings appear only for the rated review, and no fabricated or empty rating values appear for unrated reviews.
 - After each successful decision (also once while a status filter equal to the pre-decision status is active), confirm the review form closes, the affected idea's status and history reflect the saved decision, and keyboard focus lands on that idea's Details & history control. Investigate and report any browser-console or failed-request errors. Store desktop and mobile screenshots outside version control; do not claim checks that were not performed.

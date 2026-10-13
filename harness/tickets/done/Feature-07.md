@@ -10,7 +10,7 @@ Teachers currently have to open an idea's Details & history modal to see recorde
 - Show the preference only when that teacher has recorded one of these preferences for the idea. Do not show a placeholder or infer a preference when none is recorded.
 - Keep the existing supervision-preference display in Details & history. Opening and closing the modal must not hide, clear, or otherwise change recorded preferences.
 - Keep preference editing in its existing location and preserve the existing preference API and save behavior. Do not change preference options, authorization, or administrator supervisor assignment.
-- Update [frontend/SPEC.md](../../frontend/SPEC.md) minimally to document the teacher overview display and continued display in Details & history. No backend, shared product specification, or API contract changes are required.
+- Update [frontend/SPEC.md](../../../frontend/SPEC.md) minimally to document the teacher overview display and continued display in Details & history. No backend, shared product specification, or API contract changes are required.
 
 ## Mechanical checks (the Evaluator re-runs)
 
@@ -30,11 +30,11 @@ No backend tests, OpenAPI generation, or API type generation apply because the A
 
 ## One-time manual verification (in addition to automated tests)
 
-- **Implementor-performed:** Use the local browser preview and testing-profile teacher account documented in [frontend/DEV-GUIDELINES.md](../../frontend/DEV-GUIDELINES.md) and [backend/DEV-GUIDELINES.md](../../backend/DEV-GUIDELINES.md). Open Ideas & reviews and, on an idea without a recorded preference, open Details & history and use the existing control to record a willingness or desire to supervise. Close the modal and confirm the chosen preference is visible for that idea in the overview. Reopen Details & history and confirm its recorded preference remains visible. Repeat at desktop and mobile viewports, capture screenshots outside version control, and investigate/report browser-console and failed-request errors.
+- **Implementor-performed:** Use the local browser preview and testing-profile teacher account documented in [frontend/DEV-GUIDELINES.md](../../../frontend/DEV-GUIDELINES.md) and [backend/DEV-GUIDELINES.md](../../../backend/DEV-GUIDELINES.md). Open Ideas & reviews and, on an idea without a recorded preference, open Details & history and use the existing control to record a willingness or desire to supervise. Close the modal and confirm the chosen preference is visible for that idea in the overview. Reopen Details & history and confirm its recorded preference remains visible. Repeat at desktop and mobile viewports, capture screenshots outside version control, and investigate/report browser-console and failed-request errors.
 
-For UI-visible work, use the local browser preview documented in [frontend/DEV-GUIDELINES.md](../../frontend/DEV-GUIDELINES.md), not one-off scripts:
+For UI-visible work, use the local browser preview documented in [frontend/DEV-GUIDELINES.md](../../../frontend/DEV-GUIDELINES.md), not one-off scripts:
 
-- Authenticate with the testing account and profile documented in [backend/DEV-GUIDELINES.md](../../backend/DEV-GUIDELINES.md); do not hard-code credentials.
+- Authenticate with the testing account and profile documented in [backend/DEV-GUIDELINES.md](../../../backend/DEV-GUIDELINES.md); do not hard-code credentials.
 - Capture desktop and mobile viewports for the affected overview and modal states; store screenshots outside version control.
 - Investigate any console or failed-request errors and report them.
 - If a state cannot be reached, make a minimal reusable extension to the preview tooling rather than a one-off workaround.

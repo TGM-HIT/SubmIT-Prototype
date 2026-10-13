@@ -11,7 +11,7 @@ Please change the UI (and maybe the SPEC) so that:
 
 ## Scope and contract
 
-- Frontend presentation and interaction only, on the Ideas and reviews page ([IdeasPage.vue](../../frontend/src/features/ideas/IdeasPage.vue)). No backend behavior or API contract changes; existing review, preference, and supervisor-assignment calls are reused unchanged.
+- Frontend presentation and interaction only, on the Ideas and reviews page ([IdeasPage.vue](../../../frontend/src/features/ideas/IdeasPage.vue)). No backend behavior or API contract changes; existing review, preference, and supervisor-assignment calls are reused unchanged.
 - Each idea row of a teacher shows a **Review** button next to **Details & history** whenever a review is possible (status `IDEA_SUBMITTED` or `SPECIFICATION_SUBMITTED`). It opens the review form directly, without opening details first. The form keeps the existing heading and fields (idea review vs. full-specification review) and behavior.
 - **Details & history** opens the existing detail content (submission, decision history, and the role-specific actions and forms already shown there) in a modal instead of inline above the list. The modal's Review action remains available and opens the review form.
 - The review form opens as a modal. After a successful decision the modal closes, the list refreshes, and an open details modal reflects the new status and history. Cancel closes it without changes.
@@ -49,4 +49,4 @@ Use the local browser preview documented in `frontend/DEV-GUIDELINES.md` (Dev-02
 
 ## Optional: Specification changes
 
-[frontend/SPEC.md](../../frontend/SPEC.md) may be updated minimally to state that idea details and review forms open as modals and that teachers can start a review directly from the idea list. Declare any specification change in the handoff. Edit `DEV-GUIDELINES.md` only if the new modal component warrants a short convention note.
+[frontend/SPEC.md](../../../frontend/SPEC.md) may be updated minimally to state that idea details and review forms open as modals and that teachers can start a review directly from the idea list. Declare any specification change in the handoff. Edit `DEV-GUIDELINES.md` only if the new modal component warrants a short convention note.

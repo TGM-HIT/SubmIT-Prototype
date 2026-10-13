@@ -6,7 +6,7 @@ The Overview navigation item remains visually selected while a signed-in user is
 
 ## Scope and contract
 
-- Correct active-state behavior in the authenticated sidebar in [AppShell.vue](../../frontend/src/components/AppShell.vue).
+- Correct active-state behavior in the authenticated sidebar in [AppShell.vue](../../../frontend/src/components/AppShell.vue).
 - Mark Overview active only when the current route is the dashboard at `/`. On other authenticated routes, Overview must not appear selected; the navigation item for the current page should retain its existing active behavior.
 - Preserve all navigation destinations, role visibility, labels, and the sidebar layout. Do not change page routing or authentication behavior.
 - This applies to every signed-in role.
@@ -29,11 +29,11 @@ No backend tests, OpenAPI generation, or API type generation apply because this 
 
 ## One-time manual verification (in addition to automated tests)
 
-- **Implementor-performed:** Using the documented local browser preview and a testing-profile account from [backend/DEV-GUIDELINES.md](../../backend/DEV-GUIDELINES.md), view the dashboard and then navigate to Ideas & reviews and User Settings. Confirm Overview is selected only on the dashboard and the current page's menu link is selected on the other views. Capture desktop and mobile screenshots of the dashboard and at least one non-dashboard view outside version control; investigate and report browser-console and failed-request errors.
+- **Implementor-performed:** Using the documented local browser preview and a testing-profile account from [backend/DEV-GUIDELINES.md](../../../backend/DEV-GUIDELINES.md), view the dashboard and then navigate to Ideas & reviews and User Settings. Confirm Overview is selected only on the dashboard and the current page's menu link is selected on the other views. Capture desktop and mobile screenshots of the dashboard and at least one non-dashboard view outside version control; investigate and report browser-console and failed-request errors.
 
-For UI-visible work, use the local browser preview documented in [frontend/DEV-GUIDELINES.md](../../frontend/DEV-GUIDELINES.md), not one-off scripts:
+For UI-visible work, use the local browser preview documented in [frontend/DEV-GUIDELINES.md](../../../frontend/DEV-GUIDELINES.md), not one-off scripts:
 
-- Authenticate with the testing account and profile documented in [backend/DEV-GUIDELINES.md](../../backend/DEV-GUIDELINES.md); do not hard-code credentials.
+- Authenticate with the testing account and profile documented in [backend/DEV-GUIDELINES.md](../../../backend/DEV-GUIDELINES.md); do not hard-code credentials.
 - Capture desktop and mobile viewports for the affected navigation states; store screenshots outside version control.
 - Investigate any console or failed-request errors and report them.
 - If a state cannot be reached, make a minimal reusable extension to the preview tooling rather than a one-off workaround.

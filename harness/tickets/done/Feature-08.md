@@ -15,7 +15,7 @@ The Ideas & reviews interface identifies people by opaque account IDs, making it
 - Preserve IDs in API contracts and internal identity matching where they are needed; the user-facing labels must use names. Do not change idea ownership, preference, review, or supervisor-assignment behavior.
 - Supply the names through the existing authorized idea-list/detail response data or another narrowly scoped authorized response. Extend no caller's ability to see an identity: names must be available only wherever that caller is already authorized to see the corresponding user reference. Do not expose these names through public archive or unauthenticated responses, or add a general user-directory endpoint for this display.
 - Keep stored review/preference/ownership records and their historical IDs unchanged; display the current account name associated with each referenced account.
-- Update [frontend/SPEC.md](../../frontend/SPEC.md) and [backend/SPEC.md](../../backend/SPEC.md) minimally to describe the display behavior and the authorized response data. No shared product-specification change is required.
+- Update [frontend/SPEC.md](../../../frontend/SPEC.md) and [backend/SPEC.md](../../../backend/SPEC.md) minimally to describe the display behavior and the authorized response data. No shared product-specification change is required.
 - This changes backend response models and the generated API contract. Update backend annotations/models, regenerate `contracts/openapi.yaml` using `./gradlew generateOpenApi`, review the generated diff, and regenerate frontend API types using `npm run api:types`. Do not edit generated files manually.
 
 ## Mechanical checks (the Evaluator re-runs)
@@ -34,10 +34,10 @@ Standard project checks:
 
 ## One-time manual verification (in addition to automated tests)
 
-- **Implementor-performed:** Use the documented local browser preview and testing-profile accounts in [frontend/DEV-GUIDELINES.md](../../frontend/DEV-GUIDELINES.md) and [backend/DEV-GUIDELINES.md](../../backend/DEV-GUIDELINES.md). With an idea that has a submitter, review history, and supervision-preference entries, inspect the Ideas & reviews overview, Details & history modal, and (as an administrator) Confirm supervisor selector. Confirm each visible person is identified by account display name rather than UUID and that preference/decision context remains clear. Capture the affected states at desktop and mobile widths outside version control and investigate/report browser-console and failed-request errors.
+- **Implementor-performed:** Use the documented local browser preview and testing-profile accounts in [frontend/DEV-GUIDELINES.md](../../../frontend/DEV-GUIDELINES.md) and [backend/DEV-GUIDELINES.md](../../../backend/DEV-GUIDELINES.md). With an idea that has a submitter, review history, and supervision-preference entries, inspect the Ideas & reviews overview, Details & history modal, and (as an administrator) Confirm supervisor selector. Confirm each visible person is identified by account display name rather than UUID and that preference/decision context remains clear. Capture the affected states at desktop and mobile widths outside version control and investigate/report browser-console and failed-request errors.
 - If the testing profile does not contain the required idea/review/preference data, create it through the existing UI or make a minimal reusable testing-profile preview extension with smoke coverage; do not hard-code production credentials or use non-testing data.
 
-For UI-visible work, use the local browser preview documented in [frontend/DEV-GUIDELINES.md](../../frontend/DEV-GUIDELINES.md), not one-off scripts:
+For UI-visible work, use the local browser preview documented in [frontend/DEV-GUIDELINES.md](../../../frontend/DEV-GUIDELINES.md), not one-off scripts:
 
 - Authenticate with documented testing-profile accounts; do not hard-code credentials.
 - Capture desktop and mobile viewports for the affected states; store screenshots outside version control.
@@ -55,4 +55,4 @@ For UI-visible work, use the local browser preview documented in [frontend/DEV-G
 
 ## Optional: Specification changes
 
-Update [frontend/SPEC.md](../../frontend/SPEC.md) for the Ideas & reviews labels and [backend/SPEC.md](../../backend/SPEC.md) for the corresponding authorized response data. Declare each change in the implementor handoff. No change to [docs/SPEC.md](../../docs/SPEC.md) is required.
+Update [frontend/SPEC.md](../../../frontend/SPEC.md) for the Ideas & reviews labels and [backend/SPEC.md](../../../backend/SPEC.md) for the corresponding authorized response data. Declare each change in the implementor handoff. No change to [docs/SPEC.md](../../../docs/SPEC.md) is required.

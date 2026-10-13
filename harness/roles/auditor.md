@@ -29,11 +29,11 @@ Only trivial documentation defects that have a single objectively correct answer
 
 - spelling and grammar that does not alter meaning;
 - broken relative links, anchors, and file paths where the target exists under a different name or location you can verify;
-- Markdown formatting (heading levels, list and table syntax, code fence languages);
+- Markdown formatting (heading levels, list and table syntax, code fence languages, trailing whitespace, and final newlines);
 - a documented command, path, script name, or example that you verified is stale against `package.json`, `build.gradle`, `Makefile`, or the repository tree;
 - counts or names that you verified against source (for example seeded account names).
 
-Anything that changes a requirement, a role's permissions, a lifecycle rule, an API contract, or product wording whose intent is not obvious is not trivial: open a ticket. Do not edit `contracts/openapi.yaml`, generated types, application code, tests, role contracts, or other tickets. Do not edit `docs/Entwurf Rubrikenbewertung.docx`.
+The Auditor may also repair broken relative links and anchors, Markdown formatting (heading, list, table, and fence syntax, trailing whitespace, and final newlines), and verified stale paths or command names in files under `harness/tickets/`, `harness/tickets/done/`, and `harness/roles/`. These repairs must not change requirement text, role, permission, lifecycle, or policy wording. Anything that changes a requirement, a role's permissions, a lifecycle rule, an API contract, or product wording whose intent is not obvious is not trivial: open a ticket. Do not edit `contracts/openapi.yaml`, generated types, application code, tests, or `docs/Entwurf Rubrikenbewertung.docx`.
 
 Make all fixes in one commit, staged by explicit path. Keep unrelated pre-existing changes out of it.
 
