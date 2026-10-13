@@ -17,6 +17,15 @@ and administrators need to see those assignments when identifying a student.
   elective subjects. The same subject can be assigned to multiple students.
   Administrators can change a student's class and can change or clear their
   subject assignments; a student must not be left without a class.
+- Product-owner decision (2026-10-13): do not add a pending-student state,
+  blocked login, role migration, or token invalidation; registration and login
+  behave as before. A catalogue class named "No class / unassigned" exists as
+  the default; every newly registered student and every administrator role
+  change to student receives it, so every student always has exactly one class.
+  Administrators can reassign it like any other class. There are no
+  pre-existing production students, so no legacy migration is required. The
+  `dev-testing` profile seeds two additional classes and distributes its
+  student accounts across them.
 - Do not add self-service subject selection: administrators assign the
   subjects. Students cannot assign themselves subjects or manage the catalogues.
 - Teachers and administrators can see a student's current class and elective
