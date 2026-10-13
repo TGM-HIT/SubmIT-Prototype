@@ -79,7 +79,7 @@ Recurring documentation and contract checks, run by the [Auditor role](roles/aud
 
 | Check | Cadence | Last run | Result | Run | Definition |
 |-------|---------|----------|--------|-----|------------|
-| [Compliance-01](checks/Compliance-01.md) | Monthly and after SPEC or guide changes | never | n/a | n/a | Specification and guideline consistency |
+| [Compliance-01](checks/Compliance-01.md) | Monthly and after SPEC or guide changes | 2026-10-14 00:26 +0200 | clean: 0 findings | Compliance-01-20261014-0026 | Specification and guideline consistency |
 | [Compliance-02](checks/Compliance-02.md) | After each closed Feature or Bug; at least monthly | never | n/a | n/a | Documentation and code parity |
 | [Compliance-03](checks/Compliance-03.md) | After API changes; at least monthly | never | n/a | n/a | OpenAPI contract compliance |
 | [Compliance-04](checks/Compliance-04.md) | Weekly and after file moves or renames | 2026-10-14 00:13 +0200 | findings: 4 ticketed, 1 decision needed, 0 fixed | Compliance-04-20261014-0013 | Link and format validation |
