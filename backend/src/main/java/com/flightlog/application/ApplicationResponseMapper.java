@@ -6,6 +6,7 @@ import com.flightlog.data.RecordStore;
 import com.flightlog.data.StoredRecord;
 import com.flightlog.user.UserAccount;
 import com.flightlog.user.UserAccountRepository;
+import com.flightlog.user.StudentDetailsService;
 import com.flightlog.web.ApiDtos.ApplicationPeriodResponse;
 import com.flightlog.web.ApiDtos.CatalogueProjectResponse;
 import com.flightlog.web.ApiDtos.CatalogueSpecificationResponse;
@@ -39,10 +40,12 @@ class ApplicationResponseMapper {
 
     private final RecordStore store;
     private final UserAccountRepository users;
+    private final StudentDetailsService studentDetails;
 
-    ApplicationResponseMapper(RecordStore store, UserAccountRepository users) {
+    ApplicationResponseMapper(RecordStore store, UserAccountRepository users, StudentDetailsService studentDetails) {
         this.store = store;
         this.users = users;
+        this.studentDetails = studentDetails;
     }
 
     ApplicationPeriodResponse period(StoredRecord record) {
@@ -87,7 +90,7 @@ class ApplicationResponseMapper {
                     title.isBlank() ? UNKNOWN_PROJECT : title));
         });
         return new StudentApplicationResponse(record.getId(), UUID.fromString(record.getOwnerId()), displayName,
-                UUID.fromString(record.getParentId()), record.getStatus(), List.copyOf(preferences));
+                UUID.fromString(record.getParentId()), record.getStatus(), List.copyOf(preferences), null, null);
     }
 
     CatalogueProjectResponse catalogueProject(StoredRecord idea, StoredRecord specification) {
@@ -150,11 +153,24 @@ class ApplicationResponseMapper {
         store.repository().findAllById(projectIds).stream().filter(record -> "idea".equals(record.getType()))
                 .forEach(record -> titles.put(record.getId(), store.parse(record).path(TITLE).asText()));
         List<StudentApplicationResponse> content = records.getContent().stream()
-                .map(record -> application(record,
+                .map(record -> staffApplication(record,
                         names.getOrDefault(UUID.fromString(record.getOwnerId()), "Unknown student"), titles))
                 .toList();
         return new PageResponse<>(content, records.getNumber(), records.getSize(),
                 records.getTotalElements(), records.getTotalPages());
+    }
+
+    private StudentApplicationResponse staffApplication(StoredRecord record, String displayName,
+            Map<UUID, String> projectTitles) {
+        StudentApplicationResponse response = application(record, displayName, projectTitles);
+        var details = users.findById(response.studentId())
+                .filter(user -> user.getRole() == com.flightlog.security.Role.STUDENT)
+                .map(studentDetails::response)
+                .orElse(null);
+        return new StudentApplicationResponse(response.id(), response.studentId(), response.studentDisplayName(),
+                response.periodId(), response.status(), response.preferences(),
+                details == null ? null : details.className(),
+                details == null ? null : details.electiveSubjectNames());
     }
 
     private StudentAssignmentResponse assignment(StoredRecord period, StoredRecord application) {

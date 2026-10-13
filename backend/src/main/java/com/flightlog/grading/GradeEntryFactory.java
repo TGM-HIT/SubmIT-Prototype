@@ -20,6 +20,11 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.flightlog.data.RecordStore;
 import com.flightlog.security.AuthenticatedUser;
+import com.flightlog.security.Role;
+import com.flightlog.user.UserAccountRepository;
+import com.flightlog.user.StudentDetailsService;
+import com.flightlog.web.ApiDtos.StudentDetailsResponse;
+import com.flightlog.grading.GradeDtos.GradeResponse;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -29,9 +34,13 @@ import org.springframework.stereotype.Component;
 @Component
 class GradeEntryFactory {
     private final RecordStore store;
+    private final UserAccountRepository users;
+    private final StudentDetailsService studentDetails;
 
-    GradeEntryFactory(RecordStore store) {
+    GradeEntryFactory(RecordStore store, UserAccountRepository users, StudentDetailsService studentDetails) {
         this.store = store;
+        this.users = users;
+        this.studentDetails = studentDetails;
     }
 
     ObjectNode build(AuthenticatedUser caller, JsonNode request, String subject, RubricRef rubric) {
@@ -64,6 +73,22 @@ class GradeEntryFactory {
         payload.put(TEACHER_ID, caller.id().toString());
         payload.put(RECORDED_AT, Instant.now().toString());
         return payload;
+    }
+
+    GradeResponse withStudentDetails(AuthenticatedUser caller, GradeResponse grade) {
+        if (caller.role() == Role.STUDENT || grade.studentId() == null) {
+            return grade;
+        }
+        return users.findById(grade.studentId()).filter(user -> user.getRole() == Role.STUDENT)
+                .map(user -> {
+                    StudentDetailsResponse details = studentDetails.response(user);
+                    return new GradeResponse(grade.id(), grade.status(), grade.createdAt(), grade.projectId(),
+                            grade.studentId(), user.getDisplayName(), details.className(),
+                            details.electiveSubjectNames(), grade.rubricId(), grade.rubricVersion(),
+                            grade.criterionId(), grade.categoryId(), grade.grade(), grade.assessedOn(),
+                            grade.evidence(), grade.comments(), grade.teacherId(), grade.recordedAt(),
+                            grade.supersedesId(), grade.supersededById(), grade.reason());
+                }).orElse(grade);
     }
 
     private void putIfPresent(ObjectNode payload, String field, String value) {

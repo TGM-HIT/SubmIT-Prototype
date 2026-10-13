@@ -6,11 +6,13 @@ import com.flightlog.data.StoredRecord;
 import com.flightlog.security.Role;
 import com.flightlog.user.UserAccount;
 import com.flightlog.user.UserAccountRepository;
+import com.flightlog.user.StudentDetailsService;
 import com.flightlog.web.ApiDtos.IdeaResponse;
 import com.flightlog.web.ApiDtos.IdeaOwnerResponse;
 import com.flightlog.web.ApiDtos.ReviewResponse;
 import com.flightlog.web.ApiDtos.SpecificationResponse;
 import com.flightlog.web.ApiDtos.SupervisionPreferenceResponse;
+import com.flightlog.web.ApiDtos.StudentDetailsResponse;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -32,10 +34,12 @@ class IdeaResponseMapper {
 
     private final RecordStore store;
     private final UserAccountRepository users;
+    private final StudentDetailsService studentDetails;
 
-    IdeaResponseMapper(RecordStore store, UserAccountRepository users) {
+    IdeaResponseMapper(RecordStore store, UserAccountRepository users, StudentDetailsService studentDetails) {
         this.store = store;
         this.users = users;
+        this.studentDetails = studentDetails;
     }
 
     IdeaResponse response(StoredRecord record, boolean includeHistory) {
@@ -74,16 +78,27 @@ class IdeaResponseMapper {
         }
         UUID ownerId = UUID.fromString(record.getOwnerId());
         List<IdeaOwnerResponse> owners = ownerIds(record).stream()
-                .map(id -> new IdeaOwnerResponse(id, names.get(id), id.equals(ownerId))).toList();
+                .map(id -> ownerResponse(id, names.get(id), id.equals(ownerId), viewerRole)).toList();
         Boolean teacherIdea = null;
         if (viewerRole != null && viewerRole != Role.STUDENT) {
             teacherIdea = users.findById(ownerId).map(UserAccount::getRole).orElse(null) == Role.TEACHER;
         }
+
         return new IdeaResponse(record.getId(), ownerId, ownerId, owners, names.get(ownerId), record.getStatus(),
                 payload.path("title").asText(), payload.path("description").asText(),
                 payload.path("intendedOutcome").asText(), strings(payload, "scopePoints"),
                 strings(payload, "learningTopics"), payload.path("schoolYear").asText(),
                 context.supervisorDisplayName(), teacherIdea, specification, reviews, preferences);
+    }
+
+    private IdeaOwnerResponse ownerResponse(UUID id, String name, boolean creator, Role viewerRole) {
+        StudentDetailsResponse details = viewerRole == Role.ADMIN || viewerRole == Role.TEACHER
+                ? users.findById(id).filter(user -> user.getRole() == Role.STUDENT)
+                        .map(studentDetails::response).orElse(null)
+                : null;
+        return new IdeaOwnerResponse(id, name, creator,
+                details == null ? null : details.className(),
+                details == null ? null : details.electiveSubjectNames());
     }
 
     List<IdeaResponse> responses(List<StoredRecord> records, Role viewerRole) {

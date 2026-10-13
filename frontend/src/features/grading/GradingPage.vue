@@ -58,7 +58,7 @@
         <button v-for="tab in tabs" :key="tab" class="tab-button" role="tab" :aria-selected="activeTab === tab" @click="activeTab = tab">{{ tab }}</button>
       </div>
       <div v-if="projectLoaded && activeTab === 'Individual assessments'" class="data-list">
-        <article v-for="grade in gradeEntries.content" :key="String(grade.id)" class="data-row"><div class="row-main"><h3>{{ grade.criterionId }} · {{ grade.grade }} <span class="status-badge">{{ grade.status }}</span></h3><p>Rubric {{ grade.rubricVersion }} · assessed {{ grade.assessedOn }} · category {{ grade.categoryId }}</p><p>{{ grade.evidence || grade.comments || 'No evidence or comment recorded.' }}</p><p v-if="grade.reason" class="muted">Revision: {{ grade.reason }}</p></div><span v-if="auth.user?.role !== 'STUDENT'">{{ grade.studentId }}</span></article>
+        <article v-for="grade in gradeEntries.content" :key="String(grade.id)" class="data-row"><div class="row-main"><h3>{{ grade.criterionId }} · {{ grade.grade }} <span class="status-badge">{{ grade.status }}</span></h3><p>Rubric {{ grade.rubricVersion }} · assessed {{ grade.assessedOn }} · category {{ grade.categoryId }}</p><p>{{ grade.evidence || grade.comments || 'No evidence or comment recorded.' }}</p><p v-if="grade.reason" class="muted">Revision: {{ grade.reason }}</p></div><span v-if="auth.user?.role !== 'STUDENT'">{{ grade.studentDisplayName || 'Unknown student' }} · Class: {{ grade.className || 'Not assigned' }} · Elective subjects: {{ stringList(grade.electiveSubjectNames).join(', ') || 'None' }}</span></article>
         <p v-if="!gradeEntries.content.length" class="empty">No individual grade entries are available.</p>
       </div>
       <div v-if="projectLoaded && activeTab === 'Group assessments'" class="data-list">
@@ -138,6 +138,7 @@ const selectedGroupCriterion = computed(() => categories.value.flatMap((category
 
 function emptyPage(): Page<Data> { return { content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 } }
 function list(value: unknown): Data[] { return Array.isArray(value) ? value.filter((item): item is Data => typeof item === 'object' && item !== null) : [] }
+function stringList(value: unknown): string[] { return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [] }
 function number(value: unknown, fallback = 0): number { return typeof value === 'number' ? value : Number(value ?? fallback) }
 function scaleObject(value: unknown): Data {
   return typeof value === 'object' && value !== null ? value as Data : {}

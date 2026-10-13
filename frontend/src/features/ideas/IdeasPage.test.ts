@@ -122,6 +122,24 @@ beforeEach(() => {
   ]))
 })
 
+describe("student details in idea identities", () => {
+  it("shows current class and subjects beside student owner names only to staff", async () => {
+    const staffedIdea = { ...idea("IDEA_DRAFT"), owners: [{ id: "student-1", displayName: "Student One", creator: true, className: "Class 10A", electiveSubjectNames: ["Biology", "Art"] }] }
+    api.list.mockResolvedValue({ ...pageIdeas("IDEA_DRAFT"), content: [staffedIdea] })
+    state.role = "TEACHER"
+    let page = mountPage()
+    await flushPromises()
+    expect(page.text()).toContain("Student One — Class: Class 10A; Elective subjects: Biology, Art")
+    page.unmount()
+    state.role = "STUDENT"
+    page = mountPage()
+    await flushPromises()
+    expect(page.text()).not.toContain("Class 10A")
+    expect(page.text()).not.toContain("Biology")
+    page.unmount()
+  })
+})
+
 describe('IdeasPage overview supervision preferences', () => {
   it('offers withdrawn students edit and submit actions, and refreshes after each succeeds', async () => {
     api.list.mockResolvedValueOnce(pageIdeas('WITHDRAWN')).mockResolvedValue(pageIdeas())

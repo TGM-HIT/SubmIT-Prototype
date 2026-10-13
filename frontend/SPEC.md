@@ -83,3 +83,9 @@ Use the generated OpenAPI contract for API types and endpoint details. Do not ha
 ## 5. UX Quality
 
 Use responsive layouts for desktop and mobile, keyboard-accessible controls, visible focus states, semantic labels, and non-color-only status indicators. Preserve list filters, page position, and review/application context when navigating to a detail view and back. Dates and times must be displayed consistently with the user's locale while retaining the authoritative deadline from the API.
+
+## Student class and elective-subject presentation
+
+The administrator interface provides shared class and elective-subject catalogue editing and lets administrators assign one class and up to four subjects to each student. It provides validation feedback, allows clearing subject assignments, and displays resolved catalogue names rather than identifiers.
+
+Authenticated teacher and administrator identity views show current class and elective-subject names beside student names in ideas/reviews, application summaries, allocation results, administrator account lists, and grading. Catalogues and student assignments are not presented to students or in student-facing groups, and do not appear in public archive views. Student account identity and authorization behavior remains unchanged.

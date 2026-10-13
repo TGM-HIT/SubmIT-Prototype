@@ -12,6 +12,7 @@ import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
@@ -37,7 +38,11 @@ public final class ApiDtos {
     }
 
     public record UserResponse(UUID id, String username,
-            @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String displayName, Role role) {
+            @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String displayName, Role role,
+            @Schema(description = "Current student class; returned only on the administrator account-list endpoint.")
+            @JsonInclude(JsonInclude.Include.NON_NULL) String className,
+            @Schema(description = "Current elective subject names; returned only on the administrator account-list endpoint.")
+            @JsonInclude(JsonInclude.Include.NON_NULL) List<String> electiveSubjectNames) {
     }
 
     public record DisplayNameRequest(
@@ -47,6 +52,35 @@ public final class ApiDtos {
     }
 
     public record RoleRequest(@NotNull Role role) {
+    }
+
+    public record CatalogueEntryRequest(
+            @NotBlank @Size(min = 1, max = 100)
+            @Schema(description = "Unique shared class or elective-subject name; trimmed before storage; 1 to 100 characters.",
+                    minLength = 1, maxLength = 100, requiredMode = Schema.RequiredMode.REQUIRED)
+            String name) {
+    }
+
+    public record CatalogueEntryResponse(UUID id, @NotNull @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String name) {
+    }
+
+    public record StudentDetailsRequest(
+            @NotNull @Schema(description = "Required ID of the students single assigned class.") UUID classId,
+            @NotNull @Size(max = 4, message = "A student can have at most four elective subjects.")
+            @ArraySchema(arraySchema = @Schema(description =
+                    "Assigned shared elective subject IDs; required, may be empty, IDs must be unique, maximum four."),
+                    maxItems = 4, uniqueItems = true, schema = @Schema(format = "uuid"))
+            List<@NotNull UUID> electiveSubjectIds) {
+    }
+
+    public record StudentDetailsResponse(
+            UUID studentId,
+            String displayName,
+            UUID classId,
+            String className,
+            List<UUID> electiveSubjectIds,
+            @Schema(description = "Current catalogue names, returned only to authenticated teachers and administrators.")
+            List<String> electiveSubjectNames) {
     }
 
     public record ApiErrorResponse(@NotNull int status, @NotNull String error, @NotNull String message) {
@@ -301,7 +335,11 @@ public final class ApiDtos {
     public record SupervisorResponse(UUID id, UUID teacherId, String status) {
     }
 
-    public record IdeaOwnerResponse(UUID id, String displayName, boolean creator) {
+    public record IdeaOwnerResponse(UUID id, String displayName, boolean creator,
+            @Schema(description = "Current class name; only included in authenticated teacher and administrator responses.")
+            @JsonInclude(JsonInclude.Include.NON_NULL) String className,
+            @Schema(description = "Current elective subject names; only included in authenticated teacher and administrator responses.")
+            @JsonInclude(JsonInclude.Include.NON_NULL) List<String> electiveSubjectNames) {
     }
 
     public record StudentLookupResponse(UUID id, String displayName) {
@@ -403,7 +441,11 @@ public final class ApiDtos {
             String studentDisplayName,
             UUID periodId,
             String status,
-            List<PreferenceResponse> preferences) {
+            List<PreferenceResponse> preferences,
+            @Schema(description = "Current class name; only included in authenticated teacher and administrator responses.")
+            @JsonInclude(JsonInclude.Include.NON_NULL) String className,
+            @Schema(description = "Current elective subject names; only included in authenticated teacher and administrator responses.")
+            @JsonInclude(JsonInclude.Include.NON_NULL) List<String> electiveSubjectNames) {
     }
 
     public record FormalReviewResponse(UUID id, UUID teacherId, String decision, String feedback) {

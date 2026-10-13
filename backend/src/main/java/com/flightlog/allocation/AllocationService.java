@@ -46,13 +46,15 @@ public class AllocationService {
     private final AuditService audit;
     private final AllocationEngine engine;
     private final UserAccountRepository users;
+    private final AllocationStudentDetailsMapper studentIdentity;
 
     public AllocationService(RecordStore store, AuditService audit, AllocationEngine engine,
-            UserAccountRepository users) {
+            UserAccountRepository users, AllocationStudentDetailsMapper studentIdentity) {
         this.store = store;
         this.audit = audit;
         this.engine = engine;
         this.users = users;
+        this.studentIdentity = studentIdentity;
     }
 
     @Transactional
@@ -252,6 +254,8 @@ public class AllocationService {
         addLabels(result.path(ASSIGNMENTS_FIELD), PROJECT_ID_FIELD, "projectTitle", titles, "Unknown project");
         addLabels(result.path(UNASSIGNED_STUDENTS_FIELD), STUDENT_ID_FIELD, "studentDisplayName", names, "Unknown student");
         addLabels(result.path(UNASSIGNED_PROJECTS_FIELD), PROJECT_ID_FIELD, "projectTitle", titles, "Unknown project");
+        studentIdentity.addStudentDetails(result.path(ASSIGNMENTS_FIELD));
+        studentIdentity.addStudentDetails(result.path(UNASSIGNED_STUDENTS_FIELD));
     }
 
     private void collectIds(JsonNode entries, String field, Set<UUID> ids) {

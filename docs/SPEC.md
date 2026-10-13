@@ -149,3 +149,9 @@ The allocation must never violate group-size limits or assign a student to multi
 - Allocation decisions are reproducible from the recorded application snapshot and allocation run inputs.
 - Important submissions, reviews, decisions, application changes, and allocation actions are auditable.
 - Collection views are paginated. Public URLs, role names, enum values, pagination metadata, and error shapes are stable behavior.
+
+## 11. Student Classes and Elective Subjects
+
+Administrators maintain shared class and elective-subject catalogues by adding and renaming entries. Every student is assigned one class and zero to four shared elective subjects by an administrator. Assignments reference catalogue entries; names are resolved from the current catalogue. Unknown references, duplicate subjects, more than four subjects, and non-student targets are rejected without partial assignment changes.
+
+Teachers and administrators may see the current class and elective-subject names beside student names in authenticated staff views, including ideas and reviews, application summaries, allocation results, administration, and grading. Students cannot manage catalogues or assignments and cannot see other students assignments. Existing access to a students own account is unchanged. Catalogue and assignment data are private to authenticated staff and never appear in public archive responses.

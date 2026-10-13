@@ -27,6 +27,12 @@ import com.flightlog.grading.RubricDtos.RubricResponse;
 import com.flightlog.grading.RubricDtos.ScaleDto;
 import com.flightlog.security.AuthenticatedUser;
 import com.flightlog.security.Role;
+import com.flightlog.user.UserAccount;
+import com.flightlog.user.UserAccountRepository;
+import com.flightlog.user.StudentClassEntity;
+import com.flightlog.user.StudentClassRepository;
+import com.flightlog.user.ElectiveSubjectEntity;
+import com.flightlog.user.ElectiveSubjectRepository;
 import com.flightlog.web.ApiException;
 import jakarta.validation.Validation;
 import java.math.BigDecimal;
@@ -55,6 +61,9 @@ class GradingServiceTest {
     private MetricService metrics;
     @Autowired
     private FinalGradeService finalGrades;
+    @Autowired private UserAccountRepository users;
+    @Autowired private StudentClassRepository classes;
+    @Autowired private ElectiveSubjectRepository subjects;
 
     private final AuthenticatedUser admin = user(Role.ADMIN);
     private final AuthenticatedUser teacher = user(Role.TEACHER);
@@ -76,6 +85,13 @@ class GradingServiceTest {
     @BeforeEach
     void setUp() {
         projectId = UUID.randomUUID();
+        UserAccount aliceAccount = new UserAccount(alice.id(), "alice-" + alice.id(), "Alice Student", "unused", Role.STUDENT);
+        StudentClassEntity studentClass = classes.save(new StudentClassEntity(UUID.randomUUID(), "Class " + UUID.randomUUID()));
+        ElectiveSubjectEntity subject = subjects.save(new ElectiveSubjectEntity(UUID.randomUUID(), "Subject " + UUID.randomUUID()));
+        aliceAccount.setStudentClass(studentClass);
+        aliceAccount.setElectiveSubjects(List.of(subject));
+        users.save(aliceAccount);
+        users.save(new UserAccount(bob.id(), "bob-" + bob.id(), "Bob Student", "unused", Role.STUDENT));
         ObjectNode group = store.object();
         group.putArray("studentIds").add(alice.id().toString()).add(bob.id().toString());
         store.create("project_group", null, projectId.toString(), "ALLOCATED", group);
@@ -152,6 +168,20 @@ class GradingServiceTest {
         assertEquals(2, grades.listStudentGrades(teacher, projectId, null, 0, 20).totalElements());
         assertThrows(ApiException.class, () -> grades.reviseStudentGrade(teacher, projectId, first.id(),
                 new GradeRevisionRequest("again", n(3), null, null, null)));
+    }
+
+    @Test
+    void staffGradeResponsesResolveCurrentStudentIdentityButStudentResponsesDoNot() {
+        login(teacher);
+        GradeResponse recorded = grades.recordStudentGrade(teacher, projectId, studentGrade(alice, 3));
+        assertEquals("Alice Student", recorded.studentDisplayName());
+        assertTrue(recorded.className().startsWith("Class "));
+        assertEquals(1, recorded.electiveSubjectNames().size());
+        login(alice);
+        GradeResponse own = grades.listStudentGrades(alice, projectId, alice.id().toString(), 0, 20).content().get(0);
+        assertEquals(null, own.studentDisplayName());
+        assertEquals(null, own.className());
+        assertEquals(null, own.electiveSubjectNames());
     }
 
     @Test

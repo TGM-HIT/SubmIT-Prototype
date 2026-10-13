@@ -13,9 +13,15 @@ import com.flightlog.data.RecordStore;
 import com.flightlog.security.Role;
 import com.flightlog.user.UserAccount;
 import com.flightlog.user.UserAccountRepository;
+import com.flightlog.user.StudentClassEntity;
+import com.flightlog.user.StudentClassRepository;
+import com.flightlog.user.ElectiveSubjectEntity;
+import com.flightlog.user.ElectiveSubjectRepository;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -42,6 +48,8 @@ class IdeaReviewControllerTest {
     private ObjectMapper objectMapper;
     @Autowired
     private UserAccountRepository users;
+    @Autowired private StudentClassRepository classes;
+    @Autowired private ElectiveSubjectRepository subjects;
     @Autowired
     private RecordStore store;
 
@@ -302,6 +310,9 @@ class IdeaReviewControllerTest {
     void publicArchiveEndpointReturnsOnlyItsPublicArtifactMetadataAndNoAccountIdentities() throws Exception {
         // This checks archive response metadata, not whether arbitrary published artifact content is anonymous.
         UserAccount student = users.findByUsername("student01").orElseThrow();
+        student.setStudentClass(classes.save(new StudentClassEntity(UUID.randomUUID(), "Private class")));
+        student.setElectiveSubjects(List.of(subjects.save(new ElectiveSubjectEntity(UUID.randomUUID(), "Private subject"))));
+        users.save(student);
         var project = store.create("project", null, null, "PROJECT_COMPLETED",
                 store.object().put("title", "Synthetic completed archive project"));
         var publicMetadata = store.object().put("type", "POSTER").put("title", "Public poster")

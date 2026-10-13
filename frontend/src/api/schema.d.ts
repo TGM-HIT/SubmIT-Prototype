@@ -4,6 +4,22 @@
  */
 
 export interface paths {
+    "/api/users/{id}/student-details": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["details"];
+        put: operations["assign"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{projectId}/final-grade": {
         parameters: {
             query?: never;
@@ -130,6 +146,22 @@ export interface paths {
         get: operations["getPeriod"];
         put: operations["updatePeriod"];
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/student-classes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["classes"];
+        put?: never;
+        post: operations["createClass"];
         delete?: never;
         options?: never;
         head?: never;
@@ -426,6 +458,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/elective-subjects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["subjects"];
+        put?: never;
+        post: operations["createSubject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/auth/register": {
         parameters: {
             query?: never;
@@ -574,6 +622,38 @@ export interface paths {
         head?: never;
         /** Change an account role. At least one administrator account must remain. */
         patch: operations["changeRole"];
+        trace?: never;
+    };
+    "/api/student-classes/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["renameClass"];
+        trace?: never;
+    };
+    "/api/elective-subjects/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["renameSubject"];
         trace?: never;
     };
     "/api/users": {
@@ -865,6 +945,26 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        StudentDetailsRequest: {
+            /**
+             * Format: uuid
+             * @description Required ID of the students single assigned class.
+             */
+            classId: string;
+            /** @description Assigned shared elective subject IDs; required, may be empty, IDs must be unique, maximum four. */
+            electiveSubjectIds: string[];
+        };
+        StudentDetailsResponse: {
+            /** Format: uuid */
+            studentId?: string;
+            displayName?: string;
+            /** Format: uuid */
+            classId?: string;
+            className?: string;
+            electiveSubjectIds?: string[];
+            /** @description Current catalogue names, returned only to authenticated teachers and administrators. */
+            electiveSubjectNames?: string[];
+        };
         /** @description Final grade decision: either a configured ruleId, or a manual grade with an explicit rationale. */
         Decision: {
             /** @description Configured aggregation rule; omit for a manual decision. */
@@ -935,6 +1035,12 @@ export interface components {
             projectId?: string;
             /** Format: uuid */
             studentId?: string;
+            /** @description Current student display name; included only for authenticated teacher and administrator responses. */
+            studentDisplayName?: string;
+            /** @description Current class name; included only for authenticated teacher and administrator responses. */
+            className?: string;
+            /** @description Current elective subject names; included only for authenticated teacher and administrator responses. */
+            electiveSubjectNames?: string[];
             /** Format: uuid */
             rubricId?: string;
             rubricVersion?: string;
@@ -994,6 +1100,10 @@ export interface components {
             id?: string;
             displayName?: string;
             creator?: boolean;
+            /** @description Current class name; only included in authenticated teacher and administrator responses. */
+            className?: string;
+            /** @description Current elective subject names; only included in authenticated teacher and administrator responses. */
+            electiveSubjectNames?: string[];
         };
         IdeaResponse: {
             /** Format: uuid */
@@ -1173,6 +1283,10 @@ export interface components {
             periodId?: string;
             status?: string;
             preferences?: components["schemas"]["PreferenceResponse"][];
+            /** @description Current class name; only included in authenticated teacher and administrator responses. */
+            className?: string;
+            /** @description Current elective subject names; only included in authenticated teacher and administrator responses. */
+            electiveSubjectNames?: string[];
         };
         ApplicationPeriodRequest: {
             /** @description Required administrator-set period label; trimmed, non-blank after trimming, and at most 100 characters. Blank or whitespace-only values are rejected. */
@@ -1228,6 +1342,15 @@ export interface components {
             displayName?: string;
             /** @description True only for the authenticated caller. */
             self?: boolean;
+        };
+        CatalogueEntryRequest: {
+            /** @description Unique shared class or elective-subject name; trimmed before storage; 1 to 100 characters. */
+            name: string;
+        };
+        CatalogueEntryResponse: {
+            /** Format: uuid */
+            id?: string;
+            name: string;
         };
         /** @description Teacher assessment of one student against one criterion of a rubric version. */
         StudentGradeRequest: {
@@ -1477,6 +1600,10 @@ export interface components {
             displayName: string;
             /** @enum {string} */
             role?: "STUDENT" | "TEACHER" | "ADMIN";
+            /** @description Current student class; returned only on the administrator account-list endpoint. */
+            className?: string;
+            /** @description Current elective subject names; returned only on the administrator account-list endpoint. */
+            electiveSubjectNames?: string[];
         };
         LoginRequest: {
             username: string;
@@ -1537,6 +1664,17 @@ export interface components {
             /** Format: uuid */
             id?: string;
             displayName?: string;
+        };
+        PageResponseCatalogueEntryResponse: {
+            content?: components["schemas"]["CatalogueEntryResponse"][];
+            /** Format: int32 */
+            page?: number;
+            /** Format: int32 */
+            size?: number;
+            /** Format: int64 */
+            totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
         };
         PageResponseString: {
             content?: string[];
@@ -1714,6 +1852,54 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    details: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["StudentDetailsResponse"];
+                };
+            };
+        };
+    };
+    assign: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StudentDetailsRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["StudentDetailsResponse"];
+                };
+            };
+        };
+    };
     getFinalGrade: {
         parameters: {
             query?: never;
@@ -2015,6 +2201,53 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApplicationPeriodResponse"];
+                };
+            };
+        };
+    };
+    classes: {
+        parameters: {
+            query?: {
+                page?: number;
+                size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PageResponseCatalogueEntryResponse"];
+                };
+            };
+        };
+    };
+    createClass: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CatalogueEntryRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CatalogueEntryResponse"];
                 };
             };
         };
@@ -2709,6 +2942,53 @@ export interface operations {
             };
         };
     };
+    subjects: {
+        parameters: {
+            query?: {
+                page?: number;
+                size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PageResponseCatalogueEntryResponse"];
+                };
+            };
+        };
+    };
+    createSubject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CatalogueEntryRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CatalogueEntryResponse"];
+                };
+            };
+        };
+    };
     register: {
         parameters: {
             query?: never;
@@ -3047,6 +3327,58 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    renameClass: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CatalogueEntryRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CatalogueEntryResponse"];
+                };
+            };
+        };
+    };
+    renameSubject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CatalogueEntryRequest"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CatalogueEntryResponse"];
                 };
             };
         };

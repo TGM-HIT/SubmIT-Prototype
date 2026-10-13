@@ -5,8 +5,15 @@ import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
+import jakarta.persistence.JoinColumn;
+import jakarta.persistence.JoinTable;
+import jakarta.persistence.ManyToMany;
+import jakarta.persistence.ManyToOne;
 import jakarta.persistence.Table;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 
 @Entity
@@ -27,6 +34,16 @@ public class UserAccount {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private Role role;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "student_class_id")
+    private StudentClassEntity studentClass;
+
+    @ManyToMany(fetch = FetchType.LAZY)
+    @JoinTable(name = "student_elective_subjects",
+            joinColumns = @jakarta.persistence.JoinColumn(name = "student_id"),
+            inverseJoinColumns = @jakarta.persistence.JoinColumn(name = "subject_id"))
+    private List<ElectiveSubjectEntity> electiveSubjects = new ArrayList<>();
 
     protected UserAccount() {
     }
@@ -53,6 +70,22 @@ public class UserAccount {
 
     public void setDisplayName(String displayName) {
         this.displayName = displayName;
+    }
+
+    public StudentClassEntity getStudentClass() {
+        return studentClass;
+    }
+
+    public void setStudentClass(StudentClassEntity studentClass) {
+        this.studentClass = studentClass;
+    }
+
+    public List<ElectiveSubjectEntity> getElectiveSubjects() {
+        return electiveSubjects;
+    }
+
+    public void setElectiveSubjects(List<ElectiveSubjectEntity> electiveSubjects) {
+        this.electiveSubjects = new ArrayList<>(electiveSubjects);
     }
 
     public String getPasswordHash() {

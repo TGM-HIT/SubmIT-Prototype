@@ -161,3 +161,12 @@ The project archive records internal metadata, uploader, timestamps, publication
 - Formal project applications, immutable rubric versions, grade histories, metric observations, final-grade bases, and project artefact changes are retained and auditable.
 - Request, response, validation, and security annotations fully describe the generated OpenAPI contract.
 - API errors use one consistent response shape and include useful validation or conflict details without exposing secrets.
+
+### Student class and elective-subject catalogue
+
+- `GET /api/student-classes` and `GET /api/elective-subjects` return paginated shared catalogues to authenticated teachers and administrators.
+- Administrators create entries with `POST` and rename entries with `PATCH` on these catalogue resources; deletion is not supported. Names are trimmed, 1 to 100 characters, and unique without regard to case.
+- `GET /api/users/{id}/student-details` returns current student class and elective-subject IDs and names to authenticated teachers and administrators. `PUT` on that route lets administrators assign one required class and a required list of zero to four unique subject IDs.
+- Catalogues and assignment mutations are administrator-only. Assignments can target only students; unknown IDs, repeated subjects, and more than four subjects are rejected before mutation.
+- Staff-only identity responses may include current class and elective-subject names. Generic account, student lookup, student-owned application/group, and public archive responses do not expose another students assignment details. The administrator account list may include the details.
+- Allocation, idea-owner, staff application-summary, and staff grade responses resolve current names; allocation snapshots remain unchanged.

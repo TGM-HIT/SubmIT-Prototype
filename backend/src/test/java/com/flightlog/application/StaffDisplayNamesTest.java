@@ -15,6 +15,10 @@ import com.flightlog.data.RecordStore;
 import com.flightlog.data.StoredRecord;
 import com.flightlog.user.UserAccount;
 import com.flightlog.user.UserAccountRepository;
+import com.flightlog.user.StudentClassEntity;
+import com.flightlog.user.StudentClassRepository;
+import com.flightlog.user.ElectiveSubjectEntity;
+import com.flightlog.user.ElectiveSubjectRepository;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -36,6 +40,8 @@ class StaffDisplayNamesTest {
     @Autowired private ObjectMapper objectMapper;
     @Autowired private RecordStore store;
     @Autowired private UserAccountRepository users;
+    @Autowired private StudentClassRepository classes;
+    @Autowired private ElectiveSubjectRepository subjects;
 
     private UserAccount firstStudent;
     private UserAccount secondStudent;
@@ -46,6 +52,8 @@ class StaffDisplayNamesTest {
     private String adminToken;
     private String teacherToken;
     private String studentToken;
+    private String assignedClassName;
+    private String assignedSubjectName;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -54,10 +62,19 @@ class StaffDisplayNamesTest {
         adminToken = login("admin01");
         teacherToken = login("teacher01");
         studentToken = login("student01");
+        assignedClassName = "Class " + UUID.randomUUID();
+        assignedSubjectName = "Subject " + UUID.randomUUID();
+        StudentClassEntity studentClass = classes.save(new StudentClassEntity(UUID.randomUUID(), assignedClassName));
+        ElectiveSubjectEntity elective = subjects.save(new ElectiveSubjectEntity(UUID.randomUUID(), assignedSubjectName));
+        firstStudent.setStudentClass(studentClass);
+        firstStudent.setElectiveSubjects(List.of(elective));
+        users.save(firstStudent);
         firstProject = idea("Solar design project");
         secondProject = idea("Water quality project");
         ObjectNode periodData = store.object().put("label", "Staff display period")
-                .put("schoolYear", "2026/2027");
+                .put("schoolYear", "2026/2027")
+                .put("opensAt", "2026-10-10T09:00:00Z")
+                .put("closesAt", "2026-10-20T17:00:00Z");
         ArrayNode catalogue = periodData.putArray("projectIds");
         catalogue.add(firstProject.getId().toString()).add(secondProject.getId().toString());
         period = store.create("application_period", null, null, "ALLOCATED", periodData);
@@ -88,6 +105,8 @@ class StaffDisplayNamesTest {
             assertEquals(firstStudent.getId().toString(), assigned.path("studentId").asText());
             assertEquals(firstProject.getId().toString(), assigned.path("projectId").asText());
             assertEquals("Alex Example", assigned.path("studentDisplayName").asText());
+            assertEquals(assignedClassName, assigned.path("className").asText());
+            assertEquals(assignedSubjectName, assigned.path("electiveSubjectNames").get(0).asText());
             assertEquals("Solar design project", assigned.path("projectTitle").asText());
             assertEquals(secondStudent.getId().toString(), result.path("unassignedStudents").get(0)
                     .path("studentId").asText());
@@ -116,6 +135,23 @@ class StaffDisplayNamesTest {
         assertEquals(originalPayload, persistedPayload);
         assertFalse(persistedPayload.contains("studentDisplayName"));
         assertFalse(persistedPayload.contains("projectTitle"));
+    }
+
+    @Test
+    void ideaAndStudentOwnedResponsesRespectStaffOnlyAssignmentPrivacy() throws Exception {
+        for (String token : List.of(adminToken, teacherToken)) {
+            JsonNode ideaResponse = getJson("/api/ideas/" + firstProject.getId(), token);
+            assertEquals(assignedClassName, ideaResponse.path("owners").get(0).path("className").asText());
+            assertEquals(assignedSubjectName, ideaResponse.path("owners").get(0).path("electiveSubjectNames").get(0).asText());
+        }
+        JsonNode studentIdea = getJson("/api/ideas/" + firstProject.getId(), studentToken);
+        assertFalse(studentIdea.path("owners").get(0).has("className"));
+        assertFalse(studentIdea.path("owners").get(0).has("electiveSubjectNames"));
+        JsonNode ownApplication = getJson("/api/application-periods/" + period.getId() + "/applications/me", studentToken);
+        assertFalse(ownApplication.has("className"));
+        assertFalse(ownApplication.has("electiveSubjectNames"));
+        JsonNode adminAccounts = getJson("/api/users?role=STUDENT", adminToken);
+        assertTrue(adminAccounts.path("content").findValuesAsText("className").contains(assignedClassName));
     }
 
     @Test
@@ -189,6 +225,8 @@ class StaffDisplayNamesTest {
         JsonNode second = byStudent(response, secondStudent.getId());
         assertEquals(firstStudent.getId().toString(), first.path("studentId").asText());
         assertEquals(firstName, first.path("studentDisplayName").asText());
+        assertEquals(assignedClassName, first.path("className").asText());
+        assertEquals(assignedSubjectName, first.path("electiveSubjectNames").get(0).asText());
         assertEquals(secondName, second.path("studentDisplayName").asText());
         assertEquals(firstProject.getId().toString(), first.path("preferences").get(0).path("projectId").asText());
         assertEquals(firstTitle, first.path("preferences").get(0).path("projectTitle").asText());

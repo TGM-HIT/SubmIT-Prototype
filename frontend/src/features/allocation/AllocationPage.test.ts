@@ -110,7 +110,7 @@ describe('allocation supervisor display', () => {
 
     expect(page.text()).toContain("Unknown project")
     expect(page.text()).toContain("Unknown student")
-    expect(page.text()).toContain("Unknown student · RANKED_PROJECTS_NOT_FORMED")
+    expect(page.text()).toContain("Unknown student · Class: Not assigned · Elective subjects: None · RANKED_PROJECTS_NOT_FORMED")
     expect(page.text()).toContain("Unknown project · NOT_SELECTED_BY_OPTIMIZATION")
     expect(page.text()).not.toContain(studentId)
     expect(page.text()).not.toContain(projectId)
@@ -131,12 +131,16 @@ describe('allocation supervisor display', () => {
         assignments: studentIds.map((studentId, index) => ({
           studentId,
           studentDisplayName: `Assigned Student ${index + 1}`,
+          className: "Class 10A",
+          electiveSubjectNames: ["Biology", "Art"],
           projectId,
           projectTitle: "Current allocation project",
         })),
         unassignedStudents: [{
           studentId: "55555555-5555-4555-8555-555555555555",
           studentDisplayName: "Unassigned Student",
+          className: "Class 11B",
+          electiveSubjectNames: ["Music"],
           reason: "RANKED_PROJECTS_NOT_FORMED",
         }],
         unassignedProjects: [{
@@ -155,7 +159,8 @@ describe('allocation supervisor display', () => {
     expect(page.text()).toContain("Current allocation project")
     expect(page.text()).toContain("Assigned Student 1")
     expect(page.text()).toContain("Assigned Student 3")
-    expect(page.text()).toContain("Unassigned Student · RANKED_PROJECTS_NOT_FORMED")
+    expect(page.text()).toContain("Class: Class 10A · Elective subjects: Biology, Art")
+    expect(page.text()).toContain("Unassigned Student · Class: Class 11B · Elective subjects: Music · RANKED_PROJECTS_NOT_FORMED")
     expect(page.text()).toContain("Unassigned Project · NOT_SELECTED_BY_OPTIMIZATION")
     expect(page.text()).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i)
     const styles = readFileSync(resolve(process.cwd(), "src/styles.css"), "utf8")

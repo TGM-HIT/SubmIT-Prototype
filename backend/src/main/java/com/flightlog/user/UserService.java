@@ -6,6 +6,7 @@ import com.flightlog.audit.AuditService;
 import com.flightlog.web.ApiDtos.PageResponse;
 import com.flightlog.web.ApiDtos.DisplayNameRequest;
 import com.flightlog.web.ApiDtos.UserResponse;
+import com.flightlog.web.ApiDtos.StudentDetailsResponse;
 import com.flightlog.web.ApiDtos.StudentLookupResponse;
 import com.flightlog.web.ApiException;
 import java.util.Locale;
@@ -22,11 +23,14 @@ public class UserService {
     private final UserAccountRepository users;
     private final AuthService authService;
     private final AuditService audit;
+    private final StudentDetailsService studentDetails;
 
-    public UserService(UserAccountRepository users, AuthService authService, AuditService audit) {
+    public UserService(UserAccountRepository users, AuthService authService, AuditService audit,
+            StudentDetailsService studentDetails) {
         this.users = users;
         this.authService = authService;
         this.audit = audit;
+        this.studentDetails = studentDetails;
     }
 
     @Transactional(readOnly = true)
@@ -34,7 +38,15 @@ public class UserService {
         requireRole(caller, Role.ADMIN);
         String search = normalizeSearch(query);
         Page<UserAccount> result = users.findByFilters(role, search, PageRequest.of(page, size, Sort.by("id")));
-        return new PageResponse<>(result.map(authService::toResponse).getContent(), result.getNumber(),
+        return new PageResponse<>(result.map(user -> {
+            UserResponse response = authService.toResponse(user);
+            if (user.getRole() != Role.STUDENT) {
+                return response;
+            }
+            StudentDetailsResponse details = studentDetails.response(user);
+            return new UserResponse(response.id(), response.username(), response.displayName(), response.role(),
+                    details.className(), details.electiveSubjectNames());
+        }).getContent(), result.getNumber(),
                 result.getSize(), result.getTotalElements(), result.getTotalPages());
     }
 

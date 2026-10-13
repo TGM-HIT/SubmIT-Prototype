@@ -261,6 +261,8 @@ describe('application period configuration', () => {
         id: applicationId,
         studentId,
         studentDisplayName: longName,
+        className: "Class 10A",
+        electiveSubjectNames: ["Biology", "Art"],
         periodId: "period-1",
         status: "SUBMITTED",
         preferences: [{ projectId, projectTitle: "Current title outside accepted page", rank: 1 }],
@@ -276,6 +278,7 @@ describe('application period configuration', () => {
 
     expect(page.text()).toContain(`Application · ${longName}`)
     expect(page.text()).toContain(`Status: Submitted · Student ${longName}`)
+    expect(page.text()).toContain("Class: Class 10A · Elective subjects: Biology, Art")
     expect(page.text()).toContain("1. Current title outside accepted page")
     expect(page.text()).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i)
     const styles = readFileSync(resolve(process.cwd(), "src/styles.css"), "utf8")

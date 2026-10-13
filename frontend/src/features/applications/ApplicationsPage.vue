@@ -116,7 +116,7 @@
     <section v-if="applicationSummary" class="panel stack">
       <div class="page-heading"><h2 class="section-title">Application summary · {{ summaryPeriod.label }} <span class="muted">({{ summaryPeriod.schoolYear }})</span></h2><button class="button button-secondary button-small" @click="applicationSummary = null">Close summary</button></div>
       <div v-if="applicationSummary.content.length" class="data-list">
-        <article v-for="entry in applicationSummary.content" :key="entry.id" class="data-row"><div class="row-main"><h3 class="staff-display-label">Application · {{ entry.studentDisplayName || 'Unknown student' }}</h3><p class="staff-display-label">Status: {{ readable(entry.status) }} · Student {{ entry.studentDisplayName || 'Unknown student' }}</p><p class="staff-display-label">Preferences: {{ entry.preferences?.map((choice) => `${choice.rank}. ${choice.projectTitle || 'Unknown project'}`).join(" → ") }}</p></div></article>
+        <article v-for="entry in applicationSummary.content" :key="entry.id" class="data-row"><div class="row-main"><h3 class="staff-display-label">Application · {{ entry.studentDisplayName || 'Unknown student' }}</h3><p class="staff-display-label">Status: {{ readable(entry.status) }} · Student {{ entry.studentDisplayName || 'Unknown student' }}</p><p class="staff-display-label">Class: {{ entry.className || 'Not assigned' }} · Elective subjects: {{ entry.electiveSubjectNames?.join(', ') || 'None' }}</p><p class="staff-display-label">Preferences: {{ entry.preferences?.map((choice) => `${choice.rank}. ${choice.projectTitle || 'Unknown project'}`).join(" → ") }}</p></div></article>
       </div>
       <p v-else class="empty">No applications have been submitted for this period.</p>
     </section>

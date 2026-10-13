@@ -8,12 +8,21 @@ const api = vi.hoisted(() => ({
   audit: vi.fn(),
   role: vi.fn(),
   changeName: vi.fn(),
+  classes: vi.fn(),
+  subjects: vi.fn(),
+  get: vi.fn(),
+  createClass: vi.fn(),
+  createSubject: vi.fn(),
+  renameClass: vi.fn(),
+  renameSubject: vi.fn(),
+  assign: vi.fn(),
 }))
 
 vi.mock('../../api/services', () => ({
   userApi: {
     changeName: api.changeName,
   },
+  studentDetailsApi: { classes: api.classes, subjects: api.subjects, get: api.get, assign: api.assign, createClass: api.createClass, createSubject: api.createSubject, renameClass: api.renameClass, renameSubject: api.renameSubject },
   adminApi: {
     users: api.users,
     audit: api.audit,
@@ -47,7 +56,7 @@ function pageWith() {
   return wrapper
 }
 
-function pageResult(content = [account], page = 0) {
+function pageResult<T = typeof account>(content: T[] = [] as T[], page = 0) {
   return { content, page, size: 20, totalElements: content.length, totalPages: content.length ? 1 : 0 }
 }
 
@@ -60,6 +69,14 @@ describe('administrator account management', () => {
   beforeEach(() => {
     api.users.mockImplementation(async (page = 0) => pageResult([account], page))
     api.audit.mockResolvedValue(pageResult([]))
+    api.classes.mockResolvedValue(pageResult([]))
+    api.subjects.mockResolvedValue(pageResult([]))
+    api.get.mockResolvedValue({ classId: null, electiveSubjectIds: [], className: null, electiveSubjectNames: [] })
+    api.assign.mockResolvedValue({})
+    api.createClass.mockImplementation(async (input) => ({ id: "class-1", ...input }))
+    api.createSubject.mockImplementation(async (input) => ({ id: "subject-1", ...input }))
+    api.renameClass.mockResolvedValue({})
+    api.renameSubject.mockResolvedValue({})
     api.changeName.mockImplementation(async (_id: string, displayName: string) => ({ ...account, displayName }))
     api.role.mockResolvedValue(account)
     vi.stubGlobal('confirm', vi.fn().mockReturnValue(true))
@@ -255,6 +272,71 @@ describe('administrator account management', () => {
     await flushPromises()
     expect(page.get('[role="alert"]').text()).toContain('At least one administrator account must remain.')
     expect((page.get('#account-role').element as HTMLSelectElement).value).toBe('ADMIN')
+  })
+
+  it("creates and renames shared catalogue entries with current names", async () => {
+    let className = "Class A"
+    let subjectName = "Biology"
+    api.classes.mockImplementation(async () => pageResult([{ id: "class-1", name: className }]))
+    api.subjects.mockImplementation(async () => pageResult([{ id: "subject-1", name: subjectName }]))
+    api.renameClass.mockImplementation(async (_id, input) => { className = input.name; return { id: "class-1", name: className } })
+    api.renameSubject.mockImplementation(async (_id, input) => { subjectName = input.name; return { id: "subject-1", name: subjectName } })
+    const page = pageWith()
+    await flushPromises()
+    await page.findAll("button").find((button) => button.text() === "Classes & subjects")?.trigger("click")
+    await flushPromises()
+    await page.get("#new-class").setValue("  Class B  ")
+    await page.get("#new-class").element.closest("form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }))
+    await flushPromises()
+    expect(api.createClass).toHaveBeenCalledWith({ name: "Class B" })
+    await page.findAll("button").find((button) => button.text() === "Rename")?.trigger("click")
+    await page.findAll("input").find((input) => input.attributes("aria-label") === "Rename class Class A")?.setValue("Class A renamed")
+    await page.findAll("button").find((button) => button.text() === "Save")?.trigger("click")
+    await flushPromises()
+    expect(api.renameClass).toHaveBeenCalledWith("class-1", { name: "Class A renamed" })
+    expect(page.text()).toContain("Class A renamed")
+    expect(page.text()).not.toContain("class-1")
+    await page.findAll("button").filter((button) => button.text() === "Rename")[1].trigger("click")
+    await page.findAll("input").find((input) => input.attributes("aria-label") === "Rename subject Biology")?.setValue("Chemistry")
+    await page.findAll("button").find((button) => button.text() === "Save")?.trigger("click")
+    await flushPromises()
+    expect(api.renameSubject).toHaveBeenCalledWith("subject-1", { name: "Chemistry" })
+    expect(page.text()).toContain("Chemistry")
+    expect(page.text()).not.toContain("subject-1")
+  })
+
+  it("assigns four subjects and enforces the four-subject limit", async () => {
+    const classEntries = [{ id: "class-1", name: "Class A" }]
+    const subjectEntries = Array.from({ length: 5 }, (_, index) => ({ id: `subject-${index + 1}`, name: `Subject ${index + 1}` }))
+    api.classes.mockResolvedValue(pageResult(classEntries))
+    api.subjects.mockResolvedValue(pageResult(subjectEntries))
+    api.get.mockResolvedValue({ classId: "class-1", electiveSubjectIds: [], className: "Class A", electiveSubjectNames: [] })
+    const page = pageWith()
+    await flushPromises()
+    await openEditor(page)
+    for (let index = 0; index < 4; index++) await page.findAll("input[type=checkbox]")[index].setValue(true)
+    expect((page.findAll("input[type=checkbox]")[4].element as HTMLInputElement).disabled).toBe(true)
+    await page.get("form.edit-account-form").trigger("submit")
+    await flushPromises()
+    expect(api.assign).toHaveBeenCalledWith("student-id", {
+      classId: "class-1",
+      electiveSubjectIds: ["subject-1", "subject-2", "subject-3", "subject-4"],
+    })
+    expect(page.text()).not.toContain("subject-1")
+    expect(page.text()).not.toContain("class-1")
+  })
+
+  it("shows validation feedback and does not save an assignment without a class", async () => {
+    api.classes.mockResolvedValue(pageResult([{ id: "class-1", name: "Class A" }]))
+    api.subjects.mockResolvedValue(pageResult([]))
+    api.get.mockResolvedValue({ classId: "class-1", electiveSubjectIds: [], className: "Class A", electiveSubjectNames: [] })
+    const page = pageWith()
+    await flushPromises()
+    await openEditor(page)
+    await page.get("#student-class").setValue("")
+    await page.get("form.edit-account-form").trigger("submit")
+    expect(page.get("[role=alert]").text()).toBe("Select exactly one class.")
+    expect(api.assign).not.toHaveBeenCalled()
   })
 
   it('cancels without API calls and closes on Escape while restoring focus to Edit', async () => {

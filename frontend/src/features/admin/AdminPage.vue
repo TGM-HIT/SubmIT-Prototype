@@ -3,6 +3,7 @@
     <p class="page-intro">Manage user roles and inspect access-controlled audit history. Administrator actions are recorded on the server; role changes take effect only if accepted there.</p>
     <div class="tab-list" role="tablist" aria-label="Administration panels">
       <button class="tab-button" role="tab" :aria-selected="activeTab === 'users'" @click="activeTab = 'users'">Users & roles</button>
+      <button class="tab-button" role="tab" :aria-selected="activeTab === 'catalogues'" @click="activeTab = 'catalogues'; void loadCatalogues()">Classes & subjects</button>
       <button class="tab-button" role="tab" :aria-selected="activeTab === 'audit'" @click="activeTab = 'audit'">Audit history</button>
     </div>
     <section v-if="activeTab === 'users'" class="panel">
@@ -26,12 +27,30 @@
       <AsyncPanel :loading="task.loading.value" :error="task.error.value" @retry="loadUsers(users.page)">
         <div v-if="users.content.length" class="data-list">
           <article v-for="user in users.content" :key="user.id" class="data-row">
-            <div class="row-main"><h3>{{ user.displayName }}</h3><p>Username {{ user.username }}</p><p>Account {{ user.id }}</p><span class="status-badge">{{ user.role }}</span></div>
+            <div class="row-main"><h3>{{ user.displayName }}</h3><p>Username {{ user.username }}</p><p>Account {{ user.id }}</p><p v-if="user.role === 'STUDENT'">Class: {{ user.className || 'Not assigned' }} · Elective subjects: {{ user.electiveSubjectNames?.join(', ') || 'None' }}</p><span class="status-badge">{{ user.role }}</span></div>
             <button :id="`edit-account-${user.id}`" class="button button-secondary button-small" type="button" :aria-label="`Edit ${user.displayName} (${user.username})`" @click="openEditor(user, $event)">Edit</button>
           </article>
         </div>
         <p v-else class="empty">{{ hasActiveFilters ? 'No accounts match the selected filters.' : 'No accounts are visible.' }}</p>
         <Pager :page="users" @page="loadUsers" />
+      </AsyncPanel>
+    </section>
+    <section v-else-if="activeTab === 'catalogues'" class="panel">
+      <div class="page-heading"><div><h2 class="section-title">Classes and elective subjects</h2><p class="muted">Shared catalogues are used for student assignments. Entries may be renamed but not deleted.</p></div><button class="button button-secondary" type="button" @click="loadCatalogues">Refresh</button></div>
+      <AsyncPanel :loading="task.loading.value" :error="task.error.value" @retry="loadCatalogues">
+        <div class="grid grid-2">
+          <section class="panel"><h3 class="section-title">Classes</h3>
+            <form class="toolbar" @submit.prevent="createCatalogue('class')"><label class="sr-only" for="new-class">New class name</label><input id="new-class" v-model="newClassName" class="input" maxlength="100" placeholder="New class name" required><button class="button button-small" type="submit" :disabled="catalogueSaving">Add class</button></form>
+            <div v-for="entry in classes" :key="entry.id" class="data-row"><template v-if="editingCatalogue?.kind === 'class' && editingCatalogue.id === entry.id"><input v-model="catalogueDraft" class="input" maxlength="100" :aria-label="`Rename class ${entry.name}`"><button class="button button-small" type="button" @click="saveCatalogue">Save</button><button class="button button-secondary button-small" type="button" @click="editingCatalogue = null">Cancel</button></template><template v-else><span>{{ entry.name }}</span><button class="button button-secondary button-small" type="button" @click="editCatalogue('class', entry.id ?? 'unknown', entry.name ?? '')">Rename</button></template></div>
+            <p v-if="!classes.length" class="empty">No classes have been added.</p>
+          </section>
+          <section class="panel"><h3 class="section-title">Elective subjects</h3>
+            <form class="toolbar" @submit.prevent="createCatalogue('subject')"><label class="sr-only" for="new-subject">New subject name</label><input id="new-subject" v-model="newSubjectName" class="input" maxlength="100" placeholder="New subject name" required><button class="button button-small" type="submit" :disabled="catalogueSaving">Add subject</button></form>
+            <div v-for="entry in subjects" :key="entry.id" class="data-row"><template v-if="editingCatalogue?.kind === 'subject' && editingCatalogue.id === entry.id"><input v-model="catalogueDraft" class="input" maxlength="100" :aria-label="`Rename subject ${entry.name}`"><button class="button button-small" type="button" @click="saveCatalogue">Save</button><button class="button button-secondary button-small" type="button" @click="editingCatalogue = null">Cancel</button></template><template v-else><span>{{ entry.name }}</span><button class="button button-secondary button-small" type="button" @click="editCatalogue('subject', entry.id ?? 'unknown', entry.name ?? '')">Rename</button></template></div>
+            <p v-if="!subjects.length" class="empty">No elective subjects have been added.</p>
+          </section>
+        </div>
+        <p v-if="catalogueError" class="error-box" role="alert">{{ catalogueError }}</p>
       </AsyncPanel>
     </section>
     <section v-else class="panel">
@@ -63,6 +82,19 @@
             <option value="ADMIN">Administrator</option>
           </select>
         </div>
+        <template v-if="roleDraft === 'STUDENT'">
+          <div class="field">
+            <label class="label" for="student-class">Class</label>
+            <select id="student-class" v-model="classDraft" class="select" required>
+              <option value="" disabled>Select a class…</option>
+              <option v-for="entry in classes" :key="entry.id" :value="entry.id ?? ''">{{ entry.name }}</option>
+            </select>
+          </div>
+          <fieldset class="field"><legend class="label">Elective subjects (up to four)</legend>
+            <label v-for="entry in subjects" :key="entry.id" class="checkbox-row"><input v-model="subjectDraft" type="checkbox" :value="entry.id ?? ''" :disabled="subjectDraft.length >= 4 && !subjectDraft.includes(entry.id ?? '')">{{ entry.name }}</label>
+            <p v-if="subjectDraft.length >= 4" class="muted">The four-subject limit has been reached.</p>
+          </fieldset>
+        </template>
         <p v-if="editError" class="error-box" role="alert">{{ editError }}</p>
         <div class="actions">
           <button class="button button-small" type="submit" :disabled="saving || !hasChanges">Save</button>
@@ -77,7 +109,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { components } from '../../api/schema'
 import type { Page } from '../../api/client'
-import { adminApi, userApi } from '../../api/services'
+import { adminApi, studentDetailsApi, userApi } from '../../api/services'
 import { useTask } from '../../composables/useTask'
 import AsyncPanel from '../../components/AsyncPanel.vue'
 import ModalDialog from '../../components/ModalDialog.vue'
@@ -87,7 +119,7 @@ type Data = Record<string, unknown>
 type User = components['schemas']['UserResponse']
 type AccountRole = NonNullable<User['role']>
 const task = useTask()
-const activeTab = ref<'users' | 'audit'>('users')
+const activeTab = ref<'users' | 'catalogues' | 'audit'>('users')
 const users = ref<Page<User>>(emptyPage())
 const audit = ref<Page<Data>>(emptyPage())
 const roleFilter = ref<AccountRole | ''>('')
@@ -102,9 +134,25 @@ const originalName = ref('')
 const originalRole = ref<AccountRole>('STUDENT')
 const editError = ref('')
 const saving = ref(false)
+const classes = ref<components['schemas']['CatalogueEntryResponse'][]>([])
+const subjects = ref<components['schemas']['CatalogueEntryResponse'][]>([])
+const classDraft = ref('')
+const subjectDraft = ref<string[]>([])
+const originalClassId = ref('')
+const originalSubjectIds = ref<string[]>([])
+const newClassName = ref('')
+const newSubjectName = ref('')
+const catalogueDraft = ref('')
+const editingCatalogue = ref<{ kind: 'class' | 'subject'; id: string } | null>(null)
+const catalogueError = ref('')
+const catalogueSaving = ref(false)
 let searchDebounce: ReturnType<typeof setTimeout> | undefined
 const hasActiveFilters = computed(() => roleFilter.value !== '' || activeSearch.value !== '')
-const hasChanges = computed(() => nameDraft.value.trim() !== originalName.value || roleDraft.value !== originalRole.value)
+const hasChanges = computed(() => nameDraft.value.trim() !== originalName.value
+  || roleDraft.value !== originalRole.value
+  || (roleDraft.value === 'STUDENT'
+    && (classDraft.value !== originalClassId.value
+      || [...subjectDraft.value].sort().join(',') !== [...originalSubjectIds.value].sort().join(','))))
 
 function emptyPage<T>(): Page<T> { return { content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 } }
 function clearSearchDebounce(): void {
@@ -139,14 +187,32 @@ async function loadUsers(page = 0): Promise<void> {
 async function loadAudit(page = 0): Promise<void> {
   await task.run(async () => { audit.value = await adminApi.audit(page) })
 }
-function openEditor(user: User, event: MouseEvent): void {
+async function openEditor(user: User, event: MouseEvent): Promise<void> {
   editingUser.value = user
   editTrigger.value = event.currentTarget as HTMLElement
   originalName.value = user.displayName ?? ''
   originalRole.value = user.role ?? 'STUDENT'
   nameDraft.value = originalName.value
   roleDraft.value = originalRole.value
+  classDraft.value = ''
+  subjectDraft.value = []
+  originalClassId.value = ''
+  originalSubjectIds.value = []
   editError.value = ''
+  try {
+    const [classPage, subjectPage, details] = await Promise.all([
+      studentDetailsApi.classes(), studentDetailsApi.subjects(),
+      user.role === 'STUDENT' && user.id ? studentDetailsApi.get(user.id) : Promise.resolve(null),
+    ])
+    classes.value = classPage.content
+    subjects.value = subjectPage.content
+    classDraft.value = details?.classId ?? ''
+    subjectDraft.value = [...(details?.electiveSubjectIds ?? [])]
+    originalClassId.value = classDraft.value
+    originalSubjectIds.value = [...subjectDraft.value]
+  } catch (cause) {
+    editError.value = errorMessage(cause)
+  }
 }
 function closeEditor(): void {
   if (saving.value) return
@@ -174,6 +240,13 @@ async function saveAccount(): Promise<void> {
   const id = account.id ?? ''
   const nameChanged = displayName !== originalName.value
   const roleChanged = roleDraft.value !== originalRole.value
+  const assignmentChanged = roleDraft.value === 'STUDENT'
+    && (classDraft.value !== originalClassId.value
+      || [...subjectDraft.value].sort().join(',') !== [...originalSubjectIds.value].sort().join(','))
+  if (assignmentChanged && (!classDraft.value || subjectDraft.value.length > 4)) {
+    editError.value = !classDraft.value ? 'Select exactly one class.' : 'Select no more than four elective subjects.'
+    return
+  }
   if (roleChanged && !confirm(`Change this account's role to ${roleDraft.value}?`)) return
 
   saving.value = true
@@ -187,6 +260,9 @@ async function saveAccount(): Promise<void> {
       updateVisibleAccount({ ...account, ...updated, displayName: originalName.value })
     }
     if (roleChanged) await adminApi.role(id, roleDraft.value)
+    if (assignmentChanged) {
+      await studentDetailsApi.assign(id, { classId: classDraft.value, electiveSubjectIds: subjectDraft.value })
+    }
     await loadUsers(users.value.page)
     task.success.value = 'Account updated.'
     finishEditing()
@@ -199,6 +275,59 @@ async function saveAccount(): Promise<void> {
     saving.value = false
   }
 }
-onMounted(() => void loadUsers())
+async function loadCatalogues(): Promise<void> {
+  await task.run(async () => {
+    const [classPage, subjectPage] = await Promise.all([studentDetailsApi.classes(), studentDetailsApi.subjects()])
+    classes.value = classPage.content
+    subjects.value = subjectPage.content
+  })
+}
+function editCatalogue(kind: 'class' | 'subject', id: string, name: string): void {
+  editingCatalogue.value = { kind, id }
+  catalogueDraft.value = name
+  catalogueError.value = ''
+}
+async function createCatalogue(kind: 'class' | 'subject'): Promise<void> {
+  const name = (kind === 'class' ? newClassName.value : newSubjectName.value).trim()
+  if (!name || name.length > 100) {
+    catalogueError.value = 'Names must contain 1 to 100 characters.'
+    return
+  }
+  catalogueSaving.value = true
+  catalogueError.value = ''
+  try {
+    if (kind === 'class') {
+      await studentDetailsApi.createClass({ name })
+      newClassName.value = ''
+    } else {
+      await studentDetailsApi.createSubject({ name })
+      newSubjectName.value = ''
+    }
+    await loadCatalogues()
+    task.success.value = `${kind === 'class' ? 'Class' : 'Subject'} created.`
+  } catch (cause) {
+    catalogueError.value = errorMessage(cause)
+  } finally {
+    catalogueSaving.value = false
+  }
+}
+async function saveCatalogue(): Promise<void> {
+  if (!editingCatalogue.value) return
+  const { kind, id } = editingCatalogue.value
+  const name = catalogueDraft.value.trim()
+  if (!name || name.length > 100) {
+    catalogueError.value = 'Names must contain 1 to 100 characters.'
+    return
+  }
+  try {
+    if (kind === 'class') await studentDetailsApi.renameClass(id, { name })
+    else await studentDetailsApi.renameSubject(id, { name })
+    editingCatalogue.value = null
+    await loadCatalogues()
+  } catch (cause) {
+    catalogueError.value = errorMessage(cause)
+  }
+}
+onMounted(() => { void loadUsers(); void loadCatalogues() })
 onBeforeUnmount(clearSearchDebounce)
 </script>

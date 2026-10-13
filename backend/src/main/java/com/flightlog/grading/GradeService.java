@@ -65,7 +65,7 @@ public class GradeService {
         payload.put(STUDENT_ID, studentId);
         StoredRecord record = store.create(STUDENT_GRADE, studentId, projectId.toString(), ACTIVE, payload);
         audit.record(caller, "STUDENT_GRADE_RECORDED", STUDENT_GRADE, record.getId());
-        return GradingSupport.viewAs(store, record, GradeResponse.class);
+        return entries.withStudentDetails(caller, GradingSupport.viewAs(store, record, GradeResponse.class));
     }
 
     @Transactional
@@ -94,7 +94,7 @@ public class GradeService {
         originalPayload.put(SUPERSEDED_BY_ID, revision.getId().toString());
         store.update(original, SUPERSEDED, originalPayload);
         audit.record(caller, "STUDENT_GRADE_REVISED", STUDENT_GRADE, revision.getId());
-        return GradingSupport.viewAs(store, revision, GradeResponse.class);
+        return entries.withStudentDetails(caller, GradingSupport.viewAs(store, revision, GradeResponse.class));
     }
 
     @Transactional(readOnly = true)
@@ -109,8 +109,10 @@ public class GradeService {
         if (owner != null) {
             access.requireTeacherOrSelf(caller, members, owner);
         }
-        return GradingSupport.pageOf(store,
+        PageResponse<GradeResponse> records = GradingSupport.pageOf(store,
                 store.page(STUDENT_GRADE, owner, projectId.toString(), GradingSupport.newestFirst(page, size)), GradeResponse.class);
+        List<GradeResponse> content = records.content().stream().map(grade -> entries.withStudentDetails(caller, grade)).toList();
+        return new PageResponse<>(content, records.page(), records.size(), records.totalElements(), records.totalPages());
     }
 
     @Transactional

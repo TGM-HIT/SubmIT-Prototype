@@ -63,7 +63,7 @@
               <h3>{{ idea.title }}</h3>
               <span v-if="idea.teacherIdea" class="status-badge teacher-idea-label">Teacher idea</span>
               <p>{{ idea.description }}</p>
-              <p>School year {{ idea.schoolYear }} <span v-if="canSeeOwner"> · Submitted by {{ idea.ownerDisplayName }} · Owners: {{ (idea.owners ?? []).map(owner => owner.displayName).join(', ') || idea.ownerDisplayName }}</span></p>
+              <p>School year {{ idea.schoolYear }} <span v-if="canSeeOwner"> · Submitted by {{ idea.ownerDisplayName }} · Owners: {{ (idea.owners ?? []).map(owner => canSeeOwner ? `${owner.displayName} — Class: ${owner.className || 'Not assigned'}; Elective subjects: ${owner.electiveSubjectNames?.join(', ') || 'None'}` : owner.displayName).join(', ') || idea.ownerDisplayName }}</span></p>
               <p v-if="isTeacher && idea.ownSupervisionPreference" class="muted supervision-summary">
                 <strong>Your supervision preference:</strong> {{ preferenceLabel(idea.ownSupervisionPreference) }}
               </p>
@@ -89,7 +89,7 @@
       <div class="page-heading"><div><h2 class="section-title">{{ selectedIdea.title }} · history</h2><span v-if="selectedIdea.teacherIdea" class="status-badge teacher-idea-label">Teacher idea</span><p class="muted">Submission and decisions remain visible as the project changes stage.</p></div><button id="close-details-button" class="button button-secondary button-small" @click="closeDetails">Close details</button></div>
       <section class="owner-section" aria-label="Idea owners">
         <h3 class="form-section-title">Owners ({{ selectedIdea.owners?.length ?? 1 }}/5)</h3>
-        <ul class="owner-list"><li v-for="owner in selectedIdea.owners ?? fallbackOwners(selectedIdea)" :key="owner.id">{{ owner.displayName }}<span v-if="owner.creator"> · Creator</span>
+        <ul class="owner-list"><li v-for="owner in selectedIdea.owners ?? fallbackOwners(selectedIdea)" :key="owner.id">{{ owner.displayName }}<span v-if="owner.creator"> · Creator</span><span v-if="canSeeOwner"> · Class: {{ owner.className || 'Not assigned' }} · Elective subjects: {{ owner.electiveSubjectNames?.join(', ') || 'None' }}</span>
           <button v-if="isCreator(selectedIdea) && !owner.creator" class="button button-danger button-small" type="button" :aria-label="`Remove ${owner.displayName}`" @click="requestOwnerConfirmation('remove', selectedIdea, owner.id, $event)">Remove</button>
         </li></ul>
         <template v-if="isCreator(selectedIdea) && isStudent">

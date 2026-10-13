@@ -58,6 +58,13 @@ public final class GradeDtos {
             String createdAt,
             UUID projectId,
             UUID studentId,
+            @Schema(description = "Current student display name; included only for authenticated teacher and administrator responses.")
+            @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL) String studentDisplayName,
+            @Schema(description = "Current class name; included only for authenticated teacher and administrator responses.")
+            @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL) String className,
+            @Schema(description = "Current elective subject names; included only for authenticated teacher and administrator responses.")
+            @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+            java.util.List<String> electiveSubjectNames,
             UUID rubricId,
             String rubricVersion,
             String criterionId,

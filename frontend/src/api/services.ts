@@ -14,6 +14,10 @@ type ArtifactResponse = components['schemas']['ArtifactResponse']
 type PublicArtifactResponse = components['schemas']['PublicArtifactResponse']
 type UserResponse = components['schemas']['UserResponse']
 type DisplayNameRequest = components['schemas']['DisplayNameRequest']
+type CatalogueEntryRequest = components['schemas']['CatalogueEntryRequest']
+type CatalogueEntryResponse = components['schemas']['CatalogueEntryResponse']
+type StudentDetailsRequest = components['schemas']['StudentDetailsRequest']
+type StudentDetailsResponse = components['schemas']['StudentDetailsResponse']
 type Page<T> = { content: T[]; page: number; size: number; totalElements: number; totalPages: number }
 type Data = Record<string, unknown>
 
@@ -227,5 +231,32 @@ export const adminApi = {
   },
   audit(page = 0): Promise<Page<Data>> {
     return json(`/api/audit?${pageQuery(page)}`)
+  },
+}
+
+export const studentDetailsApi = {
+  classes(page = 0): Promise<Page<CatalogueEntryResponse>> {
+    return json(`/api/student-classes?${pageQuery(page, 100)}`)
+  },
+  subjects(page = 0): Promise<Page<CatalogueEntryResponse>> {
+    return json(`/api/elective-subjects?${pageQuery(page, 100)}`)
+  },
+  createClass(input: CatalogueEntryRequest): Promise<CatalogueEntryResponse> {
+    return json('/api/student-classes', 'POST', input)
+  },
+  renameClass(id: string, input: CatalogueEntryRequest): Promise<CatalogueEntryResponse> {
+    return json(`/api/student-classes/${encodeURIComponent(id)}`, 'PATCH', input)
+  },
+  createSubject(input: CatalogueEntryRequest): Promise<CatalogueEntryResponse> {
+    return json('/api/elective-subjects', 'POST', input)
+  },
+  renameSubject(id: string, input: CatalogueEntryRequest): Promise<CatalogueEntryResponse> {
+    return json(`/api/elective-subjects/${encodeURIComponent(id)}`, 'PATCH', input)
+  },
+  get(studentId: string): Promise<StudentDetailsResponse> {
+    return json(`/api/users/${encodeURIComponent(studentId)}/student-details`)
+  },
+  assign(studentId: string, input: StudentDetailsRequest): Promise<StudentDetailsResponse> {
+    return json(`/api/users/${encodeURIComponent(studentId)}/student-details`, 'PUT', input)
   },
 }
