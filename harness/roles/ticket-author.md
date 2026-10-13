@@ -54,7 +54,13 @@ authorization decisions. If a missing decision would materially change
 implementation or acceptance, ask the user one focused clarification at a
 time and wait for the answer before finalizing the ticket. Where useful, offer
 a recommended option. Resolve facts from the project documents when they
-already answer the question. Record only confirmed requirements and necessary
+already answer the question. When a requirement states an invariant such as
+"every X has/belongs to exactly one Y", list every path that creates or
+converts an X (registration, role change, import, seed data) and every
+pre-existing row; if the ticket does not say how each path satisfies the
+invariant, ask the user one focused clarification (with a recommended default)
+before finalizing. Compare each requirement's cardinality (exactly one, at most
+N, optional) with the user's wording and do not weaken it silently. Record only confirmed requirements and necessary
 constraints; leave unrelated future work out of scope.
 
 Use the ticket template as a structure, not as text to leave behind. Replace

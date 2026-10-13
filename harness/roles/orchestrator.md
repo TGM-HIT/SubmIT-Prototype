@@ -135,8 +135,37 @@ Evaluator verdicts are `pass`, `revise`, or `awaiting-human`.
      polling, dispatch an Implementor, or start another evaluation until the
      human/coordinator resumes the ticket.
 
+Decision gate (before every Implementor dispatch, first pass and revise). Scan
+the latest inputs for an open product or policy decision: `DECISION NEEDED:`
+lines in the last handoff's "What's uncertain"; an Evaluator finding, or an
+`awaiting-human` verdict, saying the fix depends on a decision the ticket does
+not make; and, on a revise dispatch, any finding whose prescribed fix would add
+a role or state, change login or registration, migrate data, or add or relax a
+"must / must not" requirement. If one is present, do not dispatch. Pause as
+`awaiting-human` with the pause kind `decision`: copy
+`harness/templates/human-acceptance.md`, fill the header and Part B with one
+row per open decision (quote the exact source sentence and cite its file, list
+the options, and give a recommended default), remove Part A unless acceptance
+checks are also unresolved, set the plan row to `awaiting-human`, commit only
+the ledger, and stop. Findings that do not depend on the decision stay in the
+pending revise brief and are dispatched only after the human answers.
+
 When the human returns a completed `human-acceptance.md`, preserve it in the
-paused run folder and record its receipt in the local run log. Do not force-add
+paused run folder and record its receipt in the local run log. Read Parts B and
+C and the Part D disposition together. If the disposition is "Decisions given,
+continue", or Part B/C holds decisions or blocking changes, this is not a
+verification-only continuation: amend the ticket with a dated "Product-owner
+decision" bullet quoting the human's words, commit only the ticket and ledger
+change, continue in the same run folder, and count one revise cycle. Run the
+scope gate on the next Implementor's own commit paths (changed since the
+amended-ticket commit), pass the decision to the Implementor and Evaluator in
+their dispatch prompts, and record the decision in the run log. If the
+disposition is "Request evaluator continuation" while a Part B decision is
+still blank, do not continue; ask the coordinator for the missing answer. If
+the disposition contradicts Part B/C text, treat the Part B/C text as the
+human's intent and note the discrepancy in the run log; never silently overrule
+either. Only a disposition with no open decisions or blocking feedback proceeds
+as the verification-only continuation below. Do not force-add
 or commit this ignored record. The tree must be clean for continuation
 preflight; ignored run records do not affect that check.
 Do not alter the human's observations or turn unchecked items into verified
