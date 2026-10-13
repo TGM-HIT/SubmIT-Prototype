@@ -1,3 +1,5 @@
+# List of bugs and ideas
+
 To create an application window the projects do not need a supervisor yet. These may be assigned later on.
 
 Allow allocation to run early.
