@@ -13,9 +13,10 @@ and administrators need to see those assignments when identifying a student.
   can create and rename entries and assign them to students. Catalogue entries
   are shared across students; assignments reference catalogue entries rather
   than storing free-text copies.
-- Each student may have one assigned class and zero to four assigned elective
-  subjects. The same subject can be assigned to multiple students. Administrators
-  can change or clear a student's class and subject assignments.
+- Every student has exactly one assigned class and zero to four assigned
+  elective subjects. The same subject can be assigned to multiple students.
+  Administrators can change a student's class and can change or clear their
+  subject assignments; a student must not be left without a class.
 - Do not add self-service subject selection: administrators assign the
   subjects. Students cannot assign themselves subjects or manage the catalogues.
 - Teachers and administrators can see a student's current class and elective
@@ -49,7 +50,8 @@ Durable automated tests (join the build):
 
 - Backend public API tests: an administrator creates and renames class and
   subject catalogue entries, assigns one class and zero, one, and four
-  subjects to a student, updates and clears assignments, reloads the student,
+  subjects to a student, changes the class and clears subject assignments,
+  reloads the student,
   and verifies the current catalogue names are returned.
 - Validation and authorization tests: reject a fifth subject, duplicate or
   unknown subject/class references, and non-student assignment targets without
@@ -104,8 +106,8 @@ Standard project checks:
 ## Acceptance criteria (the Evaluator judges)
 
 - Administrators can maintain class and elective-subject catalogues by adding
-  and renaming entries, and can assign or clear a student's one class and up
-  to four elective subjects.
+  and renaming entries, assign exactly one class to each student, change that
+  class, and assign or clear up to four elective subjects.
 - The student assignment persists and resolves to current catalogue names
   after reload. A subject may be assigned to multiple students.
 - Teachers and administrators see the student's class and elective subjects
