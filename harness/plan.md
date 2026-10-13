@@ -65,7 +65,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Feature-13](tickets/done/Feature-13.md) | done | Let several students own and edit an idea and its specification |
 | [Feature-14](tickets/done/Feature-14.md) | done | Let teachers submit ideas that follow the normal feedback and acceptance process |
 | [Feature-15](tickets/done/Feature-15.md) | done | Let administrators give each application period its own label |
-| [Feature-16](tickets/Feature-16.md) | in progress | Assign classes and elective subjects to students |
+| [Feature-16](tickets/done/Feature-16.md) | done | Assign classes and elective subjects to students |
 
 ### Optimizations
 
