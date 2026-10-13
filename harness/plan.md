@@ -44,6 +44,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-06](tickets/done/Dev-06.md) | done | Seed 15 student accounts with meaningful names for testing |
 | [Dev-07](tickets/done/Dev-07.md) | done | Seed multi-group allocation and finalization preview states for student testing |
 | [Dev-08](tickets/done/Dev-08.md) | done | Add an opt-in minimal testing fixture mode without application periods |
+| [Dev-09](tickets/Dev-09.md) | to-do | Align specifications and development guidelines |
 
 ### Features
 
@@ -64,6 +65,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Feature-13](tickets/done/Feature-13.md) | done | Let several students own and edit an idea and its specification |
 | [Feature-14](tickets/done/Feature-14.md) | done | Let teachers submit ideas that follow the normal feedback and acceptance process |
 | [Feature-15](tickets/done/Feature-15.md) | done | Let administrators give each application period its own label |
+| [Feature-16](tickets/Feature-16.md) | to-do | Assign classes and elective subjects to students |
 
 ### Optimizations
 

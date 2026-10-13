@@ -11,7 +11,7 @@
 - <For comparative acceptance criteria, name the baseline, factors held constant, and the behavior/condition varied. For SPEC changes, check related statements throughout each named SPEC file for contradictions. Remove this bullet if neither applies.>
 - <List real prerequisites, dependencies, or setup/data needed. Remove this bullet if none.>
 - <Scope-gate allowances: name any required deliverable path outside `harness/gates/commit-scope.java`'s allowed set (for example `Makefile`, `.env.example`). Remove this bullet if none.>
-- <For UI work, define relevant roles, routes, states, and responsive expectations. For API work, identify behavior/contracts and generation requirements. For interactive UI, also state the success-path end state: visible result, refreshed data, and keyboard focus.>
+- <For UI work, define relevant roles, routes, states, and responsive expectations. For API work, identify behavior/contracts and generation requirements. For constrained request/response fields, state the expected generated OpenAPI requiredness, limits, formats, and validation descriptions for both request and response schemas. For interactive UI, also state the success-path end state: visible result, refreshed data, and keyboard focus.>
 
 ## Mechanical checks (the Evaluator re-runs)
 
@@ -32,7 +32,7 @@ Standard project checks (keep only the blocks matching the ticket's scope; all m
 ## One-time manual verification (in addition to automated tests)
 
 - <Label each manual item **Implementor-performed** (reachable with the preview tooling and testing profile; name the fixtures or preview extension that create any needed data through the UI) or **human-only** (needs a real device, second browser, or a judgement a script cannot make). For every scenario that needs particular data (for example two groups, a second role, or a finalized period), name the fixture state that must exist and include it in the preview extension requirement; a scenario the available fixture cannot produce is listed as human-only up front, not as Implementor-performed. Human-only items go straight to the awaiting-human checklist and do not count against the Implementor's pass. Do not expect a multi-actor, multi-viewport walkthrough from the Implementor unless the ticket names what makes it feasible.>
-- <Give reproducible steps using supported tools, roles, profiles, fixtures, and data.>
+- <Give reproducible steps using supported tools, roles, profiles, fixtures, and data. Name the dependent requests triggered by the route and the fixture state that lets them complete successfully; if the regular fixture lacks that state, include UI setup or a testing-profile preview extension before navigation. Avoid a scenario that predictably triggers an unrelated expected 4xx/5xx and makes the browser preview fail.>
 - <Specify what must be observed and what evidence to retain, stored under `harness/runs/<run-id>/evidence/` (ignored by Git).>
 - <State how to handle errors or unavailable states; never claim checks that were not performed. State the exact condition that triggers any fallback (for example "the UI cannot reach the state after a documented retry") and require that a UI failure to reach the state be reported with the failing request, not worked around.>
 

@@ -29,7 +29,11 @@ generation and review steps. Check whether generated outputs are tracked or
 ignored before requiring them in a ticket; distinguish regenerating and
 reviewing an artifact from committing it, and specify a commit only when
 repository conventions call for tracking that output. Keep tests and
-verification proportional to the scope; do not require irrelevant checks.
+verification proportional to the scope; do not require irrelevant checks. For
+constrained API request or response fields, specify the expected generated
+OpenAPI schema requiredness, limits, formats, and relevant validation
+descriptions, including trim/blank semantics where applicable; name checks for
+both request and response schemas.
 For every acceptance criterion that makes a comparative claim (for example,
 "like", "the same as", "equivalent", or "unchanged compared with"), name the
 comparison baseline and the factors that must be held constant, and identify
@@ -83,7 +87,12 @@ or authorization behavior maps to a named mechanical check. Confirm each
 manual-verification fallback names the exact condition that triggers it and
 requires a UI failure to reach a state to be reported with the failing request
 rather than worked around. Confirm each Implementor-performed manual scenario
-is reachable with the fixture the ticket names. Confirm every file the ticket
+is reachable with the fixture the ticket names. For each manual route, identify
+the dependent requests the page makes and the fixture state needed for those
+requests to complete successfully. If that state is not in the normal fixture,
+require a reproducible UI setup or testing-profile preview extension before
+navigating to the route; do not specify a browser check that predictably causes
+an unrelated expected 4xx/5xx response which makes the preview fail. Confirm every file the ticket
 requires changing is allowed by `harness/gates/commit-scope.java`; if a
 deliverable is outside the allowed set (for example `Makefile`, `.env.example`
 or another root config file), add a "Scope-gate allowances" bullet under "Scope
