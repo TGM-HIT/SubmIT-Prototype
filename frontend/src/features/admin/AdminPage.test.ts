@@ -305,6 +305,15 @@ describe('administrator account management', () => {
     expect(page.text()).not.toContain("subject-1")
   })
 
+  it("shows current class and subject names in the administrator account row", async () => {
+    api.users.mockResolvedValue(pageResult([{ ...account, className: 'Class A', electiveSubjectNames: ['Biology', 'Art'] }]))
+    const page = pageWith()
+    await flushPromises()
+    expect(page.get('article').text()).toContain('Class: Class A · Elective subjects: Biology, Art')
+    expect(page.get('article').text()).not.toContain('class-1')
+    expect(page.get('article').text()).not.toContain('subject-1')
+  })
+
   it("assigns four subjects and enforces the four-subject limit", async () => {
     const classEntries = [{ id: "class-1", name: "Class A" }]
     const subjectEntries = Array.from({ length: 5 }, (_, index) => ({ id: `subject-${index + 1}`, name: `Subject ${index + 1}` }))
@@ -324,6 +333,59 @@ describe('administrator account management', () => {
     })
     expect(page.text()).not.toContain("subject-1")
     expect(page.text()).not.toContain("class-1")
+  })
+
+  it("promotes a teacher only after a class assignment is submitted", async () => {
+    const teacher = { id: 'teacher-id', username: 'teacher-account', displayName: 'Teacher Account', role: 'TEACHER' as const }
+    api.users.mockResolvedValue(pageResult([teacher]))
+    api.classes.mockResolvedValue(pageResult([{ id: 'class-1', name: 'Class A' }]))
+    api.subjects.mockResolvedValue(pageResult([]))
+    api.role.mockResolvedValue({ ...teacher, role: 'PENDING_STUDENT' })
+    const page = pageWith()
+    await flushPromises()
+    await page.get('[aria-label="Edit Teacher Account (teacher-account)"]').trigger('click')
+    await flushPromises()
+    await page.get('#account-role').setValue('STUDENT')
+    await page.get('#student-class').setValue('class-1')
+    await page.get('form.edit-account-form').trigger('submit')
+    await flushPromises()
+    expect(api.role).toHaveBeenCalledWith('teacher-id', 'PENDING_STUDENT')
+    expect(api.assign).toHaveBeenCalledWith('teacher-id', { classId: 'class-1', electiveSubjectIds: [] })
+  })
+
+  it("blocks promotion to Student when no class is selected", async () => {
+    const teacher = { id: 'teacher-id', username: 'teacher-account', displayName: 'Teacher Account', role: 'TEACHER' as const }
+    api.users.mockResolvedValue(pageResult([teacher]))
+    api.classes.mockResolvedValue(pageResult([{ id: 'class-1', name: 'Class A' }]))
+    api.subjects.mockResolvedValue(pageResult([]))
+    const page = pageWith()
+    await flushPromises()
+    await page.get('[aria-label="Edit Teacher Account (teacher-account)"]').trigger('click')
+    await flushPromises()
+    await page.get('#account-role').setValue('STUDENT')
+    await page.get('form.edit-account-form').trigger('submit')
+    expect(page.get('[role=alert]').text()).toBe('Select exactly one class.')
+    expect(api.role).not.toHaveBeenCalled()
+    expect(api.assign).not.toHaveBeenCalled()
+  })
+
+  it("clears existing elective subjects and refreshes the displayed names", async () => {
+    let current: typeof account & { className?: string; electiveSubjectNames?: string[] } = { ...account, className: 'Class A', electiveSubjectNames: ['Biology'] }
+    api.users.mockImplementation(async (page = 0) => pageResult([current], page))
+    api.classes.mockResolvedValue(pageResult([{ id: 'class-1', name: 'Class A' }]))
+    api.subjects.mockResolvedValue(pageResult([{ id: 'subject-1', name: 'Biology' }]))
+    api.get.mockResolvedValue({ classId: 'class-1', electiveSubjectIds: ['subject-1'], className: 'Class A', electiveSubjectNames: ['Biology'] })
+    api.assign.mockImplementation(async (_id, input) => { current = { ...current, electiveSubjectNames: input.electiveSubjectIds.length ? ['Biology'] : [] }; return {} })
+    const page = pageWith()
+    await flushPromises()
+    expect(page.get('article').text()).toContain('Biology')
+    await openEditor(page)
+    await page.get('input[type=checkbox]').setValue(false)
+    await page.get('form.edit-account-form').trigger('submit')
+    await flushPromises()
+    expect(api.assign).toHaveBeenCalledWith('student-id', { classId: 'class-1', electiveSubjectIds: [] })
+    expect(page.get('article').text()).toContain('Class: Class A · Elective subjects: None')
+    expect(page.get('article').text()).not.toContain('Biology')
   })
 
   it("shows validation feedback and does not save an assignment without a class", async () => {

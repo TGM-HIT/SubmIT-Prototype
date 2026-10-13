@@ -11,7 +11,7 @@
     <section class="auth-card-wrap">
       <form class="auth-card" @submit.prevent="submit">
         <h2>{{ mode === 'login' ? 'Welcome back' : 'Create your student account' }}</h2>
-        <p>{{ mode === 'login' ? 'Sign in to continue to your project workspace.' : 'Registration creates a student account.' }}</p>
+        <p>{{ mode === 'login' ? 'Sign in to continue to your project workspace.' : 'An administrator must assign your class before you can sign in.' }}</p>
         <div class="field">
           <label class="label" for="username">Username</label>
           <input id="username" v-model.trim="username" class="input" autocomplete="username" required minlength="3" maxlength="80" />
@@ -27,6 +27,7 @@
           <span v-if="mode === 'register'" class="muted">Use at least 12 characters.</span>
         </div>
         <div v-if="task.error.value" class="error-box" role="alert">{{ task.error.value }}</div>
+        <p v-if="task.success.value" class="success-note" role="status">{{ task.success.value }}</p>
         <button class="button" type="submit" :disabled="task.loading.value">{{ task.loading.value ? 'Please wait…' : mode === 'login' ? 'Sign in' : 'Create account' }}</button>
         <p class="auth-switch">
           {{ mode === 'login' ? 'New to the platform?' : 'Already have an account?' }}
@@ -54,13 +55,16 @@ const task = useTask()
 
 async function submit(): Promise<void> {
   const mode = String(route.name)
-  const done = await task.run(
-    () => mode === 'register'
-      ? auth.register({ username: username.value, password: password.value, displayName: displayName.value })
-      : auth.login({ username: username.value, password: password.value }),
-    'Signed in successfully.',
-  )
-  if (done === undefined && task.error.value) return
+  if (mode === 'register') {
+    await task.run(
+      () => auth.register({ username: username.value, password: password.value, displayName: displayName.value }),
+      'Account created. An administrator must assign your class before you can sign in.',
+    )
+    return
+  }
+  const done = await task.run(() => auth.login({ username: username.value, password: password.value }),
+    'Signed in successfully.')
+  if (done === undefined) return
   await router.replace(typeof route.query.redirect === 'string' ? route.query.redirect : '/')
 }
 </script>

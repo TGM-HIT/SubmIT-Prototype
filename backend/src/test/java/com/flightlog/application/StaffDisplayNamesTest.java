@@ -152,6 +152,12 @@ class StaffDisplayNamesTest {
         assertFalse(ownApplication.has("electiveSubjectNames"));
         JsonNode adminAccounts = getJson("/api/users?role=STUDENT", adminToken);
         assertTrue(adminAccounts.path("content").findValuesAsText("className").contains(assignedClassName));
+        JsonNode accountRow = null;
+        for (JsonNode row : adminAccounts.path("content")) {
+            if (firstStudent.getId().toString().equals(row.path("id").asText())) accountRow = row;
+        }
+        assertTrue(accountRow != null);
+        assertEquals(assignedSubjectName, accountRow.path("electiveSubjectNames").get(0).asText());
     }
 
     @Test

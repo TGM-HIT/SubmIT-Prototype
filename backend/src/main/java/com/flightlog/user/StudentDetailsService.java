@@ -107,7 +107,11 @@ public class StudentDetailsService {
     @Transactional
     public StudentDetailsResponse assign(AuthenticatedUser caller, UUID studentId, StudentDetailsRequest request) {
         requireAdmin(caller);
-        UserAccount student = findStudent(studentId);
+        UserAccount student = users.findById(studentId)
+                .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Student was not found."));
+        if (student.getRole() != Role.STUDENT && student.getRole() != Role.PENDING_STUDENT) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Assignments can only target student accounts.");
+        }
         List<UUID> subjectIds = request.electiveSubjectIds() == null ? List.of() : request.electiveSubjectIds();
         if (subjectIds.size() > MAX_ELECTIVE_SUBJECTS) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "A student can have at most four elective subjects.");
@@ -123,6 +127,7 @@ public class StudentDetailsService {
         }
         student.setStudentClass(studentClass);
         student.setElectiveSubjects(assignedSubjects);
+        student.setRole(Role.STUDENT);
         audit.record(caller, "STUDENT_DETAILS_ASSIGNED", "user", studentId);
         return response(student);
     }

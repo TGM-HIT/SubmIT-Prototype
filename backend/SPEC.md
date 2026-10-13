@@ -14,13 +14,13 @@ Use standard statuses: `200` for successful reads or body-returning mutations, `
 
 ### Authentication and users
 
-- `POST /api/auth/register` creates a student account; a supplied role is ignored.
+- `POST /api/auth/register` creates a `PENDING_STUDENT` account awaiting administrator class assignment; a supplied role is ignored. Pending accounts cannot log in. Startup moves existing classless `STUDENT` rows to `PENDING_STUDENT`, with no default assignment.
 - `POST /api/auth/login` returns a JWT and the account name.
-- `GET /api/users` returns a paginated user list for `ADMIN`; optional `role` (`STUDENT`, `TEACHER`, or `ADMIN`) and `q` parameters filter by role and case-insensitive username/display-name substring, respectively. Blank `q` is ignored, and `%` and `_` are literal search characters. Filters combine with AND and apply before pagination.
+- `GET /api/users` returns a paginated user list for `ADMIN`; optional `role` (`PENDING_STUDENT`, `STUDENT`, `TEACHER`, or `ADMIN`) and `q` parameters filter by role and case-insensitive username/display-name substring, respectively. Blank `q` is ignored, and `%` and `_` are literal search characters. Filters combine with AND and apply before pagination.
 - `PATCH /api/users/{id}` changes the account name for the account owner or `ADMIN`.
-- `PATCH /api/users/{id}/role` changes a role for `ADMIN`.
+- `PATCH /api/users/{id}/role` changes a role for `ADMIN`; it rejects converting a non-student to `STUDENT` without an already assigned class. An administrator activates a pending student by assigning a class through `PUT /api/users/{id}/student-details`; a direct role change cannot bypass the assignment requirement.
 
-Every account has a required display name separate from its unique username. Registration and name updates trim leading and trailing whitespace, then reject blank names and names longer than 120 characters. Registration, login, name-update, and administrator user-list responses include the display name. A name update changes no other account field; role changes remain restricted to the existing administrator-only role endpoint. Testing-profile student, teacher, and administrator accounts have stable, distinct, human-readable display names while retaining their existing usernames; a configured bootstrap administrator is named `Administrator`.
+Every account has a required display name separate from its unique username. Registration and name updates trim leading and trailing whitespace, then reject blank names and names longer than 120 characters. Registration, login, name-update, and administrator user-list responses include the display name. A name update changes no other account field; role changes remain restricted to the existing administrator-only role endpoint. Testing-profile student, teacher, and administrator accounts have stable, distinct, human-readable display names while retaining their existing usernames; each seeded testing student has the explicit `Testing Class` fixture assignment; a configured bootstrap administrator is named `Administrator`.
 
 ### School years and application periods
 

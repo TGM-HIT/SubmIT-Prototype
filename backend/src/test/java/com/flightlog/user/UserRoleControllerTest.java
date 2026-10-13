@@ -162,7 +162,7 @@ class UserRoleControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.error").value("Bad Request"))
-                .andExpect(jsonPath("$.message").value("role must be STUDENT, TEACHER, or ADMIN."));
+                .andExpect(jsonPath("$.message").value("role must be PENDING_STUDENT, STUDENT, TEACHER, or ADMIN."));
 
         mockMvc.perform(get("/api/users").header("Authorization", bearer(teacher)))
                 .andExpect(status().isForbidden())
@@ -182,8 +182,8 @@ class UserRoleControllerTest {
                         .header("Authorization", bearer(admin))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(roleRequest(Role.STUDENT)))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.role").value("STUDENT"));
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("Assign exactly one class before changing this account to Student."));
     }
 
     private UserAccount user(String name, Role role) {

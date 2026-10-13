@@ -483,7 +483,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Register a student account. Any supplied role is ignored. */
+        /** Register a student account pending administrator class assignment. Any supplied role is ignored. */
         post: operations["register"];
         delete?: never;
         options?: never;
@@ -956,14 +956,14 @@ export interface components {
         };
         StudentDetailsResponse: {
             /** Format: uuid */
-            studentId?: string;
-            displayName?: string;
+            studentId: string;
+            displayName: string;
             /** Format: uuid */
-            classId?: string;
-            className?: string;
-            electiveSubjectIds?: string[];
+            classId: string;
+            className: string;
+            electiveSubjectIds: string[];
             /** @description Current catalogue names, returned only to authenticated teachers and administrators. */
-            electiveSubjectNames?: string[];
+            electiveSubjectNames: string[];
         };
         /** @description Final grade decision: either a configured ruleId, or a manual grade with an explicit rationale. */
         Decision: {
@@ -1349,7 +1349,7 @@ export interface components {
         };
         CatalogueEntryResponse: {
             /** Format: uuid */
-            id?: string;
+            id: string;
             name: string;
         };
         /** @description Teacher assessment of one student against one criterion of a rubric version. */
@@ -1591,7 +1591,7 @@ export interface components {
             /** @description Required account name; trimmed before storage and limited to 120 characters after trimming. */
             displayName: string;
             /** @enum {string} */
-            role?: "STUDENT" | "TEACHER" | "ADMIN";
+            role?: "PENDING_STUDENT" | "STUDENT" | "TEACHER" | "ADMIN";
         };
         UserResponse: {
             /** Format: uuid */
@@ -1599,7 +1599,7 @@ export interface components {
             username?: string;
             displayName: string;
             /** @enum {string} */
-            role?: "STUDENT" | "TEACHER" | "ADMIN";
+            role?: "PENDING_STUDENT" | "STUDENT" | "TEACHER" | "ADMIN";
             /** @description Current student class; returned only on the administrator account-list endpoint. */
             className?: string;
             /** @description Current elective subject names; returned only on the administrator account-list endpoint. */
@@ -1636,7 +1636,7 @@ export interface components {
         };
         RoleRequest: {
             /** @enum {string} */
-            role: "STUDENT" | "TEACHER" | "ADMIN";
+            role: "PENDING_STUDENT" | "STUDENT" | "TEACHER" | "ADMIN";
         };
         PageResponseUserResponse: {
             content?: components["schemas"]["UserResponse"][];
@@ -3388,7 +3388,7 @@ export interface operations {
             query?: {
                 page?: number;
                 size?: number;
-                role?: "STUDENT" | "TEACHER" | "ADMIN";
+                role?: "PENDING_STUDENT" | "STUDENT" | "TEACHER" | "ADMIN";
                 q?: string;
             };
             header?: never;

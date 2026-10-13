@@ -78,6 +78,10 @@ public class UserService {
         requireRole(caller, Role.ADMIN);
         UserAccount user = users.findById(id)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "User was not found."));
+        if (role == Role.STUDENT && user.getRole() != Role.STUDENT && user.getStudentClass() == null) {
+            throw new ApiException(HttpStatus.BAD_REQUEST,
+                    "Assign exactly one class before changing this account to Student.");
+        }
         if (user.getRole() == Role.ADMIN && role != Role.ADMIN
                 && users.findAllByRoleForUpdate(Role.ADMIN).size() <= 1) {
             throw new ApiException(HttpStatus.CONFLICT, "At least one administrator account must remain.");

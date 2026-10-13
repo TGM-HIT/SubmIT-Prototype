@@ -61,7 +61,9 @@ public final class ApiDtos {
             String name) {
     }
 
-    public record CatalogueEntryResponse(UUID id, @NotNull @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String name) {
+    public record CatalogueEntryResponse(
+            @NotNull @Schema(requiredMode = Schema.RequiredMode.REQUIRED, format = "uuid") UUID id,
+            @NotNull @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String name) {
     }
 
     public record StudentDetailsRequest(
@@ -74,13 +76,15 @@ public final class ApiDtos {
     }
 
     public record StudentDetailsResponse(
-            UUID studentId,
-            String displayName,
-            UUID classId,
-            String className,
-            List<UUID> electiveSubjectIds,
-            @Schema(description = "Current catalogue names, returned only to authenticated teachers and administrators.")
-            List<String> electiveSubjectNames) {
+            @NotNull @Schema(requiredMode = Schema.RequiredMode.REQUIRED, format = "uuid") UUID studentId,
+            @NotNull @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String displayName,
+            @NotNull @Schema(requiredMode = Schema.RequiredMode.REQUIRED, format = "uuid") UUID classId,
+            @NotNull @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String className,
+            @NotNull @ArraySchema(arraySchema = @Schema(requiredMode = Schema.RequiredMode.REQUIRED),
+                    schema = @Schema(format = "uuid")) List<UUID> electiveSubjectIds,
+            @NotNull @ArraySchema(arraySchema = @Schema(
+                    description = "Current catalogue names, returned only to authenticated teachers and administrators.",
+                    requiredMode = Schema.RequiredMode.REQUIRED)) List<String> electiveSubjectNames) {
     }
 
     public record ApiErrorResponse(@NotNull int status, @NotNull String error, @NotNull String message) {

@@ -41,12 +41,22 @@ public class TestingAccountsConfiguration {
 
     @Bean
     @Order(1)
-    ApplicationRunner seedTestingAccounts(UserAccountRepository users, PasswordEncoder encoder) {
-        return args -> ACCOUNTS.stream()
-                .filter(account -> users.findByUsername(account.username()).isEmpty())
-                .map(account -> new UserAccount(UUID.randomUUID(), account.username(), account.displayName(),
-                        encoder.encode(DEFAULT_PASSWORD), account.role()))
-                .forEach(users::save);
+    ApplicationRunner seedTestingAccounts(UserAccountRepository users, StudentClassRepository classes,
+            PasswordEncoder encoder) {
+        return args -> {
+            StudentClassEntity testingClass = classes.findAll().stream()
+                    .filter(entry -> "Testing Class".equals(entry.getName())).findFirst()
+                    .orElseGet(() -> classes.save(new StudentClassEntity(UUID.randomUUID(), "Testing Class")));
+            ACCOUNTS.stream().filter(account -> users.findByUsername(account.username()).isEmpty())
+                    .map(account -> {
+                        UserAccount user = new UserAccount(UUID.randomUUID(), account.username(), account.displayName(),
+                                encoder.encode(DEFAULT_PASSWORD), account.role());
+                        if (account.role() == Role.STUDENT) {
+                            user.setStudentClass(testingClass);
+                        }
+                        return user;
+                    }).forEach(users::save);
+        };
     }
 
     private record SeedAccount(String username, String displayName, Role role) {

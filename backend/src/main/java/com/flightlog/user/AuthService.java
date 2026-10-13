@@ -41,7 +41,7 @@ public class AuthService {
             throw new ApiException(HttpStatus.CONFLICT, "Username is already registered.");
         }
         UserAccount user = users.save(new UserAccount(UUID.randomUUID(), username, displayName,
-                passwordEncoder.encode(request.password()), Role.STUDENT));
+                passwordEncoder.encode(request.password()), Role.PENDING_STUDENT));
         audit.record(new AuthenticatedUser(user.getId(), user.getUsername(), user.getRole()),
                 "USER_REGISTERED", "user", user.getId());
         return toResponse(user);
@@ -53,6 +53,10 @@ public class AuthService {
                 .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "Invalid username or password."));
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "Invalid username or password.");
+        }
+        if (user.getRole() == Role.PENDING_STUDENT) {
+            throw new ApiException(HttpStatus.FORBIDDEN,
+                    "Your account is waiting for an administrator to assign a class.");
         }
         AuthenticatedUser principal = new AuthenticatedUser(user.getId(), user.getUsername(), user.getRole());
         return new TokenResponse(jwtService.issueToken(principal), "Bearer", TOKEN_LIFETIME_SECONDS,

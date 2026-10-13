@@ -30,7 +30,7 @@ public class ApiExceptionHandler {
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     ResponseEntity<Map<String, Object>> handleInvalidParameter(MethodArgumentTypeMismatchException exception) {
         String message = "role".equals(exception.getName())
-                ? "role must be STUDENT, TEACHER, or ADMIN."
+                ? "role must be PENDING_STUDENT, STUDENT, TEACHER, or ADMIN."
                 : "Request parameter " + exception.getName() + " has an invalid value.";
         return response(HttpStatus.BAD_REQUEST, message);
     }

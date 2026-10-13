@@ -138,6 +138,23 @@ describe("student details in idea identities", () => {
     expect(page.text()).not.toContain("Biology")
     page.unmount()
   })
+
+  it("shows resolved student assignment names in the idea-detail owner display", async () => {
+    const staffedIdea = { ...idea("IDEA_DRAFT"), owners: [{ id: "student-1", displayName: "Student One", creator: true, className: "Class 10A", electiveSubjectNames: ["Biology", "Art"] }] }
+    api.list.mockResolvedValue({ ...pageIdeas("IDEA_DRAFT"), content: [staffedIdea] })
+    api.get.mockResolvedValue(staffedIdea)
+    state.role = "TEACHER"
+    const page = mountPage()
+    await flushPromises()
+    await page.get('article.data-row').findAll('button').find((button) => button.text() === 'Details & history')!.trigger('click')
+    await flushPromises()
+    const owners = page.get('[aria-label="Idea owners"]').text()
+    expect(owners).toContain('Student One')
+    expect(owners).toContain('Class: Class 10A')
+    expect(owners).toContain('Elective subjects: Biology, Art')
+    expect(owners).not.toContain('student-1')
+    page.unmount()
+  })
 })
 
 describe('IdeasPage overview supervision preferences', () => {

@@ -44,7 +44,7 @@ class AccountNameControllerTest {
     }
 
     @Test
-    void registrationTrimsAndReturnsNameAndLoginReturnsThePersistedName() throws Exception {
+    void registrationTrimsNameAndWaitsForAdministratorClassAssignment() throws Exception {
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -53,15 +53,14 @@ class AccountNameControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.username").value("new-student"))
                 .andExpect(jsonPath("$.displayName").value("Jamie Rivera"))
-                .andExpect(jsonPath("$.role").value("STUDENT"));
+                .andExpect(jsonPath("$.role").value("PENDING_STUDENT"));
 
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"username":"new-student","password":"a-long-password"}
                                 """))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.user.displayName").value("Jamie Rivera"));
+                .andExpect(status().isForbidden());
     }
 
     @Test

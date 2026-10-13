@@ -31,6 +31,8 @@ describe('registration account name', () => {
       password: 'long-password',
       displayName: 'Jamie Rivera',
     })
-    expect(api.replace).toHaveBeenCalledWith('/')
+    expect(api.login).not.toHaveBeenCalled()
+    expect(api.replace).not.toHaveBeenCalled()
+    expect(page.get('[role="status"]').text()).toContain('administrator must assign your class')
   })
 })

@@ -15,6 +15,8 @@ import org.springframework.data.repository.query.Param;
 public interface UserAccountRepository extends JpaRepository<UserAccount, UUID> {
     Optional<UserAccount> findByUsername(String username);
 
+    boolean existsByIdAndRole(UUID id, Role role);
+
     Page<UserAccount> findAll(Pageable pageable);
 
     @Query("select user from UserAccount user "
