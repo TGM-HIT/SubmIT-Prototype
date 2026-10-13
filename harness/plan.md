@@ -66,6 +66,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Feature-14](tickets/done/Feature-14.md) | done | Let teachers submit ideas that follow the normal feedback and acceptance process |
 | [Feature-15](tickets/done/Feature-15.md) | done | Let administrators give each application period its own label |
 | [Feature-16](tickets/done/Feature-16.md) | done | Assign classes and elective subjects to students |
+| [Feature-17](tickets/Feature-17.md) | to-do | Let administrators run an early allocation before the deadline |
 
 ### Optimizations
 
@@ -84,3 +85,4 @@ Recurring documentation and contract checks, run by the [Auditor role](roles/aud
 | [Compliance-03](checks/Compliance-03.md) | After API changes; at least monthly | never | n/a | n/a | OpenAPI contract compliance |
 | [Compliance-04](checks/Compliance-04.md) | Weekly and after file moves or renames | 2026-10-14 00:13 +0200 | findings: 4 ticketed, 1 decision needed, 0 fixed | Compliance-04-20261014-0013 | Link and format validation |
 | [Compliance-05](checks/Compliance-05.md) | Quarterly and before planning | 2026-10-14 00:30 +0200 | clean: 0 findings, 4 observations | Compliance-05-20261014-0030 | Documentation health |
+| [Compliance-06](checks/Compliance-06.md) | After each role-contract change or lesson application; at least monthly | never | n/a | n/a | Agent role consistency and role-file validation |
