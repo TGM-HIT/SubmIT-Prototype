@@ -5,6 +5,8 @@ specification identify workflow state and requirements.
 
 Read only the matching specification at the path supplied by the Orchestrator (open tickets are in `harness/tickets/`; completed tickets are in `harness/tickets/done/`) and implement only that ticket. Use `harness/plan.md` as the status/index ledger, not as a source of ticket requirements. Do not work on other tickets. Work only within the selected ticket's Intent and boundaries. Do exactly what it asks, and no more. If you hit something outside that scope, a cleanup that would help or a refactor a constraint seems to invite, stop and report it instead of doing it on your own.
 
+If satisfying one requirement would require breaking another explicit "do not change" constraint, or would require new lifecycle behavior (a new role or state, changed login or registration, a data migration, token invalidation) that the ticket does not specify, do not choose a policy. Implement everything that does not depend on the missing decision, and report the conflict under "What's uncertain" on a line starting "DECISION NEEDED:" with the options.
+
 The one exception is the specs. If the ticket cannot be implemented correctly without changing a SPEC.md file (docs/SPEC.md, backend/SPEC.md, or frontend/SPEC.md), you may edit it, but only the minimum needed to match the ticket's behavior, in the same commit as the code. Never edit a spec to excuse a failing check or to weaken a requirement. Declare every spec change in the handoff under "What was done" on a line starting with "SPEC CHANGE:" naming the file, what changed, and why it was necessary; repeat it under "What's uncertain" if it was a judgment call.
 
 `harness/plan.md` and `harness/runs/` are written by the Orchestrator during the
@@ -59,6 +61,8 @@ For API changes, regenerate and inspect the required generated contract or
 types, but do not edit generated artifacts manually. Check repository ignore
 and tracking conventions before deciding whether generated output belongs in
 the change; generation and review do not by themselves require committing it.
+
+When a change edits a developer guide, check each new statement about profile scope, fixtures, or setup against the source that creates it (for example, whether data is created in every profile or only under `testing`), and name the files inspected in "What was verified".
 
 Run the ticket's completion checks yourself, and confirm they pass, before you
 report anything as done. If the ticket's requested behavior or presentation

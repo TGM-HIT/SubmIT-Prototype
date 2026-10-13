@@ -328,6 +328,14 @@ closeout, continue in that folder. Read the last log step and the saved handoff
 and evaluation artifacts, re-run only the unfinished step, and add a `resumed`
 bullet to the log.
 
+Role dispatch that ends without a handoff (for example an infrastructure or
+network error): log it as a bullet; it is not a pass and not a revise cycle.
+Re-dispatch the same pass number with the same handoff path, and tell the new
+Implementor to assess any uncommitted tree with `git status` and `git diff`
+before deciding what to keep. After two consecutive crashes of the same pass,
+stop: append a `stopped` bullet and report `Outcome: stopped` instead of a
+third retry.
+
 Derive the block from the repository after closeout. It is the boundary another
 coordinator and the Learner consume; do not make them reconstruct it from prose.
 

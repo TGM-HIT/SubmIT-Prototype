@@ -43,6 +43,11 @@ If the Implementor's handoff says manual evidence from an earlier pass was reuse
   or human decision needed. Do not return this verdict for an implementation
   defect that an Implementor can fix.
 
+If the only way to resolve a finding is a product or policy choice the ticket
+does not make, return `awaiting-human` with the exact decision question and the
+options; do not return `revise` for it. Return `revise` only for findings that
+do not depend on that decision, and say which finding is waiting on a decision.
+
 After three revise cycles, if the remaining gap is human-exercisable and no
 concrete implementation task remains, return `awaiting-human`, not `revise`
 merely to satisfy a cycle count. The Orchestrator pauses the original run and
