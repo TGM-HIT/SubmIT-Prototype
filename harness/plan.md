@@ -44,7 +44,6 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-06](tickets/done/Dev-06.md) | done | Seed 15 student accounts with meaningful names for testing |
 | [Dev-07](tickets/done/Dev-07.md) | done | Seed multi-group allocation and finalization preview states for student testing |
 | [Dev-08](tickets/done/Dev-08.md) | done | Add an opt-in minimal testing fixture mode without application periods |
-| [Dev-09](tickets/Dev-09.md) | to-do | Align specifications and development guidelines |
 
 ### Features
 
@@ -72,3 +71,15 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | Ticket | Status | Specification |
 |--------|--------|---------------|
 | [Optimization-01](tickets/Optimization-01.md) | to-do | Query student-owned ideas without scanning the full catalogue |
+
+## Compliance checks
+
+Recurring documentation and contract checks, run by the [Auditor role](roles/auditor.md) on request (for example "run Compliance-02"). A check has no `to-do`/`done` status: it is run repeatedly, and this ledger records when it last ran. Check definitions live in `checks/<check-id>.md` and are created from [`templates/check.md`](templates/check.md). The Auditor updates only the `Last run`, `Result`, and `Run` cells of a row after each run, and opens ordinary Bug, Dev, or Feature tickets for findings. `Cadence` is a suggestion; nothing starts a run automatically.
+
+| Check | Cadence | Last run | Result | Run | Definition |
+|-------|---------|----------|--------|-----|------------|
+| [Compliance-01](checks/Compliance-01.md) | Monthly and after SPEC or guide changes | never | n/a | n/a | Specification and guideline consistency |
+| [Compliance-02](checks/Compliance-02.md) | After each closed Feature or Bug; at least monthly | never | n/a | n/a | Documentation and code parity |
+| [Compliance-03](checks/Compliance-03.md) | After API changes; at least monthly | never | n/a | n/a | OpenAPI contract compliance |
+| [Compliance-04](checks/Compliance-04.md) | Weekly and after file moves or renames | never | n/a | n/a | Link and format validation |
+| [Compliance-05](checks/Compliance-05.md) | Quarterly and before planning | never | n/a | n/a | Documentation health |

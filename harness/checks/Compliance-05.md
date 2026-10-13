@@ -1,0 +1,43 @@
+# Compliance-05. Documentation health
+
+## Purpose
+
+Documents rot quietly: sections describe removed features, TODO markers outlive their purpose, tickets and checks pile up unreferenced, and rules exist in one file that should live in another. This check reports documentation that is stale, orphaned, or misplaced, so it can be reviewed before it misleads someone.
+
+## Inspect
+
+- The five specification and guide documents, `README.md`, `CLAUDE.md`, and `list-of-bugs.md`.
+- `harness/plan.md`, `harness/tickets/`, `harness/tickets/done/`, `harness/checks/`, `harness/roles/`, `harness/templates/`.
+- `git log` dates per file, and the source tree for any feature or name a document mentions.
+
+## Topics to check
+
+1. Staleness: documents or sections not touched since the last change to the code area they describe (compare the last commit date of the document with the last commit date of the code it documents).
+2. Removed or renamed features, endpoints, classes, scripts, or accounts that a document still mentions.
+3. Leftover markers: `TODO`, `TBD`, `FIXME`, `XXX`, `???`, placeholder text, and commented-out sections.
+4. Open tickets: tickets that stay `to-do` or `in progress` while their work is already in the code, or that have not changed for a long period; `awaiting-human` tickets with no pending checklist.
+5. Orphans: Markdown files not linked from `README.md`, `harness/plan.md`, or another document; checks and tickets with no ledger row.
+6. `list-of-bugs.md` entries that correspond to closed tickets, or open entries with no ticket.
+7. Duplicated rules: the same rule restated in several documents with no clear owner (candidates for a single owner and a cross-reference). Report only; do not move rules.
+8. Roles and templates: harness role files that mention commands, paths, or gates that no longer exist.
+9. Size and structure: files or sections long enough to need splitting or a table of contents (report only).
+
+## Finding and fix rules
+
+- This check mostly reports. Open one ticket per theme (not one per line) so follow-ups stay manageable.
+- Trivially fixable: a leftover marker with no content, a commented-out block that duplicates the live text.
+- Never delete documents, tickets, or sections. Removal is a ticket.
+- Classify duplication and size observations as `ticketed` only when they cause a concrete risk (a contradiction or an unclear owner); otherwise list them as observations in the report.
+
+## Commands and verification
+
+- Read-only: `git log -1 --format=%cs -- <path>`, `git ls-files`, `grep` for markers and removed names.
+- State the cutoff you used for "long period" and the reason; report it so runs stay comparable.
+
+## Report requirements
+
+- A table with columns `Document`, `Last changed`, `Code area last changed`, `Observation`, `Classification`.
+
+## Cadence
+
+Quarterly, and before each planning session.
