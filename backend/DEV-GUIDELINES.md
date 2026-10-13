@@ -59,7 +59,7 @@ All seeded accounts use the testing-only password `testing-password`:
 | `TEACHER` | `teacher01` — Olivia Chen; `teacher02` — Marcus Reed; `teacher03` — Priya Shah; `teacher04` — Daniel Brooks; `teacher05` — Elena Torres |
 | `ADMIN` | `admin01` — Grace Morgan; `admin02` — Samuel Wright |
 
-These credentials are for local/testing use only. Never use them in production or expose them to a public environment. The accounts are not seeded unless the `testing` profile is active.
+The `testing` profile also seeds the `No class / unassigned` default class and two additional classes, `Testing Class` and `Testing Class 2`; student accounts are distributed between the latter two, with `student01` assigned to `Testing Class`. These credentials and classes are for local/testing use only. Never use them in production or expose them to a public environment. The accounts and test classes are not seeded unless the `testing` profile is active.
 
 | Period label | School year | Accounts | State |
 | --- | --- | --- | --- |

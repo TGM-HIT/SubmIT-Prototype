@@ -44,19 +44,26 @@ public class TestingAccountsConfiguration {
     ApplicationRunner seedTestingAccounts(UserAccountRepository users, StudentClassRepository classes,
             PasswordEncoder encoder) {
         return args -> {
-            StudentClassEntity testingClass = classes.findAll().stream()
-                    .filter(entry -> "Testing Class".equals(entry.getName())).findFirst()
-                    .orElseGet(() -> classes.save(new StudentClassEntity(UUID.randomUUID(), "Testing Class")));
+            StudentClassEntity firstClass = testingClass(classes, "Testing Class");
+            StudentClassEntity secondClass = testingClass(classes, "Testing Class 2");
             ACCOUNTS.stream().filter(account -> users.findByUsername(account.username()).isEmpty())
-                    .map(account -> {
-                        UserAccount user = new UserAccount(UUID.randomUUID(), account.username(), account.displayName(),
-                                encoder.encode(DEFAULT_PASSWORD), account.role());
-                        if (account.role() == Role.STUDENT) {
-                            user.setStudentClass(testingClass);
-                        }
-                        return user;
-                    }).forEach(users::save);
+                    .map(account -> new UserAccount(UUID.randomUUID(), account.username(), account.displayName(),
+                            encoder.encode(DEFAULT_PASSWORD), account.role()))
+                    .forEach(users::save);
+            for (int index = 0; index < ACCOUNTS.size(); index++) {
+                SeedAccount account = ACCOUNTS.get(index);
+                if (account.role() == Role.STUDENT) {
+                    UserAccount student = users.findByUsername(account.username()).orElseThrow();
+                    student.setStudentClass(index % 2 == 0 ? firstClass : secondClass);
+                    users.save(student);
+                }
+            }
         };
+    }
+
+    private StudentClassEntity testingClass(StudentClassRepository classes, String name) {
+        return classes.findByName(name)
+                .orElseGet(() -> classes.save(new StudentClassEntity(UUID.randomUUID(), name)));
     }
 
     private record SeedAccount(String username, String displayName, Role role) {

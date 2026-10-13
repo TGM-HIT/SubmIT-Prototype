@@ -31,6 +31,8 @@ class UserRoleControllerTest {
     private JwtService jwtService;
     @Autowired
     private ObjectMapper objectMapper;
+    @Autowired
+    private StudentClassRepository classes;
 
     private UserAccount admin;
     private UserAccount anotherAdmin;
@@ -162,7 +164,7 @@ class UserRoleControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.error").value("Bad Request"))
-                .andExpect(jsonPath("$.message").value("role must be PENDING_STUDENT, STUDENT, TEACHER, or ADMIN."));
+                .andExpect(jsonPath("$.message").value("role must be STUDENT, TEACHER, or ADMIN."));
 
         mockMvc.perform(get("/api/users").header("Authorization", bearer(teacher)))
                 .andExpect(status().isForbidden())
@@ -182,8 +184,12 @@ class UserRoleControllerTest {
                         .header("Authorization", bearer(admin))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(roleRequest(Role.STUDENT)))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.message").value("Assign exactly one class before changing this account to Student."));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.role").value("STUDENT"));
+        mockMvc.perform(get("/api/users/{id}/student-details", teacher.getId())
+                        .header("Authorization", bearer(admin)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.className").value("No class / unassigned"));
     }
 
     private UserAccount user(String name, Role role) {

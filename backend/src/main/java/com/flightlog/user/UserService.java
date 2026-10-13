@@ -24,13 +24,15 @@ public class UserService {
     private final AuthService authService;
     private final AuditService audit;
     private final StudentDetailsService studentDetails;
+    private final DefaultStudentClassService defaultStudentClass;
 
     public UserService(UserAccountRepository users, AuthService authService, AuditService audit,
-            StudentDetailsService studentDetails) {
+            StudentDetailsService studentDetails, DefaultStudentClassService defaultStudentClass) {
         this.users = users;
         this.authService = authService;
         this.audit = audit;
         this.studentDetails = studentDetails;
+        this.defaultStudentClass = defaultStudentClass;
     }
 
     @Transactional(readOnly = true)
@@ -79,8 +81,7 @@ public class UserService {
         UserAccount user = users.findById(id)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "User was not found."));
         if (role == Role.STUDENT && user.getRole() != Role.STUDENT && user.getStudentClass() == null) {
-            throw new ApiException(HttpStatus.BAD_REQUEST,
-                    "Assign exactly one class before changing this account to Student.");
+            user.setStudentClass(defaultStudentClass.getOrCreate());
         }
         if (user.getRole() == Role.ADMIN && role != Role.ADMIN
                 && users.findAllByRoleForUpdate(Role.ADMIN).size() <= 1) {

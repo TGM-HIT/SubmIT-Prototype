@@ -69,7 +69,7 @@ describe('administrator account management', () => {
   beforeEach(() => {
     api.users.mockImplementation(async (page = 0) => pageResult([account], page))
     api.audit.mockResolvedValue(pageResult([]))
-    api.classes.mockResolvedValue(pageResult([]))
+    api.classes.mockResolvedValue(pageResult([{ id: 'default-class', name: 'No class / unassigned' }]))
     api.subjects.mockResolvedValue(pageResult([]))
     api.get.mockResolvedValue({ classId: null, electiveSubjectIds: [], className: null, electiveSubjectNames: [] })
     api.assign.mockResolvedValue({})
@@ -335,12 +335,12 @@ describe('administrator account management', () => {
     expect(page.text()).not.toContain("class-1")
   })
 
-  it("promotes a teacher only after a class assignment is submitted", async () => {
+  it("promotes a teacher and saves an explicitly selected class", async () => {
     const teacher = { id: 'teacher-id', username: 'teacher-account', displayName: 'Teacher Account', role: 'TEACHER' as const }
     api.users.mockResolvedValue(pageResult([teacher]))
-    api.classes.mockResolvedValue(pageResult([{ id: 'class-1', name: 'Class A' }]))
+    api.classes.mockResolvedValue(pageResult([{ id: 'default-class', name: 'No class / unassigned' }, { id: 'class-1', name: 'Class A' }]))
     api.subjects.mockResolvedValue(pageResult([]))
-    api.role.mockResolvedValue({ ...teacher, role: 'PENDING_STUDENT' })
+    api.role.mockResolvedValue({ ...teacher, role: 'STUDENT' })
     const page = pageWith()
     await flushPromises()
     await page.get('[aria-label="Edit Teacher Account (teacher-account)"]').trigger('click')
@@ -349,24 +349,28 @@ describe('administrator account management', () => {
     await page.get('#student-class').setValue('class-1')
     await page.get('form.edit-account-form').trigger('submit')
     await flushPromises()
-    expect(api.role).toHaveBeenCalledWith('teacher-id', 'PENDING_STUDENT')
+    expect(api.role).toHaveBeenCalledWith('teacher-id', 'STUDENT')
     expect(api.assign).toHaveBeenCalledWith('teacher-id', { classId: 'class-1', electiveSubjectIds: [] })
   })
 
-  it("blocks promotion to Student when no class is selected", async () => {
+  it("uses the default class when a teacher is promoted without an explicit class selection", async () => {
     const teacher = { id: 'teacher-id', username: 'teacher-account', displayName: 'Teacher Account', role: 'TEACHER' as const }
     api.users.mockResolvedValue(pageResult([teacher]))
-    api.classes.mockResolvedValue(pageResult([{ id: 'class-1', name: 'Class A' }]))
+    api.classes.mockResolvedValue(pageResult([{ id: 'default-class', name: 'No class / unassigned' }]))
     api.subjects.mockResolvedValue(pageResult([]))
+    api.role.mockResolvedValue({ ...teacher, role: 'STUDENT' })
     const page = pageWith()
     await flushPromises()
     await page.get('[aria-label="Edit Teacher Account (teacher-account)"]').trigger('click')
     await flushPromises()
     await page.get('#account-role').setValue('STUDENT')
     await page.get('form.edit-account-form').trigger('submit')
-    expect(page.get('[role=alert]').text()).toBe('Select exactly one class.')
-    expect(api.role).not.toHaveBeenCalled()
-    expect(api.assign).not.toHaveBeenCalled()
+    await flushPromises()
+    expect(api.role).toHaveBeenCalledWith('teacher-id', 'STUDENT')
+    expect(api.assign).toHaveBeenCalledWith('teacher-id', {
+      classId: 'default-class',
+      electiveSubjectIds: [],
+    })
   })
 
   it("clears existing elective subjects and refreshes the displayed names", async () => {

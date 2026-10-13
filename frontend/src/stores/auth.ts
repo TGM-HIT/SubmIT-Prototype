@@ -44,8 +44,9 @@ export const useAuthStore = defineStore('auth', () => {
     save(await request<TokenResponse>('/api/auth/login', { method: 'POST', body: credentials }))
   }
 
-  async function register(credentials: RegisterRequest): Promise<components['schemas']['UserResponse']> {
-    return request<components['schemas']['UserResponse']>('/api/auth/register', { method: 'POST', body: credentials })
+  async function register(credentials: RegisterRequest): Promise<void> {
+    await request<components['schemas']['UserResponse']>('/api/auth/register', { method: 'POST', body: credentials })
+    await login({ username: credentials.username, password: credentials.password })
   }
 
   function updateUser(updated: components['schemas']['UserResponse']): void {

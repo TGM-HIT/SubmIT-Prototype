@@ -35,7 +35,6 @@ class StudentDetailsControllerTest {
     @Autowired private StudentClassRepository classes;
     @Autowired private ElectiveSubjectRepository subjects;
     @Autowired private JwtService jwt;
-    @Autowired private StudentAccountLifecycle lifecycle;
 
     private UserAccount admin;
     private UserAccount teacher;
@@ -138,33 +137,28 @@ class StudentDetailsControllerTest {
 
 
     @Test
-    void registrationAndRoleConversionWaitForAdministratorClassAssignmentAndLegacyRowsAreDeactivated() throws Exception {
+    void registrationAndRoleConversionReceiveDefaultClassAndRemainImmediatelyUsable() throws Exception {
         mvc.perform(post("/api/auth/register").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"username\":\"new-student\",\"password\":\"password-long-enough\",\"displayName\":\"New Student\"}"))
-                .andExpect(status().isCreated()).andExpect(jsonPath("$.role").value("PENDING_STUDENT"));
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.role").value("STUDENT"));
+        UserAccount registered = users.findByUsername("new-student").orElseThrow();
+        assertEquals("No class / unassigned", getJson("/api/users/" + registered.getId() + "/student-details", admin)
+                .path("className").asText());
         mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"username\":\"new-student\",\"password\":\"password-long-enough\"}"))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isOk());
 
         mvc.perform(patch("/api/users/{id}/role", teacher.getId()).header("Authorization", bearer(admin))
                         .contentType(MediaType.APPLICATION_JSON).content("{\"role\":\"STUDENT\"}"))
-                .andExpect(status().isBadRequest());
-        mvc.perform(patch("/api/users/{id}/role", teacher.getId()).header("Authorization", bearer(admin))
-                        .contentType(MediaType.APPLICATION_JSON).content("{\"role\":\"PENDING_STUDENT\"}"))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk()).andExpect(jsonPath("$.role").value("STUDENT"));
+        assertEquals("No class / unassigned", getJson("/api/users/" + teacher.getId() + "/student-details", admin)
+                .path("className").asText());
         var assignedClass = classes.save(new StudentClassEntity(UUID.randomUUID(), "Assigned"));
         mvc.perform(put("/api/users/{id}/student-details", teacher.getId()).header("Authorization", bearer(admin))
                         .contentType(MediaType.APPLICATION_JSON).content("{\"classId\":\"" + assignedClass.getId()
                                 + "\",\"electiveSubjectIds\":[]}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.classId").value(assignedClass.getId().toString()));
         assertEquals(Role.STUDENT, users.findById(teacher.getId()).orElseThrow().getRole());
-
-        UserAccount legacy = users.save(user("legacy-student", Role.STUDENT));
-        String legacyStudentToken = bearer(legacy);
-        lifecycle.run(null);
-        assertEquals(Role.PENDING_STUDENT, users.findById(legacy.getId()).orElseThrow().getRole());
-        mvc.perform(get("/api/student-classes").header("Authorization", legacyStudentToken))
-                .andExpect(status().isUnauthorized());
     }
 
     private JsonNode postJson(String path, String body, UserAccount caller, int expectedStatus) throws Exception {

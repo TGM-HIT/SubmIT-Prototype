@@ -44,7 +44,7 @@ class AccountNameControllerTest {
     }
 
     @Test
-    void registrationTrimsNameAndWaitsForAdministratorClassAssignment() throws Exception {
+    void registrationTrimsNameAndCreatesAnImmediatelyUsableStudent() throws Exception {
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -53,14 +53,20 @@ class AccountNameControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.username").value("new-student"))
                 .andExpect(jsonPath("$.displayName").value("Jamie Rivera"))
-                .andExpect(jsonPath("$.role").value("PENDING_STUDENT"));
+                .andExpect(jsonPath("$.role").value("STUDENT"));
+        var registered = users.findByUsername("new-student").orElseThrow();
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .get("/api/users/{id}/student-details", registered.getId())
+                        .header("Authorization", bearer(admin)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.className").value("No class / unassigned"));
 
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"username":"new-student","password":"a-long-password"}
                                 """))
-                .andExpect(status().isForbidden());
+                .andExpect(status().isOk());
     }
 
     @Test

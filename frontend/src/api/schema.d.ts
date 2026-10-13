@@ -1591,7 +1591,7 @@ export interface components {
             /** @description Required account name; trimmed before storage and limited to 120 characters after trimming. */
             displayName: string;
             /** @enum {string} */
-            role?: "PENDING_STUDENT" | "STUDENT" | "TEACHER" | "ADMIN";
+            role?: "STUDENT" | "TEACHER" | "ADMIN";
         };
         UserResponse: {
             /** Format: uuid */
@@ -1599,7 +1599,7 @@ export interface components {
             username?: string;
             displayName: string;
             /** @enum {string} */
-            role?: "PENDING_STUDENT" | "STUDENT" | "TEACHER" | "ADMIN";
+            role?: "STUDENT" | "TEACHER" | "ADMIN";
             /** @description Current student class; returned only on the administrator account-list endpoint. */
             className?: string;
             /** @description Current elective subject names; returned only on the administrator account-list endpoint. */
@@ -1636,7 +1636,7 @@ export interface components {
         };
         RoleRequest: {
             /** @enum {string} */
-            role: "PENDING_STUDENT" | "STUDENT" | "TEACHER" | "ADMIN";
+            role: "STUDENT" | "TEACHER" | "ADMIN";
         };
         PageResponseUserResponse: {
             content?: components["schemas"]["UserResponse"][];
@@ -3388,7 +3388,7 @@ export interface operations {
             query?: {
                 page?: number;
                 size?: number;
-                role?: "PENDING_STUDENT" | "STUDENT" | "TEACHER" | "ADMIN";
+                role?: "STUDENT" | "TEACHER" | "ADMIN";
                 q?: string;
             };
             header?: never;

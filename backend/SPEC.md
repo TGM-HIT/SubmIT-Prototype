@@ -14,13 +14,13 @@ Use standard statuses: `200` for successful reads or body-returning mutations, `
 
 ### Authentication and users
 
-- `POST /api/auth/register` creates a `PENDING_STUDENT` account awaiting administrator class assignment; a supplied role is ignored. Pending accounts cannot log in. Startup moves existing classless `STUDENT` rows to `PENDING_STUDENT`, with no default assignment.
+- `POST /api/auth/register` creates an immediately usable `STUDENT` account; a supplied role is ignored. The default `No class / unassigned` catalogue class is assigned to each new student. Login behavior is unchanged; no role migration is performed.
 - `POST /api/auth/login` returns a JWT and the account name.
-- `GET /api/users` returns a paginated user list for `ADMIN`; optional `role` (`PENDING_STUDENT`, `STUDENT`, `TEACHER`, or `ADMIN`) and `q` parameters filter by role and case-insensitive username/display-name substring, respectively. Blank `q` is ignored, and `%` and `_` are literal search characters. Filters combine with AND and apply before pagination.
+- `GET /api/users` returns a paginated user list for `ADMIN`; optional `role` (`STUDENT`, `TEACHER`, or `ADMIN`) and `q` parameters filter by role and case-insensitive username/display-name substring, respectively. Blank `q` is ignored, and `%` and `_` are literal search characters. Filters combine with AND and apply before pagination.
 - `PATCH /api/users/{id}` changes the account name for the account owner or `ADMIN`.
-- `PATCH /api/users/{id}/role` changes a role for `ADMIN`; it rejects converting a non-student to `STUDENT` without an already assigned class. An administrator activates a pending student by assigning a class through `PUT /api/users/{id}/student-details`; a direct role change cannot bypass the assignment requirement.
+- `PATCH /api/users/{id}/role` changes a role for `ADMIN`; changing an account to `STUDENT` assigns the default `No class / unassigned` class if the account has no class. Administrators can change the class through `PUT /api/users/{id}/student-details`.
 
-Every account has a required display name separate from its unique username. Registration and name updates trim leading and trailing whitespace, then reject blank names and names longer than 120 characters. Registration, login, name-update, and administrator user-list responses include the display name. A name update changes no other account field; role changes remain restricted to the existing administrator-only role endpoint. Testing-profile student, teacher, and administrator accounts have stable, distinct, human-readable display names while retaining their existing usernames; each seeded testing student has the explicit `Testing Class` fixture assignment; a configured bootstrap administrator is named `Administrator`.
+Every account has a required display name separate from its unique username. Registration and name updates trim leading and trailing whitespace, then reject blank names and names longer than 120 characters. Registration, login, name-update, and administrator user-list responses include the display name. A name update changes no other account field; role changes remain restricted to the existing administrator-only role endpoint. Testing-profile student, teacher, and administrator accounts have stable, distinct, human-readable display names while retaining their existing usernames; the `testing` profile seeds the `Testing Class` and `Testing Class 2` classes and distributes student accounts between them (student01 remains in `Testing Class`); a configured bootstrap administrator is named `Administrator`.
 
 ### School years and application periods
 
@@ -164,7 +164,7 @@ The project archive records internal metadata, uploader, timestamps, publication
 
 ### Student class and elective-subject catalogue
 
-- `GET /api/student-classes` and `GET /api/elective-subjects` return paginated shared catalogues to authenticated teachers and administrators.
+- `GET /api/student-classes` and `GET /api/elective-subjects` return paginated shared catalogues to authenticated teachers and administrators. The class catalogue includes the default `No class / unassigned` entry.
 - Administrators create entries with `POST` and rename entries with `PATCH` on these catalogue resources; deletion is not supported. Names are trimmed, 1 to 100 characters, and unique without regard to case.
 - `GET /api/users/{id}/student-details` returns current student class and elective-subject IDs and names to authenticated teachers and administrators. `PUT` on that route lets administrators assign one required class and a required list of zero to four unique subject IDs.
 - Catalogues and assignment mutations are administrator-only. Assignments can target only students; unknown IDs, repeated subjects, and more than four subjects are rejected before mutation.

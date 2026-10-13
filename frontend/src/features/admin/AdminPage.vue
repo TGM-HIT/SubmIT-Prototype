@@ -7,14 +7,13 @@
       <button class="tab-button" role="tab" :aria-selected="activeTab === 'audit'" @click="activeTab = 'audit'">Audit history</button>
     </div>
     <section v-if="activeTab === 'users'" class="panel">
-      <div class="page-heading"><div><h2 id="accounts-heading" ref="accountsHeading" class="section-title">Accounts</h2><p class="muted">Registration always creates a student account. Change roles only when authorized by school policy.</p></div><button class="button button-secondary" @click="loadUsers(0)">Refresh</button></div>
+      <div class="page-heading"><div><h2 id="accounts-heading" ref="accountsHeading" class="section-title">Accounts</h2><p class="muted">Registration creates a student account with the default class; administrators can reassign its class and subjects.</p></div><button class="button button-secondary" @click="loadUsers(0)">Refresh</button></div>
       <form class="toolbar account-filters" @submit.prevent>
         <div class="field">
           <label class="label" for="account-role-filter">Role</label>
           <select id="account-role-filter" :value="roleFilter" class="select filter-control" @change="applyRoleFilter">
             <option value="">All roles</option>
             <option value="STUDENT">Student</option>
-            <option value="PENDING_STUDENT">Pending student</option>
             <option value="TEACHER">Teacher</option>
             <option value="ADMIN">Administrator</option>
           </select>
@@ -28,7 +27,7 @@
       <AsyncPanel :loading="task.loading.value" :error="task.error.value" @retry="loadUsers(users.page)">
         <div v-if="users.content.length" class="data-list">
           <article v-for="user in users.content" :key="user.id" class="data-row">
-            <div class="row-main"><h3>{{ user.displayName }}</h3><p>Username {{ user.username }}</p><p>Account {{ user.id }}</p><p v-if="user.role === 'STUDENT'">Class: {{ user.className }} · Elective subjects: {{ user.electiveSubjectNames?.join(', ') || 'None' }}</p><p v-else-if="user.role === 'PENDING_STUDENT'">Awaiting administrator class assignment</p><span class="status-badge">{{ user.role }}</span></div>
+            <div class="row-main"><h3>{{ user.displayName }}</h3><p>Username {{ user.username }}</p><p>Account {{ user.id }}</p><p v-if="user.role === 'STUDENT'">Class: {{ user.className }} · Elective subjects: {{ user.electiveSubjectNames?.join(', ') || 'None' }}</p><span class="status-badge">{{ user.role }}</span></div>
             <button :id="`edit-account-${user.id}`" class="button button-secondary button-small" type="button" :aria-label="`Edit ${user.displayName} (${user.username})`" @click="openEditor(user, $event)">Edit</button>
           </article>
         </div>
@@ -79,7 +78,6 @@
           <label class="label" for="account-role">Role</label>
           <select id="account-role" v-model="roleDraft" class="select">
             <option value="STUDENT">Student</option>
-            <option value="PENDING_STUDENT">Pending student</option>
             <option value="TEACHER">Teacher</option>
             <option value="ADMIN">Administrator</option>
           </select>
@@ -208,7 +206,7 @@ async function openEditor(user: User, event: MouseEvent): Promise<void> {
     ])
     classes.value = classPage.content
     subjects.value = subjectPage.content
-    classDraft.value = details?.classId ?? ''
+    classDraft.value = details?.classId ?? classes.value.find((entry) => entry.name === 'No class / unassigned')?.id ?? ''
     subjectDraft.value = [...(details?.electiveSubjectIds ?? [])]
     originalClassId.value = classDraft.value
     originalSubjectIds.value = [...subjectDraft.value]
@@ -261,14 +259,9 @@ async function saveAccount(): Promise<void> {
       originalName.value = updated.displayName ?? displayName
       updateVisibleAccount({ ...account, ...updated, displayName: originalName.value })
     }
-    if (roleChanged && roleDraft.value === 'STUDENT') {
-      if (originalRole.value !== 'PENDING_STUDENT') await adminApi.role(id, 'PENDING_STUDENT')
+    if (roleChanged) await adminApi.role(id, roleDraft.value)
+    if (assignmentChanged) {
       await studentDetailsApi.assign(id, { classId: classDraft.value, electiveSubjectIds: subjectDraft.value })
-    } else {
-      if (roleChanged) await adminApi.role(id, roleDraft.value)
-      if (assignmentChanged) {
-        await studentDetailsApi.assign(id, { classId: classDraft.value, electiveSubjectIds: subjectDraft.value })
-      }
     }
     await loadUsers(users.value.page)
     task.success.value = 'Account updated.'

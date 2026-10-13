@@ -2,6 +2,7 @@ package com.flightlog.user;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.flightlog.security.Role;
 import org.junit.jupiter.api.Test;
@@ -22,6 +23,10 @@ class TestingAccountSeedTest {
                 .filter(account -> account.getUsername().startsWith("student")).toList();
         assertFalse(students.isEmpty());
         assertEquals(15, students.size());
-        students.forEach(student -> assertEquals("Testing Class", student.getStudentClass().getName()));
+        assertEquals("Testing Class", students.stream().filter(student -> student.getUsername().equals("student01"))
+                .findFirst().orElseThrow().getStudentClass().getName());
+        assertEquals(2, students.stream().map(student -> student.getStudentClass().getName()).distinct().count());
+        assertTrue(students.stream().anyMatch(student -> student.getStudentClass().getName().equals("Testing Class")));
+        assertTrue(students.stream().anyMatch(student -> student.getStudentClass().getName().equals("Testing Class 2")));
     }
 }

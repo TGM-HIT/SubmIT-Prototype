@@ -32,7 +32,6 @@ describe('registration account name', () => {
       displayName: 'Jamie Rivera',
     })
     expect(api.login).not.toHaveBeenCalled()
-    expect(api.replace).not.toHaveBeenCalled()
-    expect(page.get('[role="status"]').text()).toContain('administrator must assign your class')
+    expect(api.replace).toHaveBeenCalledWith('/')
   })
 })

@@ -24,13 +24,15 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
     private final AuditService audit;
+    private final DefaultStudentClassService defaultStudentClass;
 
     public AuthService(UserAccountRepository users, PasswordEncoder passwordEncoder, JwtService jwtService,
-            AuditService audit) {
+            AuditService audit, DefaultStudentClassService defaultStudentClass) {
         this.users = users;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
         this.audit = audit;
+        this.defaultStudentClass = defaultStudentClass;
     }
 
     @Transactional
@@ -40,8 +42,10 @@ public class AuthService {
         if (users.findByUsername(username).isPresent()) {
             throw new ApiException(HttpStatus.CONFLICT, "Username is already registered.");
         }
-        UserAccount user = users.save(new UserAccount(UUID.randomUUID(), username, displayName,
-                passwordEncoder.encode(request.password()), Role.PENDING_STUDENT));
+        UserAccount user = new UserAccount(UUID.randomUUID(), username, displayName,
+                passwordEncoder.encode(request.password()), Role.STUDENT);
+        user.setStudentClass(defaultStudentClass.getOrCreate());
+        users.save(user);
         audit.record(new AuthenticatedUser(user.getId(), user.getUsername(), user.getRole()),
                 "USER_REGISTERED", "user", user.getId());
         return toResponse(user);
@@ -53,10 +57,6 @@ public class AuthService {
                 .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "Invalid username or password."));
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "Invalid username or password.");
-        }
-        if (user.getRole() == Role.PENDING_STUDENT) {
-            throw new ApiException(HttpStatus.FORBIDDEN,
-                    "Your account is waiting for an administrator to assign a class.");
         }
         AuthenticatedUser principal = new AuthenticatedUser(user.getId(), user.getUsername(), user.getRole());
         return new TokenResponse(jwtService.issueToken(principal), "Bearer", TOKEN_LIFETIME_SECONDS,
