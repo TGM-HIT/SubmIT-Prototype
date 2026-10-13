@@ -45,6 +45,7 @@ For each finding that is not fixed and not a duplicate, open one ticket:
 - Take the next free number in that group from `harness/plan.md` and the files under `harness/tickets/` and `harness/tickets/done/`.
 - Create `harness/tickets/<ticket-id>.md` from `harness/templates/ticket.md`: concrete intent, scope, and acceptance criteria drawn from the finding, with a `Source:` line naming the run ID, report entry, and quoted evidence. Mark it `Draft from <run-id>: needs Ticket Author refinement before implementation` as the first line under the title; the Ticket Author removes that line when refining.
 - Add one `to-do` row to the matching group table in `harness/plan.md`, kept in ticket-ID order.
+- Before a follow-up ticket states that a link, path, or name has a correct replacement, resolve each one against the repository tree. List any target that does not resolve separately, with the decision it needs (retarget, turn into plain text, or accept), and do not count it among the mechanical repairs.
 - Before opening, search open tickets for the same finding; if one covers it, classify the finding `duplicate` and open nothing. For a `decision needed` finding, still open the ticket but state the exact competing statements and the decision required, and do not prescribe an answer.
 
 ## Ledger

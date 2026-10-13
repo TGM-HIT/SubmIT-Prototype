@@ -74,6 +74,12 @@ prints a "FLAG: spec change: <path>" line for each one in the commit. A flag is 
 failure, but it must be carried forward: tell the Evaluator that the spec changed so it
 judges the change, and record it in the run log.
 
+When the ticket has a "Scope-gate allowances" bullet, make exactly that allowlist
+change in `harness/gates/commit-scope.java` as its own commit before dispatching
+the Implementor, and record it in the log. Remove those paths again in the
+closeout commit unless the ticket says they are permanent. The fail-then-fix rule
+below remains for paths the ticket did not declare.
+
 A failed scope gate sends the commit back with the out-of-scope path. Before
 deciding the failure cannot be corrected, compare each rejected path with the
 ticket's explicit scope and required deliverables. If a path is necessary to
@@ -282,20 +288,23 @@ report it."
 
 Keep a run log as you go: the ticket, what you dispatched, the gate results, the
 verdicts you got back, and any escalation. Write each step as one Markdown bullet in the form
-`- <timestamp> <step> <result>`: preflight; each dispatch with its commit SHA; each
+`- <timestamp> <step> <result>`: preflight; for each Implementor pass one bullet before dispatch
+(`Implementor dispatched pass N`) and one on return (`Implementor returned pass N
+commit <SHA>`); each
 gate with its exit code; each Evaluator verdict with its artifact path; and, after
 the closeout commit, its SHA (append it to the local log). Do not write
 unbulleted step lines.
 
-For every pass, log the Implementor dispatch and returned commit SHA, then each
+For every pass, log the Implementor dispatch, then its returned commit SHA, then each
 gate result, then an `Evaluator dispatched` event before the corresponding
 Evaluator verdict event. Evaluator dispatch entries identify the pass and
 requested evaluation artifact path; they do not have an implementation commit
 SHA. At closeout, verify that every Evaluator verdict has a preceding dispatch
 event and that the heartbeat was updated at each Evaluator dispatch and verdict.
 
-Before writing the footer, list the run folder and check the log against it. Each
-`handoff-N.md` needs an Implementor dispatch bullet with a SHA and two gate
+After writing the final footer, list the run folder and check the log against it. Each
+`handoff-N.md` needs an Implementor dispatch bullet, a returned-commit bullet with a
+SHA, and two gate
 bullets. Each `evaluation-N.md` needs a dispatch bullet and a verdict bullet. The
 Metrics counts must equal the number of those files. Put the SPEC CHANGE section
 after the last bullet and before Metrics, and label the token figure "estimate".
@@ -305,7 +314,10 @@ including failed, stopped, and paused runs: Implementor passes, revise cycles,
 Evaluator passes, start and end timestamps, and a token figure. The token figure
 is your own estimate and stays labelled "estimate": the run's real per-model
 usage is written to the launcher's output when the process exits, which nothing
-inside the run can read.
+inside the run can read. When a paused run continues in the same folder, rename
+the pause footer to `## Metrics (paused at <timestamp>)`, keep it in place, append
+all later bullets after it, and write the final `## Metrics` footer last. Edit the
+log append-only; never rewrite it from a prefix.
 
 Name per-pass artifacts with a pass number N starting at 1: `handoff-N.md`,
 `changed-paths-N.txt`, and `evaluation-N.md`. Run the scope gate on each pass's
