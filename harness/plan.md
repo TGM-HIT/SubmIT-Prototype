@@ -44,7 +44,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-06](tickets/done/Dev-06.md) | done | Seed 15 student accounts with meaningful names for testing |
 | [Dev-07](tickets/done/Dev-07.md) | done | Seed multi-group allocation and finalization preview states for student testing |
 | [Dev-08](tickets/done/Dev-08.md) | done | Add an opt-in minimal testing fixture mode without application periods |
-| [Dev-09](tickets/Dev-09.md) | to-do | Repair Markdown structure findings from Compliance-04 |
+| [Dev-09](tickets/Dev-09.md) | awaiting-human | Repair Markdown structure findings from Compliance-04 |
 | [Dev-10](tickets/Dev-10.md) | to-do | Settle ticket-creation ownership in the Ticket Author contract |
 | [Dev-11](tickets/Dev-11.md) | to-do | Remove stale and misleading wording from role and agent files |
 
