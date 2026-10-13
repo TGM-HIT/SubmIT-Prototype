@@ -44,6 +44,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-06](tickets/done/Dev-06.md) | done | Seed 15 student accounts with meaningful names for testing |
 | [Dev-07](tickets/done/Dev-07.md) | done | Seed multi-group allocation and finalization preview states for student testing |
 | [Dev-08](tickets/done/Dev-08.md) | done | Add an opt-in minimal testing fixture mode without application periods |
+| [Dev-09](tickets/Dev-09.md) | to-do | Repair Markdown structure findings from Compliance-04 |
 
 ### Features
 
@@ -81,5 +82,5 @@ Recurring documentation and contract checks, run by the [Auditor role](roles/aud
 | [Compliance-01](checks/Compliance-01.md) | Monthly and after SPEC or guide changes | never | n/a | n/a | Specification and guideline consistency |
 | [Compliance-02](checks/Compliance-02.md) | After each closed Feature or Bug; at least monthly | never | n/a | n/a | Documentation and code parity |
 | [Compliance-03](checks/Compliance-03.md) | After API changes; at least monthly | never | n/a | n/a | OpenAPI contract compliance |
-| [Compliance-04](checks/Compliance-04.md) | Weekly and after file moves or renames | never | n/a | n/a | Link and format validation |
+| [Compliance-04](checks/Compliance-04.md) | Weekly and after file moves or renames | 2026-10-14 00:13 +0200 | findings: 4 ticketed, 1 decision needed, 0 fixed | Compliance-04-20261014-0013 | Link and format validation |
 | [Compliance-05](checks/Compliance-05.md) | Quarterly and before planning | never | n/a | n/a | Documentation health |
