@@ -9,3 +9,7 @@ Open question for this entry: `backend/SPEC.md` already has `PUT /api/applicatio
 - C: Something else (including dates only, without projects).
 
 Re-opening a closed period by moving the deadline into the future is out of scope unless decided otherwise.
+
+## Update auditor to be orchestrated.
+
+## Allow learner for compliance checks
