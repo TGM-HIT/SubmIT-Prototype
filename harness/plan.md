@@ -45,6 +45,8 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-07](tickets/done/Dev-07.md) | done | Seed multi-group allocation and finalization preview states for student testing |
 | [Dev-08](tickets/done/Dev-08.md) | done | Add an opt-in minimal testing fixture mode without application periods |
 | [Dev-09](tickets/Dev-09.md) | to-do | Repair Markdown structure findings from Compliance-04 |
+| [Dev-10](tickets/Dev-10.md) | to-do | Settle ticket-creation ownership in the Ticket Author contract |
+| [Dev-11](tickets/Dev-11.md) | to-do | Remove stale and misleading wording from role and agent files |
 
 ### Features
 
@@ -85,4 +87,4 @@ Recurring documentation and contract checks, run by the [Auditor role](roles/aud
 | [Compliance-03](checks/Compliance-03.md) | After API changes; at least monthly | never | n/a | n/a | OpenAPI contract compliance |
 | [Compliance-04](checks/Compliance-04.md) | Weekly and after file moves or renames | 2026-10-14 00:13 +0200 | findings: 4 ticketed, 1 decision needed, 0 fixed | Compliance-04-20261014-0013 | Link and format validation |
 | [Compliance-05](checks/Compliance-05.md) | Quarterly and before planning | 2026-10-14 00:30 +0200 | clean: 0 findings, 4 observations | Compliance-05-20261014-0030 | Documentation health |
-| [Compliance-06](checks/Compliance-06.md) | After each role-contract change or lesson application; at least monthly | never | n/a | n/a | Agent role consistency and role-file validation |
+| [Compliance-06](checks/Compliance-06.md) | After each role-contract change or lesson application; at least monthly | 2026-10-14 00:46 +0200 | findings: 7 ticketed (2 with decisions needed), 1 duplicate, 0 fixed | Compliance-06-20261014-0046 | Agent role consistency and role-file validation |
