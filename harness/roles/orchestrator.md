@@ -97,4 +97,18 @@ Role dispatch that ends without a handoff (for example an infrastructure or netw
 
 Derive the block from the repository after closeout. It is the boundary another coordinator and the Learner consume; do not make them reconstruct it from prose.
 
+## Audit runs
+
+An ID that resolves to a file under `harness/checks/<id>.md` is an audit run instead of a ticket run. If the ID resolves to both a check and a ticket, or to neither, stop before creating a run folder and leave the tree and ledger unchanged. For a check ID, use the check definition as the specification and make only the changes in this section; all other preflight, run id, run folder, `run.log`, heartbeat, timestamp, bullet-format, pass-numbering, closeout, and `## Metrics` requirements above apply as written. The log header links the check definition. Do not set the check row to `in-progress` or edit the Compliance ledger.
+
+Create the run folder named `<check-id>-<yyyymmdd-hhmm>`. Dispatch the Auditor instead of the Implementor, supplying the check ID, run folder, `harness/runs/<run-id>/report.md`, and the pass handoff path `harness/runs/<run-id>/handoff-N.md`. Log `Auditor dispatched pass N` and `Auditor returned pass N commit <SHA|none>` as the usual timestamped bullets. The Auditor may return `none` for a clean audit with no changes to commit. The Auditor owns and commits any audit fixes, the check's ledger row, follow-up tickets, and their plan rows, as specified in its contract.
+
+Run the handoff-completeness gate on the supplied handoff. Instead of the commit-scope gate, verify with `git diff --name-only` that the Auditor's fix commit contains only Markdown paths, and that its separate follow-up commit contains only `harness/plan.md` and paths under `harness/tickets/`; log both changed-path lists and each verification result. Verify that `report.md` exists and contains all headings required by the Auditor contract. The Evaluator re-checks these path boundaries. Do not run the implementation commit-scope gate for audit commits.
+
+Dispatch the Evaluator with the check-definition path instead of a ticket path, the report and handoff paths, and the Auditor's commits as the audit diff from the baseline. Keep `handoff-N.md` and `evaluation-N.md` per pass, and keep one `report.md` that the Auditor updates in place on a revise cycle. On revise, dispatch a fresh Auditor with the Evaluator's verdict and the existing report and run folder; it fixes only what the verdict names and does not rewrite or discard earlier commits. The usual limit of three revise cycles applies.
+
+For audit closeout, do not move a ticket or change a plan-row status. On Evaluator `pass`, record outcome `done`; on terminal failure, record `failed`. In either case the ledger is `unchanged`, because the Auditor owns the Compliance ledger update. A paused or failed audit must not change the Compliance ledger beyond changes already committed by the Auditor. Awaiting-human and stopped work otherwise follow the ticket-run rules. Record the check's `Result` cell in the run log. In the return block, `Ticket:` contains the check ID, and `Follow-ups:` lists the Auditor's opened ticket IDs as well as any `OUT OF SCOPE:` lines.
+
+The Auditor retains its model-tier rule: mid tier, or the most-capable tier for Compliance-01 and Compliance-06. The Evaluator's tier is unchanged.
+
 Run this seat on the most-capable model tier at a high thinking level: the loop is judgment work, and judgment work gets the judgment model.

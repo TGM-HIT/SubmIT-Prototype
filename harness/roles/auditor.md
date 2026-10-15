@@ -52,6 +52,18 @@ For each finding that is not fixed and not a duplicate, open one ticket:
 
 After the run, update only the check's row in the `## Compliance checks` table: set `Last run` to the run's start date and time with time zone, `Result` to the outcome and finding counts (for example `findings: 3 ticketed, 1 fixed`), and `Run` to the run ID. Commit the ledger change together with the follow-up tickets and their rows, separately from the documentation-fix commit. Do not commit the run folder.
 
+## Orchestrated run
+
+When the caller supplies a run folder, a report path, and a handoff path, the Orchestrator has already completed preflight and created the run folder. Do not run preflight, mint a run ID, or create a folder. Write `report.md` and the handoff to the supplied locations. All other audit, inspection, source-of-truth, fix, follow-up, ledger, and commit requirements above remain in force.
+
+The handoff must have these headings:
+
+- `## What was done`: list the commits, the ledger change, and follow-ups.
+- `## What was verified`: list the inspections actually performed and refer to the report's `## Scope inspected`.
+- `## What's uncertain`: list any topic in the check definition that was not or could not be inspected and any `decision needed` finding.
+
+If there are no fix or follow-up commits, say so explicitly and list the HEAD SHA. On a revise cycle, a fresh Auditor receives the Evaluator's verdict, reads the existing report and run folder, fixes only what the verdict names, updates `report.md` in place, writes the next `handoff-N.md`, and commits any new changes separately. Do not rewrite or discard earlier commits.
+
 ## Return
 
 Reply with the report path and this block:
@@ -64,5 +76,7 @@ Reply with the report path and this block:
     Decisions needed: <none|one line per decision>
     Terminal commit: <full commit sha>
     Tree: <clean|dirty>
+
+For an orchestrated run, add `Handoff: <exact handoff path>` to the return block.
 
 Run this seat on a solid mid model tier at a medium thinking level, except for checks that compare many documents for contradictions (Compliance-01 and Compliance-06), which should run on the most-capable tier at a high thinking level.
