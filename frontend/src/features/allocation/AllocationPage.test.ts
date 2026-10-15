@@ -194,7 +194,7 @@ describe('allocation supervisor display', () => {
         assignments: [{ projectId: "project-1", projectTitle: "Project One", studentId: "student-1",
           studentDisplayName: "Pinned Student", pinned: true }],
         unassignedStudents: [{ studentId: "student-4", studentDisplayName: "Unassigned Pinned Student",
-          reason: "PINNED_PROJECT_CANNOT_FORM_GROUP", explanation: "The administrator pin could not form a valid group." }],
+          reason: "PINNED_PROJECT_CANNOT_FORM_GROUP", explanation: "The administrator pin could not form a valid group of at least three students." }],
       },
     })
     const page = mountPage()
@@ -202,7 +202,37 @@ describe('allocation supervisor display', () => {
     await page.findAll("button").find((button) => button.text() === "Inspect result")!.trigger("click")
     await flushPromises()
     expect(page.text()).toContain("Pinned Student · Fixed by administrator")
-    expect(page.text()).toContain("Unassigned Pinned Student · Class: Not assigned · Elective subjects: None · The administrator pin could not form a valid group.")
+    expect(page.text()).toContain("Unassigned Pinned Student · Class: Not assigned · Elective subjects: None · The administrator pin could not form a valid group of at least three students.")
+    expect(page.text()).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i)
+  })
+
+  it("loads all pin and application pages before showing pins or classifying rankings", async () => {
+    state.role = "ADMIN"
+    const firstPin = { studentId: "student-1", studentDisplayName: "Student One", projectId: "project-1", projectTitle: "Project One", rankedChoice: true }
+    const laterPin = { studentId: "student-2", studentDisplayName: "Student Two", projectId: "project-1", projectTitle: "Project One", rankedChoice: true }
+    api.listPins.mockResolvedValueOnce({ content: [firstPin], page: 0, size: 1, totalElements: 2, totalPages: 2 })
+      .mockResolvedValueOnce({ content: [laterPin], page: 1, size: 1, totalElements: 2, totalPages: 2 })
+      .mockResolvedValue({ content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 })
+    api.listApplications.mockResolvedValueOnce({ content: [], page: 0, size: 1, totalElements: 2, totalPages: 2 })
+      .mockResolvedValueOnce({ content: [{ studentId: "student-2", preferences: [{ projectId: "project-1" }] }], page: 1, size: 1, totalElements: 2, totalPages: 2 })
+      .mockResolvedValue({ content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 })
+    api.lookupStudents.mockResolvedValue({ content: [{ id: "student-2", displayName: "Student Two" }] })
+    const page = mountPage()
+    await flushPromises()
+
+    expect(page.text()).toContain("Student One → Project One")
+    expect(page.text()).toContain("Student Two → Project One")
+    expect(api.listPins.mock.calls.map(([periodId, pageNumber]) => [periodId, pageNumber])).toContainEqual(["period-1", 1])
+    expect(api.listApplications.mock.calls.map(([periodId, pageNumber]) => [periodId, pageNumber])).toContainEqual(["period-1", 1])
+
+    await page.get("#pin-student").setValue("Student Two")
+    await flushPromises()
+    await page.findAll("select")[1].setValue("student-2")
+    await page.findAll("select")[2].setValue("project-1")
+    expect(page.text()).not.toContain("did not rank the selected project")
+    await page.find("form").trigger("submit")
+    await flushPromises()
+    expect(api.savePin).toHaveBeenCalledWith("period-1", "student-2", "project-1", false)
   })
 
   it("lists and changes an existing administrator pin", async () => {

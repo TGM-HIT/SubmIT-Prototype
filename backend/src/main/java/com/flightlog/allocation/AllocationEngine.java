@@ -136,10 +136,8 @@ class AllocationEngine {
         for (JsonNode student : students) {
             String studentId = student.path(STUDENT_ID).asText();
             if (student instanceof ObjectNode object && pins.containsKey(studentId)) {
-                String projectId = pins.get(studentId);
                 object.put("reason", PIN_REASON);
-                object.put("explanation", "The administrator pin to project " + projectId
-                        + " could not form a valid group of at least three students.");
+                object.put("explanation", "The administrator pin could not form a valid group of at least three students.");
             }
         }
     }

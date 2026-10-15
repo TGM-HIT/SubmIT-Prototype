@@ -145,6 +145,14 @@ function unassigned(run: Data): Data[] {
   const entries = [result.unassignedStudents, result.unassignedProjects]
   return entries.flatMap((items) => Array.isArray(items) ? items.filter((entry): entry is Data => typeof entry === 'object' && entry !== null) : [])
 }
+async function allPages<T>(fetchPage: (page: number) => Promise<{ content: T[]; totalPages: number }>): Promise<T[]> {
+  const firstPage = await fetchPage(0)
+  const pages = [firstPage]
+  for (let page = 1; page < firstPage.totalPages; page += 1) {
+    pages.push(await fetchPage(page))
+  }
+  return pages.flatMap((page) => page.content)
+}
 function isRanked(studentId: string, projectId: string): boolean {
   const application = submittedApplications.value.find((entry) => String(entry.studentId ?? ``) === studentId)
   const preferences = Array.isArray(application?.preferences) ? application.preferences : []
@@ -159,15 +167,15 @@ async function loadPins(): Promise<void> {
   pinLoading.value = true
   pinError.value = ``
   try {
-    const [pinPage, ideaPage, applicationPage] = await Promise.all([
-      periodsApi.pins(periodId.value, 0),
+    const [allPins, ideaPage, allApplications] = await Promise.all([
+      allPages((page) => periodsApi.pins(periodId.value, page)),
       ideasApi.list(0, `ACCEPTED_FOR_APPLICATIONS`, 100),
-      periodsApi.applications(periodId.value, 0),
+      allPages((page) => periodsApi.applications(periodId.value, page)),
     ])
-    pins.value = pinPage.content as unknown as Data[]
+    pins.value = allPins as unknown as Data[]
     const ids = Array.isArray(selectedPeriod.value.projectIds) ? selectedPeriod.value.projectIds.map(String) : []
     catalogueProjects.value = ideaPage.content.filter((idea) => ids.includes(String(idea.id ?? ``))).map((idea) => ({ id: String(idea.id ?? ``), title: idea.title }))
-    submittedApplications.value = applicationPage.content as unknown as Data[]
+    submittedApplications.value = allApplications as unknown as Data[]
   } catch (error) {
     pinError.value = error instanceof Error ? error.message : `Could not load fixed assignments.`
   } finally {

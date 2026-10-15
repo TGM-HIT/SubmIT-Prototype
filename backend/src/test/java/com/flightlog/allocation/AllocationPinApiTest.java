@@ -208,6 +208,9 @@ class AllocationPinApiTest {
         assertEquals(pinnedStudent.toString(), unassigned.path("studentId").asText());
         assertEquals("PINNED_PROJECT_CANNOT_FORM_GROUP", unassigned.path("reason").asText());
         assertTrue(unassigned.path("explanation").asText().contains("pin"));
+        assertEquals("The administrator pin could not form a valid group of at least three students.",
+                unassigned.path("explanation").asText());
+        assertFalse(unassigned.path("explanation").asText().contains(projects.get(0).toString()));
     }
 
     @Test
@@ -335,6 +338,38 @@ class AllocationPinApiTest {
             }
         }
         assertTrue(pinnedStudentAssigned);
+    }
+
+    @Test
+    void pinCollectionReturnsRequestedPageAndPaginationMetadata() throws Exception {
+        List<UUID> students = List.of(
+                users.findByUsername("student01").orElseThrow().getId(),
+                users.findByUsername("student02").orElseThrow().getId(),
+                users.findByUsername("student03").orElseThrow().getId());
+        for (UUID student : students) {
+            mockMvc.perform(put(pinPath(student)).header("Authorization", bearer(adminToken))
+                            .contentType(MediaType.APPLICATION_JSON).content(pinRequest(projects.get(0), true)))
+                    .andExpect(status().isOk());
+        }
+
+        JsonNode firstPage = mapper.readTree(mockMvc.perform(get(
+                        "/api/application-periods/{periodId}/allocation-pins?page=0&size=2", periodId)
+                        .header("Authorization", bearer(teacherToken)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content.length()").value(2))
+                .andExpect(jsonPath("$.page").value(0)).andExpect(jsonPath("$.size").value(2))
+                .andExpect(jsonPath("$.totalElements").value(3)).andExpect(jsonPath("$.totalPages").value(2))
+                .andReturn().getResponse().getContentAsString());
+        JsonNode secondPage = mapper.readTree(mockMvc.perform(get(
+                        "/api/application-periods/{periodId}/allocation-pins?page=1&size=2", periodId)
+                        .header("Authorization", bearer(teacherToken)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content.length()").value(1))
+                .andExpect(jsonPath("$.page").value(1)).andExpect(jsonPath("$.size").value(2))
+                .andExpect(jsonPath("$.totalElements").value(3)).andExpect(jsonPath("$.totalPages").value(2))
+                .andReturn().getResponse().getContentAsString());
+        List<String> returnedStudentIds = new ArrayList<>();
+        firstPage.path("content").forEach(pin -> returnedStudentIds.add(pin.path("studentId").asText()));
+        secondPage.path("content").forEach(pin -> returnedStudentIds.add(pin.path("studentId").asText()));
+        assertEquals(students.stream().map(UUID::toString).sorted().toList(), returnedStudentIds.stream().sorted().toList());
     }
 
     @Test
