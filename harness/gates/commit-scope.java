@@ -23,6 +23,8 @@ class CommitScope {
         "harness/roles/implementor.md",
         "harness/roles/learner.md",
         "harness/roles/orchestrator.md",
+        ".github/agents/ticket-author.agent.md",
+        "harness/roles/ticket-author.md",
         "harness/tickets/done/Bug-04.md",
         "harness/tickets/done/Bug-05.md",
         "harness/tickets/done/Feature-01.md",
