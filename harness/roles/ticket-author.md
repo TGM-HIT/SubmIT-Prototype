@@ -8,9 +8,8 @@ existing ticket, find its row in any of the Bug, Dev, or Features tables in
 matching specification in `harness/tickets/` and `harness/tickets/done/`.
 Create new tickets in `harness/tickets/`; tickets are moved to `harness/tickets/done/`
 only by the Orchestrator when closing them as done. Use the ticket ID prefix to
-identify its plan group (`Bug-` → Bugs, `Dev-` → Dev, `Feature-` → Features).
-When creating a ticket, report its group so the Orchestrator can add its status
-row to that group’s table; do not edit the ledger yourself. Read
+identify its plan group (`Bug-` → Bugs, `Dev-` → Development, `Feature-` →
+Features, `Optimization-` → Optimizations). Read
 only the relevant product/API specifications, development guidelines, and
 nearby tickets needed to establish project conventions and avoid conflicting
 requirements. Inspect source only when needed to describe the current behavior
@@ -75,16 +74,28 @@ review controller tests asserting seeded display names). If another open ticket
 in `harness/plan.md` or `harness/tickets/` touches the same seeds or fixtures,
 note the dependency or intended order in the ticket.
 
-Write only the requested ticket file, plus one index row for a new ticket. Do not
-edit project specifications, role contracts, or other tickets unless the user
-explicitly requests those additional changes. For a new ticket, use the requested
-ticket ID and location; if either is not provided and cannot be derived safely,
-ask the user. When you create a new ticket, add exactly one row to the matching
-group table in `harness/plan.md` (`Bug-` to Bugs, `Dev-` to Development,
-`Feature-` to Features): status `to-do`, link `tickets/<ticket-id>.md`, and the
-ticket title, kept in ticket-ID order. This is the only plan edit you may make;
-do not change any other row or status. When only refining an existing ticket,
-leave the ledger unchanged unless explicitly asked.
+Write only the requested ticket file, plus exactly one plan row when creating a
+new ticket. Do not edit project specifications, role contracts, or other tickets
+unless the user explicitly requests those additional changes. For a new ticket,
+use the requested ticket ID and location; if either is not provided and cannot
+be derived safely, ask the user. When you create a new ticket, add exactly one
+row to the matching group table in `harness/plan.md` (`Bug-` to Bugs, `Dev-` to
+Development, `Feature-` to Features, `Optimization-` to Optimizations): status
+`to-do`, link `tickets/<ticket-id>.md`, and the ticket title, kept in ticket-ID
+order. This is the only plan edit you may make; do not change any other row or
+status.
+
+After creating a new ticket, commit the ticket file and its one plan row
+together. Stage only those two paths explicitly and use a commit message of the
+form `Add <ticket-id> ticket`, including the repository-required
+`Co-authored-by: Copilot <223556219+Copilot@users.noreply.github.com>` trailer.
+Before committing, check that `harness/plan.md` and the new ticket path have no
+other uncommitted changes. If either path has other uncommitted changes, do not
+commit; leave all files in place and report the exact paths to stage and why.
+Never stash, revert, or discard another change. When only refining an existing
+ticket, leave the ledger unchanged unless explicitly asked, and do not commit
+unless the user asks. Report the commit SHA, or state that nothing was committed
+and why.
 
 Before reporting completion, check the ticket for leftover template
 placeholders, conflicting requirements, ungrounded assumptions, and whitespace
@@ -104,6 +115,9 @@ deliverable is outside the allowed set (for example `Makefile`, `.env.example`
 or another root config file), add a "Scope-gate allowances" bullet under "Scope
 and contract" naming the exact paths, so the Orchestrator's narrow allowlist
 change is expected rather than discovered. Documentation-only ticket authoring requires no
-project build or test run. Report the ticket path, the material requirements captured, any
-clarifications or assumptions, and the checks performed. Do not claim project
-tests or implementation checks were run.
+project build or test run. Report the ticket path, the material requirements
+captured, any clarifications or assumptions, and the checks performed. Do not
+claim project tests or implementation checks were run.
+
+Run this seat on the most-capable model tier at a high thinking level, matching
+the agent's high reasoning-effort setting.

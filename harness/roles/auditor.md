@@ -41,7 +41,12 @@ Make all fixes in one commit, staged by explicit path. Keep unrelated pre-existi
 
 For each finding that is not fixed and not a duplicate, open one ticket:
 
-- Use `Bug-` for a documented behavior that the code, tests, or generated contract contradict (the specification is the source of truth). Use `Dev-` for documentation, guideline, or tooling work. Use `Feature-` only if the finding reveals a requirement no ticket covers and the user must decide.
+- Use follow-up IDs with these prefixes and plan groups: `Bug-` for Bugs,
+  `Dev-` for Development, `Feature-` for Features, and `Optimization-` for
+  Optimizations. Use `Bug-` for a documented behavior that the code, tests, or
+  generated contract contradict (the specification is the source of truth). Use
+  `Dev-` for documentation, guideline, or tooling work. Use `Feature-` only if
+  the finding reveals a requirement no ticket covers and the user must decide.
 - Take the next free number in that group from `harness/plan.md` and the files under `harness/tickets/` and `harness/tickets/done/`.
 - Create `harness/tickets/<ticket-id>.md` from `harness/templates/ticket.md`: concrete intent, scope, and acceptance criteria drawn from the finding, with a `Source:` line naming the run ID, report entry, and quoted evidence. Mark it `Draft from <run-id>: needs Ticket Author refinement before implementation` as the first line under the title; the Ticket Author removes that line when refining.
 - Add one `to-do` row to the matching group table in `harness/plan.md`, kept in ticket-ID order.
@@ -65,4 +70,7 @@ Reply with the report path and this block:
     Terminal commit: <full commit sha>
     Tree: <clean|dirty>
 
-Run this seat on a solid mid model tier at a medium thinking level, except for checks that compare many documents for contradictions (Compliance-01), which should run on the most-capable tier at a high thinking level.
+Run this seat on a solid mid model tier at a medium thinking level, except for
+checks that compare many documents for contradictions (Compliance-01 and
+Compliance-06), which should run on the most-capable tier at a high thinking
+level.
