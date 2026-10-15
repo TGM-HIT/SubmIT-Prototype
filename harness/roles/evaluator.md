@@ -24,7 +24,7 @@ an actionable finding or human-exercisable acceptance gap.
 
 If the diff changes a SPEC.md file, judge that change explicitly: it must be declared in the handoff as a "SPEC CHANGE:", necessary for the ticket, minimal, and consistent with the code and the acceptance criteria. An undeclared, unnecessary, or requirement-weakening spec change is a revise. Always state in your verdict whether spec files changed and whether you accept the change.
 
-For Dev-02, evaluate any changes to `frontend/DEV-GUIDELINES.md` or `backend/DEV-GUIDELINES.md` for necessity and minimality against the delivered tooling. The frontend guide should change only when needed to explain how to use or maintain the workflow; the backend guide should change only for backend-specific profile, fixture, or startup instructions. A guide being allowed by the commit-scope gate does not by itself justify changing it.
+For any ticket that changes a developer guide, evaluate any changes to `frontend/DEV-GUIDELINES.md` or `backend/DEV-GUIDELINES.md` for necessity and minimality against the delivered tooling. The frontend guide should change only when needed to explain how to use or maintain the workflow; the backend guide should change only for backend-specific profile, fixture, or startup instructions. A guide being allowed by the commit-scope gate does not by itself justify changing it.
 
 Return one verdict: `pass`, `revise`, or `awaiting-human`.
 

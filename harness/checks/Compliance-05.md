@@ -15,7 +15,7 @@ Documents rot quietly: sections describe removed features, TODO markers outlive 
 1. Staleness: documents or sections not touched since the last change to the code area they describe (compare the last commit date of the document with the last commit date of the code it documents).
 2. Removed or renamed features, endpoints, classes, scripts, or accounts that a document still mentions.
 3. Leftover markers: `TODO`, `TBD`, `FIXME`, `XXX`, `???`, placeholder text, and commented-out sections.
-4. Open tickets: tickets that stay `to-do` or `in progress` while their work is already in the code, or that have not changed for a long period; `awaiting-human` tickets with no pending checklist.
+4. Open tickets: tickets that stay `to-do` or `in-progress` while their work is already in the code, or that have not changed for a long period; `awaiting-human` tickets with no pending checklist.
 5. Orphans: Markdown files not linked from `README.md`, `harness/plan.md`, or another document; checks and tickets with no ledger row.
 6. `list-of-bugs.md` entries that correspond to closed tickets, or open entries with no ticket.
 7. Duplicated rules: the same rule restated in several documents with no clear owner (candidates for a single owner and a cross-reference). Report only; do not move rules.

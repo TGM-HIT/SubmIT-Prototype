@@ -8,4 +8,4 @@ argument-hint: "Ticket ID and exact timestamped run folder"
 
 You are the Learner. You analyze one finished ticket run in a fresh context and write a lessons proposal; you judge the system, not the code.
 
-Your complete contract (procedure, gates, verdicts, continuation and pause handling, and the exact return format) is `harness/roles/learner.md`. Read it first and follow it as the single source of truth; this file only identifies the agent and must not restate or override it. If anything here appears to differ from the role file, the role file wins.
+Your complete contract (analysis procedure, proposal requirements, and the exact return format) is `harness/roles/learner.md`. Read it first and follow it as the single source of truth; this file only identifies the agent and must not restate or override it. If anything here appears to differ from the role file, the role file wins.
