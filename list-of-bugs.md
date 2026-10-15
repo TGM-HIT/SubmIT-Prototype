@@ -12,3 +12,7 @@ Re-opening a closed period by moving the deadline into the future is out of scop
 
 ## Build a documentation run, use automatically created screenshots. Show process for students, teachers and admins.
 
+## Rename java.com.flightlog to da-db.
+
+## Make a real run with DA-Excel from the last few years.
+
