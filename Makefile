@@ -13,7 +13,7 @@ BACKEND  := backend
 FRONTEND := frontend
 FRONTEND_DEV := cd $(FRONTEND) && (npm ci || npm install) && npm run dev
 
-.PHONY: help env install build build-backend build-frontend test test-backend test-frontend \
+.PHONY: help env install format-markdown build build-backend build-frontend test test-backend test-frontend \
         check run run-testing run-testing-minimal testing-stack run-backend run-backend-testing \
         run-frontend openapi clean
 
@@ -25,6 +25,10 @@ env: ## Create .env from .env.example if missing
 
 install: ## Install frontend dependencies
 	cd $(FRONTEND) && npm ci || (cd $(FRONTEND) && npm install)
+
+format-markdown: install ## Format Markdown files: make format-markdown FILES="path/to/file.md ..."
+	@test -n "$(strip $(FILES))" || { echo 'Usage: make format-markdown FILES="path/to/file.md ..."' >&2; exit 2; }
+	cd $(FRONTEND) && npx prettier --write $(addprefix ../,$(FILES))
 
 build: build-backend build-frontend ## Build backend and frontend
 
