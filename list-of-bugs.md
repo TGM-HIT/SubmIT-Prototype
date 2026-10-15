@@ -13,3 +13,8 @@ Re-opening a closed period by moving the deadline into the future is out of scop
 ## Update auditor to be orchestrated.
 
 ## Allow learner for compliance checks
+
+## Allow admins to fix some student applications before allocation runs
+
+## Build a documentation run, use automatically created screenshots. Show process for students, teachers and admins.
+
