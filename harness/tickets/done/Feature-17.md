@@ -4,7 +4,7 @@
 
 Today an allocation run can start only after the application deadline (the initial run starts automatically at the deadline; administrators can start replacement runs afterwards). Administrators want to preview an allocation while students can still change their applications. Add an administrator-triggered early run that uses a snapshot of the applications at that moment, leaves the period open, and is visible to staff only.
 
-Source: `list-of-bugs.md` entry "Allow allocation to run early", with the decisions below confirmed by the user.
+Source: `../../../list-of-bugs.md` entry "Allow allocation to run early", with the decisions below confirmed by the user.
 
 ## Scope and contract
 

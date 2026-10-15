@@ -69,7 +69,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Feature-14](tickets/done/Feature-14.md) | done | Let teachers submit ideas that follow the normal feedback and acceptance process |
 | [Feature-15](tickets/done/Feature-15.md) | done | Let administrators give each application period its own label |
 | [Feature-16](tickets/done/Feature-16.md) | done | Assign classes and elective subjects to students |
-| [Feature-17](tickets/Feature-17.md) | to-do | Let administrators run an early allocation before the deadline |
+| [Feature-17](tickets/done/Feature-17.md) | done | Let administrators run an early allocation before the deadline |
 | [Feature-18](tickets/done/Feature-18.md) | done | Let administrators pin students to projects before an allocation runs |
 
 ### Optimizations
