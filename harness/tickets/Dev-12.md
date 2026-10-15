@@ -10,6 +10,8 @@ Source: user request of 2026-10-15 ("Update the auditor role (and others if nece
 
 Confirmed decision (option A): the Orchestrator accepts a check ID as well as a ticket ID. The Auditor replaces the Implementor, and a fresh Evaluator judges the audit like any other pass. The usual limit of three revise cycles applies.
 
+- Product-owner decision (2026-10-15): “The orchestrator should be able to dispatch auditors.” This authorizes adding `auditor` to the Orchestrator agent's `agents` allowlist for audit runs; no other permission changes are authorized.
+
 Assumptions made by the Ticket Author for the remaining design points (the user may change them):
 
 - Run folder naming is unchanged: `<check-id>-<yyyymmdd-hhmm>` is already what both roles produce. When orchestrated, the Orchestrator creates the folder, and the Auditor writes into it instead of minting its own.
@@ -41,10 +43,10 @@ Required changes (the role files are the source of truth; edit only the named fi
   - confirms the ledger row matches the report.
   - It returns the same three verdicts and saves the verdict as `evaluation-N.md`. It does not re-run the whole audit.
 - `harness/roles/learner.md`: extend the first paragraph so that, for an audit run, the supplied folder starts with a check ID (`Compliance-NN`), the Learner also reads `report.md`, and the contract it judges is the check definition under `harness/checks/` (plus the Auditor and Orchestrator contracts and the Compliance ledger), in the place of the ticket specification; proposals may name `harness/checks/<id>.md` as an owning document. Detection of earlier legs and the Learner's rules are otherwise unchanged. Add that earlier runs of the same check (other folders `harness/runs/<check-id>-<timestamp>`) count as the "earlier runs" history only when they are orchestrated runs with a `run.log`; older standalone runs have only `report.md`, which the Learner may read for context.
-- `.github/agents/orchestrator.agent.md`: update its description and `argument-hint` so that they mention a check ID as an alternative to a ticket ID. Keep the "role file wins" sentence and everything else.
+- `.github/agents/orchestrator.agent.md`: update its description and `argument-hint` so that they mention a check ID as an alternative to a ticket ID. Keep the "role file wins" sentence and everything else unchanged except adding `auditor` to the existing `agents` allowlist, retaining `implementor` and `evaluator`.
 - Prerequisites and ordering: Dev-11 is done. Dev-12 edits the same role files as other open role tickets; if another ticket changed them first, keep its wording.
 - Scope-gate allowances: `harness/gates/commit-scope.java` permits `harness/roles/auditor.md`, `harness/roles/learner.md` and `harness/roles/orchestrator.md` but not `harness/roles/evaluator.md` or `.github/agents/orchestrator.agent.md`. The expected narrow allowlist change covers exactly those two paths; remove them again at closeout.
-- Out of scope: running an audit through the Orchestrator for this ticket, changing any check definition, the gate scripts, the Compliance ledger, the Ticket Author or Implementor contracts, and any role's existing permissions and limits for ticket runs.
+- Out of scope: running an audit through the Orchestrator for this ticket, changing any check definition, the gate scripts, the Compliance ledger, the Ticket Author or Implementor contracts, or any other role permission or limit. The only permission addition in scope is adding `auditor` to the Orchestrator agent's `agents` allowlist for audit runs.
 
 ## Mechanical checks (the Evaluator re-runs)
 
@@ -68,7 +70,7 @@ None applies. This is a documentation-only change; an end-to-end orchestrated au
 - The Evaluator contract tells it how to judge an audit against the check definition and the report.
 - The Learner contract lets it analyse an audit run (reads `report.md`, uses the check definition as the judged contract, history of earlier orchestrated runs of the same check).
 - An audit run leaves the same record types as an implementation run (`run.log`, heartbeat, handoff, evaluation, Metrics footer) plus `report.md`, each created by a named role.
-- No existing ticket-run behavior, role permission or limit changes; no unrelated cleanups; no check is claimed that was not performed.
+- No existing ticket-run behavior or other role permission or limit changes; the sole permission addition is adding `auditor` to the Orchestrator agent's `agents` allowlist for audit runs. No unrelated cleanups; no check is claimed that was not performed.
 
 ## Optional: Specification changes
 
