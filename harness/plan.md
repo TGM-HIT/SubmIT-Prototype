@@ -47,7 +47,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-09](tickets/done/Dev-09.md) | done | Repair Markdown structure findings from Compliance-04 |
 | [Dev-10](tickets/done/Dev-10.md) | done | Settle ticket-creation ownership in the Ticket Author contract |
 | [Dev-11](tickets/done/Dev-11.md) | done | Remove stale and misleading wording from role and agent files |
-| [Dev-12](tickets/Dev-12.md) | in-progress | Let the Orchestrator run compliance audits and leave a Learner-readable run record |
+| [Dev-12](tickets/done/Dev-12.md) | done | Let the Orchestrator run compliance audits and leave a Learner-readable run record |
 
 ### Features
 

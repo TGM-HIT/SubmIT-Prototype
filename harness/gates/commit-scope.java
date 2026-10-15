@@ -10,7 +10,6 @@ class CommitScope {
     };
     static final String[] ALLOWED_FILES = {
         ".gitignore",
-        ".github/agents/orchestrator.agent.md",
         ".env.example",
         "Makefile",
         "frontend/index.html",
@@ -21,7 +20,6 @@ class CommitScope {
         "harness/gates/commit-scope.java",
         "harness/checks/Compliance-04.md",
         "harness/roles/auditor.md",
-        "harness/roles/evaluator.md",
         "harness/roles/implementor.md",
         "harness/roles/learner.md",
         "harness/roles/orchestrator.md",
