@@ -66,6 +66,16 @@ class TestingAccountsConfigurationTest {
                 Map.entry("student13", "Theo Martinez"),
                 Map.entry("student14", "Nina Wallace"),
                 Map.entry("student15", "Caleb Rivera"),
+                Map.entry("student16", "Riley Stone"),
+                Map.entry("student17", "Jordan Ellis"),
+                Map.entry("student18", "Casey Morgan"),
+                Map.entry("student19", "Taylor Quinn"),
+                Map.entry("student20", "Avery Blake"),
+                Map.entry("student21", "Rowan Hayes"),
+                Map.entry("student22", "Reese Parker"),
+                Map.entry("student23", "Skyler James"),
+                Map.entry("student24", "Dakota Lane"),
+                Map.entry("student25", "Finley Reed"),
                 Map.entry("teacher01", "Olivia Chen"),
                 Map.entry("teacher02", "Marcus Reed"),
                 Map.entry("teacher03", "Priya Shah"),
@@ -74,9 +84,9 @@ class TestingAccountsConfigurationTest {
                 Map.entry("admin01", "Grace Morgan"),
                 Map.entry("admin02", "Samuel Wright"));
         Set<String> expectedUsernames = expectedDisplayNames.keySet();
-        assertEquals(22, accounts.size());
+        assertEquals(32, accounts.size());
         assertEquals(expectedUsernames, accounts.stream().map(UserAccount::getUsername).collect(Collectors.toSet()));
-        assertEquals(15, accounts.stream().filter(account -> account.getRole() == Role.STUDENT).count());
+        assertEquals(25, accounts.stream().filter(account -> account.getRole() == Role.STUDENT).count());
         assertEquals(5, accounts.stream().filter(account -> account.getRole() == Role.TEACHER).count());
         assertEquals(2, accounts.stream().filter(account -> account.getRole() == Role.ADMIN).count());
         assertEquals(expectedDisplayNames.size(),
@@ -104,7 +114,7 @@ class TestingAccountsConfigurationTest {
         for (String username : List.of("admin01", "admin02")) {
             mockMvc.perform(get("/api/users?size=100").header("Authorization", "Bearer " + loginToken(username)))
                     .andExpect(status().isOk())
-                    .andExpect(jsonPath("$.content.length()").value(22));
+                    .andExpect(jsonPath("$.content.length()").value(32));
         }
 
         for (String username : List.of("student01", "teacher01")) {
@@ -147,7 +157,7 @@ class TestingAccountsConfigurationTest {
         seeder.run(startupArguments);
 
         List<UserAccount> accountsAfterRestart = users.findAll();
-        assertEquals(22, accountsAfterRestart.size());
+        assertEquals(32, accountsAfterRestart.size());
         for (UserAccount account : accountsAfterRestart) {
             assertEquals(originalIds.get(account.getUsername()), account.getId());
             assertEquals(originalHashes.get(account.getUsername()), account.getPasswordHash());
@@ -155,9 +165,9 @@ class TestingAccountsConfigurationTest {
     }
 
     @Test
-    void rerunningAgainstOnlyTheOriginalAccountsAddsExactlyTheTenNewStudents() throws Exception {
-        Set<String> newUsernames = Set.of("student06", "student07", "student08", "student09", "student10",
-                "student11", "student12", "student13", "student14", "student15");
+    void rerunningAgainstOnlyTheOriginalAccountsAddsExactlyTheTwentyNewStudents() throws Exception {
+        Set<String> newUsernames = java.util.stream.IntStream.rangeClosed(6, 25)
+                .mapToObj(index -> String.format("student%02d", index)).collect(Collectors.toSet());
         List<UserAccount> originalAccounts = users.findAll().stream()
                 .filter(account -> !newUsernames.contains(account.getUsername()))
                 .toList();
@@ -176,7 +186,7 @@ class TestingAccountsConfigurationTest {
         seeder.run(new DefaultApplicationArguments(new String[0]));
 
         List<UserAccount> afterRerun = users.findAll();
-        assertEquals(22, afterRerun.size());
+        assertEquals(32, afterRerun.size());
         assertEquals(newUsernames, afterRerun.stream().map(UserAccount::getUsername)
                 .filter(newUsernames::contains).collect(Collectors.toSet()));
         for (UserAccount original : originalAccounts) {

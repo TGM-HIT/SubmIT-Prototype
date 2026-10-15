@@ -28,6 +28,7 @@ export function parseArgs(args) {
     auth: false,
     seedIdeaOwner: undefined,
     seedIdeaHistory: undefined,
+    seedAllocationPinPreview: false,
     fill: [],
     click: [],
     waitFor: [],
@@ -78,6 +79,8 @@ export function parseArgs(args) {
       options.headed = true
     } else if (flag === '--auth') {
       options.auth = true
+    } else if (flag === '--seed-allocation-pin-preview') {
+      options.seedAllocationPinPreview = true
     } else if (flag === '--session') {
       options.session = true
     } else if (['--session-start', '--session-url', '--session-stop'].includes(flag)) {
@@ -186,6 +189,10 @@ export function parseArgs(args) {
     throw new Error('--screenshot must be a filename, not a path.')
   }
   if (options.auth && !options.username) throw new Error('--auth requires --username.')
+  if (options.seedAllocationPinPreview
+      && (!options.start || options.session || !options.auth || options.username !== "admin01")) {
+    throw new Error('--seed-allocation-pin-preview requires a started preview authenticated as admin01.')
+  }
   const seedable = options.start || options.session
   if (options.seedIdeaOwner && (!options.auth || !options.username || !seedable)) {
     throw new Error('--seed-idea-owner requires --auth and a started local preview or --session.')
@@ -717,6 +724,7 @@ function connectCdp(url) {
 export function collectBrowserErrors(client) {
   const errors = []
   const requests = new Map()
+  errors.requests = requests
   client.onEvent(({ method, params }) => {
     if (method === 'Runtime.exceptionThrown') {
       const details = params.exceptionDetails
@@ -1204,6 +1212,7 @@ async function launchBrowser(options, url, { signal, onBrowser, onClient, env })
   const executable = await findChrome(options.chrome)
   const profile = await mkdtemp(path.join(tmpdir(), 'flightlog-preview-'))
   const port = await unusedPort()
+  let browserErrors = []
   const browser = startChild(executable, [
     ...(options.headed ? [] : ['--headless=new']),
     '--no-first-run',
@@ -1223,7 +1232,7 @@ async function launchBrowser(options, url, { signal, onBrowser, onClient, env })
     const target = await targetResponse.json()
     const client = await connectCdp(target.webSocketDebuggerUrl)
     onClient(client)
-    const browserErrors = collectBrowserErrors(client)
+    browserErrors = collectBrowserErrors(client)
     await Promise.all([
       client.send('Page.enable'),
       client.send('Runtime.enable'),
@@ -1249,6 +1258,12 @@ async function launchBrowser(options, url, { signal, onBrowser, onClient, env })
     if (evaluation.exceptionDetails) throw new Error(`Could not inspect rendered page: ${evaluation.exceptionDetails.text}`)
     return { browser, profile, client, errors: browserErrors, page: evaluation.result?.value }
   } catch (error) {
+    for (const browserError of browserErrors) console.error(`Browser error: ${browserError}`)
+    for (const request of browserErrors.requests?.values() ?? []) {
+      if (!request.loadingFinished) {
+        console.error(`Browser request incomplete: ${request.method} ${request.url}; status=${request.responseStatus ?? "none"}; responseUrl=${request.responseUrl ?? "none"}`)
+      }
+    }
     await stopChild(browser).catch(() => undefined)
     await rm(profile, { recursive: true, force: true })
     throw error
@@ -1295,6 +1310,7 @@ Options:
   --auth --username USER          Authenticate using the local testing account
   --seed-idea-owner USER           Create and submit a synthetic idea using a student testing account before opening the page
   --seed-idea-history USER         Create a synthetic idea with review and preference history for display verification
+  --seed-allocation-pin-preview    Opt in to a testing-profile period with 21 pins and 22 applications
   --seed-idea-title TITLE          Distinctive title for the seeded idea so a later invocation can find it
   --fill SELECTOR=VALUE           Fill an input, textarea, or select; may be repeated
   --click SELECTOR                Click an element; may be repeated
@@ -1326,6 +1342,24 @@ for example to load a form that requires a project ID before its details are sho
 --select-by-key for browser keyboard navigation. On macOS, use --headed and --native-select-by-key for GUI
 keyboard input to a collapsed popup (Terminal may require Accessibility permission).
 `
+}
+
+async function waitForTestingAccount(baseUrl, username, password, timeoutMs) {
+  const deadline = Date.now() + timeoutMs
+  let lastResponse
+  while (Date.now() < deadline) {
+    const response = await fetch(`${baseUrl}/api/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    })
+    if (response.ok) return
+    const body = await response.text()
+    lastResponse = `HTTP ${response.status}: ${body}`
+    if (response.status !== 401) throw new Error(`Testing-profile readiness check failed: ${lastResponse}`)
+    await new Promise((resolve) => setTimeout(resolve, 250))
+  }
+  throw new Error(`Testing-profile account ${username} was not ready before timeout; last login response: ${lastResponse}`)
 }
 
 async function seedRequested(options, baseUrl) {
@@ -1364,6 +1398,7 @@ async function run(options) {
   const url = buildUrl(options)
   const children = []
   const childEnv = { ...process.env }
+  if (options.seedAllocationPinPreview) childEnv.DADB_TESTING_ALLOCATION_PIN_PREVIEW = 'true'
   delete childEnv.PREVIEW_PASSWORD
   if (options.passwordEnv) delete childEnv[options.passwordEnv]
   let browser
@@ -1392,6 +1427,12 @@ async function run(options) {
         timeoutMs: options.startupTimeout,
         isAlive: () => !interrupted && backend.exitCode === null && backend.signalCode === null,
       })
+      if (options.auth) {
+        const password = process.env[options.passwordEnv ?? "PREVIEW_PASSWORD"]
+        if (!password) throw new Error(`Set ${options.passwordEnv ?? "PREVIEW_PASSWORD"} before using --auth.`)
+        await waitForTestingAccount(`http://127.0.0.1:${backendPort}`, options.username, password,
+          options.startupTimeout)
+      }
       console.log(`Backend ready: http://127.0.0.1:${backendPort}`)
       await new Promise((resolve) => setTimeout(resolve, 500))
       assertSpawnedAlive(backend, 'backend', backendPort)

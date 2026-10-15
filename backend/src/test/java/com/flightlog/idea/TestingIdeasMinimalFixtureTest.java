@@ -60,11 +60,16 @@ class TestingIdeasMinimalFixtureTest {
                 Map.entry("student09", "Lucas Bennett"), Map.entry("student10", "Amara Johnson"),
                 Map.entry("student11", "Oliver Kim"), Map.entry("student12", "Zara Patel"),
                 Map.entry("student13", "Theo Martinez"), Map.entry("student14", "Nina Wallace"),
-                Map.entry("student15", "Caleb Rivera"), Map.entry("teacher01", "Olivia Chen"),
+                Map.entry("student15", "Caleb Rivera"), Map.entry("student16", "Riley Stone"),
+                Map.entry("student17", "Jordan Ellis"), Map.entry("student18", "Casey Morgan"),
+                Map.entry("student19", "Taylor Quinn"), Map.entry("student20", "Avery Blake"),
+                Map.entry("student21", "Rowan Hayes"), Map.entry("student22", "Reese Parker"),
+                Map.entry("student23", "Skyler James"), Map.entry("student24", "Dakota Lane"),
+                Map.entry("student25", "Finley Reed"), Map.entry("teacher01", "Olivia Chen"),
                 Map.entry("teacher02", "Marcus Reed"), Map.entry("teacher03", "Priya Shah"),
                 Map.entry("teacher04", "Daniel Brooks"), Map.entry("teacher05", "Elena Torres"),
                 Map.entry("admin01", "Grace Morgan"), Map.entry("admin02", "Samuel Wright"));
-        assertEquals(22, users.count());
+        assertEquals(32, users.count());
         assertEquals(names.keySet(), users.findAll().stream().map(UserAccount::getUsername)
                 .collect(Collectors.toSet()));
         for (Map.Entry<String, String> expected : names.entrySet()) {

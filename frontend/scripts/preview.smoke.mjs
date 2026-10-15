@@ -83,6 +83,22 @@ test('parses preview options and rejects incomplete or invalid invocations', () 
   assert.throws(() => parseArgs(['--width', '800']), /supplied together/)
   assert.throws(() => parseArgs(['--auth']), /requires --username/)
   assert.equal(
+    parseArgs(['--seed-allocation-pin-preview', '--auth', '--username', 'admin01']).seedAllocationPinPreview,
+    true,
+  )
+  assert.throws(
+    () => parseArgs(['--seed-allocation-pin-preview', '--auth', '--username', 'teacher01']),
+    /requires a started preview authenticated as admin01/,
+  )
+  assert.throws(
+    () => parseArgs(['--seed-allocation-pin-preview', '--auth', '--username', 'admin01', '--no-start', '--url', 'http://localhost:5173']),
+    /requires a started preview authenticated as admin01/,
+  )
+  assert.throws(
+    () => parseArgs(['--seed-allocation-pin-preview', '--session', '--auth', '--username', 'admin01']),
+    /requires a started preview authenticated as admin01/,
+  )
+  assert.equal(
     parseArgs(['--auth', '--username', 'teacher01', '--seed-idea-owner', 'student01']).seedIdeaOwner,
     'student01',
   )

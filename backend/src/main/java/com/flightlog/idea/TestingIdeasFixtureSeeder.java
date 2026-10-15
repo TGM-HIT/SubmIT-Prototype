@@ -12,9 +12,9 @@ import java.util.List;
 import java.util.UUID;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.Order;
+import org.springframework.core.env.Environment;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
@@ -30,6 +30,9 @@ public class TestingIdeasFixtureSeeder implements ApplicationRunner {
     private static final String APPLICATION_SCHOOL_YEAR = "2026/2027";
     private static final String DECISION_FIELD = "decision";
     private static final String FEEDBACK_FIELD = "feedback";
+    private static final String MINIMAL_FIXTURES_PROPERTY = "DADB_TESTING_MINIMAL_FIXTURES";
+    private static final String PIN_PREVIEW_PROPERTY = "DADB_TESTING_ALLOCATION_PIN_PREVIEW";
+    private static final int PIN_PREVIEW_STUDENT_COUNT = 22;
     private static final int MULTI_GROUP_PADDING_PROJECT_COUNT = 7;
     private static final int FIRST_PADDING_STUDENT_NUMBER = 6;
     private static final List<String> STUDENT_USERNAMES = List.of(
@@ -39,29 +42,42 @@ public class TestingIdeasFixtureSeeder implements ApplicationRunner {
     private final RecordStore store;
     private final IdeaService ideas;
     private final TestingAllocationPreviewSeeder allocationPreview;
-    private final String fixtureMode;
+    private final Environment environment;
 
     public TestingIdeasFixtureSeeder(UserAccountRepository users, RecordStore store, IdeaService ideas,
-            TestingAllocationPreviewSeeder allocationPreview,
-            @Value("${DADB_TESTING_MINIMAL_FIXTURES:}") String fixtureMode) {
+            TestingAllocationPreviewSeeder allocationPreview, Environment environment) {
         this.users = users;
         this.store = store;
         this.ideas = ideas;
         this.allocationPreview = allocationPreview;
-        this.fixtureMode = fixtureMode;
+        this.environment = environment;
     }
 
     @Override
     @Transactional
     public void run(ApplicationArguments args) {
+        boolean minimalFixtures = "true".equals(environment.getProperty(MINIMAL_FIXTURES_PROPERTY));
+        boolean seedPinPreview = "true".equals(environment.getProperty(PIN_PREVIEW_PROPERTY));
         try {
             for (String username : STUDENT_USERNAMES) {
                 UserAccount student = requireAccount(username, Role.STUDENT);
                 seedSubmittedIdea(student);
                 seedSpecifiedIdea(student);
             }
-            if (!"true".equals(fixtureMode)) {
+            if (!minimalFixtures) {
                 seedAcceptedAllocationPreview();
+                if (seedPinPreview) {
+                    List<UserAccount> previewStudents = java.util.stream.IntStream
+                            .rangeClosed(1, PIN_PREVIEW_STUDENT_COUNT)
+                            .mapToObj(index -> requireAccount(String.format("student%02d", index), Role.STUDENT))
+                            .toList();
+                    List<UUID> previewProjects = new java.util.ArrayList<>(seededAcceptedProjects());
+                    previewProjects.addAll(seedMultiGroupPaddingProjects());
+                    allocationPreview.seedPinPaginationScenario(requireAccount("admin01", Role.ADMIN),
+                            previewStudents, previewProjects, allocationPreviewMarker());
+                }
+            } else if (seedPinPreview) {
+                throw new IllegalStateException("The pin pagination preview requires full testing fixtures.");
             }
         } finally {
             SecurityContextHolder.clearContext();
@@ -127,6 +143,15 @@ public class TestingIdeasFixtureSeeder implements ApplicationRunner {
         List<UUID> multiGroupProjects = new java.util.ArrayList<>(ideasForPreview);
         multiGroupProjects.addAll(seedMultiGroupPaddingProjects());
         allocationPreview.seedMultiGroupScenario(admin, multiGroupProjects, periodMarker);
+    }
+
+    private List<UUID> seededAcceptedProjects() {
+        List<UUID> projects = new java.util.ArrayList<>();
+        for (int index = 1; index <= 3; index++) {
+            UserAccount owner = requireAccount(String.format("student%02d", index), Role.STUDENT);
+            projects.add(seededIdeaId(markerId(owner, "accepted-allocation-" + index)));
+        }
+        return List.copyOf(projects);
     }
 
     private List<UUID> seedMultiGroupPaddingProjects() {

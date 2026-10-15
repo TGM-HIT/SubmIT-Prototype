@@ -22,7 +22,7 @@ class TestingAccountSeedTest {
         var students = users.findAll().stream().filter(account -> account.getRole() == Role.STUDENT)
                 .filter(account -> account.getUsername().startsWith("student")).toList();
         assertFalse(students.isEmpty());
-        assertEquals(15, students.size());
+        assertEquals(25, students.size());
         assertEquals("Testing Class", students.stream().filter(student -> student.getUsername().equals("student01"))
                 .findFirst().orElseThrow().getStudentClass().getName());
         assertEquals(2, students.stream().map(student -> student.getStudentClass().getName()).distinct().count());
