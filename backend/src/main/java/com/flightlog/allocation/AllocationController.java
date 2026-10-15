@@ -36,9 +36,13 @@ public class AllocationController {
 
     @PostMapping("/api/application-periods/{periodId}/allocation-runs")
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Start a replacement allocation after the deadline.")
+    @Operation(summary = "Start an early allocation before the deadline or a replacement afterward.")
     @ApiResponse(responseCode = "201", description = "Allocation run started.",
             content = @Content(schema = @Schema(implementation = AllocationRunResponse.class)))
+    @ApiResponse(responseCode = "401", description = "Authentication is required.")
+    @ApiResponse(responseCode = "403", description = "Only administrators may start allocation runs.")
+    @ApiResponse(responseCode = "404", description = "Application period was not found.")
+    @ApiResponse(responseCode = "409", description = "Period is not open for an early run or is finalized.")
     public Map<String, Object> start(@AuthenticationPrincipal AuthenticatedUser caller, @PathVariable UUID periodId) {
         return plain(service.startReplacement(caller, periodId));
     }
@@ -63,6 +67,11 @@ public class AllocationController {
     }
 
     @PostMapping("/api/allocation-runs/{id}/finalize")
+    @ApiResponse(responseCode = "200", description = "Allocation run and period finalized.",
+            content = @Content(schema = @Schema(implementation = AllocationRunResponse.class)))
+    @ApiResponse(responseCode = "403", description = "Only administrators may finalize allocation runs.")
+    @ApiResponse(responseCode = "404", description = "Allocation run was not found.")
+    @ApiResponse(responseCode = "409", description = "Early, incomplete, or already finalized allocation cannot be finalized.")
     public Map<String, Object> finalizeRun(@AuthenticationPrincipal AuthenticatedUser caller, @PathVariable UUID id) {
         return plain(service.finalizeRun(caller, id));
     }

@@ -35,6 +35,7 @@ public class AllocationService {
     private static final String PROJECT_GROUP = "project_group";
     private static final String FINALIZED = "FINALIZED";
     private static final String RESULT_FIELD = "result";
+    private static final String EARLY_FIELD = "early";
     private static final String ASSIGNMENTS_FIELD = "assignments";
     private static final String PROJECT_ID_FIELD = "projectId";
     private static final String STUDENT_ID_FIELD = "studentId";
@@ -63,7 +64,7 @@ public class AllocationService {
         int started = 0;
         for (StoredRecord period : periods.getContent()) {
             if (isDue(period) && !hasInitialRun(period.getId())) {
-                createRun(null, period, true);
+                createRun(null, period, true, false);
                 started++;
             }
         }
@@ -77,11 +78,14 @@ public class AllocationService {
         if (FINALIZED.equals(period.getStatus())) {
             throw conflict("A finalized allocation cannot be replaced.");
         }
-        if (Instant.now().isBefore(Instant.parse(store.parse(period).path("closesAt").asText()))) {
-            throw conflict("An allocation run can start only after the application deadline.");
+        boolean early = Instant.now().isBefore(Instant.parse(store.parse(period).path("closesAt").asText()));
+        if (early && !"OPEN".equals(period.getStatus())) {
+            throw conflict("An allocation run can start early only while the application period is OPEN.");
         }
-        store.update(period, "CLOSED", store.parse(period));
-        StoredRecord run = createRun(caller, period, false);
+        if (!early) {
+            store.update(period, "CLOSED", store.parse(period));
+        }
+        StoredRecord run = createRun(caller, period, false, early);
         return response(run);
     }
 
@@ -102,6 +106,9 @@ public class AllocationService {
     @PreAuthorize("hasRole('ADMIN')")
     public ObjectNode finalizeRun(AuthenticatedUser caller, UUID id) {
         StoredRecord run = findRun(id);
+        if (store.parse(run).path(EARLY_FIELD).asBoolean(false)) {
+            throw conflict("An early allocation run cannot be finalized.");
+        }
         if (!"COMPLETED".equals(run.getStatus())) {
             throw conflict("Only a completed allocation can be finalized.");
         }
@@ -130,12 +137,13 @@ public class AllocationService {
         return response(run);
     }
 
-    private StoredRecord createRun(AuthenticatedUser caller, StoredRecord period, boolean initial) {
+    private StoredRecord createRun(AuthenticatedUser caller, StoredRecord period, boolean initial, boolean early) {
         ObjectNode periodData = store.parse(period);
         List<String> projectIds = readIds(periodData.path("projectIds"), "projectIds");
         List<StoredRecord> pins = readPins(period.getId());
         ObjectNode snapshot = snapshot(projectIds, List.of(), pins);
         snapshot.put("initial", initial);
+        snapshot.put(EARLY_FIELD, early);
         snapshot.put("createdAt", Instant.now().toString());
         StoredRecord run = store.create(RUN, caller == null ? null : caller.id().toString(),
                 period.getId().toString(), "RUNNING", snapshot);
@@ -145,12 +153,16 @@ public class AllocationService {
             Object result = engine.optimize(projectIds, applications, pins);
             snapshot.set(RESULT_FIELD, store.value(result));
             store.update(run, "COMPLETED", snapshot);
-            store.update(period, "ALLOCATED", periodData);
+            if (!early) {
+                store.update(period, "ALLOCATED", periodData);
+            }
         } catch (AllocationLimitExceededException | IllegalArgumentException exception) {
             snapshot.put("error", exception.getMessage());
             snapshot.put("inputSnapshotComplete", false);
             store.update(run, "FAILED", snapshot);
-            store.update(period, "CLOSED", periodData);
+            if (!early) {
+                store.update(period, "CLOSED", periodData);
+            }
         }
         if (caller != null) {
             audit.record(caller, "ALLOCATION_RUN_STARTED", RUN, run.getId());
@@ -246,6 +258,9 @@ public class AllocationService {
         response.put("id", record.getId().toString());
         response.put("status", record.getStatus());
         response.put("periodId", record.getParentId());
+        if (!response.has(EARLY_FIELD)) {
+            response.put(EARLY_FIELD, false);
+        }
         JsonNode storedResult = response.path(RESULT_FIELD);
         if (storedResult.isObject()) {
             ObjectNode enriched = (ObjectNode) storedResult.deepCopy();

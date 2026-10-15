@@ -1,13 +1,13 @@
 <template>
   <section class="page">
-    <p class="page-intro">The initial run starts automatically at the application deadline. Authorized staff can review immutable snapshots, inspect outcomes, and administrators may rerun before finalization.</p>
+    <p class="page-intro">The initial run starts automatically at the application deadline. Administrators can also run a preliminary allocation while applications are open; students do not see preliminary results. Authorized staff can review immutable snapshots and inspect outcomes.</p>
     <div class="panel">
       <div class="toolbar">
         <div class="field"><label class="label" for="period-select">Application period</label><select id="period-select" v-model="periodId" class="select" @change="loadPeriodData"><option value="">Select a period…</option><option v-for="period in periods" :key="period.id" :value="period.id">{{ period.label || period.schoolYear }} · {{ period.schoolYear }} · {{ period.status }}</option></select></div>
-        <button v-if="auth.user?.role === 'ADMIN' && selectedPeriod && selectedPeriod.status !== 'FINALIZED'" id="start-replacement-run" class="button" type="button" :disabled="!deadlinePassed || task.loading.value" @click="startReplacement">Start replacement run</button>
+        <button v-if="auth.user?.role === 'ADMIN' && selectedPeriod && selectedPeriod.status !== 'FINALIZED' && (selectedPeriod.status === 'OPEN' || deadlinePassed)" id="start-replacement-run" ref="startRunControl" class="button" type="button" :disabled="task.loading.value" @click="startReplacement">{{ deadlinePassed ? 'Start replacement run' : 'Start early preliminary run' }}</button>
       </div>
       <p v-if="selectedPeriod" class="notice">Selected period: {{ selectedPeriod.label || selectedPeriod.schoolYear }} · school year {{ selectedPeriod.schoolYear }}</p>
-      <p v-if="selectedPeriod && !deadlinePassed" class="notice">The deadline is {{ date(selectedPeriod.closesAt) }}. Allocation cannot be started early.</p>
+      <p v-if="selectedPeriod && selectedPeriod.status === 'OPEN' && !deadlinePassed" class="notice">The deadline is {{ date(selectedPeriod.closesAt) }}. An early preliminary run snapshots applications now, does not close the period, and is not shown to students.</p>
       <section v-if="selectedPeriod && [`ADMIN`, `TEACHER`].includes(auth.user?.role ?? ``)" class="panel stack" aria-labelledby="pins-heading">
         <div><h2 id="pins-heading" class="section-title">Fixed assignments</h2><p class="muted">Administrator pins apply to future allocation runs.</p></div>
         <p v-if="pinError" class="error-box" role="alert">{{ pinError }} <button class="button button-secondary button-small" type="button" @click="loadPins">Retry</button></p>
@@ -31,8 +31,8 @@
       <AsyncPanel :loading="task.loading.value" :error="task.error.value" @retry="loadRuns">
         <div v-if="runs.content.length" class="data-list">
           <article v-for="run in runs.content" :key="idOf(run)" class="data-row">
-            <div class="row-main"><h3>Allocation run <span class="muted">{{ idOf(run) }}</span></h3><p>State: <span class="status-badge" :class="`status-${statusOf(run).toLowerCase()}`">{{ statusOf(run) }}</span> · {{ run.createdAt ?? run.startedAt ?? 'Timestamp unavailable' }}</p><p v-if="run.error" class="field-error">Run error: {{ run.error }}</p></div>
-            <div class="actions"><button class="button button-secondary button-small" @click="loadResult(idOf(run))">Inspect result</button><button v-if="auth.user?.role === 'ADMIN' && statusOf(run) === 'COMPLETED' && selectedPeriod?.status !== 'FINALIZED'" class="button button-small" @click="finalize(idOf(run))">Finalize result</button></div>
+            <div class="row-main"><h3>Allocation run <span class="muted">{{ idOf(run) }}</span></h3><p>{{ runKind(run) }}</p><p>State: <span class="status-badge" :class="`status-${statusOf(run).toLowerCase()}`">{{ statusOf(run) }}</span> · {{ run.createdAt ?? run.startedAt ?? 'Timestamp unavailable' }}</p><p v-if="run.error" class="field-error">Run error: {{ run.error }}</p></div>
+            <div class="actions"><button class="button button-secondary button-small" @click="loadResult(idOf(run))">Inspect result</button><button v-if="auth.user?.role === 'ADMIN' && statusOf(run) === 'COMPLETED' && run.early !== true && selectedPeriod?.status !== 'FINALIZED'" class="button button-small" @click="finalize(idOf(run))">Finalize result</button></div>
           </article>
         </div>
         <p v-else class="empty">No allocation runs are recorded for this period.</p>
@@ -40,7 +40,7 @@
       </AsyncPanel>
     </div>
     <section v-if="selectedRun" class="panel stack">
-      <div class="page-heading"><div><h2 class="section-title">Run outcome</h2><p class="muted">Snapshot captured {{ selectedRun.createdAt ?? 'time unavailable' }}</p></div><button class="button button-secondary button-small" @click="selectedRun = null">Close result</button></div>
+      <div class="page-heading"><div><h2 ref="selectedRunHeading" class="section-title" tabindex="-1">Run outcome</h2><p>{{ runKind(selectedRun) }}</p><p class="muted">Snapshot captured {{ selectedRun.createdAt ?? 'time unavailable' }}</p></div><button class="button button-secondary button-small" @click="selectedRun = null">Close result</button></div>
       <span class="status-badge" :class="`status-${statusOf(selectedRun).toLowerCase()}`">{{ statusOf(selectedRun) }}</span>
       <p v-if="selectedRun.error" class="error-box">Run did not complete: {{ selectedRun.error }}</p>
       <div v-for="assignment in assignments(selectedRun)" :key="assignment.projectId" class="data-row">
@@ -72,6 +72,8 @@ const periods = ref<Period[]>([])
 const periodId = ref('')
 const runs = ref<Page<Data>>({ content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 })
 const selectedRun = ref<Data | null>(null)
+const selectedRunHeading = ref<HTMLHeadingElement | null>(null)
+const startRunControl = ref<HTMLButtonElement | null>(null)
 const supervisors = ref<Record<string, string>>({})
 const pins = ref<Data[]>([])
 const pinLoading = ref(false)
@@ -91,6 +93,10 @@ const unrankedSelection = computed(() => Boolean(pinStudentId.value && pinProjec
 
 function idOf(run: Data): string { return String(run.id ?? '') }
 function statusOf(run: Data): string { return String(run.status ?? 'UNKNOWN').toUpperCase() }
+function runKind(run: Data): string {
+  if (run.early === true) return "Early preliminary run · not shown to students"
+  return run.initial === true ? "Automatic deadline run" : "Replacement run"
+}
 function date(value?: string): string { return value ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : 'unknown' }
 function assignments(run: Data): { projectId: string; projectTitle: string; students: { id: string; name: string; className?: string; electiveSubjectNames: string[]; pinned: boolean }[] }[] {
   const result = run.result
@@ -274,9 +280,26 @@ async function loadResult(id: string): Promise<void> {
   supervisors.value = Object.fromEntries(names)
 }
 async function startReplacement(): Promise<void> {
-  if (!selectedPeriod.value || !confirm('Start a replacement allocation run? The existing run history will remain.')) return
-  const result = await task.run(() => periodsApi.startRun(periodId.value), 'Replacement run completed.')
-  if (result) await loadRuns(0)
+  if (!selectedPeriod.value) return
+  const early = !deadlinePassed.value
+  const message = early
+    ? "Start an early preliminary allocation? It snapshots applications now, does not close the period, and students will not see its results. The existing run history will remain."
+    : "Start a replacement allocation run? The existing run history will remain."
+  if (!confirm(message)) {
+    await nextTick()
+    startRunControl.value?.focus()
+    return
+  }
+  const result = await task.run(() => periodsApi.startRun(periodId.value),
+    early ? 'Early preliminary run completed.' : 'Replacement run completed.')
+  if (!result) return
+  const refreshedPeriods = await task.run(() => periodsApi.list(0))
+  if (!refreshedPeriods) return
+  periods.value = refreshedPeriods.content
+  await loadRuns(0)
+  await loadResult(idOf(result))
+  await nextTick()
+  selectedRunHeading.value?.focus()
 }
 async function finalize(id: string): Promise<void> {
   if (!confirm('Finalize this allocation? Finalized results cannot be replaced.')) return

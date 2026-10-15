@@ -15,6 +15,7 @@ const api = vi.hoisted(() => ({
   lookupStudents: vi.fn(),
   savePin: vi.fn(),
   removePin: vi.fn(),
+  startRun: vi.fn(),
 }))
 const state = vi.hoisted(() => ({ role: 'TEACHER' }))
 
@@ -24,7 +25,7 @@ vi.mock('../../api/services', () => ({
   periodsApi: {
     list: api.listPeriods,
     runs: api.listRuns,
-    startRun: vi.fn(),
+    startRun: api.startRun,
     pins: api.listPins,
     applications: api.listApplications,
     savePin: api.savePin,
@@ -89,6 +90,82 @@ describe('allocation supervisor display', () => {
     await page.get('#period-select').setValue('period-1')
     await flushPromises()
     expect(page.text()).toContain('Selected period: Allocation preview · school year 2026/2027')
+  })
+
+  it('offers and explains an early run, preserves state on cancellation, refreshes the result, and focuses it', async () => {
+    state.role = 'ADMIN'
+    api.listPeriods.mockResolvedValue({
+      content: [{
+        id: 'period-1', label: 'Allocation preview', schoolYear: '2026/2027', status: 'OPEN',
+        closesAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(), projectIds: ['project-1'],
+      }],
+    })
+    const earlyRun = { id: 'early-run', status: 'COMPLETED', early: true, initial: false, result: { assignments: [] } }
+    api.startRun.mockResolvedValue(earlyRun)
+    api.getRun.mockResolvedValue(earlyRun)
+    api.listRuns
+      .mockResolvedValueOnce({ content: [{ id: 'run-1', status: 'COMPLETED' }], page: 0, size: 20, totalElements: 1, totalPages: 1 })
+      .mockResolvedValueOnce({ content: [earlyRun], page: 0, size: 20, totalElements: 1, totalPages: 1 })
+    const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true)
+
+    const page = mountPage()
+    await flushPromises()
+    const startButton = page.get('#start-replacement-run')
+    expect(startButton.text()).toBe('Start early preliminary run')
+    expect(page.text()).toContain('does not close the period, and is not shown to students')
+
+    await startButton.trigger('click')
+    await flushPromises()
+    expect(confirm).toHaveBeenCalledWith(expect.stringContaining('students will not see its results'))
+    expect(api.startRun).not.toHaveBeenCalled()
+    expect(document.activeElement).toBe(startButton.element)
+    expect(page.text()).not.toContain('Early preliminary run · not shown to students')
+
+    await startButton.trigger('click')
+    await flushPromises()
+    expect(api.startRun).toHaveBeenCalledOnce()
+    expect(api.listRuns).toHaveBeenCalledTimes(2)
+    expect(api.getRun).toHaveBeenCalledWith('early-run')
+    expect(page.text()).toContain('Early preliminary run · not shown to students')
+    expect(page.text()).not.toContain('Finalize result')
+    expect(page.text()).toContain('Selected period: Allocation preview · school year 2026/2027')
+    expect(document.activeElement).toBe(page.get('h2[tabindex="-1"]').element)
+  })
+
+  it('keeps the post-deadline replacement flow and distinguishes automatic and replacement runs', async () => {
+    state.role = 'ADMIN'
+    api.listPeriods.mockResolvedValue({
+      content: [{
+        id: 'period-1', label: 'Allocation preview', schoolYear: '2026/2027', status: 'ALLOCATED',
+        closesAt: new Date(Date.now() - 60 * 1000).toISOString(), projectIds: ['project-1'],
+      }],
+    })
+    const replacement = { id: 'replacement-run', status: 'COMPLETED', early: false, initial: false, result: { assignments: [] } }
+    api.startRun.mockResolvedValue(replacement)
+    api.getRun.mockResolvedValue(replacement)
+    api.listRuns
+      .mockResolvedValueOnce({
+        content: [{ id: 'initial-run', status: 'COMPLETED', initial: true }, { id: 'run-1', status: 'COMPLETED' }],
+        page: 0, size: 20, totalElements: 2, totalPages: 1,
+      })
+      .mockResolvedValueOnce({
+        content: [replacement, { id: 'initial-run', status: 'COMPLETED', initial: true }],
+        page: 0, size: 20, totalElements: 2, totalPages: 1,
+      })
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+    const page = mountPage()
+    await flushPromises()
+    expect(page.get('#start-replacement-run').text()).toBe('Start replacement run')
+    expect(page.text()).toContain('Automatic deadline run')
+    expect(page.text()).toContain('Replacement run')
+    expect(page.text()).toContain('Finalize result')
+    await page.get('#start-replacement-run').trigger('click')
+    await flushPromises()
+    expect(window.confirm).toHaveBeenCalledWith('Start a replacement allocation run? The existing run history will remain.')
+    expect(api.startRun).toHaveBeenCalledOnce()
+    expect(page.get('#period-select').text()).toContain('ALLOCATED')
+    expect(page.text()).toContain('Replacement run')
   })
 
   it('shows missing supervisors to teachers in allocation results without exposing an assignment control', async () => {

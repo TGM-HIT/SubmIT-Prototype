@@ -214,7 +214,8 @@ class ApplicationResponseMapper {
     private StoredRecord latestRelevantRun(StoredRecord period, boolean finalized) {
         return store.repository().findByTypeAndParentIdOrderByCreatedAtDesc(RUN, period.getId().toString()).stream()
                 .filter(candidate -> finalized ? "FINALIZED".equals(candidate.getStatus())
-                        : "COMPLETED".equals(candidate.getStatus()))
+                        : "COMPLETED".equals(candidate.getStatus())
+                                && !store.parse(candidate).path("early").asBoolean(false))
                 .findFirst().orElse(null);
     }
 

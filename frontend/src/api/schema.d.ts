@@ -582,7 +582,7 @@ export interface paths {
         };
         get: operations["list_4"];
         put?: never;
-        /** Start a replacement allocation after the deadline. */
+        /** Start an early allocation before the deadline or a replacement afterward. */
         post: operations["start"];
         delete?: never;
         options?: never;
@@ -1736,6 +1736,8 @@ export interface components {
             /** Format: date-time */
             createdAt?: string;
             initial?: boolean;
+            /** @default false */
+            early: boolean;
             projectIds?: string[];
             applications?: components["schemas"]["AllocationApplicationSnapshot"][];
             pins?: components["schemas"]["AllocationPinSnapshot"][];
@@ -3477,6 +3479,50 @@ export interface operations {
                     "*/*": components["schemas"]["AllocationRunResponse"];
                 };
             };
+            /** @description Authentication is required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Only administrators may start allocation runs. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Application period was not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Period is not open for an early run or is finalized. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
         };
     };
     finalizeRun: {
@@ -3490,8 +3536,39 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Allocation run and period finalized. */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AllocationRunResponse"];
+                };
+            };
+            /** @description Only administrators may finalize allocation runs. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Allocation run was not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Early, incomplete, or already finalized allocation cannot be finalized. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

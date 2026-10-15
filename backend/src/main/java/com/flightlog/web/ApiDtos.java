@@ -306,7 +306,8 @@ public final class ApiDtos {
     }
 
     public record AllocationRunResponse(UUID id, String status, UUID periodId, Instant createdAt,
-            Boolean initial, List<UUID> projectIds, List<AllocationApplicationSnapshot> applications,
+            Boolean initial, @Schema(requiredMode = Schema.RequiredMode.REQUIRED, defaultValue = "false")
+            Boolean early, List<UUID> projectIds, List<AllocationApplicationSnapshot> applications,
             List<AllocationPinSnapshot> pins, AllocationResultResponse result, String error,
             Boolean inputSnapshotComplete, Instant finalizedAt) {
     }
