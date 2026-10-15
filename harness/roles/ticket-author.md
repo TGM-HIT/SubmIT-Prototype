@@ -41,6 +41,10 @@ the one behavior or condition being varied. When requesting a product-SPEC
 change, inspect all occurrences of the affected rule and related role or
 ownership terms throughout each named SPEC file, not only the named paragraph.
 Require that the resulting specifications contain no contradictory statements.
+When a request adds or changes a prefix, identifier, or group mapping, inspect
+all workflows that consume it, including lookup and creation paths. Specify the
+required behavior for each affected path in the ticket's scope and acceptance
+criteria, and include checks that verify each path.
 
 When a ticket changes or depends on extending existing documented developer
 tooling, inspect its owning usage guidance. Include a minimal documentation
