@@ -48,6 +48,8 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-10](tickets/done/Dev-10.md) | done | Settle ticket-creation ownership in the Ticket Author contract |
 | [Dev-11](tickets/done/Dev-11.md) | done | Remove stale and misleading wording from role and agent files |
 | [Dev-12](tickets/done/Dev-12.md) | done | Let the Orchestrator run compliance audits and leave a Learner-readable run record |
+| [Dev-13](tickets/Dev-13.md) | to-do | Include Optimizations in ticket-role workflows |
+| [Dev-14](tickets/Dev-14.md) | to-do | Align Auditor agent thinking guidance with check-specific requirements |
 
 ### Features
 
@@ -89,4 +91,4 @@ Recurring documentation and contract checks, run by the [Auditor role](roles/aud
 | [Compliance-03](checks/Compliance-03.md) | After API changes; at least monthly | never | n/a | n/a | OpenAPI contract compliance |
 | [Compliance-04](checks/Compliance-04.md) | Weekly and after file moves or renames | 2026-10-15 17:59 +0200 | clean: 0 findings | Compliance-04-20261015-1759 | Link and format validation |
 | [Compliance-05](checks/Compliance-05.md) | Quarterly and before planning | 2026-10-14 00:30 +0200 | clean: 0 findings, 4 observations | Compliance-05-20261014-0030 | Documentation health |
-| [Compliance-06](checks/Compliance-06.md) | After each role-contract change or lesson application; at least monthly | 2026-10-14 00:46 +0200 | findings: 7 ticketed (3 with decisions needed), 1 duplicate, 0 fixed | Compliance-06-20261014-0046 | Agent role consistency and role-file validation |
+| [Compliance-06](checks/Compliance-06.md) | After each role-contract change or lesson application; at least monthly | 2026-10-15 22:51 +0200 | findings: 2 ticketed, 0 fixed | Compliance-06-20261015-2251 | Agent role consistency and role-file validation |
