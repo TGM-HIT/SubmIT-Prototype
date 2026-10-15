@@ -51,6 +51,13 @@ public class UserController {
     }
 
     @GetMapping("/students")
+    @Operation(summary = "Search students by display name.")
+    @ApiResponse(responseCode = "200", description = "Paginated display-name-only student results.",
+            useReturnTypeSchema = true)
+    @ApiResponse(responseCode = "401", description = "Authentication is required.",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
+    @ApiResponse(responseCode = "403", description = "Only students and administrators may use this lookup.",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
     public PageResponse<StudentLookupResponse> lookupStudents(@AuthenticationPrincipal AuthenticatedUser caller,
             @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) String q) {

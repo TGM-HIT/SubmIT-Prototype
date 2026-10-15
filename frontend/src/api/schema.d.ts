@@ -136,6 +136,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/application-periods/{periodId}/allocation-pins/{studentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["put"];
+        post?: never;
+        delete: operations["delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/application-periods/{id}": {
         parameters: {
             query?: never;
@@ -683,6 +699,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Search students by display name. */
         get: operations["lookupStudents"];
         put?: never;
         post?: never;
@@ -838,7 +855,7 @@ export interface paths {
         put?: never;
         post?: never;
         /** Remove an artefact before project completion. */
-        delete: operations["delete"];
+        delete: operations["delete_1"];
         options?: never;
         head?: never;
         patch?: never;
@@ -885,6 +902,22 @@ export interface paths {
             cookie?: never;
         };
         get: operations["me"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/application-periods/{periodId}/allocation-pins": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["list_7"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1288,6 +1321,32 @@ export interface components {
             /** @description Current elective subject names; only included in authenticated teacher and administrator responses. */
             electiveSubjectNames?: string[];
         };
+        AllocationPinRequest: {
+            /** Format: uuid */
+            projectId: string;
+            /**
+             * @description Explicitly acknowledge that the student did not rank the selected project.
+             * @default false
+             */
+            acknowledgeUnranked: boolean;
+        };
+        ApiErrorResponse: {
+            /** Format: int32 */
+            status: number;
+            error: string;
+            message: string;
+        };
+        AllocationPinResponse: {
+            /** Format: uuid */
+            studentId: string;
+            studentDisplayName: string;
+            /** Format: uuid */
+            projectId: string;
+            projectTitle: string;
+            rankedChoice: boolean;
+            /** Format: date-time */
+            savedAt: string;
+        };
         ApplicationPeriodRequest: {
             /** @description Required administrator-set period label; trimmed, non-blank after trimming, and at most 100 characters. Blank or whitespace-only values are rejected. */
             label: string;
@@ -1624,15 +1683,89 @@ export interface components {
             decision: string;
             note?: string;
         };
+        AllocationApplicationSnapshot: {
+            /** Format: uuid */
+            applicationId?: string;
+            /** Format: uuid */
+            studentId?: string;
+            preferences?: components["schemas"]["AllocationPreferenceSnapshot"][];
+        };
+        AllocationAssignmentResponse: {
+            /** Format: uuid */
+            studentId: string;
+            /** Format: uuid */
+            projectId: string;
+            /** Format: int32 */
+            preferenceRank: number;
+            /** @description True when fixed to this project by an administrator pin. */
+            pinned: boolean;
+            studentDisplayName?: string;
+            projectTitle?: string;
+            className?: string;
+            electiveSubjectNames?: string[];
+        };
+        AllocationPinSnapshot: {
+            /** Format: uuid */
+            studentId?: string;
+            /** Format: uuid */
+            projectId?: string;
+            /** Format: date-time */
+            savedAt?: string;
+        };
+        AllocationPreferenceSnapshot: {
+            /** Format: uuid */
+            projectId?: string;
+            /** Format: int32 */
+            rank?: number;
+        };
+        AllocationResultResponse: {
+            assignments?: components["schemas"]["AllocationAssignmentResponse"][];
+            unassignedStudents?: components["schemas"]["AllocationUnassignedStudentResponse"][];
+            unassignedProjects?: components["schemas"]["AllocationUnassignedProjectResponse"][];
+            /** Format: int32 */
+            assignedStudents?: number;
+            /** Format: int64 */
+            preferenceScore?: number;
+        };
+        AllocationRunResponse: {
+            /** Format: uuid */
+            id?: string;
+            status?: string;
+            /** Format: uuid */
+            periodId?: string;
+            /** Format: date-time */
+            createdAt?: string;
+            initial?: boolean;
+            projectIds?: string[];
+            applications?: components["schemas"]["AllocationApplicationSnapshot"][];
+            pins?: components["schemas"]["AllocationPinSnapshot"][];
+            result?: components["schemas"]["AllocationResultResponse"];
+            error?: string;
+            inputSnapshotComplete?: boolean;
+            /** Format: date-time */
+            finalizedAt?: string;
+        };
+        AllocationUnassignedProjectResponse: {
+            /** Format: uuid */
+            projectId?: string;
+            reason?: string;
+            /** Format: int32 */
+            interestedStudents?: number;
+            projectTitle?: string;
+        };
+        AllocationUnassignedStudentResponse: {
+            /** Format: uuid */
+            studentId?: string;
+            reason?: string;
+            rankedProjectIds?: string[];
+            explanation?: string;
+            studentDisplayName?: string;
+            className?: string;
+            electiveSubjectNames?: string[];
+        };
         DisplayNameRequest: {
             /** @description Required account name; leading and trailing whitespace is trimmed. The trimmed name must contain 1 to 120 characters. */
             displayName: string;
-        };
-        ApiErrorResponse: {
-            /** Format: int32 */
-            status: number;
-            error: string;
-            message: string;
         };
         RoleRequest: {
             /** @enum {string} */
@@ -1830,10 +1963,19 @@ export interface components {
             /** Format: int32 */
             totalPages?: number;
         };
-        PageResponseMapStringObject: {
-            content?: {
-                [key: string]: unknown;
-            }[];
+        AllocationRunPageResponse: {
+            content?: components["schemas"]["AllocationRunResponse"][];
+            /** Format: int32 */
+            page?: number;
+            /** Format: int32 */
+            size?: number;
+            /** Format: int64 */
+            totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
+        };
+        PageResponseAllocationPinResponse: {
+            content?: components["schemas"]["AllocationPinResponse"][];
             /** Format: int32 */
             page?: number;
             /** Format: int32 */
@@ -2154,6 +2296,135 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                periodId: string;
+                studentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AllocationPinRequest"];
+            };
+        };
+        responses: {
+            /** @description Pin saved. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AllocationPinResponse"];
+                };
+            };
+            /** @description Target is not a STUDENT account or project is outside the period catalogue. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Authentication is required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Administrator role required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Period or student not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Unranked project without acknowledgement, more than five project pins, or finalized period. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                periodId: string;
+                studentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pin removed. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication is required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Administrator role required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Period or pin not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Period is finalized. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiErrorResponse"];
+                };
             };
         };
     };
@@ -3175,13 +3446,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Paginated allocation runs. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["PageResponseMapStringObject"];
+                    "*/*": components["schemas"]["AllocationRunPageResponse"];
                 };
             };
         };
@@ -3197,15 +3468,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Created */
+            /** @description Allocation run started. */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": {
-                        [key: string]: unknown;
-                    };
+                    "*/*": components["schemas"]["AllocationRunResponse"];
                 };
             };
         };
@@ -3439,13 +3708,31 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Paginated display-name-only student results. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "*/*": components["schemas"]["PageResponseStudentLookupResponse"];
+                };
+            };
+            /** @description Authentication is required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Only students and administrators may use this lookup. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiErrorResponse"];
                 };
             };
         };
@@ -3670,7 +3957,7 @@ export interface operations {
             };
         };
     };
-    delete: {
+    delete_1: {
         parameters: {
             query?: never;
             header?: never;
@@ -3757,6 +4044,58 @@ export interface operations {
             };
         };
     };
+    list_7: {
+        parameters: {
+            query?: {
+                page?: number;
+                size?: number;
+            };
+            header?: never;
+            path: {
+                periodId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pins listed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PageResponseAllocationPinResponse"];
+                };
+            };
+            /** @description Authentication is required. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Teacher or administrator role required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Period not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     get_4: {
         parameters: {
             query?: never;
@@ -3768,15 +4107,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Allocation run with its result snapshot. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": {
-                        [key: string]: unknown;
-                    };
+                    "*/*": components["schemas"]["AllocationRunResponse"];
                 };
             };
         };

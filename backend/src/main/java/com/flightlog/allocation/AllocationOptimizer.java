@@ -8,9 +8,9 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * Exact, deterministic optimizer: first maximizes the number of assigned students, then the ranked preference score
- * (rank r, zero-based, is worth projectCount - r points). Groups have 3 to 5 students, every student gets at most one
- * project, and projects may stay unassigned. Students can only be assigned to projects they ranked.
+ * Exact, deterministic optimizer: first maximizes assigned pinned students, then the total number of assigned students,
+ * then the ranked preference score (rank r, zero-based, is worth projectCount - r points). Groups have 3 to 5 students,
+ * every student gets at most one project, and projects may stay unassigned. Students can only be assigned to projects they ranked.
  *
  * <p>Complexity: every subset of viable projects (ranked by at least three students) is opened in turn and a min-cost flow
  * decides the assignment, giving O(2^P * S * SPFA) with S students and P viable projects. Subsets needing more than S/3
@@ -23,13 +23,18 @@ import java.util.Set;
 public final class AllocationOptimizer {
 
     /** Accepted projects and student applications. Ids are non-blank; projects are unique; rankings only name known projects. */
-    public record Request(List<Project> projects, List<Application> applications) {
+    public record Request(List<Project> projects, List<Application> applications, Set<String> pinnedStudentIds) {
+
+        public Request(List<Project> projects, List<Application> applications) {
+            this(projects, applications, Set.of());
+        }
 
         public Request {
             Objects.requireNonNull(projects, "projects must not be null");
             Objects.requireNonNull(applications, "applications must not be null");
             projects = List.copyOf(projects);
             applications = List.copyOf(applications);
+            pinnedStudentIds = Set.copyOf(pinnedStudentIds);
             Set<String> projectIds = new HashSet<>();
             for (Project project : projects) {
                 if (!projectIds.add(project.projectId())) {
@@ -37,13 +42,18 @@ public final class AllocationOptimizer {
                 }
             }
             Set<String> studentIds = new HashSet<>();
+            Set<String> knownStudents = new HashSet<>();
             for (Application application : applications) {
                 if (!studentIds.add(application.studentId())) {
                     throw new IllegalArgumentException("duplicate student id " + application.studentId());
                 }
+                knownStudents.add(application.studentId());
                 if (!projectIds.containsAll(application.rankedProjectIds())) {
                     throw new IllegalArgumentException("student " + application.studentId() + " ranks an unknown project");
                 }
+            }
+            if (!knownStudents.containsAll(pinnedStudentIds)) {
+                throw new IllegalArgumentException("pinned student must be in the request");
             }
         }
     }
@@ -93,7 +103,10 @@ public final class AllocationOptimizer {
     }
 
     /** A student placed in a project; {@code preferenceRank} is 1-based (1 = first choice). */
-    public record Assignment(String studentId, String projectId, int preferenceRank) {
+    public record Assignment(String studentId, String projectId, int preferenceRank, boolean pinned) {
+        public Assignment(String studentId, String projectId, int preferenceRank) {
+            this(studentId, projectId, preferenceRank, false);
+        }
     }
 
     /** An unassigned student with the reason and the student's ranked preferences. */
@@ -175,6 +188,8 @@ public final class AllocationOptimizer {
         private final int projects;
         private final int[][] profit;
         private final int[] interest;
+        private final boolean[] pinned;
+        private final long pinWeight;
         private final long countWeight;
         private final List<String> projectIds;
 
@@ -184,16 +199,20 @@ public final class AllocationOptimizer {
             this.projects = request.projects().size();
             this.profit = new int[students][projects];
             this.interest = new int[projects];
+            this.pinned = new boolean[students];
+            this.countWeight = (long) students * projects + 1;
+            this.pinWeight = (long) students * (countWeight + projects) + 1;
             this.projectIds = request.projects().stream().map(Project::projectId).toList();
             for (int s = 0; s < students; s++) {
                 List<String> ranking = request.applications().get(s).rankedProjectIds();
+                pinned[s] = request.pinnedStudentIds().contains(request.applications().get(s).studentId());
                 for (int r = 0; r < ranking.size(); r++) {
                     int p = projectIds.indexOf(ranking.get(r));
                     profit[s][p] = projects - r;
                     interest[p]++;
                 }
             }
-            this.countWeight = (long) students * projects + 1;
+
         }
 
         int[] viableProjects() {
@@ -211,10 +230,10 @@ public final class AllocationOptimizer {
             int[][] weighted = new int[students][projects];
             for (int s = 0; s < students; s++) {
                 for (int p : open) {
-                    weighted[s][p] = profit[s][p] == 0 ? 0 : (int) countWeight + profit[s][p];
+                    weighted[s][p] = profit[s][p] == 0 ? 0 : (int) (countWeight + profit[s][p] + (pinned[s] ? pinWeight : 0));
                 }
             }
-            int bonus = (int) (students * (countWeight + projects) + 1);
+            int bonus = (int) (students * (countWeight + pinWeight + projects) + 1);
             int[] assignment = new AllocationFlow(weighted, open, bonus).solve();
             int[] sizes = sizes(assignment);
             for (int p : open) {
@@ -229,7 +248,7 @@ public final class AllocationOptimizer {
             long total = 0;
             for (int s = 0; s < students; s++) {
                 if (assignment[s] >= 0) {
-                    total += countWeight + profit[s][assignment[s]];
+                    total += countWeight + profit[s][assignment[s]] + (pinned[s] ? pinWeight : 0);
                 }
             }
             return total;

@@ -541,8 +541,8 @@ class IdeaOwnershipControllerTest {
                 .andExpect(jsonPath("$.totalElements").value(1));
         mockMvc.perform(get("/api/users/students").header("Authorization", bearer(teacherToken)))
                 .andExpect(status().isForbidden());
-        mockMvc.perform(get("/api/users/students").header("Authorization", bearer(adminToken)))
-                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/users/students?q=liam").header("Authorization", bearer(adminToken)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content[0].displayName").value("Liam Foster"));
         mockMvc.perform(get("/api/users/students")).andExpect(status().isUnauthorized());
     }
 

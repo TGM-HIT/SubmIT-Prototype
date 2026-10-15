@@ -115,7 +115,7 @@ public class ApplicationPeriodService {
     @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
     public ApiDtos.ApplicationPeriodResponse update(
             AuthenticatedUser caller, java.util.UUID id, JsonNode request) {
-        var period = findPeriod(id);
+        var period = findPeriodForUpdate(id);
         if ("FINALIZED".equals(period.getStatus())) {
             throw conflict("A finalized application period cannot be changed.");
         }
@@ -127,6 +127,12 @@ public class ApplicationPeriodService {
                     "An application period must include at least three accepted projects.");
         }
         ensureEligibleProjects(projectIds, payload.path(SCHOOL_YEAR).asText());
+        var proposed = new java.util.HashSet<>(projectIds);
+        boolean removesPinnedProject = store.repository().findByTypeAndParentId("allocation_pin", id.toString()).stream()
+                .map(pin -> store.parse(pin).path("projectId").asText()).anyMatch(project -> !proposed.contains(project));
+        if (removesPinnedProject) {
+            throw conflict("A project with allocation pins cannot be removed from the catalogue.");
+        }
         store.update(period, periodStatus(payload), payload);
         audit.record(caller, "APPLICATION_PERIOD_UPDATED", PERIOD, id);
         return mapper.period(period);
@@ -368,6 +374,11 @@ public class ApplicationPeriodService {
 
     private StoredRecord findPeriod(java.util.UUID id) {
         return store.repository().findById(id).filter(record -> PERIOD.equals(record.getType()))
+                .orElseThrow(() -> new EntityNotFoundException("Application period was not found."));
+    }
+
+    private StoredRecord findPeriodForUpdate(java.util.UUID id) {
+        return store.repository().findByIdForUpdate(id).filter(record -> PERIOD.equals(record.getType()))
                 .orElseThrow(() -> new EntityNotFoundException("Application period was not found."));
     }
 

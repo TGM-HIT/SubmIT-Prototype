@@ -271,6 +271,65 @@ public final class ApiDtos {
             @NotEmpty List<@NotNull UUID> projectIds) {
     }
 
+    public record AllocationPinSnapshot(UUID studentId, UUID projectId, Instant savedAt) {
+    }
+
+    public record AllocationPreferenceSnapshot(UUID projectId, int rank) {
+    }
+
+    public record AllocationApplicationSnapshot(UUID applicationId, UUID studentId,
+            List<AllocationPreferenceSnapshot> preferences) {
+    }
+
+    public record AllocationAssignmentResponse(
+            @NotNull @Schema(requiredMode = Schema.RequiredMode.REQUIRED, format = "uuid") UUID studentId,
+            @NotNull @Schema(requiredMode = Schema.RequiredMode.REQUIRED, format = "uuid") UUID projectId,
+            @NotNull @Schema(requiredMode = Schema.RequiredMode.REQUIRED) int preferenceRank,
+            @NotNull @Schema(requiredMode = Schema.RequiredMode.REQUIRED,
+                    description = "True when fixed to this project by an administrator pin.") Boolean pinned,
+            String studentDisplayName, String projectTitle, String className, List<String> electiveSubjectNames) {
+    }
+
+    public record AllocationUnassignedStudentResponse(UUID studentId, String reason,
+            List<UUID> rankedProjectIds, String explanation, String studentDisplayName,
+            String className, List<String> electiveSubjectNames) {
+    }
+
+    public record AllocationUnassignedProjectResponse(UUID projectId, String reason,
+            int interestedStudents, String projectTitle) {
+    }
+
+    public record AllocationResultResponse(List<AllocationAssignmentResponse> assignments,
+            List<AllocationUnassignedStudentResponse> unassignedStudents,
+            List<AllocationUnassignedProjectResponse> unassignedProjects,
+            int assignedStudents, long preferenceScore) {
+    }
+
+    public record AllocationRunResponse(UUID id, String status, UUID periodId, Instant createdAt,
+            Boolean initial, List<UUID> projectIds, List<AllocationApplicationSnapshot> applications,
+            List<AllocationPinSnapshot> pins, AllocationResultResponse result, String error,
+            Boolean inputSnapshotComplete, Instant finalizedAt) {
+    }
+
+    public record AllocationRunPageResponse(List<AllocationRunResponse> content, int page, int size,
+            long totalElements, int totalPages) {
+    }
+
+    public record AllocationPinRequest(
+            @NotNull @Schema(requiredMode = Schema.RequiredMode.REQUIRED, format = "uuid") UUID projectId,
+            @Schema(description = "Explicitly acknowledge that the student did not rank the selected project.",
+                    defaultValue = "false") Boolean acknowledgeUnranked) {
+    }
+
+    public record AllocationPinResponse(
+            @NotNull @Schema(requiredMode = Schema.RequiredMode.REQUIRED, format = "uuid") UUID studentId,
+            @NotNull @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String studentDisplayName,
+            @NotNull @Schema(requiredMode = Schema.RequiredMode.REQUIRED, format = "uuid") UUID projectId,
+            @NotNull @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String projectTitle,
+            @NotNull @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Boolean rankedChoice,
+            @NotNull @Schema(requiredMode = Schema.RequiredMode.REQUIRED, format = "date-time") Instant savedAt) {
+    }
+
     public record StudentApplicationRequest(@NotEmpty List<@NotNull UUID> projectIds) {
     }
 

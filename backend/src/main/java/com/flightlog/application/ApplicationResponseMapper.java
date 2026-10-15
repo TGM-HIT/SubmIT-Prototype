@@ -68,11 +68,12 @@ class ApplicationResponseMapper {
         if (label.isBlank()) {
             label = schoolYear;
         }
+        StudentAssignmentResponse studentAssignment = studentAssignment(record, studentId, ownApplication);
         return new ApplicationPeriodResponse(record.getId(), label, schoolYear,
                 Instant.parse(data.path(OPENS_AT).asText()), Instant.parse(data.path(CLOSES_AT).asText()),
                 record.getStatus(), List.copyOf(projects), studentView ? projectTitles(record) : null,
                 studentId == null ? null : ownApplication == null ? "NOT_SUBMITTED" : ownApplication.getStatus(),
-                ownApplication == null ? null : assignment(record, ownApplication));
+                studentAssignment);
     }
 
     StudentApplicationResponse studentApplication(StoredRecord record, Map<UUID, String> projectTitles) {
@@ -173,24 +174,41 @@ class ApplicationResponseMapper {
                 details == null ? null : details.electiveSubjectNames());
     }
 
-    private StudentAssignmentResponse assignment(StoredRecord period, StoredRecord application) {
-        if (!"SUBMITTED".equals(application.getStatus())) {
+    private StudentAssignmentResponse studentAssignment(StoredRecord period, UUID studentId,
+            StoredRecord application) {
+        if (studentId == null) {
             return null;
         }
+        String id = studentId.toString();
+        if (application != null || hasPin(period, id)) {
+            return assignment(period, id, application);
+        }
+        return null;
+    }
+
+    private StudentAssignmentResponse assignment(StoredRecord period, String studentId, StoredRecord application) {
+        if (application != null && !"SUBMITTED".equals(application.getStatus())) {
+            return null;
+        }
+        return assignmentFromRun(period, studentId, application);
+    }
+
+    private StudentAssignmentResponse assignmentFromRun(StoredRecord period, String studentId,
+            StoredRecord application) {
         boolean finalized = "FINALIZED".equals(period.getStatus());
         StoredRecord run = latestRelevantRun(period, finalized);
         if (run == null) {
             return new StudentAssignmentResponse("NO_RESULT", null, null, List.of());
         }
-        GroupAssignment group = finalized ? finalizedGroup(period, run, application.getOwnerId())
-                : preliminaryGroup(run, application.getOwnerId());
+        GroupAssignment group = finalized ? finalizedGroup(period, run, studentId)
+                : preliminaryGroup(run, studentId);
         if (group.projectId() == null) {
             String state = finalized ? "NOT_ASSIGNED_FINAL" : "NOT_ASSIGNED_PRELIMINARY";
             return new StudentAssignmentResponse(state, null, null, List.of());
         }
         String state = finalized ? "FINAL" : "PRELIMINARY";
         return new StudentAssignmentResponse(state, projectTitle(group.projectId()),
-                preferenceRank(application, group.projectId()), groupMembers(group.memberIds(), application.getOwnerId()));
+                preferenceRank(application, group.projectId()), groupMembers(group.memberIds(), studentId));
     }
 
     private StoredRecord latestRelevantRun(StoredRecord period, boolean finalized) {
@@ -264,8 +282,12 @@ class ApplicationResponseMapper {
         return List.copyOf(members);
     }
 
+    private boolean hasPin(StoredRecord period, String studentId) {
+        return store.repository().findByTypeAndParentIdAndOwnerId("allocation_pin", period.getId().toString(), studentId).isPresent();
+    }
+
     private Integer preferenceRank(StoredRecord application, String projectId) {
-        if (projectId == null) {
+        if (application == null || projectId == null) {
             return null;
         }
         for (JsonNode preference : store.parse(application).path("preferences")) {

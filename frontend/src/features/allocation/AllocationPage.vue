@@ -3,11 +3,30 @@
     <p class="page-intro">The initial run starts automatically at the application deadline. Authorized staff can review immutable snapshots, inspect outcomes, and administrators may rerun before finalization.</p>
     <div class="panel">
       <div class="toolbar">
-        <div class="field"><label class="label" for="period-select">Application period</label><select id="period-select" v-model="periodId" class="select" @change="() => loadRuns()"><option value="">Select a period…</option><option v-for="period in periods" :key="period.id" :value="period.id">{{ period.label || period.schoolYear }} · {{ period.schoolYear }} · {{ period.status }}</option></select></div>
-        <button v-if="auth.user?.role === 'ADMIN' && selectedPeriod && selectedPeriod.status !== 'FINALIZED'" class="button" type="button" :disabled="!deadlinePassed || task.loading.value" @click="startReplacement">Start replacement run</button>
+        <div class="field"><label class="label" for="period-select">Application period</label><select id="period-select" v-model="periodId" class="select" @change="loadPeriodData"><option value="">Select a period…</option><option v-for="period in periods" :key="period.id" :value="period.id">{{ period.label || period.schoolYear }} · {{ period.schoolYear }} · {{ period.status }}</option></select></div>
+        <button v-if="auth.user?.role === 'ADMIN' && selectedPeriod && selectedPeriod.status !== 'FINALIZED'" id="start-replacement-run" class="button" type="button" :disabled="!deadlinePassed || task.loading.value" @click="startReplacement">Start replacement run</button>
       </div>
       <p v-if="selectedPeriod" class="notice">Selected period: {{ selectedPeriod.label || selectedPeriod.schoolYear }} · school year {{ selectedPeriod.schoolYear }}</p>
       <p v-if="selectedPeriod && !deadlinePassed" class="notice">The deadline is {{ date(selectedPeriod.closesAt) }}. Allocation cannot be started early.</p>
+      <section v-if="selectedPeriod && [`ADMIN`, `TEACHER`].includes(auth.user?.role ?? ``)" class="panel stack" aria-labelledby="pins-heading">
+        <div><h2 id="pins-heading" class="section-title">Fixed assignments</h2><p class="muted">Administrator pins apply to future allocation runs.</p></div>
+        <p v-if="pinError" class="error-box" role="alert">{{ pinError }} <button class="button button-secondary button-small" type="button" @click="loadPins">Retry</button></p>
+        <p v-else-if="pinLoading" class="notice" role="status">Loading fixed assignments…</p>
+        <template v-else>
+          <p v-if="pins.length === 0" class="empty">No fixed assignments for this period.</p>
+          <article v-for="(pin, index) in pins" :key="String(pin.studentId)" class="data-row" tabindex="-1" :ref="(element) => setPinControl(String(pin.studentId), element)">
+            <div class="row-main"><h3>{{ pin.studentDisplayName }} → {{ pin.projectTitle }}</h3><p>{{ pin.rankedChoice ? `One of their ranked choices` : `Not a ranked choice` }}</p></div>
+            <div v-if="auth.user?.role === `ADMIN`" class="actions"><button class="button button-secondary button-small" type="button" @click="editPin(pin)">Change</button><button class="button button-secondary button-small" type="button" @click="removePin(pin, index, $event)">Remove</button></div>
+          </article>
+          <form v-if="auth.user?.role === `ADMIN`" class="stack" @submit.prevent="savePin">
+            <h3 class="form-section-title">{{ pinStudentId ? `Change fixed assignment` : `Add fixed assignment` }}</h3>
+            <div class="field"><label class="label" for="pin-student">Student</label><input id="pin-student" ref="addPinControl" v-model="studentQuery" class="input" type="search" placeholder="Search students by name" @input="lookupStudents"><select id="pin-student-select" v-model="pinStudentId" class="select" required><option value="">Choose a student…</option><option v-for="student in studentOptions" :key="String(student.id)" :value="String(student.id)">{{ student.displayName }}</option></select></div>
+            <div class="field"><label class="label" for="pin-project">Project</label><select id="pin-project" v-model="pinProjectId" class="select" required><option value="">Choose a project…</option><option v-for="project in catalogueProjects" :key="String(project.id)" :value="String(project.id)">{{ project.title }}</option></select></div>
+            <p v-if="unrankedSelection" class="notice" role="alert">This student did not rank the selected project. You must confirm before saving this fixed assignment.</p>
+            <div class="actions"><button class="button" type="submit" :disabled="pinSaving || !pinStudentId || !pinProjectId">{{ pinSaving ? `Saving…` : pinStudentId ? `Save fixed assignment` : `Add fixed assignment` }}</button><button v-if="pinStudentId" class="button button-secondary" type="button" @click="cancelPinEdit">Cancel</button></div>
+          </form>
+        </template>
+      </section>
       <p class="notice">Every allocated group must contain 3–5 students, and each student can be assigned at most once. Failed or incomplete runs remain clearly marked.</p>
       <AsyncPanel :loading="task.loading.value" :error="task.error.value" @retry="loadRuns">
         <div v-if="runs.content.length" class="data-list">
@@ -26,10 +45,10 @@
       <p v-if="selectedRun.error" class="error-box">Run did not complete: {{ selectedRun.error }}</p>
       <div v-for="assignment in assignments(selectedRun)" :key="assignment.projectId" class="data-row">
         <div class="row-main"><h3 class="staff-display-label">{{ assignment.projectTitle }}</h3><p>{{ assignment.students.length }} students assigned</p><p>Supervisor: {{ supervisors[assignment.projectId] || 'No supervisor assigned' }}</p><p class="muted">Members are shown only to authorized project staff. Group sizes remain within the required 3–5 range.</p></div>
-        <div class="choice-list"><span v-for="(student, index) in assignment.students" :key="student.id || index" class="status-badge staff-member-label">{{ student.name }} · Class: {{ student.className || 'Not assigned' }} · Elective subjects: {{ student.electiveSubjectNames.join(', ') || 'None' }}</span></div>
+        <div class="choice-list"><span v-for="(student, index) in assignment.students" :key="student.id || index" class="status-badge staff-member-label">{{ student.name }}<strong v-if="student.pinned"> · Fixed by administrator</strong> · Class: {{ student.className || 'Not assigned' }} · Elective subjects: {{ student.electiveSubjectNames.join(', ') || 'None' }}</span></div>
       </div>
       <h3 class="form-section-title">Unassigned outcomes</h3>
-      <div v-if="unassigned(selectedRun).length" class="choice-list"><p v-for="(entry, index) in unassigned(selectedRun)" :key="unassignedKey(entry, index)" class="notice staff-display-label">{{ unassignedLabel(entry) }}<template v-if="typeof entry.studentId === 'string'"> · Class: {{ entry.className || 'Not assigned' }} · Elective subjects: {{ Array.isArray(entry.electiveSubjectNames) ? entry.electiveSubjectNames.join(', ') || 'None' : 'None' }}</template> · {{ entry.reason ?? entry.explanation ?? 'No reason supplied by the run.' }}</p></div>
+      <div v-if="unassigned(selectedRun).length" class="choice-list"><p v-for="(entry, index) in unassigned(selectedRun)" :key="unassignedKey(entry, index)" class="notice staff-display-label">{{ unassignedLabel(entry) }}<template v-if="typeof entry.studentId === 'string'"> · Class: {{ entry.className || 'Not assigned' }} · Elective subjects: {{ Array.isArray(entry.electiveSubjectNames) ? entry.electiveSubjectNames.join(', ') || 'None' : 'None' }}</template> · {{ entry.explanation ?? entry.reason ?? 'No reason supplied by the run.' }}</p></div>
       <p v-else class="muted">The run did not report unassigned students or projects.</p>
     </section>
     <p v-if="task.success.value" class="success-note" role="status">{{ task.success.value }}</p>
@@ -37,7 +56,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref } from 'vue'
 import type { components } from '../../api/schema'
 import type { Page } from '../../api/client'
 import { allocationApi, ideasApi, periodsApi } from '../../api/services'
@@ -54,20 +73,33 @@ const periodId = ref('')
 const runs = ref<Page<Data>>({ content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 })
 const selectedRun = ref<Data | null>(null)
 const supervisors = ref<Record<string, string>>({})
+const pins = ref<Data[]>([])
+const pinLoading = ref(false)
+const pinSaving = ref(false)
+const pinError = ref("")
+const pinStudentId = ref("")
+const pinProjectId = ref("")
+const studentQuery = ref("")
+const studentOptions = ref<Data[]>([])
+const catalogueProjects = ref<Data[]>([])
+const submittedApplications = ref<Data[]>([])
+const addPinControl = ref<HTMLButtonElement | null>(null)
+const pinControls = new Map<string, HTMLElement>()
 const selectedPeriod = computed(() => periods.value.find((period) => period.id === periodId.value))
 const deadlinePassed = computed(() => Boolean(selectedPeriod.value?.closesAt && Date.now() >= new Date(selectedPeriod.value.closesAt).getTime()))
+const unrankedSelection = computed(() => Boolean(pinStudentId.value && pinProjectId.value && !isRanked(pinStudentId.value, pinProjectId.value)))
 
 function idOf(run: Data): string { return String(run.id ?? '') }
 function statusOf(run: Data): string { return String(run.status ?? 'UNKNOWN').toUpperCase() }
 function date(value?: string): string { return value ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : 'unknown' }
-function assignments(run: Data): { projectId: string; projectTitle: string; students: { id: string; name: string; className?: string; electiveSubjectNames: string[] }[] }[] {
+function assignments(run: Data): { projectId: string; projectTitle: string; students: { id: string; name: string; className?: string; electiveSubjectNames: string[]; pinned: boolean }[] }[] {
   const result = run.result
   if (!result || typeof result !== "object" || !Array.isArray((result as Data).assignments)) return []
-  const groups = new Map<string, { title: string; students: Map<string, { name: string; className?: string; electiveSubjectNames: string[] }> }>()
+  const groups = new Map<string, { title: string; students: Map<string, { name: string; className?: string; electiveSubjectNames: string[]; pinned: boolean }> }>()
   for (const assignment of (result as Data).assignments as Data[]) {
     const projectId = String(assignment.projectId ?? assignment.project ?? "")
     if (!projectId) continue
-    const group = groups.get(projectId) ?? { title: "Unknown project", students: new Map<string, { name: string; className?: string; electiveSubjectNames: string[] }>() }
+    const group = groups.get(projectId) ?? { title: "Unknown project", students: new Map<string, { name: string; className?: string; electiveSubjectNames: string[]; pinned: boolean }>() }
     if (typeof assignment.projectTitle === "string" && assignment.projectTitle.trim()) group.title = assignment.projectTitle
     const studentIds = Array.isArray(assignment.studentIds) ? assignment.studentIds
       : Array.isArray(assignment.students) ? assignment.students
@@ -80,7 +112,7 @@ function assignments(run: Data): { projectId: string; projectTitle: string; stud
           ? assignment.studentDisplayName : "Unknown student"
       const electiveSubjectNames = Array.isArray(assignment.electiveSubjectNames) ? assignment.electiveSubjectNames.filter((value): value is string => typeof value === "string") : []
       const className = typeof assignment.className === "string" ? assignment.className : undefined
-      group.students.set(id, { name, className, electiveSubjectNames })
+      group.students.set(id, { name, className, electiveSubjectNames, pinned: assignment.pinned === true })
     }
     groups.set(projectId, group)
   }
@@ -112,6 +144,105 @@ function unassigned(run: Data): Data[] {
   if (!result) return []
   const entries = [result.unassignedStudents, result.unassignedProjects]
   return entries.flatMap((items) => Array.isArray(items) ? items.filter((entry): entry is Data => typeof entry === 'object' && entry !== null) : [])
+}
+function isRanked(studentId: string, projectId: string): boolean {
+  const application = submittedApplications.value.find((entry) => String(entry.studentId ?? ``) === studentId)
+  const preferences = Array.isArray(application?.preferences) ? application.preferences : []
+  return preferences.some((preference) => typeof preference === `object` && preference !== null && String((preference as Data).projectId ?? ``) === projectId)
+}
+function setPinControl(id: string, element: unknown): void {
+  if (element instanceof HTMLElement) pinControls.set(id, element)
+  else pinControls.delete(id)
+}
+async function loadPins(): Promise<void> {
+  if (!periodId.value || !selectedPeriod.value) return
+  pinLoading.value = true
+  pinError.value = ``
+  try {
+    const [pinPage, ideaPage, applicationPage] = await Promise.all([
+      periodsApi.pins(periodId.value, 0),
+      ideasApi.list(0, `ACCEPTED_FOR_APPLICATIONS`, 100),
+      periodsApi.applications(periodId.value, 0),
+    ])
+    pins.value = pinPage.content as unknown as Data[]
+    const ids = Array.isArray(selectedPeriod.value.projectIds) ? selectedPeriod.value.projectIds.map(String) : []
+    catalogueProjects.value = ideaPage.content.filter((idea) => ids.includes(String(idea.id ?? ``))).map((idea) => ({ id: String(idea.id ?? ``), title: idea.title }))
+    submittedApplications.value = applicationPage.content as unknown as Data[]
+  } catch (error) {
+    pinError.value = error instanceof Error ? error.message : `Could not load fixed assignments.`
+  } finally {
+    pinLoading.value = false
+  }
+}
+async function lookupStudents(event: Event): Promise<void> {
+  const input = event.target as HTMLInputElement
+  studentQuery.value = input.value
+  try {
+    const page = await ideasApi.lookupStudents(studentQuery.value)
+    studentOptions.value = page.content as unknown as Data[]
+  } catch (error) {
+    pinError.value = error instanceof Error ? error.message : `Could not search students.`
+  }
+}
+function editPin(pin: Data): void {
+  pinStudentId.value = String(pin.studentId ?? ``)
+  pinProjectId.value = String(pin.projectId ?? ``)
+  studentQuery.value = String(pin.studentDisplayName ?? ``)
+  if (!studentOptions.value.some((student) => student.id === pinStudentId.value)) {
+    studentOptions.value = [...studentOptions.value, { id: pinStudentId.value, displayName: studentQuery.value }]
+  }
+}
+function cancelPinEdit(event?: Event): void {
+  const opener = event?.currentTarget as HTMLElement | null
+  pinStudentId.value = ``
+  pinProjectId.value = ``
+  studentQuery.value = ``
+  void nextTick(() => opener?.focus())
+}
+async function savePin(): Promise<void> {
+  if (!selectedPeriod.value || !pinStudentId.value || !pinProjectId.value) return
+  if (unrankedSelection.value && !window.confirm(`This student did not rank the selected project. Save this fixed assignment anyway?`)) {
+    await nextTick()
+    document.querySelector<HTMLButtonElement>(`form button[type=submit]`)?.focus()
+    return
+  }
+  pinSaving.value = true
+  try {
+    await periodsApi.savePin(periodId.value, pinStudentId.value, pinProjectId.value, unrankedSelection.value)
+    const studentId = pinStudentId.value
+    await loadPins()
+    pinStudentId.value = ``
+    pinProjectId.value = ``
+    studentQuery.value = ``
+    await nextTick()
+    pinControls.get(studentId)?.focus()
+  } catch (error) {
+    pinError.value = error instanceof Error ? error.message : `Could not save the fixed assignment.`
+  } finally {
+    pinSaving.value = false
+  }
+}
+async function removePin(pin: Data, index: number, event: Event): Promise<void> {
+  const opener = event.currentTarget as HTMLElement
+  if (!window.confirm(`Remove the fixed assignment for ${String(pin.studentDisplayName ?? `this student`)}?`)) {
+    opener.focus()
+    return
+  }
+  try {
+    await periodsApi.removePin(periodId.value, String(pin.studentId))
+    const focusId = pins.value[index + 1]?.studentId ?? pins.value[index - 1]?.studentId
+    await loadPins()
+    await nextTick()
+    if (pins.value.length === 0) addPinControl.value?.focus()
+    else if (focusId) pinControls.get(String(focusId))?.focus()
+  } catch (error) {
+    pinError.value = error instanceof Error ? error.message : `Could not remove the fixed assignment.`
+    await nextTick()
+    opener.focus()
+  }
+}
+async function loadPeriodData(): Promise<void> {
+  await Promise.all([loadRuns(), loadPins()])
 }
 async function loadRuns(page = 0): Promise<void> {
   selectedRun.value = null
@@ -151,6 +282,7 @@ async function load(): Promise<void> {
     if (!periodId.value && page.content[0]?.id) {
       periodId.value = page.content[0].id
       runs.value = await periodsApi.runs(periodId.value, 0)
+      await loadPins()
     }
   })
 }

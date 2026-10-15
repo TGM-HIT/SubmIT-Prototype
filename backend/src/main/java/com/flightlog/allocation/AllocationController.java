@@ -6,6 +6,11 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.flightlog.security.AuthenticatedUser;
 import com.flightlog.web.ApiDtos.PageResponse;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import com.flightlog.web.ApiDtos.AllocationRunPageResponse;
+import com.flightlog.web.ApiDtos.AllocationRunResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import java.util.Map;
 import java.util.UUID;
@@ -32,11 +37,15 @@ public class AllocationController {
     @PostMapping("/api/application-periods/{periodId}/allocation-runs")
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Start a replacement allocation after the deadline.")
+    @ApiResponse(responseCode = "201", description = "Allocation run started.",
+            content = @Content(schema = @Schema(implementation = AllocationRunResponse.class)))
     public Map<String, Object> start(@AuthenticationPrincipal AuthenticatedUser caller, @PathVariable UUID periodId) {
         return plain(service.startReplacement(caller, periodId));
     }
 
     @GetMapping("/api/application-periods/{periodId}/allocation-runs")
+    @ApiResponse(responseCode = "200", description = "Paginated allocation runs.",
+            content = @Content(schema = @Schema(implementation = AllocationRunPageResponse.class)))
     public PageResponse<Map<String, Object>> list(@AuthenticationPrincipal AuthenticatedUser caller,
             @PathVariable UUID periodId, @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
@@ -47,6 +56,8 @@ public class AllocationController {
     }
 
     @GetMapping("/api/allocation-runs/{id}")
+    @ApiResponse(responseCode = "200", description = "Allocation run with its result snapshot.",
+            content = @Content(schema = @Schema(implementation = AllocationRunResponse.class)))
     public Map<String, Object> get(@AuthenticationPrincipal AuthenticatedUser caller, @PathVariable UUID id) {
         return plain(service.getRun(caller, id));
     }

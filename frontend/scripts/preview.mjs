@@ -150,10 +150,10 @@ export function parseArgs(args) {
           } else {
             options.steps.push({ action, value: argument })
           }
-        } else if (action === 'accept-confirms' && !argument) {
+        } else if (['accept-confirms', 'reject-confirms'].includes(action) && !argument) {
           options.steps.push({ action })
         } else {
-          throw new Error('--step must be fill:SELECTOR=VALUE, select-index:SELECTOR=INDEX, click-record-action:TITLE_OR_ID|SELECTOR, read-record:TITLE_OR_ID, click:SELECTOR, wait:SELECTOR, read:SELECTOR, focus:SELECTOR, scroll:SELECTOR, screenshot:FILE, key:Tab|Shift+Tab|Escape, or accept-confirms.')
+          throw new Error('--step must be fill:SELECTOR=VALUE, select-index:SELECTOR=INDEX, click-record-action:TITLE_OR_ID|SELECTOR, read-record:TITLE_OR_ID, click:SELECTOR, wait:SELECTOR, read:SELECTOR, focus:SELECTOR, scroll:SELECTOR, screenshot:FILE, key:Tab|Shift+Tab|Escape, or accept-confirms or reject-confirms.')
         }
       } else {
         options[name] = value
@@ -1060,9 +1060,10 @@ export async function applyPageSteps(client, steps, { outputDir, log = console.l
         element.scrollIntoView({ block: 'center', inline: 'nearest' });
       })()`, `scroll ${step.value} into view`)
       log(`Scrolled ${step.value} into view.`)
-    } else if (step.action === 'accept-confirms') {
-      await evaluatePage(client, 'window.confirm = () => true', 'allow confirmation dialogs in the local preview')
-      log('Preview confirmation dialogs will be accepted.')
+    } else if (step.action === "accept-confirms" || step.action === "reject-confirms") {
+      const accepted = step.action === "accept-confirms"
+      await evaluatePage(client, `window.confirm = () => ${accepted}`, "configure confirmation dialogs in the local preview")
+      log(`Preview confirmation dialogs will be ${accepted ? "accepted" : "dismissed"}.`)
     } else if (step.action === 'key') {
       const key = step.value === 'Shift+Tab' ? 'Tab' : step.value
       const code = key === 'Tab' ? 'Tab' : 'Escape'
@@ -1320,7 +1321,7 @@ backend/DEV-GUIDELINES.md and pass --username student01 (or another documented a
 Use --fill, --click, --wait-for, and --expand-select to perform reusable preview interactions after authentication,
 or repeat --step ACTION:VALUE to sequence conditional flows. Steps support fill:SELECTOR=VALUE, click:SELECTOR,
 click-row-action:USERNAME|SELECTOR,
-wait:SELECTOR, read:SELECTOR, focus:SELECTOR, scroll:SELECTOR, key:Tab|Shift+Tab|Escape, select-index:SELECTOR=INDEX, screenshot:FILE, and accept-confirms (local preview only).
+wait:SELECTOR, read:SELECTOR, focus:SELECTOR, scroll:SELECTOR, key:Tab|Shift+Tab|Escape, select-index:SELECTOR=INDEX, screenshot:FILE, and accept-confirms or reject-confirms (local preview only).
 for example to load a form that requires a project ID before its details are shown. Use --tab-to and
 --select-by-key for browser keyboard navigation. On macOS, use --headed and --native-select-by-key for GUI
 keyboard input to a collapsed popup (Terminal may require Accessibility permission).

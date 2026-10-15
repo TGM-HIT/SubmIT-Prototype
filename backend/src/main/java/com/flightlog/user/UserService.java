@@ -15,6 +15,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -53,9 +54,12 @@ public class UserService {
     }
 
     @Transactional(readOnly = true)
+    @PreAuthorize("hasAnyAuthority('ROLE_STUDENT','ROLE_ADMIN')")
     public PageResponse<StudentLookupResponse> lookupStudents(AuthenticatedUser caller, int page, int size,
             String query) {
-        requireRole(caller, Role.STUDENT);
+        if (caller.role() != Role.STUDENT && caller.role() != Role.ADMIN) {
+            throw new org.springframework.security.access.AccessDeniedException("Student lookup is restricted.");
+        }
         String search = query == null || query.isBlank() ? null
                 : query.strip().toLowerCase(Locale.ROOT).replace("!", "!!").replace("%", "!%").replace("_", "!_");
         Page<UserAccount> result = users.findStudentsByDisplayName(Role.STUDENT, search,

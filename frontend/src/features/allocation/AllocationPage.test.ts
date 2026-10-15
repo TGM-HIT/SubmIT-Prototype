@@ -9,16 +9,26 @@ const api = vi.hoisted(() => ({
   listRuns: vi.fn(),
   getRun: vi.fn(),
   getIdea: vi.fn(),
+  listPins: vi.fn(),
+  listIdeas: vi.fn(),
+  listApplications: vi.fn(),
+  lookupStudents: vi.fn(),
+  savePin: vi.fn(),
+  removePin: vi.fn(),
 }))
 const state = vi.hoisted(() => ({ role: 'TEACHER' }))
 
 vi.mock('../../api/services', () => ({
   allocationApi: { getRun: api.getRun, finalize: vi.fn() },
-  ideasApi: { get: api.getIdea },
+  ideasApi: { get: api.getIdea, list: api.listIdeas, lookupStudents: api.lookupStudents },
   periodsApi: {
     list: api.listPeriods,
     runs: api.listRuns,
     startRun: vi.fn(),
+    pins: api.listPins,
+    applications: api.listApplications,
+    savePin: api.savePin,
+    removePin: api.removePin,
   },
 }))
 
@@ -28,6 +38,7 @@ vi.mock('../../stores/auth', () => ({
 
 function mountPage() {
   return mount(AllocationPage, {
+    attachTo: document.body,
     global: {
       stubs: {
         AsyncPanel: { template: '<div><slot /></div>' },
@@ -40,7 +51,7 @@ describe('allocation supervisor display', () => {
   beforeEach(() => {
     state.role = 'TEACHER'
     api.listPeriods.mockResolvedValue({
-      content: [{ id: 'period-1', label: 'Allocation preview', schoolYear: '2026/2027', status: 'ALLOCATED' }],
+      content: [{ id: 'period-1', label: 'Allocation preview', schoolYear: '2026/2027', status: 'ALLOCATED', projectIds: ['project-1'] }],
     })
     api.listRuns.mockResolvedValue({
       content: [{ id: 'run-1', status: 'COMPLETED' }],
@@ -57,10 +68,17 @@ describe('allocation supervisor display', () => {
       },
     })
     api.getIdea.mockResolvedValue({ id: 'project-1' })
+    api.listPins.mockResolvedValue({ content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 })
+    api.listIdeas.mockResolvedValue({ content: [{ id: 'project-1', title: 'Project One' }] })
+    api.listApplications.mockResolvedValue({ content: [] })
+    api.lookupStudents.mockResolvedValue({ content: [{ id: 'student-1', displayName: 'Student One' }] })
+    api.savePin.mockResolvedValue({})
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
     vi.clearAllMocks()
+    document.body.innerHTML = ``
   })
 
   it('identifies periods by label with the school year in the selector and selected view', async () => {
@@ -165,6 +183,129 @@ describe('allocation supervisor display', () => {
     expect(page.text()).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i)
     const styles = readFileSync(resolve(process.cwd(), "src/styles.css"), "utf8")
     expect(styles).toContain(".staff-member-label { max-width: 100%; white-space: normal; overflow-wrap: anywhere; word-break: break-word; }")
+  })
+
+
+  it("labels pinned run assignments and explains pinned unassignment", async () => {
+    api.getRun.mockResolvedValue({
+      id: "run-1",
+      status: "COMPLETED",
+      result: {
+        assignments: [{ projectId: "project-1", projectTitle: "Project One", studentId: "student-1",
+          studentDisplayName: "Pinned Student", pinned: true }],
+        unassignedStudents: [{ studentId: "student-4", studentDisplayName: "Unassigned Pinned Student",
+          reason: "PINNED_PROJECT_CANNOT_FORM_GROUP", explanation: "The administrator pin could not form a valid group." }],
+      },
+    })
+    const page = mountPage()
+    await flushPromises()
+    await page.findAll("button").find((button) => button.text() === "Inspect result")!.trigger("click")
+    await flushPromises()
+    expect(page.text()).toContain("Pinned Student · Fixed by administrator")
+    expect(page.text()).toContain("Unassigned Pinned Student · Class: Not assigned · Elective subjects: None · The administrator pin could not form a valid group.")
+  })
+
+  it("lists and changes an existing administrator pin", async () => {
+    state.role = "ADMIN"
+    const pin = { studentId: "student-1", studentDisplayName: "Student One", projectId: "project-1", projectTitle: "Project One", rankedChoice: true }
+    const changedPin = { ...pin, projectId: "project-2", projectTitle: "Project Two" }
+    api.listPins.mockResolvedValueOnce({ content: [pin] }).mockResolvedValueOnce({ content: [changedPin] })
+    api.listApplications.mockResolvedValue({ content: [{ studentId: "student-1", preferences: [{ projectId: "project-1" }] }] })
+    const page = mountPage()
+    await flushPromises()
+    expect(page.text()).toContain("Student One → Project One")
+    await page.findAll("button").find((button) => button.text() === "Change")!.trigger("click")
+    expect(page.text()).toContain("Change fixed assignment")
+    await page.find("form").trigger("submit")
+    await flushPromises()
+    expect(api.savePin).toHaveBeenCalledWith("period-1", "student-1", "project-1", false)
+    expect(page.text()).toContain("Student One → Project Two")
+    expect(document.activeElement).toBe(page.get("[tabindex=-1]").element)
+  })
+
+  it("lists pins for teachers without showing write controls", async () => {
+    api.listPins.mockResolvedValue({ content: [{ studentId: "student-1", studentDisplayName: "Student One", projectId: "project-1", projectTitle: "Project One", rankedChoice: true }] })
+    const page = mountPage()
+    await flushPromises()
+    expect(page.text()).toContain("Fixed assignments")
+    expect(page.text()).toContain("Student One → Project One")
+    expect(page.find("form").exists()).toBe(false)
+    expect(page.text()).not.toContain("Remove")
+  })
+
+  it("requires confirmation for an unranked pin and sends acknowledgement only after confirmation", async () => {
+    state.role = "ADMIN"
+    const confirm = vi.spyOn(window, "confirm").mockReturnValue(false)
+    const page = mountPage()
+    await flushPromises()
+    await page.get("#pin-student").setValue("Student")
+    await flushPromises()
+    await page.findAll("select")[1].setValue("student-1")
+    await page.findAll("select")[2].setValue("project-1")
+    expect(page.text()).toContain("did not rank the selected project")
+    await page.find("form").trigger("submit")
+    await flushPromises()
+    expect(confirm).toHaveBeenCalledOnce()
+    expect(api.savePin).not.toHaveBeenCalled()
+    expect(document.activeElement).toBe(page.get("form button[type=submit]").element)
+  })
+
+  it("saves an acknowledged pin and moves focus to its refreshed entry", async () => {
+    state.role = "ADMIN"
+    vi.spyOn(window, "confirm").mockReturnValue(true)
+    api.listPins.mockResolvedValue({ content: [{ studentId: "student-1", studentDisplayName: "Student One", projectId: "project-1", projectTitle: "Project One", rankedChoice: false }] })
+    const page = mountPage()
+    await flushPromises()
+    await page.get("#pin-student").setValue("Student")
+    await flushPromises()
+    await page.findAll("select")[1].setValue("student-1")
+    await page.findAll("select")[2].setValue("project-1")
+    await page.find("form").trigger("submit")
+    await flushPromises()
+    expect(api.savePin).toHaveBeenCalledWith("period-1", "student-1", "project-1", true)
+    expect(page.text()).toContain("Student One → Project One")
+    expect(document.activeElement).toBe(page.get("[tabindex=-1]").element)
+  })
+
+  it("cancels pin removal without changing the list and restores focus to its opener", async () => {
+    state.role = "ADMIN"
+    const pin = { studentId: "student-1", studentDisplayName: "Student One", projectId: "project-1", projectTitle: "Project One", rankedChoice: true }
+    api.listPins.mockResolvedValue({ content: [pin] })
+    vi.spyOn(window, "confirm").mockReturnValue(false)
+    const page = mountPage()
+    await flushPromises()
+    const remove = page.findAll("button").find((button) => button.text() === "Remove")!
+    await remove.trigger("click")
+    await flushPromises()
+    expect(api.removePin).not.toHaveBeenCalled()
+    expect(page.text()).toContain("Student One → Project One")
+    expect(document.activeElement).toBe(remove.element)
+  })
+
+  it("removes the last pin and returns focus to the add control", async () => {
+    state.role = "ADMIN"
+    const pin = { studentId: "student-1", studentDisplayName: "Student One", projectId: "project-1", projectTitle: "Project One", rankedChoice: true }
+    api.listPins.mockResolvedValueOnce({ content: [pin] }).mockResolvedValueOnce({ content: [] })
+    vi.spyOn(window, "confirm").mockReturnValue(true)
+    const page = mountPage()
+    await flushPromises()
+    await page.findAll("button").find((button) => button.text() === "Remove")!.trigger("click")
+    await flushPromises()
+    expect(api.removePin).toHaveBeenCalledWith("period-1", "student-1")
+    expect(page.text()).toContain("No fixed assignments for this period.")
+    expect(document.activeElement).toBe(page.get("#pin-student").element)
+  })
+
+  it("shows pin loading errors and retries the list request", async () => {
+    state.role = "ADMIN"
+    api.listPins.mockRejectedValueOnce(new Error("Pin list unavailable"))
+    const page = mountPage()
+    await flushPromises()
+    expect(page.text()).toContain("Pin list unavailable")
+    api.listPins.mockResolvedValue({ content: [] })
+    await page.findAll("button").find((button) => button.text() === "Retry")!.trigger("click")
+    await flushPromises()
+    expect(page.text()).toContain("No fixed assignments for this period.")
   })
 
 })

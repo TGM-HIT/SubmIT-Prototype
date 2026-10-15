@@ -42,6 +42,9 @@ test('parses preview options and rejects incomplete or invalid invocations', () 
   assert.deepEqual(parseArgs(['--step', 'select-index:#teacher-id=2']).steps, [
     { action: 'select-index', selector: '#teacher-id', index: 2 },
   ])
+  assert.deepEqual(parseArgs(['--step', 'reject-confirms']).steps, [
+    { action: 'reject-confirms' },
+  ])
   assert.throws(() => parseArgs(['--step', 'select-index:#teacher-id=-1']), /NONNEGATIVE_INDEX/)
   assert.throws(
     () => parseArgs(['--step', 'click-row-action:teacher01']),

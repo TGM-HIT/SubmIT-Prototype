@@ -4,7 +4,7 @@ This is the shared product specification. It defines behavior that both the back
 
 ## 1. Product Purpose
 
-The application helps students propose, develop, and join group projects for the next school year. Teachers review ideas, give structured feedback, decide which projects may proceed, and indicate whether they are willing to supervise them. Students apply to accepted projects by submitting a ranked list of preferences. After the application deadline, the system forms project groups of three to five students while optimizing how well assignments match student preferences.
+The application helps students propose, develop, and join group projects for the next school year. Teachers review ideas, give structured feedback, decide which projects may proceed, and indicate whether they are willing to supervise them. Students apply to accepted projects by submitting a ranked list of preferences. After the application deadline, the system forms project groups of three to five students, honoring feasible administrator pins and optimizing the remaining assignments to match student preferences.
 
 ## 2. People and Roles
 
@@ -129,9 +129,11 @@ For every reviewed project, each teacher can record one supervision preference: 
 
 An application period belongs to a school year and has an opening time, a closing deadline, and a set of accepted projects from that school year. Students submit one application containing at least three distinct accepted projects ranked in preference order. The same project cannot appear twice in one ranking. Students may update or withdraw their application until the deadline.
 
-At the deadline, the system automatically closes application changes and starts an allocation run. Each student is assigned to at most one project. Every allocated project group contains at least three and at most five students. The allocation should maximize the number of students assigned and, among allocations with the same number assigned, maximize satisfaction of student rankings, giving higher-ranked choices greater weight.
+At the deadline, the system automatically closes application changes and starts an allocation run. Until the period is finalized, an administrator may pin any student to any accepted project in the period catalogue, independently of whether the student submitted an application or ranked that project. The student ranking is never changed. A pinned student sees any resulting assignment through the ordinary student period projection, even without an application; no pin metadata is exposed. A pin to an unranked project, or to a project for a student without an application, requires explicit administrator acknowledgement. No project may have more than five pins; catalogue updates cannot remove a pinned project. Pins can be created, replaced, or removed until finalization and apply to every subsequently started run.
 
-The allocation must never violate group-size limits or assign a student to multiple projects. If the constraints make a complete allocation impossible, affected students or projects remain explicitly unassigned; the system reports why and allows a teacher or administrator to review the result. It must not silently create groups smaller than three or larger than five. A run records its inputs, result, and completion status. An authorized administrator can trigger a new run before results are finalized; finalized results are not silently overwritten.
+Each student is assigned to at most one project. A pinned student is assigned to the pinned project and is not moved by a run whenever that project can form a valid group; otherwise the pin-specific unassigned outcome applies. Pinned students count toward group size. The run honors feasible pins first, then optimizes the remaining students around them by maximizing the number assigned and then satisfaction of their rankings, giving higher-ranked choices greater weight. Every allocated group contains at least three and at most five students. If a pinned project cannot form a group of at least three even with other students, the run completes without creating a smaller group; its pinned students are unassigned with an explanation naming the pin.
+
+The allocation must never violate group-size limits or assign a student to multiple projects. If the constraints make a complete allocation impossible, affected students or projects remain explicitly unassigned; the system reports why and allows a teacher or administrator to review the result. It must not silently create groups smaller than three or larger than five. A run records its eligible applications, projects, pins, result, and completion status as an immutable snapshot. Later pin changes do not change earlier runs. An authorized administrator can trigger a new run before results are finalized; finalized results are not silently overwritten.
 
 ## 10. Shared Invariants
 
@@ -139,14 +141,14 @@ The allocation must never violate group-size limits or assign a student to multi
 - Only projects with submitted full specifications and an explicit teacher acceptance may be offered to students.
 - Teacher ratings and supervision preferences are separate from approval, acceptance, and confirmed supervision.
 - Applications include at least three distinct ranked projects and are editable only before the deadline.
-- A student is allocated to no more than one project per school-year allocation.
-- Allocated groups contain three to five students, inclusive.
+- A student is allocated to no more than one project per school-year allocation; pins fix the selected student and project without changing the ranked application.
+- Allocated groups contain three to five students, inclusive; pins count toward these limits and an infeasible pinned project is reported unassigned, never as a smaller group.
 - A group's formal project application contains the official fields and character limits, including per-student topics, investigation concerns, planned results, dated milestones, and an optional cooperation partner, and requires teacher approval before project work proceeds.
 - Ongoing grades are tied to a versioned rubric criterion, assessment subject, teacher, and time and retain their history.
 - Final student and project grades preserve their underlying rubric assessments and metric inputs and use only explicitly defined, versioned grading rules.
 - Completed projects retain a browsable website archive, poster, and source data with access control and audit history.
 - The approved archive of a completed project is anonymously and publicly readable; private student information, grades, reviews, and unapproved artefacts are never exposed through public routes or files.
-- Allocation decisions are reproducible from the recorded application snapshot and allocation run inputs.
+- Allocation decisions are reproducible from the recorded application and pin snapshots; later pin changes do not alter earlier runs.
 - Important submissions, reviews, decisions, application changes, and allocation actions are auditable.
 - Collection views are paginated. Public URLs, role names, enum values, pagination metadata, and error shapes are stable behavior.
 

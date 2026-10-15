@@ -133,7 +133,8 @@ public class AllocationService {
     private StoredRecord createRun(AuthenticatedUser caller, StoredRecord period, boolean initial) {
         ObjectNode periodData = store.parse(period);
         List<String> projectIds = readIds(periodData.path("projectIds"), "projectIds");
-        ObjectNode snapshot = snapshot(projectIds, List.of());
+        List<StoredRecord> pins = readPins(period.getId());
+        ObjectNode snapshot = snapshot(projectIds, List.of(), pins);
         snapshot.put("initial", initial);
         snapshot.put("createdAt", Instant.now().toString());
         StoredRecord run = store.create(RUN, caller == null ? null : caller.id().toString(),
@@ -141,7 +142,7 @@ public class AllocationService {
         try {
             List<StoredRecord> applications = readApplications(period.getId());
             snapshot.set("applications", serializeApplications(applications));
-            Object result = engine.optimize(projectIds, applications);
+            Object result = engine.optimize(projectIds, applications, pins);
             snapshot.set(RESULT_FIELD, store.value(result));
             store.update(run, "COMPLETED", snapshot);
             store.update(period, "ALLOCATED", periodData);
@@ -169,12 +170,30 @@ public class AllocationService {
         return page.getContent().stream().filter(application -> "SUBMITTED".equals(application.getStatus())).toList();
     }
 
-    private ObjectNode snapshot(List<String> projects, List<StoredRecord> applications) {
+    private ObjectNode snapshot(List<String> projects, List<StoredRecord> applications, List<StoredRecord> pins) {
         ObjectNode snapshot = store.object();
         ArrayNode projectIds = snapshot.putArray("projectIds");
         projects.forEach(projectIds::add);
         snapshot.set("applications", serializeApplications(applications));
+        ArrayNode savedPins = snapshot.putArray("pins");
+        pins.forEach(pin -> savedPins.add(store.object().put("studentId", pin.getOwnerId())
+                .put(PROJECT_ID_FIELD, store.parse(pin).path(PROJECT_ID_FIELD).asText())
+                .put("savedAt", store.parse(pin).path("savedAt").asText())));
         return snapshot;
+    }
+
+    private List<StoredRecord> readPins(UUID periodId) {
+        return store.repository().findByTypeAndParentId("allocation_pin", periodId.toString()).stream()
+                .filter(this::pinTargetIsStudent).toList();
+    }
+
+    private boolean pinTargetIsStudent(StoredRecord pin) {
+        try {
+            return users.findById(UUID.fromString(pin.getOwnerId()))
+                    .filter(user -> user.getRole() == com.flightlog.security.Role.STUDENT).isPresent();
+        } catch (IllegalArgumentException exception) {
+            return false;
+        }
     }
 
     private ArrayNode serializeApplications(List<StoredRecord> applications) {
@@ -230,10 +249,21 @@ public class AllocationService {
         JsonNode storedResult = response.path(RESULT_FIELD);
         if (storedResult.isObject()) {
             ObjectNode enriched = (ObjectNode) storedResult.deepCopy();
+            addDefaultPinnedFlags(enriched.path(ASSIGNMENTS_FIELD));
             addDisplayNames(enriched);
             response.set(RESULT_FIELD, enriched);
         }
         return response;
+    }
+
+    private void addDefaultPinnedFlags(JsonNode assignments) {
+        if (assignments.isArray()) {
+            assignments.forEach(assignment -> {
+                if (assignment instanceof ObjectNode object && !object.has("pinned")) {
+                    object.put("pinned", false);
+                }
+            });
+        }
     }
 
     private void addDisplayNames(ObjectNode result) {

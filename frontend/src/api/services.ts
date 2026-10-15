@@ -109,6 +109,15 @@ export const periodsApi = {
   withdrawApplication(id: string): Promise<void> {
     return json(`/api/applications/${encodeURIComponent(id)}`, 'DELETE')
   },
+  pins(periodId: string, page: number): Promise<Page<components["schemas"]["AllocationPinResponse"]>> {
+    return json(`/api/application-periods/${encodeURIComponent(periodId)}/allocation-pins?${pageQuery(page)}`)
+  },
+  savePin(periodId: string, studentId: string, projectId: string, acknowledgeUnranked = false): Promise<components["schemas"]["AllocationPinResponse"]> {
+    return json(`/api/application-periods/${encodeURIComponent(periodId)}/allocation-pins/${encodeURIComponent(studentId)}`, "PUT", { projectId, acknowledgeUnranked })
+  },
+  removePin(periodId: string, studentId: string): Promise<void> {
+    return json(`/api/application-periods/${encodeURIComponent(periodId)}/allocation-pins/${encodeURIComponent(studentId)}`, "DELETE")
+  },
   runs(periodId: string, page: number): Promise<Page<Data>> {
     return json(`/api/application-periods/${encodeURIComponent(periodId)}/allocation-runs?${pageQuery(page)}`)
   },
