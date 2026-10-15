@@ -87,6 +87,6 @@ Recurring documentation and contract checks, run by the [Auditor role](roles/aud
 | [Compliance-01](checks/Compliance-01.md) | Monthly and after SPEC or guide changes | 2026-10-15 17:47 +0200 | clean: 0 findings | Compliance-01-20261015-1747 | Specification and guideline consistency |
 | [Compliance-02](checks/Compliance-02.md) | After each closed Feature or Bug; at least monthly | never | n/a | n/a | Documentation and code parity |
 | [Compliance-03](checks/Compliance-03.md) | After API changes; at least monthly | never | n/a | n/a | OpenAPI contract compliance |
-| [Compliance-04](checks/Compliance-04.md) | Weekly and after file moves or renames | 2026-10-14 00:13 +0200 | findings: 4 ticketed, 1 decision needed, 0 fixed | Compliance-04-20261014-0013 | Link and format validation |
+| [Compliance-04](checks/Compliance-04.md) | Weekly and after file moves or renames | 2026-10-15 17:59 +0200 | clean: 0 findings | Compliance-04-20261015-1759 | Link and format validation |
 | [Compliance-05](checks/Compliance-05.md) | Quarterly and before planning | 2026-10-14 00:30 +0200 | clean: 0 findings, 4 observations | Compliance-05-20261014-0030 | Documentation health |
 | [Compliance-06](checks/Compliance-06.md) | After each role-contract change or lesson application; at least monthly | 2026-10-14 00:46 +0200 | findings: 7 ticketed (3 with decisions needed), 1 duplicate, 0 fixed | Compliance-06-20261014-0046 | Agent role consistency and role-file validation |
