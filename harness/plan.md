@@ -17,7 +17,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 ### Bugs
 
 | Ticket | Status | Specification |
-|--------|--------|---------------|
+| --- | --- | --- |
 | [Bug-01](tickets/done/Bug-01.md) | done | Create Application Period doesn't work |
 | [Bug-02](tickets/done/Bug-02.md) | done | Prevent removal of the last administrator |
 | [Bug-03a](tickets/done/Bug-03a.md) | done | Provide a local fixture for conditional selector verification |
@@ -35,7 +35,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 ### Development
 
 | Ticket | Status | Specification |
-|--------|--------|---------------|
+| --- | --- | --- |
 | [Dev-01](tickets/done/Dev-01.md) | done | Seed student and teacher accounts for testing |
 | [Dev-02](tickets/done/Dev-02.md) | done | Add reusable browser preview tooling |
 | [Dev-03](tickets/done/Dev-03.md) | done | Give testing accounts meaningful display names |
@@ -46,12 +46,12 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-08](tickets/done/Dev-08.md) | done | Add an opt-in minimal testing fixture mode without application periods |
 | [Dev-09](tickets/done/Dev-09.md) | done | Repair Markdown structure findings from Compliance-04 |
 | [Dev-10](tickets/done/Dev-10.md) | done | Settle ticket-creation ownership in the Ticket Author contract |
-| [Dev-11](tickets/Dev-11.md) | to-do | Remove stale and misleading wording from role and agent files |
+| [Dev-11](tickets/done/Dev-11.md) | done | Remove stale and misleading wording from role and agent files |
 
 ### Features
 
 | Ticket | Status | Specification |
-|--------|--------|---------------|
+| --- | --- | --- |
 | [Feature-01](tickets/done/Feature-01.md) | done | Allow unrated idea reviews and show ratings in history |
 | [Feature-02](tickets/done/Feature-02.md) | done | Add editable account names |
 | [Feature-03](tickets/done/Feature-03.md) | done | Move personal name editing to User Settings |
@@ -73,7 +73,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 ### Optimizations
 
 | Ticket | Status | Specification |
-|--------|--------|---------------|
+| --- | --- | --- |
 | [Optimization-01](tickets/Optimization-01.md) | to-do | Query student-owned ideas without scanning the full catalogue |
 
 ## Compliance checks
@@ -81,7 +81,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 Recurring documentation and contract checks, run by the [Auditor role](roles/auditor.md) on request (for example "run Compliance-02"). A check has no `to-do`/`done` status: it is run repeatedly, and this ledger records when it last ran. Check definitions live in `checks/<check-id>.md` and are created from [`templates/check.md`](templates/check.md). The Auditor updates only the `Last run`, `Result`, and `Run` cells of a row after each run, and opens ordinary Bug, Dev, or Feature tickets for findings. `Cadence` is a suggestion; nothing starts a run automatically.
 
 | Check | Cadence | Last run | Result | Run | Definition |
-|-------|---------|----------|--------|-----|------------|
+| --- | --- | --- | --- | --- | --- |
 | [Compliance-01](checks/Compliance-01.md) | Monthly and after SPEC or guide changes | 2026-10-14 00:26 +0200 | clean: 0 findings | Compliance-01-20261014-0026 | Specification and guideline consistency |
 | [Compliance-02](checks/Compliance-02.md) | After each closed Feature or Bug; at least monthly | never | n/a | n/a | Documentation and code parity |
 | [Compliance-03](checks/Compliance-03.md) | After API changes; at least monthly | never | n/a | n/a | OpenAPI contract compliance |
