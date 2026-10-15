@@ -51,7 +51,7 @@ class AllocationEarlyRunApiTest {
     void setUp() throws Exception {
         adminToken = login("admin01");
         teacherToken = login("teacher01");
-        for (int number = 1; number <= 4; number++) {
+        for (int number = 1; number <= 5; number++) {
             String username = String.format("student%02d", number);
             students.add(users.findByUsername(username).orElseThrow().getId());
             studentTokens.add(login(username));
@@ -66,8 +66,8 @@ class AllocationEarlyRunApiTest {
     @Test
     void earlyRunsKeepThePeriodOpenHideResultsAndDoNotSuppressTheDeadlineRun() throws Exception {
         List<UUID> applicationIds = new ArrayList<>();
-        for (String token : studentTokens) {
-            applicationIds.add(createApplication(token, projects));
+        for (int index = 0; index < 4; index++) {
+            applicationIds.add(createApplication(studentTokens.get(index), projects));
         }
         mockMvc.perform(put(pinPath(students.get(3))).header("Authorization", bearer(adminToken))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -79,6 +79,7 @@ class AllocationEarlyRunApiTest {
         assertFalse(firstEarlyRun.path("initial").asBoolean());
         assertEquals("COMPLETED", firstEarlyRun.path("status").asText());
         assertEquals("OPEN", getPeriod(adminToken).path("status").asText());
+        assertEarlyRunAudit(firstEarlyRun.path("id").asText());
         assertEquals(projects.get(0).toString(), assignment(firstEarlyRun, students.get(3))
                 .path("projectId").asText());
         assertTrue(assignment(firstEarlyRun, students.get(3)).path("pinned").asBoolean());
@@ -123,10 +124,15 @@ class AllocationEarlyRunApiTest {
         mockMvc.perform(delete("/api/applications/{id}", applicationIds.get(3))
                         .header("Authorization", bearer(studentTokens.get(3))))
                 .andExpect(status().isNoContent());
+        UUID createdAfterFirstRun = createApplication(studentTokens.get(4), projects);
 
         JsonNode secondEarlyRun = startRun(adminToken);
         assertTrue(secondEarlyRun.path("early").asBoolean());
-        assertEquals(3, secondEarlyRun.path("applications").size());
+        assertEquals(4, secondEarlyRun.path("applications").size());
+        JsonNode persistedSecondRun = store.parse(store.repository()
+                .findById(UUID.fromString(secondEarlyRun.path("id").asText())).orElseThrow());
+        assertTrue(applicationIsInSnapshot(persistedSecondRun, createdAfterFirstRun, students.get(4)),
+                "The later early-run snapshot must include the application created after the first run.");
         assertEquals(projects.get(1).toString(), secondEarlyRun.path("applications").get(0)
                 .path("preferences").get(0).path("projectId").asText());
         assertEquals(firstSnapshot, store.repository().findById(UUID.fromString(firstEarlyRun.path("id").asText()))
@@ -238,6 +244,29 @@ class AllocationEarlyRunApiTest {
 
     private String pinPath(UUID studentId) {
         return "/api/application-periods/" + periodId + "/allocation-pins/" + studentId;
+    }
+
+    private void assertEarlyRunAudit(String runId) {
+        UUID id = UUID.fromString(runId);
+        List<StoredRecord> runEvents = store.repository().findByTypeAndReferenceTypeAndParentId(
+                "audit", "allocation_run", runId,
+                org.springframework.data.domain.PageRequest.of(0, 20)).getContent();
+        assertEquals(1, runEvents.size(), "The early run must have one linked audit entry.");
+        JsonNode event = store.parse(runEvents.get(0));
+        assertEquals("ALLOCATION_RUN_STARTED", event.path("action").asText());
+        assertEquals("allocation_run", event.path("entityType").asText());
+        assertEquals(id.toString(), event.path("entityId").asText());
+        assertEquals(id.toString(), runEvents.get(0).getParentId());
+    }
+
+    private boolean applicationIsInSnapshot(JsonNode run, UUID applicationId, UUID studentId) {
+        for (JsonNode application : run.path("applications")) {
+            if (applicationId.toString().equals(application.path("applicationId").asText())
+                    && studentId.toString().equals(application.path("studentId").asText())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private String bearer(String token) {
