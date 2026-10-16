@@ -33,7 +33,6 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Bug-10](tickets/done/Bug-10.md) | done | Show project titles instead of UUIDs to students in an open application period |
 | [Bug-11](tickets/Bug-11.md) | to-do | Align request-array constraints with API validation |
 | [Bug-12](tickets/Bug-12.md) | to-do | Complete response requiredness and nullability in OpenAPI |
-| [Bug-13](tickets/Bug-13.md) | to-do | Document OpenAPI operations and constrained fields |
 | [Bug-14](tickets/Bug-14.md) | to-do | Document successful OpenAPI response statuses |
 
 ### Development
@@ -58,6 +57,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-16](tickets/Dev-16.md) | to-do | Document accepted-catalogue and audit read endpoints |
 | [Dev-17](tickets/Dev-17.md) | to-do | Cover formal-application validation with API tests |
 | [Dev-18](tickets/Dev-18.md) | to-do | Use generated pagination response types in API services |
+| [Dev-19](tickets/Dev-19.md) | to-do | Document OpenAPI operations and constrained fields |
 
 ### Features
 

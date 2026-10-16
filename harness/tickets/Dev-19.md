@@ -1,4 +1,4 @@
-# Bug-13. Document OpenAPI operations and constrained fields
+# Dev-19. Document OpenAPI operations and constrained fields
 
 Draft from Compliance-03-20261016-0825: needs Ticket Author refinement before implementation
 
@@ -6,7 +6,7 @@ Draft from Compliance-03-20261016-0825: needs Ticket Author refinement before im
 
 The generated API contract omits summaries for many operations and descriptions for constrained request fields. API consumers cannot discover endpoint purpose or understand field-specific validation from the generated schema, despite the backend specification requiring annotations to describe the contract.
 
-Source: Compliance-03-20261016-0825, report finding 4: `backend/SPEC.md:169` says “Request, response, validation, and security annotations fully describe the generated OpenAPI contract”; `contracts/openapi.yaml` has no summary on 41 of 77 operations and omits descriptions for 88 value-constrained request properties. For example, `ApiDtos.java:93-100` constrains `IdeaRequest.title` and other fields but supplies no field descriptions, and generated `IdeaRequest.title` has a `maxLength` without a description.
+Source: Compliance-03-20261016-0825, report finding 4: `backend/SPEC.md:169` says “Request, response, validation, and security annotations fully describe the generated OpenAPI contract”; `contracts/openapi.yaml` has no summary on 41 of 77 operations and omits descriptions for 88 value-constrained request properties. For example, `ApiDtos.java:93-100` constrains `IdeaRequest.title` and other fields but supplies no field descriptions, and generated `IdeaRequest.title` has a length bound without a description.
 
 ## Scope and contract
 
