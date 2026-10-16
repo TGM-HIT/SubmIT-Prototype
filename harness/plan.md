@@ -51,6 +51,8 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-13](tickets/Dev-13.md) | to-do | Include Optimizations in ticket-role workflows |
 | [Dev-14](tickets/Dev-14.md) | to-do | Align Auditor agent thinking guidance with check-specific requirements |
 | [Dev-15](tickets/Dev-15.md) | to-do | Align preview Node.js prerequisite with Vite support |
+| [Dev-16](tickets/Dev-16.md) | to-do | Document accepted-catalogue and audit read endpoints |
+| [Dev-17](tickets/Dev-17.md) | to-do | Cover formal-application validation with API tests |
 
 ### Features
 
@@ -88,7 +90,7 @@ Recurring documentation and contract checks, run by the [Auditor role](roles/aud
 | Check | Cadence | Last run | Result | Run | Definition |
 | --- | --- | --- | --- | --- | --- |
 | [Compliance-01](checks/Compliance-01.md) | Monthly and after SPEC or guide changes | 2026-10-16 08:03 +0200 | findings: 1 ticketed, 0 fixed | Compliance-01-20261016-0803 | Specification and guideline consistency |
-| [Compliance-02](checks/Compliance-02.md) | After each closed Feature or Bug; at least monthly | never | n/a | n/a | Documentation and code parity |
+| [Compliance-02](checks/Compliance-02.md) | After each closed Feature or Bug; at least monthly | 2026-10-16 08:14 +0200 | findings: 2 ticketed, 0 fixed, 1 duplicate | Compliance-02-20261016-0814 | Documentation and code parity |
 | [Compliance-03](checks/Compliance-03.md) | After API changes; at least monthly | never | n/a | n/a | OpenAPI contract compliance |
 | [Compliance-04](checks/Compliance-04.md) | Weekly and after file moves or renames | 2026-10-15 17:59 +0200 | clean: 0 findings | Compliance-04-20261015-1759 | Link and format validation |
 | [Compliance-05](checks/Compliance-05.md) | Quarterly and before planning | 2026-10-14 00:30 +0200 | clean: 0 findings, 4 observations | Compliance-05-20261014-0030 | Documentation health |
