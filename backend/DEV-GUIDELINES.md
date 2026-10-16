@@ -74,7 +74,7 @@ By default, the testing profile seeds the full fixture set described below. To s
 
 Minimal mode keeps all 32 testing accounts and the two sample ideas for each of `student01`–`student05`, including the approved review and submitted specification. It skips all five application periods and their applications, allocation runs, finalizations and period project groups; all ten accepted synthetic catalogue projects and their supervision preferences; and the fixture markers for those skipped scenarios. The separate synthetic Formal Application fixture remains. These accounts and fixtures are for local/testing use only: never use them in production or expose them to a public environment.
 
-With the `testing` profile, each seeded student also receives two synthetic ideas: one submitted for its initial teacher review, and one with an approved idea review and a submitted specification awaiting teacher review. These fixtures are safe to rerun; existing seeded ideas are left unchanged.
+With the `testing` profile, each of `student01`–`student05` also receives two synthetic ideas: one submitted for its initial teacher review, and one with an approved idea review and a submitted specification awaiting teacher review. These fixtures are safe to rerun; existing seeded ideas are left unchanged.
 
 With the same explicit `testing` profile, the backend seeds an allocation preview with three submitted applications over three accepted projects. Its completed run contains an assigned group and unassigned project outcomes. The testing-only preview also adds synthetic unassigned student outcomes to exercise staff label rendering; those entries do not represent optimizer results or alter production behavior.
 

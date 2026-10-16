@@ -1,10 +1,6 @@
 # Student Project Platform - Project Context
 
-For shared product requirements, see `docs/SPEC.md`.
-For backend behavior and API requirements, see `backend/SPEC.md`.
-For backend technical guidelines, see `backend/DEV-GUIDELINES.md`.
-For frontend behavior, see `frontend/SPEC.md`.
-For frontend technical guidelines, see `frontend/DEV-GUIDELINES.md`.
+For shared product requirements, see `docs/SPEC.md`. For backend behavior and API requirements, see `backend/SPEC.md`. For backend technical guidelines, see `backend/DEV-GUIDELINES.md`. For frontend behavior, see `frontend/SPEC.md`. For frontend technical guidelines, see `frontend/DEV-GUIDELINES.md`.
 
 The application supports the full lifecycle of school-year group projects:
 
@@ -34,7 +30,7 @@ The repository is a combined frontend/backend project:
 
 Use only the technologies listed above. Do not add Lombok, MapStruct, or other code-generation or extra libraries. Use plain Java and the dependencies supplied by these starters.
 
-Run backend Gradle commands from `backend/` or use `./backend/gradlew` from the repository root. Do not introduce Maven build files or Maven commands.
+Run backend Gradle commands from `backend/` or use `./backend/gradlew -p backend` from the repository root. Do not introduce Maven build files or Maven commands.
 
 The OpenAPI specification is generated from annotations in the backend source code and written to `contracts/openapi.yaml`. Do not edit the generated contract manually. Changes to endpoints, request models, response models, or validation rules must update the backend annotations and regenerate the contract.
 
