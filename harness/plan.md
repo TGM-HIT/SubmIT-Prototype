@@ -55,7 +55,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-14](tickets/done/Dev-14.md) | done | Align Auditor agent thinking guidance with check-specific requirements |
 | [Dev-15](tickets/Dev-15.md) | failed | Align preview Node.js prerequisite with Vite support |
 | [Dev-16](tickets/done/Dev-16.md) | done | Document accepted-catalogue and audit read endpoints |
-| [Dev-17](tickets/Dev-17.md) | to-do | Cover formal-application validation with API tests |
+| [Dev-17](tickets/done/Dev-17.md) | done | Cover formal-application validation with API tests |
 | [Dev-18](tickets/Dev-18.md) | to-do | Use generated pagination response types in API services |
 | [Dev-19](tickets/Dev-19.md) | to-do | Document OpenAPI operations and constrained fields |
 | [Dev-20](tickets/Dev-20.md) | to-do | Align Docker startup configuration and documentation |
