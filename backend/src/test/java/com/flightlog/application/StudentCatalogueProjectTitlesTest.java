@@ -2,6 +2,7 @@ package com.flightlog.application;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -94,6 +95,75 @@ class StudentCatalogueProjectTitlesTest {
                 saved.path("preferences").get(0).path("projectTitle").asText());
         org.junit.jupiter.api.Assertions.assertEquals(ideas.get(0).getId().toString(),
                 saved.path("preferences").get(0).path("projectId").asText());
+    }
+
+    @Test
+    void studentApplicationCreateAndUpdateRequireThreeDistinctEligibleProjects() throws Exception {
+        List<String> projectIds = ideas.stream().map(record -> record.getId().toString()).toList();
+        String createPath = "/api/application-periods/" + openPeriod.getId() + "/applications";
+        mockMvc.perform(post(createPath).header("Authorization", "Bearer " + studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("projectIds", projectIds.subList(0, 2)))))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(post(createPath).header("Authorization", "Bearer " + studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "projectIds", List.of(projectIds.get(0), projectIds.get(0), projectIds.get(1))))))
+                .andExpect(status().isBadRequest());
+
+        mockMvc.perform(post(createPath).header("Authorization", "Bearer " + studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("projectIds", projectIds))))
+                .andExpect(status().isCreated());
+        StoredRecord created = store.repository().findByTypeAndParentIdAndOwnerId(
+                "student_application", openPeriod.getId().toString(), applicantId).orElseThrow();
+        assertPersistedPreferenceIds(created, projectIds);
+
+        String updatePath = "/api/applications/" + created.getId();
+        mockMvc.perform(put(updatePath).header("Authorization", "Bearer " + studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("projectIds", projectIds.subList(0, 2)))))
+                .andExpect(status().isBadRequest());
+        mockMvc.perform(put(updatePath).header("Authorization", "Bearer " + studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "projectIds", List.of(projectIds.get(0), projectIds.get(0), projectIds.get(1))))))
+                .andExpect(status().isBadRequest());
+        assertPersistedPreferenceIds(store.repository().findByTypeAndParentIdAndOwnerId(
+                "student_application", openPeriod.getId().toString(), applicantId).orElseThrow(), projectIds);
+
+        List<String> updatedProjectIds = List.of(projectIds.get(2), projectIds.get(0), projectIds.get(1));
+        mockMvc.perform(put(updatePath).header("Authorization", "Bearer " + studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("projectIds", updatedProjectIds))))
+                .andExpect(status().isOk());
+        StoredRecord updated = store.repository().findByTypeAndParentIdAndOwnerId(
+                "student_application", openPeriod.getId().toString(), applicantId).orElseThrow();
+        assertPersistedPreferenceIds(updated, updatedProjectIds);
+    }
+
+    @Test
+    void generatedApplicationRequestSchemasMatchArrayValidationRules() throws Exception {
+        JsonNode schemas = objectMapper.readTree(mockMvc.perform(get("/v3/api-docs"))
+                        .andExpect(status().isOk()).andReturn().getResponse().getContentAsString())
+                .path("components").path("schemas");
+
+        JsonNode projectIds = schemas.path("StudentApplicationRequest").path("properties").path("projectIds");
+        boolean projectIdsRequired = false;
+        for (JsonNode required : schemas.path("StudentApplicationRequest").path("required")) {
+            projectIdsRequired |= "projectIds".equals(required.asText());
+        }
+        org.junit.jupiter.api.Assertions.assertTrue(projectIdsRequired);
+        org.junit.jupiter.api.Assertions.assertEquals(3, projectIds.path("minItems").asInt());
+        org.junit.jupiter.api.Assertions.assertTrue(projectIds.path("uniqueItems").asBoolean());
+        org.junit.jupiter.api.Assertions.assertEquals("uuid", projectIds.path("items").path("format").asText());
+
+        JsonNode formalProperties = schemas.path("FormalApplicationRequest").path("properties");
+        for (String field : List.of("individualTopics", "investigationConcerns", "plannedResults")) {
+            JsonNode arraySchema = formalProperties.path(field);
+            org.junit.jupiter.api.Assertions.assertEquals(3, arraySchema.path("minItems").asInt(), field);
+            org.junit.jupiter.api.Assertions.assertEquals(5, arraySchema.path("maxItems").asInt(), field);
+        }
     }
 
     @Test
@@ -221,6 +291,13 @@ class StudentCatalogueProjectTitlesTest {
         MvcResult result = mockMvc.perform(get(path).header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk()).andReturn();
         return objectMapper.readTree(result.getResponse().getContentAsString());
+    }
+
+    private void assertPersistedPreferenceIds(StoredRecord application, List<String> expectedIds) {
+        List<String> persistedIds = new ArrayList<>();
+        store.parse(application).path("preferences").forEach(preference ->
+                persistedIds.add(preference.path("projectId").asText()));
+        org.junit.jupiter.api.Assertions.assertEquals(expectedIds, persistedIds);
     }
 
     private JsonNode findPeriod(JsonNode response, UUID id) {

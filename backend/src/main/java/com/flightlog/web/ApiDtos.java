@@ -331,7 +331,10 @@ public final class ApiDtos {
             @NotNull @Schema(requiredMode = Schema.RequiredMode.REQUIRED, format = "date-time") Instant savedAt) {
     }
 
-    public record StudentApplicationRequest(@NotEmpty List<@NotNull UUID> projectIds) {
+    public record StudentApplicationRequest(
+            @NotEmpty @ArraySchema(arraySchema = @Schema(requiredMode = Schema.RequiredMode.REQUIRED),
+                    minItems = 3, uniqueItems = true, schema = @Schema(format = "uuid"))
+            List<@NotNull UUID> projectIds) {
     }
 
     public record IndividualTopic(@NotNull UUID studentId,
@@ -347,11 +350,14 @@ public final class ApiDtos {
 
     public record FormalApplicationRequest(
             @NotBlank @Size(max = 200) String topic,
-            @NotEmpty List<@Valid IndividualTopic> individualTopics,
+            @NotEmpty @ArraySchema(minItems = 3, maxItems = 5)
+            List<@Valid IndividualTopic> individualTopics,
             @NotBlank @Size(max = 400) String initialSituation,
-            @NotEmpty List<@Valid StudentText> investigationConcerns,
+            @NotEmpty @ArraySchema(minItems = 3, maxItems = 5)
+            List<@Valid StudentText> investigationConcerns,
             @NotBlank @Size(max = 400) String objective,
-            @NotEmpty List<@Valid StudentText> plannedResults,
+            @NotEmpty @ArraySchema(minItems = 3, maxItems = 5)
+            List<@Valid StudentText> plannedResults,
             @NotEmpty List<@Valid Milestone> milestones,
             @Size(max = 1000) String cooperationPartner) {
     }
