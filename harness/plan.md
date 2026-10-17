@@ -31,7 +31,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Bug-08](tickets/done/Bug-08.md) | done | Allow a withdrawn idea to be edited and submitted again |
 | [Bug-09](tickets/done/Bug-09.md) | done | Show names instead of IDs in application summaries and allocation results |
 | [Bug-10](tickets/done/Bug-10.md) | done | Show project titles instead of UUIDs to students in an open application period |
-| [Bug-11](tickets/Bug-11.md) | to-do | Align request-array constraints with API validation |
+| [Bug-11](tickets/done/Bug-11.md) | done | Align request-array constraints with API validation |
 | [Bug-12](tickets/Bug-12.md) | to-do | Complete response requiredness and nullability in OpenAPI |
 | [Bug-14](tickets/Bug-14.md) | to-do | Document successful OpenAPI response statuses |
 
