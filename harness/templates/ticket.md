@@ -54,7 +54,7 @@ For UI-visible work, use the local browser preview documented in `frontend/DEV-G
 - <State required regression checks and any constraints that must remain unchanged.>
 - <For presentation work, identify target viewports and measurable/observable layout outcomes.>
 - <For interactive UI (modals, forms, state changes), state the end state after a successful action as well as after cancel: what is visible, what refreshes, and where keyboard focus lands, especially when the triggering control disappears.>
-- Standard (all tickets): the standard project checks pass; existing behavior outside the stated scope is unchanged; no unrelated cleanups; generated files (such as `contracts/openapi.yaml`) are not hand-edited or committed; no check is claimed that was not performed.
+- Standard (all tickets): the standard project checks pass; existing behavior outside the stated scope is unchanged; no unrelated cleanups; generated artifacts are never hand-edited and are regenerated and reviewed when applicable; commit generated output only when repository tracking conventions require it (for example, tracked `frontend/src/api/schema.d.ts` may need to be committed, while ignored `contracts/openapi.yaml` must not be committed); no check is claimed that was not performed.
 - Standard (presentation-only tickets): no backend or API changes.
 
 ## Optional: Current-state triage
