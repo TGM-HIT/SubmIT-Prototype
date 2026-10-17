@@ -4,7 +4,7 @@
 
 - `to-do`: not started.
 - `in-progress`: implementation/evaluation is active.
-- `awaiting-human`: implementation is complete, but one or more acceptance checks need human verification or disposition. This is nonterminal: do not treat it as done or failed.
+- `awaiting-human`: one or more acceptance checks need human verification or disposition after implementation is complete, or an unresolved product/policy decision pauses work (implementation need not be complete, including before the first dispatch). This is nonterminal: do not treat it as done or failed, and do not use it to defer an actionable code defect.
 - `done`: accepted by an Evaluator pass or by an explicit authorized human acceptance recorded in the run artifacts. A human acceptance may leave items unverified; the run log's closeout line lists them.
 - `failed`: explicitly stopped or terminally failed. If the only remaining gap is human-exercisable verification, use `awaiting-human` until the human path is completed or declined. A failed ticket can be continued (revised ticket, new run building on the earlier commits) rather than restarted; the row returns to `in-progress` for the continuation run. See "Continuing a failed ticket" in `roles/orchestrator.md`.
 
