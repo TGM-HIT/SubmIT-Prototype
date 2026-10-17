@@ -60,7 +60,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-19](tickets/done/Dev-19.md) | done | Document OpenAPI operations and constrained fields |
 | [Dev-20](tickets/Dev-20.md) | awaiting-human | Align Docker startup configuration and documentation |
 | [Dev-22](tickets/done/Dev-22.md) | done | Align generated-artifact ticket guidance with tracking conventions |
-| [Dev-23](tickets/Dev-23.md) | to-do | Include decision pauses in the awaiting-human status definition |
+| [Dev-23](tickets/done/Dev-23.md) | done | Include decision pauses in the awaiting-human status definition |
 
 ### Features
 
