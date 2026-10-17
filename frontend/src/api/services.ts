@@ -11,27 +11,28 @@ type FormalApplicationRequest = components['schemas']['FormalApplicationRequest'
 type FormalApplicationResponse = components['schemas']['FormalApplicationResponse']
 type ReviewRequest = components['schemas']['ReviewRequest']
 type ArtifactResponse = components['schemas']['ArtifactResponse']
-type PublicArtifactResponse = components['schemas']['PublicArtifactResponse']
 type UserResponse = components['schemas']['UserResponse']
 type DisplayNameRequest = components['schemas']['DisplayNameRequest']
 type CatalogueEntryRequest = components['schemas']['CatalogueEntryRequest']
 type CatalogueEntryResponse = components['schemas']['CatalogueEntryResponse']
 type StudentDetailsRequest = components['schemas']['StudentDetailsRequest']
 type StudentDetailsResponse = components['schemas']['StudentDetailsResponse']
-type Page<T> = { content: T[]; page: number; size: number; totalElements: number; totalPages: number }
 type Data = Record<string, unknown>
+type Page<T extends { content?: unknown[] }> = Required<Omit<T, 'content'>> & {
+  content: NonNullable<T['content']>
+}
 
 function json<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
   return request<T>(path, { method, ...(body === undefined ? {} : { body }) })
 }
 
 export const ideasApi = {
-  list(page: number, status?: string, size = 20): Promise<Page<IdeaResponse>> {
+  list(page: number, status?: string, size = 20): Promise<Page<components['schemas']['PageResponseIdeaResponse']>> {
     const query = new URLSearchParams(pageQuery(page, size))
     if (status) query.set('status', status)
     return json(`/api/ideas?${query}`)
   },
-  lookupStudents(query: string, page = 0): Promise<Page<components['schemas']['StudentLookupResponse']>> {
+  lookupStudents(query: string, page = 0): Promise<Page<components['schemas']['PageResponseStudentLookupResponse']>> {
     const params = new URLSearchParams(pageQuery(page, 20))
     if (query.trim()) params.set('q', query.trim())
     return json(`/api/users/students?${params}`)
@@ -79,7 +80,7 @@ export const ideasApi = {
 }
 
 export const periodsApi = {
-  list(page: number): Promise<Page<ApplicationPeriodResponse>> {
+  list(page: number): Promise<Page<components['schemas']['PageResponseApplicationPeriodResponse']>> {
     return json(`/api/application-periods?${pageQuery(page)}`)
   },
   create(input: ApplicationPeriodRequest): Promise<ApplicationPeriodResponse> {
@@ -88,7 +89,7 @@ export const periodsApi = {
   update(id: string, input: ApplicationPeriodRequest): Promise<ApplicationPeriodResponse> {
     return json(`/api/application-periods/${encodeURIComponent(id)}`, 'PUT', input)
   },
-  years(page = 0): Promise<Page<string>> {
+  years(page = 0): Promise<Page<components['schemas']['PageResponseString']>> {
     return json(`/api/school-years?${pageQuery(page)}`)
   },
   myApplication(periodId: string): Promise<StudentApplicationResponse> {
@@ -97,7 +98,7 @@ export const periodsApi = {
   projectDetails(periodId: string, projectId: string): Promise<Data> {
     return json(`/api/application-periods/${encodeURIComponent(periodId)}/catalogue/${encodeURIComponent(projectId)}`)
   },
-  applications(periodId: string, page: number): Promise<Page<StudentApplicationResponse>> {
+  applications(periodId: string, page: number): Promise<Page<components['schemas']['PageResponseStudentApplicationResponse']>> {
     return json(`/api/application-periods/${encodeURIComponent(periodId)}/applications?${pageQuery(page)}`)
   },
   createApplication(periodId: string, input: StudentApplicationRequest): Promise<StudentApplicationResponse> {
@@ -109,7 +110,7 @@ export const periodsApi = {
   withdrawApplication(id: string): Promise<void> {
     return json(`/api/applications/${encodeURIComponent(id)}`, 'DELETE')
   },
-  pins(periodId: string, page: number): Promise<Page<components["schemas"]["AllocationPinResponse"]>> {
+  pins(periodId: string, page: number): Promise<Page<components["schemas"]["PageResponseAllocationPinResponse"]>> {
     return json(`/api/application-periods/${encodeURIComponent(periodId)}/allocation-pins?${pageQuery(page)}`)
   },
   savePin(periodId: string, studentId: string, projectId: string, acknowledgeUnranked = false): Promise<components["schemas"]["AllocationPinResponse"]> {
@@ -118,7 +119,7 @@ export const periodsApi = {
   removePin(periodId: string, studentId: string): Promise<void> {
     return json(`/api/application-periods/${encodeURIComponent(periodId)}/allocation-pins/${encodeURIComponent(studentId)}`, "DELETE")
   },
-  runs(periodId: string, page: number): Promise<Page<Data>> {
+  runs(periodId: string, page: number): Promise<Page<components['schemas']['AllocationRunPageResponse']>> {
     return json(`/api/application-periods/${encodeURIComponent(periodId)}/allocation-runs?${pageQuery(page)}`)
   },
   startRun(periodId: string): Promise<Data> {
@@ -154,7 +155,7 @@ export const formalApi = {
 }
 
 export const gradingApi = {
-  rubrics(page = 0): Promise<Page<Data>> {
+  rubrics(page = 0): Promise<Page<components['schemas']['PageResponseRubricSummary']>> {
     return json(`/api/grading-rubrics?${pageQuery(page)}`)
   },
   activeRubric(): Promise<Data> {
@@ -163,19 +164,19 @@ export const gradingApi = {
   publishRubric(input: Data): Promise<Data> {
     return json('/api/grading-rubrics', 'POST', input)
   },
-  grades(projectId: string, page = 0): Promise<Page<Data>> {
+  grades(projectId: string, page = 0): Promise<Page<components['schemas']['PageResponseGradeResponse']>> {
     return json(`/api/projects/${encodeURIComponent(projectId)}/student-grades?${pageQuery(page)}`)
   },
   recordGrade(projectId: string, input: Data): Promise<Data> {
     return json(`/api/projects/${encodeURIComponent(projectId)}/student-grades`, 'POST', input)
   },
-  groupGrades(projectId: string, page = 0): Promise<Page<Data>> {
+  groupGrades(projectId: string, page = 0): Promise<Page<components['schemas']['PageResponseGradeResponse']>> {
     return json(`/api/projects/${encodeURIComponent(projectId)}/group-grades?${pageQuery(page)}`)
   },
   recordGroupGrade(projectId: string, input: Data): Promise<Data> {
     return json(`/api/projects/${encodeURIComponent(projectId)}/group-grades`, 'POST', input)
   },
-  metrics(projectId: string, page = 0): Promise<Page<Data>> {
+  metrics(projectId: string, page = 0): Promise<Page<components['schemas']['PageResponseMetricResponse']>> {
     return json(`/api/projects/${encodeURIComponent(projectId)}/metrics?${pageQuery(page)}`)
   },
   recordMetric(projectId: string, input: Data): Promise<Data> {
@@ -193,14 +194,14 @@ export const gradingApi = {
 }
 
 export const archiveApi = {
-  publicList(projectId: string, page = 0): Promise<Page<PublicArtifactResponse>> {
+  publicList(projectId: string, page = 0): Promise<Page<components['schemas']['PageResponsePublicArtifactResponse']>> {
     return request(`/api/public/projects/${encodeURIComponent(projectId)}/archive?${pageQuery(page)}`, { public: true })
   },
   publicContent(projectId: string, artifactId: string): Promise<Blob> {
     return request(`/api/public/projects/${encodeURIComponent(projectId)}/archive/${encodeURIComponent(artifactId)}`,
       { public: true })
   },
-  list(projectId: string, page = 0): Promise<Page<ArtifactResponse>> {
+  list(projectId: string, page = 0): Promise<Page<components['schemas']['PageResponseArtifactResponse']>> {
     return json(`/api/projects/${encodeURIComponent(projectId)}/artifacts?${pageQuery(page)}`)
   },
   upload(projectId: string, form: FormData): Promise<ArtifactResponse> {
@@ -228,7 +229,7 @@ export const userApi = {
 }
 
 export const adminApi = {
-  users(page = 0, role?: NonNullable<UserResponse['role']>, query?: string, size = 20): Promise<Page<UserResponse>> {
+  users(page = 0, role?: NonNullable<UserResponse['role']>, query?: string, size = 20): Promise<Page<components['schemas']['PageResponseUserResponse']>> {
     const params = new URLSearchParams(pageQuery(page))
     if (role) params.set('role', role)
     if (query?.trim()) params.set('q', query.trim())
@@ -238,16 +239,16 @@ export const adminApi = {
   role(id: string, role: UserResponse['role']): Promise<UserResponse> {
     return json(`/api/users/${encodeURIComponent(id)}/role`, 'PATCH', { role })
   },
-  audit(page = 0): Promise<Page<Data>> {
+  audit(page = 0): Promise<Page<components['schemas']['PageResponseObjectNode']>> {
     return json(`/api/audit?${pageQuery(page)}`)
   },
 }
 
 export const studentDetailsApi = {
-  classes(page = 0): Promise<Page<CatalogueEntryResponse>> {
+  classes(page = 0): Promise<Page<components['schemas']['PageResponseCatalogueEntryResponse']>> {
     return json(`/api/student-classes?${pageQuery(page, 100)}`)
   },
-  subjects(page = 0): Promise<Page<CatalogueEntryResponse>> {
+  subjects(page = 0): Promise<Page<components['schemas']['PageResponseCatalogueEntryResponse']>> {
     return json(`/api/elective-subjects?${pageQuery(page, 100)}`)
   },
   createClass(input: CatalogueEntryRequest): Promise<CatalogueEntryResponse> {
