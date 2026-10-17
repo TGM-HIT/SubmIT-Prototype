@@ -23,22 +23,31 @@ public final class ApiDtos {
     }
 
     public record RegisterRequest(
-            @NotBlank @Size(min = 3, max = 80) String username,
-            @NotBlank @Size(min = 12, max = 128) String password,
+            @NotBlank @Size(min = 3, max = 80)
+            @Schema(description = "Required login name; 3 to 80 characters.")
+            String username,
+            @NotBlank @Size(min = 12, max = 128)
+            @Schema(description = "Required password; 12 to 128 characters.")
+            String password,
             @NotNull @Schema(description = "Required account name; trimmed before storage and limited to 120 "
                     + "characters after trimming.")
             String displayName,
             Role role) {
     }
 
-    public record LoginRequest(@NotBlank String username, @NotBlank String password) {
+    public record LoginRequest(
+            @NotBlank @Schema(description = "Required login name; at least one non-whitespace character.",
+                    minLength = 1) String username,
+            @NotBlank @Schema(description = "Required password; at least one non-whitespace character.",
+                    minLength = 1) String password) {
     }
 
     public record TokenResponse(String token, String tokenType, long expiresIn, UserResponse user) {
     }
 
     public record UserResponse(UUID id, String username,
-            @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String displayName, Role role,
+            @Schema(description = "Current account display name.", requiredMode = Schema.RequiredMode.REQUIRED)
+            String displayName, Role role,
             @Schema(description = "Current student class; returned only on the administrator account-list endpoint.")
             @JsonInclude(JsonInclude.Include.NON_NULL) String className,
             @Schema(description = "Current elective subject names; returned only on the administrator account-list endpoint.")
@@ -51,23 +60,29 @@ public final class ApiDtos {
             String displayName) {
     }
 
-    public record RoleRequest(@NotNull Role role) {
+    public record RoleRequest(
+            @NotNull @Schema(description = "Account role to assign.", allowableValues = {"STUDENT", "TEACHER", "ADMIN"})
+            Role role) {
     }
 
     public record CatalogueEntryRequest(
             @NotBlank @Size(min = 1, max = 100)
-            @Schema(description = "Unique shared class or elective-subject name; trimmed before storage; 1 to 100 characters.",
+            @Schema(description = "Unique case-insensitively shared class or elective-subject name; trimmed before storage; "
+                    + "1 to 100 characters.",
                     minLength = 1, maxLength = 100, requiredMode = Schema.RequiredMode.REQUIRED)
             String name) {
     }
 
     public record CatalogueEntryResponse(
-            @NotNull @Schema(requiredMode = Schema.RequiredMode.REQUIRED, format = "uuid") UUID id,
-            @NotNull @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String name) {
+            @NotNull @Schema(description = "Catalogue entry ID.", requiredMode = Schema.RequiredMode.REQUIRED,
+                    format = "uuid") UUID id,
+            @NotNull @Schema(description = "Current catalogue entry name.", requiredMode = Schema.RequiredMode.REQUIRED)
+            String name) {
     }
 
     public record StudentDetailsRequest(
-            @NotNull @Schema(description = "Required ID of the students single assigned class.") UUID classId,
+            @NotNull @Schema(description = "Required ID of the student's single assigned class.", format = "uuid")
+            UUID classId,
             @NotNull @Size(max = 4, message = "A student can have at most four elective subjects.")
             @ArraySchema(arraySchema = @Schema(description =
                     "Assigned shared elective subject IDs; required, may be empty, IDs must be unique, maximum four."),
@@ -76,50 +91,99 @@ public final class ApiDtos {
     }
 
     public record StudentDetailsResponse(
-            @NotNull @Schema(requiredMode = Schema.RequiredMode.REQUIRED, format = "uuid") UUID studentId,
-            @NotNull @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String displayName,
-            @NotNull @Schema(requiredMode = Schema.RequiredMode.REQUIRED, format = "uuid") UUID classId,
-            @NotNull @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String className,
-            @NotNull @ArraySchema(arraySchema = @Schema(requiredMode = Schema.RequiredMode.REQUIRED),
+            @NotNull @Schema(description = "ID of the student.", requiredMode = Schema.RequiredMode.REQUIRED,
+                    format = "uuid") UUID studentId,
+            @NotNull @Schema(description = "Current student display name.", requiredMode = Schema.RequiredMode.REQUIRED)
+            String displayName,
+            @NotNull @Schema(description = "ID of the student's assigned class.", requiredMode = Schema.RequiredMode.REQUIRED,
+                    format = "uuid") UUID classId,
+            @NotNull @Schema(description = "Current name of the student's assigned class.",
+                    requiredMode = Schema.RequiredMode.REQUIRED) String className,
+            @NotNull @ArraySchema(arraySchema = @Schema(description = "IDs of assigned elective subjects.",
+                    requiredMode = Schema.RequiredMode.REQUIRED),
                     schema = @Schema(format = "uuid")) List<UUID> electiveSubjectIds,
             @NotNull @ArraySchema(arraySchema = @Schema(
                     description = "Current catalogue names, returned only to authenticated teachers and administrators.",
                     requiredMode = Schema.RequiredMode.REQUIRED)) List<String> electiveSubjectNames) {
     }
 
-    public record ApiErrorResponse(@NotNull int status, @NotNull String error, @NotNull String message) {
+    public record ApiErrorResponse(
+            @NotNull @Schema(description = "HTTP response status code.") int status,
+            @NotNull @Schema(description = "Short error category.") String error,
+            @NotNull @Schema(description = "Human-readable error detail.") String message) {
     }
 
     public record IdeaRequest(
-            @NotBlank @Size(max = 200) String title,
-            @NotBlank @Size(max = 5000) String description,
-            @NotBlank @Size(max = 2000) String intendedOutcome,
-            @NotEmpty List<@NotBlank @Size(max = 1000) String> scopePoints,
-            @Size(max = 50) List<@NotBlank @Size(max = 200) String> learningTopics,
-            @NotBlank @Size(max = 20) String schoolYear,
-            @Size(max = 4, message = "An idea can have at most five owners including its creator.") List<@NotNull UUID> collaboratorIds) {
+            @NotBlank @Size(max = 200) @Schema(description = "Required, non-blank idea title; at most 200 characters.",
+                    minLength = 1)
+            String title,
+            @NotBlank @Size(max = 5000) @Schema(description = "Required, non-blank idea description; at most 5,000 characters.",
+                    minLength = 1)
+            String description,
+            @NotBlank @Size(max = 2000) @Schema(description = "Required, non-blank intended outcome; at most 2,000 characters.",
+                    minLength = 1)
+            String intendedOutcome,
+            @NotEmpty @ArraySchema(arraySchema = @Schema(description = "At least one non-blank scope point; each is at most 1,000 characters."),
+                    minItems = 1, schema = @Schema(description = "Non-blank scope point; at most 1,000 characters.",
+                            minLength = 1))
+            List<@NotBlank @Size(max = 1000) String> scopePoints,
+            @Size(max = 50) @ArraySchema(arraySchema = @Schema(description = "Optional learning topics; at most 50 entries."),
+                    maxItems = 50, schema = @Schema(description = "Non-blank learning topic; at most 200 characters.",
+                            minLength = 1))
+            List<@NotBlank @Size(max = 200) String> learningTopics,
+            @NotBlank @Schema(description = "Required, non-blank school year; at most 20 characters.", minLength = 1)
+            @Size(max = 20) String schoolYear,
+            @Size(max = 4, message = "An idea can have at most five owners including its creator.")
+            @ArraySchema(arraySchema = @Schema(description = "For student-authored ideas, optional distinct IDs of other "
+                    + "student collaborators; exclude the creator and provide at most four (five owners total). "
+                    + "Teacher-authored ideas cannot have collaborators."),
+                    maxItems = 4, uniqueItems = true, schema = @Schema(description = "Collaborator account ID.", format = "uuid"))
+            List<@NotNull UUID> collaboratorIds) {
     }
 
     public record SpecificationRequest(
-            @NotEmpty List<@NotBlank @Size(max = 2000) String> objectives,
-            @NotEmpty List<@NotBlank @Size(max = 1000) String> intendedUsers,
-            @NotEmpty List<@NotBlank @Size(max = 2000) String> requirements,
-            @NotEmpty List<@NotBlank @Size(max = 1000) String> deliverables,
-            @NotBlank @Size(max = 5000) String scope,
-            @NotEmpty List<@NotBlank @Size(max = 1000) String> dependencies) {
+            @NotEmpty @ArraySchema(arraySchema = @Schema(description = "At least one objective."),
+                    minItems = 1, schema = @Schema(description = "Non-blank objective; at most 2,000 characters.",
+                            minLength = 1))
+            List<@NotBlank @Size(max = 2000) String> objectives,
+            @NotEmpty @ArraySchema(arraySchema = @Schema(description = "At least one intended user group."),
+                    minItems = 1, schema = @Schema(description = "Non-blank intended user group; at most 1,000 characters.",
+                            minLength = 1))
+            List<@NotBlank @Size(max = 1000) String> intendedUsers,
+            @NotEmpty @ArraySchema(arraySchema = @Schema(description = "At least one requirement."),
+                    minItems = 1, schema = @Schema(description = "Non-blank requirement; at most 2,000 characters.",
+                            minLength = 1))
+            List<@NotBlank @Size(max = 2000) String> requirements,
+            @NotEmpty @ArraySchema(arraySchema = @Schema(description = "At least one deliverable."),
+                    minItems = 1, schema = @Schema(description = "Non-blank deliverable; at most 1,000 characters.",
+                            minLength = 1))
+            List<@NotBlank @Size(max = 1000) String> deliverables,
+            @NotBlank @Size(max = 5000)
+            @Schema(description = "Required, non-blank specification scope; at most 5,000 characters.", minLength = 1)
+            String scope,
+            @NotEmpty @ArraySchema(arraySchema = @Schema(description = "At least one dependency."),
+                    minItems = 1, schema = @Schema(description = "Non-blank dependency; at most 1,000 characters.",
+                            minLength = 1))
+            List<@NotBlank @Size(max = 1000) String> dependencies) {
     }
 
     public record ReviewRequest(
-            @NotBlank String decision,
-            @NotBlank @Size(max = 5000) String feedback,
-            @Min(1) @Max(5) Integer workSize,
-            @Min(1) @Max(5) Integer curriculumRelevance,
-            @Min(1) @Max(5) Integer technicalComplexity,
-            @Min(1) @Max(5) Integer feasibility,
-            @Min(1) @Max(5) Integer learningValue,
-            @Min(1) @Max(5) Integer resourceNeeds,
-            @Min(1) @Max(5) Integer riskAndDependencies,
-            @Size(max = 2000) String recommendation) {
+            @NotBlank @Schema(description = "Required, non-blank decision. Formal applications accept APPROVE, "
+                    + "REQUEST_REVISION, or DECLINE; specifications accept ACCEPT_FOR_APPLICATIONS, "
+                    + "REQUEST_REVISION, or DECLINE.", minLength = 1)
+            String decision,
+            @NotBlank @Size(max = 5000)
+            @Schema(description = "Required, non-blank written feedback; at most 5,000 characters.", minLength = 1)
+            String feedback,
+            @Min(1) @Max(5) @Schema(description = "Optional rating from 1 to 5.") Integer workSize,
+            @Min(1) @Max(5) @Schema(description = "Optional rating from 1 to 5.") Integer curriculumRelevance,
+            @Min(1) @Max(5) @Schema(description = "Optional rating from 1 to 5.") Integer technicalComplexity,
+            @Min(1) @Max(5) @Schema(description = "Optional rating from 1 to 5.") Integer feasibility,
+            @Min(1) @Max(5) @Schema(description = "Optional rating from 1 to 5.") Integer learningValue,
+            @Min(1) @Max(5) @Schema(description = "Optional rating from 1 to 5.") Integer resourceNeeds,
+            @Min(1) @Max(5) @Schema(description = "Optional rating from 1 to 5.") Integer riskAndDependencies,
+            @Size(max = 2000) @Schema(description = "Optional recommendation; at most 2,000 characters.")
+            String recommendation) {
     }
 
     /**
@@ -129,32 +193,43 @@ public final class ApiDtos {
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public static class IdeaReviewRequest {
         @NotBlank
+        @Schema(description = "Required, non-blank idea-review decision: APPROVE_FOR_SPECIFICATION, "
+                + "REQUEST_REVISION, or DECLINE.", minLength = 1)
         private String decision;
         @NotBlank
         @Size(max = 5000)
+        @Schema(description = "Required, non-blank written feedback; at most 5,000 characters.", minLength = 1)
         private String feedback;
         @Min(1)
         @Max(5)
+        @Schema(description = "Optional rating from 1 to 5.")
         private Integer workSize;
         @Min(1)
         @Max(5)
+        @Schema(description = "Optional rating from 1 to 5.")
         private Integer curriculumRelevance;
         @Min(1)
         @Max(5)
+        @Schema(description = "Optional rating from 1 to 5.")
         private Integer technicalComplexity;
         @Min(1)
         @Max(5)
+        @Schema(description = "Optional rating from 1 to 5.")
         private Integer feasibility;
         @Min(1)
         @Max(5)
+        @Schema(description = "Optional rating from 1 to 5.")
         private Integer learningValue;
         @Min(1)
         @Max(5)
+        @Schema(description = "Optional rating from 1 to 5.")
         private Integer resourceNeeds;
         @Min(1)
         @Max(5)
+        @Schema(description = "Optional rating from 1 to 5.")
         private Integer riskAndDependencies;
         @Size(max = 2000)
+        @Schema(description = "Optional recommendation; at most 2,000 characters.")
         private String recommendation;
 
         public String getDecision() {
@@ -247,13 +322,16 @@ public final class ApiDtos {
 
     public record SupervisionPreferenceRequest(
             @NotBlank @Schema(allowableValues = {"WANTS_TO_SUPERVISE", "WILLING_TO_SUPERVISE",
-                    "NOT_WILLING_TO_SUPERVISE", "NOT_AVAILABLE"})
+                    "NOT_WILLING_TO_SUPERVISE", "NOT_AVAILABLE"},
+                    description = "Required supervision preference: WANTS_TO_SUPERVISE, WILLING_TO_SUPERVISE, "
+                            + "NOT_WILLING_TO_SUPERVISE, or NOT_AVAILABLE.", minLength = 1)
             String preference,
-            @Size(max = 2000) String note) {
+            @Size(max = 2000) @Schema(description = "Optional note; at most 2,000 characters.") String note) {
     }
 
     public record SupervisorRequest(
-            @NotNull UUID teacherId,
+            @NotNull @Schema(description = "ID of the teacher to assign as supervisor.", format = "uuid")
+            UUID teacherId,
             @Schema(description = "Explicitly acknowledge that this teacher recorded an explicit refusal "
                     + "(NOT_WILLING_TO_SUPERVISE or NOT_AVAILABLE). Required to assign such a teacher.")
             Boolean acknowledgeRefusal) {
@@ -265,10 +343,18 @@ public final class ApiDtos {
                     description = "Required administrator-set period label; trimmed, non-blank after trimming, "
                             + "and at most 100 characters. Blank or whitespace-only values are rejected.")
             String label,
-            @NotBlank @Size(max = 20) String schoolYear,
-            @NotNull Instant opensAt,
-            @NotNull Instant closesAt,
-            @NotEmpty List<@NotNull UUID> projectIds) {
+            @NotBlank @Size(max = 20) @Schema(description = "Required, non-blank school year; at most 20 characters.",
+                    minLength = 1)
+            String schoolYear,
+            @NotNull @Schema(description = "Period opening instant in ISO 8601 date-time format.", format = "date-time")
+            Instant opensAt,
+            @NotNull @Schema(description = "Period closing instant in ISO 8601 date-time format; must be after opensAt.",
+                    format = "date-time")
+            Instant closesAt,
+            @NotEmpty @ArraySchema(arraySchema = @Schema(
+                    description = "At least three distinct accepted project IDs for this period's school year must be included."),
+                    minItems = 3, uniqueItems = true, schema = @Schema(description = "Project ID.", format = "uuid"))
+            List<@NotNull UUID> projectIds) {
     }
 
     public record AllocationPinSnapshot(UUID studentId, UUID projectId, Instant savedAt) {
@@ -282,9 +368,12 @@ public final class ApiDtos {
     }
 
     public record AllocationAssignmentResponse(
-            @NotNull @Schema(requiredMode = Schema.RequiredMode.REQUIRED, format = "uuid") UUID studentId,
-            @NotNull @Schema(requiredMode = Schema.RequiredMode.REQUIRED, format = "uuid") UUID projectId,
-            @NotNull @Schema(requiredMode = Schema.RequiredMode.REQUIRED) int preferenceRank,
+            @NotNull @Schema(description = "Assigned student ID.", requiredMode = Schema.RequiredMode.REQUIRED,
+                    format = "uuid") UUID studentId,
+            @NotNull @Schema(description = "Assigned project ID.", requiredMode = Schema.RequiredMode.REQUIRED,
+                    format = "uuid") UUID projectId,
+            @NotNull @Schema(description = "Rank of the assigned project in the student's preferences; zero when pinned.",
+                    requiredMode = Schema.RequiredMode.REQUIRED) int preferenceRank,
             @NotNull @Schema(requiredMode = Schema.RequiredMode.REQUIRED,
                     description = "True when fixed to this project by an administrator pin.") Boolean pinned,
             String studentDisplayName, String projectTitle, String className, List<String> electiveSubjectNames) {
@@ -306,7 +395,9 @@ public final class ApiDtos {
     }
 
     public record AllocationRunResponse(UUID id, String status, UUID periodId, Instant createdAt,
-            Boolean initial, @Schema(requiredMode = Schema.RequiredMode.REQUIRED, defaultValue = "false")
+            Boolean initial, @Schema(description = "True when this run was started before the application deadline; otherwise false.",
+                    requiredMode = Schema.RequiredMode.REQUIRED,
+                    defaultValue = "false")
             Boolean early, List<UUID> projectIds, List<AllocationApplicationSnapshot> applications,
             List<AllocationPinSnapshot> pins, AllocationResultResponse result, String error,
             Boolean inputSnapshotComplete, Instant finalizedAt) {
@@ -317,49 +408,83 @@ public final class ApiDtos {
     }
 
     public record AllocationPinRequest(
-            @NotNull @Schema(requiredMode = Schema.RequiredMode.REQUIRED, format = "uuid") UUID projectId,
+            @NotNull @Schema(description = "Project to pin for this student.", requiredMode = Schema.RequiredMode.REQUIRED,
+                    format = "uuid") UUID projectId,
             @Schema(description = "Explicitly acknowledge that the student did not rank the selected project.",
                     defaultValue = "false") Boolean acknowledgeUnranked) {
     }
 
     public record AllocationPinResponse(
-            @NotNull @Schema(requiredMode = Schema.RequiredMode.REQUIRED, format = "uuid") UUID studentId,
-            @NotNull @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String studentDisplayName,
-            @NotNull @Schema(requiredMode = Schema.RequiredMode.REQUIRED, format = "uuid") UUID projectId,
-            @NotNull @Schema(requiredMode = Schema.RequiredMode.REQUIRED) String projectTitle,
-            @NotNull @Schema(requiredMode = Schema.RequiredMode.REQUIRED) Boolean rankedChoice,
-            @NotNull @Schema(requiredMode = Schema.RequiredMode.REQUIRED, format = "date-time") Instant savedAt) {
+            @NotNull @Schema(description = "Pinned student ID.", requiredMode = Schema.RequiredMode.REQUIRED,
+                    format = "uuid") UUID studentId,
+            @NotNull @Schema(description = "Current student display name.", requiredMode = Schema.RequiredMode.REQUIRED)
+            String studentDisplayName,
+            @NotNull @Schema(description = "Pinned project ID.", requiredMode = Schema.RequiredMode.REQUIRED,
+                    format = "uuid") UUID projectId,
+            @NotNull @Schema(description = "Current project title.", requiredMode = Schema.RequiredMode.REQUIRED)
+            String projectTitle,
+            @NotNull @Schema(description = "Whether the project is among the student's ranked choices.",
+                    requiredMode = Schema.RequiredMode.REQUIRED) Boolean rankedChoice,
+            @NotNull @Schema(description = "When the pin was saved, as an ISO 8601 instant.",
+                    requiredMode = Schema.RequiredMode.REQUIRED, format = "date-time") Instant savedAt) {
     }
 
     public record StudentApplicationRequest(
-            @NotEmpty @ArraySchema(arraySchema = @Schema(requiredMode = Schema.RequiredMode.REQUIRED),
-                    minItems = 3, uniqueItems = true, schema = @Schema(format = "uuid"))
+            @NotEmpty @ArraySchema(arraySchema = @Schema(description =
+                    "At least three distinct project IDs from the period catalogue, ranked in array order.",
+                    requiredMode = Schema.RequiredMode.REQUIRED),
+                    minItems = 3, uniqueItems = true, schema = @Schema(description = "Project ID.", format = "uuid"))
             List<@NotNull UUID> projectIds) {
     }
 
-    public record IndividualTopic(@NotNull UUID studentId,
-            @NotBlank @Size(max = 200) String topic) {
+    public record IndividualTopic(
+            @NotNull @Schema(description = "Allocated group member's account ID.", format = "uuid") UUID studentId,
+            @NotBlank @Size(max = 200)
+            @Schema(description = "Non-blank individual topic; at most 200 characters.", minLength = 1)
+            String topic) {
     }
 
-    public record StudentText(@NotNull UUID studentId,
-            @NotBlank @Size(max = 2400) String text) {
+    public record StudentText(
+            @NotNull @Schema(description = "Allocated group member's account ID.", format = "uuid") UUID studentId,
+            @NotBlank @Size(max = 2400)
+            @Schema(description = "Non-blank text; at most 2,400 characters per member.", minLength = 1)
+            String text) {
     }
 
-    public record Milestone(@NotBlank @Size(max = 1000) String text, @NotNull LocalDate date) {
+    public record Milestone(
+            @NotBlank @Size(max = 1000)
+            @Schema(description = "Non-blank milestone description; at most 1,000 characters.", minLength = 1)
+            String text,
+            @NotNull @Schema(description = "Milestone date in ISO 8601 calendar-date format.", format = "date")
+            LocalDate date) {
     }
 
     public record FormalApplicationRequest(
-            @NotBlank @Size(max = 200) String topic,
-            @NotEmpty @ArraySchema(minItems = 3, maxItems = 5)
+            @NotBlank @Size(max = 200)
+            @Schema(description = "Required, non-blank project topic; at most 200 characters.", minLength = 1)
+            String topic,
+            @NotEmpty @ArraySchema(arraySchema = @Schema(description =
+                    "Exactly one individual topic for each allocated group member; the group contains 3 to 5 students."),
+                    minItems = 3, maxItems = 5)
             List<@Valid IndividualTopic> individualTopics,
-            @NotBlank @Size(max = 400) String initialSituation,
-            @NotEmpty @ArraySchema(minItems = 3, maxItems = 5)
+            @NotBlank @Size(max = 400)
+            @Schema(description = "Required, non-blank initial situation; at most 400 characters.", minLength = 1)
+            String initialSituation,
+            @NotEmpty @ArraySchema(arraySchema = @Schema(description =
+                    "Exactly one entry per allocated group member (3 to 5 entries); text values combined must be at most 2,400 characters."),
+                    minItems = 3, maxItems = 5)
             List<@Valid StudentText> investigationConcerns,
-            @NotBlank @Size(max = 400) String objective,
-            @NotEmpty @ArraySchema(minItems = 3, maxItems = 5)
+            @NotBlank @Size(max = 400)
+            @Schema(description = "Required, non-blank objective; at most 400 characters.", minLength = 1)
+            String objective,
+            @NotEmpty @ArraySchema(arraySchema = @Schema(description =
+                    "Exactly one entry per allocated group member (3 to 5 entries); text values combined must be at most 2,400 characters."),
+                    minItems = 3, maxItems = 5)
             List<@Valid StudentText> plannedResults,
-            @NotEmpty List<@Valid Milestone> milestones,
-            @Size(max = 1000) String cooperationPartner) {
+            @NotEmpty @ArraySchema(arraySchema = @Schema(description = "At least one milestone."), minItems = 1)
+            List<@Valid Milestone> milestones,
+            @Size(max = 1000) @Schema(description = "Optional cooperation partner; at most 1,000 characters.")
+            String cooperationPartner) {
     }
 
     public record PageResponse<T>(List<T> content, int page, int size, long totalElements, int totalPages) {
@@ -415,7 +540,9 @@ public final class ApiDtos {
     public record StudentLookupResponse(UUID id, String displayName) {
     }
 
-    public record IdeaOwnerRequest(@NotNull UUID studentId) {
+    public record IdeaOwnerRequest(
+            @NotNull @Schema(description = "ID of the student to add as a co-owner.", format = "uuid")
+            UUID studentId) {
     }
 
     public record IdeaResponse(

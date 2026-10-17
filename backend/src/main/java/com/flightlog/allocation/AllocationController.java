@@ -48,6 +48,7 @@ public class AllocationController {
     }
 
     @GetMapping("/api/application-periods/{periodId}/allocation-runs")
+    @Operation(summary = "List allocation runs for an application period.")
     @ApiResponse(responseCode = "200", description = "Paginated allocation runs.",
             content = @Content(schema = @Schema(implementation = AllocationRunPageResponse.class)))
     public PageResponse<Map<String, Object>> list(@AuthenticationPrincipal AuthenticatedUser caller,
@@ -60,6 +61,7 @@ public class AllocationController {
     }
 
     @GetMapping("/api/allocation-runs/{id}")
+    @Operation(summary = "Get an allocation run and its saved result snapshot.")
     @ApiResponse(responseCode = "200", description = "Allocation run with its result snapshot.",
             content = @Content(schema = @Schema(implementation = AllocationRunResponse.class)))
     public Map<String, Object> get(@AuthenticationPrincipal AuthenticatedUser caller, @PathVariable UUID id) {
@@ -67,6 +69,7 @@ public class AllocationController {
     }
 
     @PostMapping("/api/allocation-runs/{id}/finalize")
+    @Operation(summary = "Finalize a completed allocation run and its application period.")
     @ApiResponse(responseCode = "200", description = "Allocation run and period finalized.",
             content = @Content(schema = @Schema(implementation = AllocationRunResponse.class)))
     @ApiResponse(responseCode = "403", description = "Only administrators may finalize allocation runs.")

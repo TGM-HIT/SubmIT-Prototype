@@ -8,6 +8,7 @@ import com.flightlog.web.ApiDtos.SupervisionPreferenceRequest;
 import com.flightlog.web.ApiDtos.SupervisionPreferenceResponse;
 import com.flightlog.web.ApiDtos.SupervisorRequest;
 import com.flightlog.web.ApiDtos.SupervisorResponse;
+import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -16,12 +17,10 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@RequestMapping("/api/ideas")
 public class IdeaReviewController {
     private final IdeaService ideaService;
     private final SupervisionService supervisionService;
@@ -34,20 +33,23 @@ public class IdeaReviewController {
         this.objectMapper = objectMapper;
     }
 
-    @PostMapping("/{id}/reviews")
+    @PostMapping("/api/ideas/{id}/reviews")
     @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary = "Review an idea and record its decision and rubric ratings.")
     public ReviewResponse review(@AuthenticationPrincipal AuthenticatedUser caller, @PathVariable UUID id,
             @Valid @RequestBody IdeaReviewRequest request) {
         return ideaService.review(caller, id, false, objectMapper.valueToTree(request));
     }
 
-    @PutMapping("/{id}/supervision-preference")
+    @PutMapping("/api/ideas/{id}/supervision-preference")
+    @Operation(summary = "Record or update a teacher's supervision preference for an idea.")
     public SupervisionPreferenceResponse setSupervisionPreference(@AuthenticationPrincipal AuthenticatedUser caller,
             @PathVariable UUID id, @Valid @RequestBody SupervisionPreferenceRequest request) {
         return supervisionService.setPreference(caller, id, objectMapper.valueToTree(request));
     }
 
-    @PutMapping("/{id}/supervisor")
+    @PutMapping("/api/ideas/{id}/supervisor")
+    @Operation(summary = "Assign a teacher to supervise an idea.")
     public SupervisorResponse assignSupervisor(@AuthenticationPrincipal AuthenticatedUser caller,
             @PathVariable UUID id, @Valid @RequestBody SupervisorRequest request) {
         return supervisionService.assign(caller, id, objectMapper.valueToTree(request));

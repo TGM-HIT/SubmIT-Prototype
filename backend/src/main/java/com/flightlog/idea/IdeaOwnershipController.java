@@ -2,6 +2,7 @@ package com.flightlog.idea;
 
 import com.flightlog.security.AuthenticatedUser;
 import com.flightlog.web.ApiDtos.IdeaOwnerRequest;
+import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -24,12 +25,14 @@ class IdeaOwnershipController {
     }
 
     @PostMapping
+    @Operation(summary = "Add a student as a co-owner of an idea.")
     public com.flightlog.web.ApiDtos.IdeaResponse add(@AuthenticationPrincipal AuthenticatedUser caller,
             @PathVariable UUID id, @Valid @RequestBody IdeaOwnerRequest request) {
         return ownership.addOwner(caller, id, request.studentId());
     }
 
     @DeleteMapping("/{studentId}")
+    @Operation(summary = "Remove a student from an idea's ownership group.")
     public com.flightlog.web.ApiDtos.IdeaResponse remove(@AuthenticationPrincipal AuthenticatedUser caller,
             @PathVariable UUID id, @PathVariable UUID studentId) {
         return ownership.removeOwner(caller, id, studentId);
@@ -37,6 +40,7 @@ class IdeaOwnershipController {
 
     @DeleteMapping("/me")
     @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Operation(summary = "Leave an idea's ownership group.")
     public void leave(@AuthenticationPrincipal AuthenticatedUser caller, @PathVariable UUID id) {
         ownership.leave(caller, id);
     }

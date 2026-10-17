@@ -9,14 +9,16 @@ import org.springframework.web.multipart.MultipartFile;
 @Schema(description = "Multipart upload form; the artefact is stored privately and never published by upload.")
 public class ArtifactUploadRequest {
     @NotNull
+    @Schema(description = "Artefact type.", allowableValues = {"WEBSITE_ARCHIVE", "POSTER", "SOURCE_DATA"})
     private ArtifactType type;
 
     @NotBlank
     @Size(max = 200)
+    @Schema(description = "Required, non-blank artefact title; at most 200 characters.", minLength = 1)
     private String title;
 
     @Size(max = 4000)
-    @Schema(description = "Optional description.")
+    @Schema(description = "Optional description; at most 4,000 characters.")
     private String description;
 
     @NotNull
@@ -24,7 +26,7 @@ public class ArtifactUploadRequest {
     private MultipartFile file;
 
     @Size(max = 4000)
-    @Schema(description = "Optional notes for the later publication review.")
+    @Schema(description = "Optional notes for the later publication review; at most 4,000 characters.")
     private String publicationSubmissionMetadata;
 
     public ArtifactType getType() {

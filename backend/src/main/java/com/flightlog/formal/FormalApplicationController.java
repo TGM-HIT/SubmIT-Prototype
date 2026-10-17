@@ -35,7 +35,10 @@ public class FormalApplicationController {
     @PostMapping("/api/projects/{projectId}/formal-applications")
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Create a draft formal application for an allocated group.",
-            description = "Text limits count Java UTF-16 code units; the service also enforces combined per-student field limits.")
+            description = "Text limits count Java UTF-16 code units. For each allocated group member, provide exactly one "
+                    + "individual topic, investigation concern, and planned result. A group has 3 to 5 members; each "
+                    + "individual topic is at most 200 characters, and investigation-concern text and planned-result "
+                    + "text are each limited to 2,400 characters combined across all group members.")
     public FormalApplicationResponse create(@AuthenticationPrincipal AuthenticatedUser caller,
             @PathVariable UUID projectId,
             @Valid @RequestBody FormalApplicationRequest request) {
@@ -43,6 +46,7 @@ public class FormalApplicationController {
     }
 
     @GetMapping("/api/projects/{projectId}/formal-applications")
+    @Operation(summary = "Get the formal application for a project.")
     public FormalApplicationResponse get(@AuthenticationPrincipal AuthenticatedUser caller,
             @PathVariable UUID projectId,
             @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
@@ -50,18 +54,21 @@ public class FormalApplicationController {
     }
 
     @PutMapping("/api/formal-applications/{id}")
+    @Operation(summary = "Update a draft or returned formal application.")
     public FormalApplicationResponse update(@AuthenticationPrincipal AuthenticatedUser caller, @PathVariable UUID id,
             @Valid @RequestBody FormalApplicationRequest request) {
         return service.update(caller, id, objectMapper.valueToTree(request));
     }
 
     @PostMapping("/api/formal-applications/{id}/submit")
+    @Operation(summary = "Submit a formal application for teacher review.")
     public FormalApplicationResponse submit(@AuthenticationPrincipal AuthenticatedUser caller, @PathVariable UUID id) {
         return service.submit(caller, id);
     }
 
     @PostMapping("/api/formal-applications/{id}/reviews")
     @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary = "Review a formal application and record its decision and feedback.")
     public FormalReviewResponse review(@AuthenticationPrincipal AuthenticatedUser caller, @PathVariable UUID id,
             @Valid @RequestBody ReviewRequest request) {
         return service.review(caller, id, objectMapper.valueToTree(request));

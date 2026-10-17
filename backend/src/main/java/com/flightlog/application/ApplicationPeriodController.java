@@ -43,30 +43,35 @@ public class ApplicationPeriodController {
 
     @PostMapping("/api/application-periods")
     @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary = "Create an application period with its project catalogue.")
     public ApplicationPeriodResponse createPeriod(@AuthenticationPrincipal AuthenticatedUser caller,
             @Valid @RequestBody ApplicationPeriodRequest request) {
         return service.create(caller, objectMapper.valueToTree(request));
     }
 
     @GetMapping("/api/application-periods")
+    @Operation(summary = "List application periods.")
     public PageResponse<ApplicationPeriodResponse> listPeriods(@AuthenticationPrincipal AuthenticatedUser caller,
             @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
         return service.list(caller, Math.max(page, 0), normalizeSize(size));
     }
 
     @GetMapping("/api/application-periods/{id}")
+    @Operation(summary = "Get an application period and its current status.")
     public ApplicationPeriodResponse getPeriod(@AuthenticationPrincipal AuthenticatedUser caller,
             @PathVariable UUID id) {
         return service.get(caller, id);
     }
 
     @GetMapping("/api/application-periods/{periodId}/catalogue/{projectId}")
+    @Operation(summary = "Get a project's period-specific catalogue details.")
     public CatalogueProjectResponse getCatalogueProject(@AuthenticationPrincipal AuthenticatedUser caller,
             @PathVariable UUID periodId, @PathVariable UUID projectId) {
         return service.getCatalogueProject(caller, periodId, projectId);
     }
 
     @PutMapping("/api/application-periods/{id}")
+    @Operation(summary = "Update an application period and its project catalogue.")
     public ApplicationPeriodResponse updatePeriod(@AuthenticationPrincipal AuthenticatedUser caller,
             @PathVariable UUID id,
             @Valid @RequestBody ApplicationPeriodRequest request) {

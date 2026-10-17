@@ -5,6 +5,7 @@ import com.flightlog.security.AuthenticatedUser;
 import com.flightlog.web.ApiDtos.PageResponse;
 import com.flightlog.web.ApiDtos.StudentApplicationRequest;
 import com.flightlog.web.ApiDtos.StudentApplicationResponse;
+import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -33,18 +34,21 @@ public class StudentApplicationController {
 
     @PostMapping("/api/application-periods/{periodId}/applications")
     @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary = "Submit ranked project preferences for an application period.")
     public StudentApplicationResponse create(@AuthenticationPrincipal AuthenticatedUser caller,
             @PathVariable UUID periodId, @Valid @RequestBody StudentApplicationRequest request) {
         return service.createApplication(caller, periodId, objectMapper.valueToTree(request));
     }
 
     @GetMapping("/api/application-periods/{periodId}/applications/me")
+    @Operation(summary = "Get the authenticated student's application for an application period.")
     public StudentApplicationResponse me(@AuthenticationPrincipal AuthenticatedUser caller,
             @PathVariable UUID periodId) {
         return service.myApplication(caller, periodId);
     }
 
     @GetMapping("/api/application-periods/{periodId}/applications")
+    @Operation(summary = "List applications for an application period.")
     public PageResponse<StudentApplicationResponse> list(@AuthenticationPrincipal AuthenticatedUser caller,
             @PathVariable UUID periodId, @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size) {
@@ -52,6 +56,7 @@ public class StudentApplicationController {
     }
 
     @PutMapping("/api/applications/{id}")
+    @Operation(summary = "Update an application’s ranked project preferences.")
     public StudentApplicationResponse update(@AuthenticationPrincipal AuthenticatedUser caller,
             @PathVariable UUID id, @Valid @RequestBody StudentApplicationRequest request) {
         return service.updateApplication(caller, id, objectMapper.valueToTree(request));
@@ -59,6 +64,7 @@ public class StudentApplicationController {
 
     @DeleteMapping("/api/applications/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
+    @Operation(summary = "Withdraw an application from an application period.")
     public void withdraw(@AuthenticationPrincipal AuthenticatedUser caller, @PathVariable UUID id) {
         service.withdrawApplication(caller, id);
     }

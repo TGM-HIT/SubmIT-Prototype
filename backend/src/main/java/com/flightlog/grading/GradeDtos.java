@@ -16,39 +16,66 @@ public final class GradeDtos {
 
     @Schema(description = "Explicit, recorded switch to another rubric version for a project that is already bound.")
     public record VersionTransition(
-            @NotBlank @Size(max = 2000) @Schema(description = "Why the project moves to another rubric version.") String reason) {
+            @NotBlank @Size(max = 2000)
+            @Schema(description = "Required, non-blank reason for moving the project to another rubric version; "
+                    + "at most 2,000 characters.", minLength = 1) String reason) {
     }
 
     @Schema(description = "Teacher assessment of one student against one criterion of a rubric version.")
     public record StudentGradeRequest(
-            @NotNull UUID rubricId,
+            @NotNull @Schema(description = "ID of the immutable rubric version used for this assessment.", format = "uuid")
+            UUID rubricId,
             @Valid VersionTransition versionTransition,
-            @NotNull UUID studentId,
-            @NotBlank String criterionId,
-            @NotNull BigDecimal grade,
-            @Pattern(regexp = RubricDtos.ISO_DATE) @Schema(description = "Assessment date; defaults to today.") String assessedOn,
-            @Size(max = 4000) String evidence,
-            @Size(max = 4000) String comments) {
+            @NotNull @Schema(description = "ID of the student being assessed.", format = "uuid") UUID studentId,
+            @NotBlank @Schema(description = "Non-blank criterion ID from the selected rubric version.")
+            String criterionId,
+            @NotNull @Schema(description = "Grade value within the selected criterion's configured scale.")
+            BigDecimal grade,
+            @Pattern(regexp = RubricDtos.ISO_DATE)
+            @Schema(description = "Optional assessment date in YYYY-MM-DD format; defaults to today and cannot be in the future.",
+                    format = "date")
+            String assessedOn,
+            @Size(max = 4000) @Schema(description = "Optional evidence text; at most 4,000 characters.")
+            String evidence,
+            @Size(max = 4000) @Schema(description = "Optional comments; at most 4,000 characters.")
+            String comments) {
     }
 
     @Schema(description = "Teacher assessment of the whole group against one criterion of a rubric version.")
     public record GroupGradeRequest(
-            @NotNull UUID rubricId,
+            @NotNull @Schema(description = "ID of the immutable rubric version used for this assessment.", format = "uuid")
+            UUID rubricId,
             @Valid VersionTransition versionTransition,
-            @NotBlank String criterionId,
-            @NotNull BigDecimal grade,
-            @Pattern(regexp = RubricDtos.ISO_DATE) String assessedOn,
-            @Size(max = 4000) String evidence,
-            @Size(max = 4000) String comments) {
+            @NotBlank @Schema(description = "Non-blank criterion ID from the selected rubric version.")
+            String criterionId,
+            @NotNull @Schema(description = "Grade value within the selected criterion's configured scale.")
+            BigDecimal grade,
+            @Pattern(regexp = RubricDtos.ISO_DATE)
+            @Schema(description = "Optional assessment date in YYYY-MM-DD format; defaults to today and cannot be in the future.",
+                    format = "date")
+            String assessedOn,
+            @Size(max = 4000) @Schema(description = "Optional evidence text; at most 4,000 characters.")
+            String evidence,
+            @Size(max = 4000) @Schema(description = "Optional comments; at most 4,000 characters.")
+            String comments) {
     }
 
     @Schema(description = "Reassessment; the original entry is retained as superseded on its original rubric version.")
     public record GradeRevisionRequest(
-            @NotBlank @Size(max = 2000) String reason,
-            @NotNull BigDecimal grade,
-            @Pattern(regexp = RubricDtos.ISO_DATE) String assessedOn,
-            @Size(max = 4000) String evidence,
-            @Size(max = 4000) String comments) {
+            @NotBlank @Size(max = 2000)
+            @Schema(description = "Required, non-blank reason for reassessment; at most 2,000 characters.",
+                    minLength = 1)
+            String reason,
+            @NotNull @Schema(description = "Replacement grade value within the selected criterion's configured scale.")
+            BigDecimal grade,
+            @Pattern(regexp = RubricDtos.ISO_DATE)
+            @Schema(description = "Optional assessment date in YYYY-MM-DD format; defaults to today and cannot be in the future.",
+                    format = "date")
+            String assessedOn,
+            @Size(max = 4000) @Schema(description = "Optional evidence text; at most 4,000 characters.")
+            String evidence,
+            @Size(max = 4000) @Schema(description = "Optional comments; at most 4,000 characters.")
+            String comments) {
     }
 
     @Schema(description = "Stored grade entry bound to an immutable rubric version and criterion.")
@@ -82,12 +109,18 @@ public final class GradeDtos {
 
     @Schema(description = "Records one observation of a metric defined in the rubric version.")
     public record MetricRequest(
-            @NotNull UUID rubricId,
+            @NotNull @Schema(description = "ID of the immutable rubric version used for this observation.", format = "uuid")
+            UUID rubricId,
             @Valid VersionTransition versionTransition,
-            @NotBlank String metricId,
-            @NotNull BigDecimal value,
-            @Schema(description = "ISO instant of the measurement; defaults to now.") String measuredAt,
-            @Size(max = 2000) String note) {
+            @NotBlank @Schema(description = "Non-blank metric ID from the selected rubric version.")
+            String metricId,
+            @NotNull @Schema(description = "Numeric value of this metric observation, within the optional bounds "
+                    + "defined for the selected metric.")
+            BigDecimal value,
+            @Schema(description = "Optional measurement instant in ISO 8601 date-time format; defaults to now.",
+                    format = "date-time") String measuredAt,
+            @Size(max = 2000) @Schema(description = "Optional note; at most 2,000 characters.")
+            String note) {
     }
 
     @Schema(description = "Stored metric observation referencing the metric definition version.")

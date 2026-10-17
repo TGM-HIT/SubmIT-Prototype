@@ -18,20 +18,25 @@ public final class FinalGradeDtos {
             @Schema(description = "Configured aggregation rule; omit for a manual decision.") String ruleId,
             @Schema(description = "Manual grade (required without ruleId); with ruleId it must equal the computed result.")
             BigDecimal grade,
-            @Size(max = 4000) @Schema(description = "Rationale; required when no configured rule is used.") String rationale) {
+            @Size(max = 4000) @Schema(description = "Rationale required for a manual grade; at most 4,000 characters.")
+            String rationale) {
     }
 
     @Schema(description = "Final grade decision for one student.")
     public record StudentDecision(
-            @NotNull UUID studentId,
-            String ruleId,
+            @NotNull @Schema(description = "ID of the student receiving this final grade.", format = "uuid")
+            UUID studentId,
+            @Schema(description = "Configured aggregation rule; omit for a manual decision.") String ruleId,
+            @Schema(description = "Manual grade (required without ruleId); with ruleId it must equal the computed result.")
             BigDecimal grade,
-            @Size(max = 4000) String rationale) {
+            @Size(max = 4000) @Schema(description = "Rationale for a manual grade; at most 4,000 characters.")
+            String rationale) {
     }
 
     @Schema(description = "Records project and/or individual final grades; earlier ones are retained as superseded.")
     public record FinalGradesRequest(
-            @NotNull UUID rubricId,
+            @NotNull @Schema(description = "ID of the immutable rubric version for the final-grade decisions.",
+                    format = "uuid") UUID rubricId,
             @Valid GradeDtos.VersionTransition versionTransition,
             @Valid Decision project,
             @Valid List<StudentDecision> students) {

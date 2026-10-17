@@ -42,6 +42,7 @@ public class IdeaController {
     }
 
     @GetMapping("/{id}")
+    @Operation(summary = "Get an idea and its authorized review and ownership details.")
     public IdeaResponse get(@AuthenticationPrincipal AuthenticatedUser caller, @PathVariable UUID id) {
         return ideaService.get(caller, id);
     }
@@ -60,6 +61,7 @@ public class IdeaController {
     }
 
     @PostMapping("/{id}/withdraw")
+    @Operation(summary = "Withdraw an owned idea from teacher review.")
     public IdeaResponse withdraw(@AuthenticationPrincipal AuthenticatedUser caller, @PathVariable UUID id) {
         return ideaService.withdraw(caller, id);
     }

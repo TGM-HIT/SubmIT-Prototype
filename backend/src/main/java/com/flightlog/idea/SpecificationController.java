@@ -38,12 +38,14 @@ public class SpecificationController {
     }
 
     @PostMapping("/{id}/specification/submit")
+    @Operation(summary = "Submit a saved idea specification for teacher review.")
     public SpecificationResponse submit(@AuthenticationPrincipal AuthenticatedUser caller, @PathVariable UUID id) {
         return ideaService.submitSpecification(caller, id);
     }
 
     @PostMapping("/{id}/specification/reviews")
     @ResponseStatus(HttpStatus.CREATED)
+    @Operation(summary = "Review an idea specification and record its decision and feedback.")
     public ReviewResponse review(@AuthenticationPrincipal AuthenticatedUser caller, @PathVariable UUID id,
             @Valid @RequestBody ReviewRequest request) {
         return ideaService.review(caller, id, true, objectMapper.valueToTree(request));

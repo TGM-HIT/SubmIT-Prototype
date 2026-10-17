@@ -11,7 +11,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Get the student's current class and elective-subject assignments. */
         get: operations["details"];
+        /** Assign a student's class and elective subjects. */
         put: operations["assign"];
         post?: never;
         delete?: never;
@@ -45,6 +47,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Get an idea and its authorized review and ownership details. */
         get: operations["get"];
         /** Update an idea draft, returned idea, or withdrawn idea owned by the authenticated author. */
         put: operations["update"];
@@ -63,6 +66,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
+        /** Assign a teacher to supervise an idea. */
         put: operations["assignSupervisor"];
         post?: never;
         delete?: never;
@@ -79,6 +83,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
+        /** Record or update a teacher's supervision preference for an idea. */
         put: operations["setSupervisionPreference"];
         post?: never;
         delete?: never;
@@ -112,6 +117,7 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
+        /** Update a draft or returned formal application. */
         put: operations["update_1"];
         post?: never;
         delete?: never;
@@ -128,8 +134,10 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
+        /** Update an application’s ranked project preferences. */
         put: operations["update_2"];
         post?: never;
+        /** Withdraw an application from an application period. */
         delete: operations["withdraw"];
         options?: never;
         head?: never;
@@ -144,8 +152,10 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
+        /** Pin a student to a project in an application period. */
         put: operations["put"];
         post?: never;
+        /** Remove a student's project pin from an application period. */
         delete: operations["delete"];
         options?: never;
         head?: never;
@@ -159,7 +169,9 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Get an application period and its current status. */
         get: operations["getPeriod"];
+        /** Update an application period and its project catalogue. */
         put: operations["updatePeriod"];
         post?: never;
         delete?: never;
@@ -175,8 +187,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List the shared student-class catalogue. */
         get: operations["classes"];
         put?: never;
+        /** Create a shared student-class catalogue entry. */
         post: operations["createClass"];
         delete?: never;
         options?: never;
@@ -262,11 +276,12 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Get the formal application for a project. */
         get: operations["get_1"];
         put?: never;
         /**
          * Create a draft formal application for an allocated group.
-         * @description Text limits count Java UTF-16 code units; the service also enforces combined per-student field limits.
+         * @description Text limits count Java UTF-16 code units. For each allocated group member, provide exactly one individual topic, investigation concern, and planned result. A group has 3 to 5 members; each individual topic is at most 200 characters, and investigation-concern text and planned-result text are each limited to 2,400 characters combined across all group members.
          */
         post: operations["create"];
         delete?: never;
@@ -317,6 +332,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List ideas visible to the authenticated user, optionally filtered by status. */
         get: operations["list_1"];
         put?: never;
         /** Create an idea draft for the authenticated student or teacher. */
@@ -336,6 +352,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Withdraw an owned idea from teacher review. */
         post: operations["withdraw_1"];
         delete?: never;
         options?: never;
@@ -369,6 +386,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Submit a saved idea specification for teacher review. */
         post: operations["submit_1"];
         delete?: never;
         options?: never;
@@ -385,6 +403,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Review an idea specification and record its decision and feedback. */
         post: operations["review"];
         delete?: never;
         options?: never;
@@ -401,6 +420,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Review an idea and record its decision and rubric ratings. */
         post: operations["review_1"];
         delete?: never;
         options?: never;
@@ -417,6 +437,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Add a student as a co-owner of an idea. */
         post: operations["add"];
         delete?: never;
         options?: never;
@@ -451,6 +472,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Submit a formal application for teacher review. */
         post: operations["submit_2"];
         delete?: never;
         options?: never;
@@ -467,6 +489,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Review a formal application and record its decision and feedback. */
         post: operations["review_2"];
         delete?: never;
         options?: never;
@@ -481,8 +504,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List the shared elective-subject catalogue. */
         get: operations["subjects"];
         put?: never;
+        /** Create a shared elective-subject catalogue entry. */
         post: operations["createSubject"];
         delete?: never;
         options?: never;
@@ -499,7 +524,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Register a student account pending administrator class assignment. Any supplied role is ignored. */
+        /** Register an immediately usable student account with the default unassigned class; any supplied role is ignored. */
         post: operations["register"];
         delete?: never;
         options?: never;
@@ -548,8 +573,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List application periods. */
         get: operations["listPeriods"];
         put?: never;
+        /** Create an application period with its project catalogue. */
         post: operations["createPeriod"];
         delete?: never;
         options?: never;
@@ -564,8 +591,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List applications for an application period. */
         get: operations["list_3"];
         put?: never;
+        /** Submit ranked project preferences for an application period. */
         post: operations["create_2"];
         delete?: never;
         options?: never;
@@ -580,6 +609,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List allocation runs for an application period. */
         get: operations["list_4"];
         put?: never;
         /** Start an early allocation before the deadline or a replacement afterward. */
@@ -599,6 +629,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Finalize a completed allocation run and its application period. */
         post: operations["finalizeRun"];
         delete?: never;
         options?: never;
@@ -653,6 +684,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
+        /** Rename a shared student-class catalogue entry. */
         patch: operations["renameClass"];
         trace?: never;
     };
@@ -669,6 +701,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
+        /** Rename a shared elective-subject catalogue entry. */
         patch: operations["renameSubject"];
         trace?: never;
     };
@@ -818,6 +851,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List audit events visible to the authenticated user. */
         get: operations["list_6"];
         put?: never;
         post?: never;
@@ -834,6 +868,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List audit events for an entity visible to the authenticated user. */
         get: operations["forEntity"];
         put?: never;
         post?: never;
@@ -885,6 +920,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Get a project's period-specific catalogue details. */
         get: operations["getCatalogueProject"];
         put?: never;
         post?: never;
@@ -901,6 +937,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Get the authenticated student's application for an application period. */
         get: operations["me"];
         put?: never;
         post?: never;
@@ -917,6 +954,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** List project pins for an application period. */
         get: operations["list_7"];
         put?: never;
         post?: never;
@@ -933,6 +971,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Get an allocation run and its saved result snapshot. */
         get: operations["get_4"];
         put?: never;
         post?: never;
@@ -952,6 +991,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
+        /** Remove a student from an idea's ownership group. */
         delete: operations["remove"];
         options?: never;
         head?: never;
@@ -968,6 +1008,7 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
+        /** Leave an idea's ownership group. */
         delete: operations["leave"];
         options?: never;
         head?: never;
@@ -981,19 +1022,28 @@ export interface components {
         StudentDetailsRequest: {
             /**
              * Format: uuid
-             * @description Required ID of the students single assigned class.
+             * @description Required ID of the student's single assigned class.
              */
             classId: string;
             /** @description Assigned shared elective subject IDs; required, may be empty, IDs must be unique, maximum four. */
             electiveSubjectIds: string[];
         };
         StudentDetailsResponse: {
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description ID of the student.
+             */
             studentId: string;
+            /** @description Current student display name. */
             displayName: string;
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description ID of the student's assigned class.
+             */
             classId: string;
+            /** @description Current name of the student's assigned class. */
             className: string;
+            /** @description IDs of assigned elective subjects. */
             electiveSubjectIds: string[];
             /** @description Current catalogue names, returned only to authenticated teachers and administrators. */
             electiveSubjectNames: string[];
@@ -1004,12 +1054,15 @@ export interface components {
             ruleId?: string;
             /** @description Manual grade (required without ruleId); with ruleId it must equal the computed result. */
             grade?: number;
-            /** @description Rationale; required when no configured rule is used. */
+            /** @description Rationale required for a manual grade; at most 4,000 characters. */
             rationale?: string;
         };
         /** @description Records project and/or individual final grades; earlier ones are retained as superseded. */
         FinalGradesRequest: {
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description ID of the immutable rubric version for the final-grade decisions.
+             */
             rubricId: string;
             versionTransition?: components["schemas"]["VersionTransition"];
             project?: components["schemas"]["Decision"];
@@ -1017,15 +1070,21 @@ export interface components {
         };
         /** @description Final grade decision for one student. */
         StudentDecision: {
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description ID of the student receiving this final grade.
+             */
             studentId: string;
+            /** @description Configured aggregation rule; omit for a manual decision. */
             ruleId?: string;
+            /** @description Manual grade (required without ruleId); with ruleId it must equal the computed result. */
             grade?: number;
+            /** @description Rationale for a manual grade; at most 4,000 characters. */
             rationale?: string;
         };
         /** @description Explicit, recorded switch to another rubric version for a project that is already bound. */
         VersionTransition: {
-            /** @description Why the project moves to another rubric version. */
+            /** @description Required, non-blank reason for moving the project to another rubric version; at most 2,000 characters. */
             reason: string;
         };
         /** @description Stored final grade with its method, rationale and input snapshot. */
@@ -1120,12 +1179,19 @@ export interface components {
             recordedAt?: string;
         };
         IdeaRequest: {
+            /** @description Required, non-blank idea title; at most 200 characters. */
             title: string;
+            /** @description Required, non-blank idea description; at most 5,000 characters. */
             description: string;
+            /** @description Required, non-blank intended outcome; at most 2,000 characters. */
             intendedOutcome: string;
+            /** @description At least one non-blank scope point; each is at most 1,000 characters. */
             scopePoints: string[];
+            /** @description Optional learning topics; at most 50 entries. */
             learningTopics?: string[];
+            /** @description Required, non-blank school year; at most 20 characters. */
             schoolYear: string;
+            /** @description For student-authored ideas, optional distinct IDs of other student collaborators; exclude the creator and provide at most four (five owners total). Teacher-authored ideas cannot have collaborators. */
             collaboratorIds?: string[];
         };
         IdeaOwnerResponse: {
@@ -1211,7 +1277,10 @@ export interface components {
             note?: string;
         };
         SupervisorRequest: {
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description ID of the teacher to assign as supervisor.
+             */
             teacherId: string;
             /** @description Explicitly acknowledge that this teacher recorded an explicit refusal (NOT_WILLING_TO_SUPERVISE or NOT_AVAILABLE). Required to assign such a teacher. */
             acknowledgeRefusal?: boolean;
@@ -1224,41 +1293,71 @@ export interface components {
             status?: string;
         };
         SupervisionPreferenceRequest: {
-            /** @enum {string} */
+            /**
+             * @description Required supervision preference: WANTS_TO_SUPERVISE, WILLING_TO_SUPERVISE, NOT_WILLING_TO_SUPERVISE, or NOT_AVAILABLE.
+             * @enum {string}
+             */
             preference: "WANTS_TO_SUPERVISE" | "WILLING_TO_SUPERVISE" | "NOT_WILLING_TO_SUPERVISE" | "NOT_AVAILABLE";
+            /** @description Optional note; at most 2,000 characters. */
             note?: string;
         };
         SpecificationRequest: {
+            /** @description At least one objective. */
             objectives: string[];
+            /** @description At least one intended user group. */
             intendedUsers: string[];
+            /** @description At least one requirement. */
             requirements: string[];
+            /** @description At least one deliverable. */
             deliverables: string[];
+            /** @description Required, non-blank specification scope; at most 5,000 characters. */
             scope: string;
+            /** @description At least one dependency. */
             dependencies: string[];
         };
         FormalApplicationRequest: {
+            /** @description Required, non-blank project topic; at most 200 characters. */
             topic: string;
+            /** @description Exactly one individual topic for each allocated group member; the group contains 3 to 5 students. */
             individualTopics: components["schemas"]["IndividualTopic"][];
+            /** @description Required, non-blank initial situation; at most 400 characters. */
             initialSituation: string;
+            /** @description Exactly one entry per allocated group member (3 to 5 entries); text values combined must be at most 2,400 characters. */
             investigationConcerns: components["schemas"]["StudentText"][];
+            /** @description Required, non-blank objective; at most 400 characters. */
             objective: string;
+            /** @description Exactly one entry per allocated group member (3 to 5 entries); text values combined must be at most 2,400 characters. */
             plannedResults: components["schemas"]["StudentText"][];
+            /** @description At least one milestone. */
             milestones: components["schemas"]["Milestone"][];
+            /** @description Optional cooperation partner; at most 1,000 characters. */
             cooperationPartner?: string;
         };
         IndividualTopic: {
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description Allocated group member's account ID.
+             */
             studentId: string;
+            /** @description Non-blank individual topic; at most 200 characters. */
             topic: string;
         };
         Milestone: {
+            /** @description Non-blank milestone description; at most 1,000 characters. */
             text: string;
-            /** Format: date */
+            /**
+             * Format: date
+             * @description Milestone date in ISO 8601 calendar-date format.
+             */
             date: string;
         };
         StudentText: {
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description Allocated group member's account ID.
+             */
             studentId: string;
+            /** @description Non-blank text; at most 2,400 characters per member. */
             text: string;
         };
         FormalApplicationResponse: {
@@ -1297,6 +1396,7 @@ export interface components {
             totalPages?: number;
         };
         StudentApplicationRequest: {
+            /** @description At least three distinct project IDs from the period catalogue, ranked in array order. */
             projectIds: string[];
         };
         PreferenceResponse: {
@@ -1322,7 +1422,10 @@ export interface components {
             electiveSubjectNames?: string[];
         };
         AllocationPinRequest: {
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description Project to pin for this student.
+             */
             projectId: string;
             /**
              * @description Explicitly acknowledge that the student did not rank the selected project.
@@ -1331,30 +1434,55 @@ export interface components {
             acknowledgeUnranked: boolean;
         };
         ApiErrorResponse: {
-            /** Format: int32 */
+            /**
+             * Format: int32
+             * @description HTTP response status code.
+             */
             status: number;
+            /** @description Short error category. */
             error: string;
+            /** @description Human-readable error detail. */
             message: string;
         };
         AllocationPinResponse: {
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description Pinned student ID.
+             */
             studentId: string;
+            /** @description Current student display name. */
             studentDisplayName: string;
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description Pinned project ID.
+             */
             projectId: string;
+            /** @description Current project title. */
             projectTitle: string;
+            /** @description Whether the project is among the student's ranked choices. */
             rankedChoice: boolean;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description When the pin was saved, as an ISO 8601 instant.
+             */
             savedAt: string;
         };
         ApplicationPeriodRequest: {
             /** @description Required administrator-set period label; trimmed, non-blank after trimming, and at most 100 characters. Blank or whitespace-only values are rejected. */
             label: string;
+            /** @description Required, non-blank school year; at most 20 characters. */
             schoolYear: string;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description Period opening instant in ISO 8601 date-time format.
+             */
             opensAt: string;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description Period closing instant in ISO 8601 date-time format; must be after opensAt.
+             */
             closesAt: string;
+            /** @description At least three distinct accepted project IDs for this period's school year must be included. */
             projectIds: string[];
         };
         ApplicationPeriodResponse: {
@@ -1403,56 +1531,101 @@ export interface components {
             self?: boolean;
         };
         CatalogueEntryRequest: {
-            /** @description Unique shared class or elective-subject name; trimmed before storage; 1 to 100 characters. */
+            /** @description Unique case-insensitively shared class or elective-subject name; trimmed before storage; 1 to 100 characters. */
             name: string;
         };
         CatalogueEntryResponse: {
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description Catalogue entry ID.
+             */
             id: string;
+            /** @description Current catalogue entry name. */
             name: string;
         };
         /** @description Teacher assessment of one student against one criterion of a rubric version. */
         StudentGradeRequest: {
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description ID of the immutable rubric version used for this assessment.
+             */
             rubricId: string;
             versionTransition?: components["schemas"]["VersionTransition"];
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description ID of the student being assessed.
+             */
             studentId: string;
+            /** @description Non-blank criterion ID from the selected rubric version. */
             criterionId: string;
+            /** @description Grade value within the selected criterion's configured scale. */
             grade: number;
-            /** @description Assessment date; defaults to today. */
+            /**
+             * Format: date
+             * @description Optional assessment date in YYYY-MM-DD format; defaults to today and cannot be in the future.
+             */
             assessedOn?: string;
+            /** @description Optional evidence text; at most 4,000 characters. */
             evidence?: string;
+            /** @description Optional comments; at most 4,000 characters. */
             comments?: string;
         };
         /** @description Reassessment; the original entry is retained as superseded on its original rubric version. */
         GradeRevisionRequest: {
+            /** @description Required, non-blank reason for reassessment; at most 2,000 characters. */
             reason: string;
+            /** @description Replacement grade value within the selected criterion's configured scale. */
             grade: number;
+            /**
+             * Format: date
+             * @description Optional assessment date in YYYY-MM-DD format; defaults to today and cannot be in the future.
+             */
             assessedOn?: string;
+            /** @description Optional evidence text; at most 4,000 characters. */
             evidence?: string;
+            /** @description Optional comments; at most 4,000 characters. */
             comments?: string;
         };
         /** @description Records one observation of a metric defined in the rubric version. */
         MetricRequest: {
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description ID of the immutable rubric version used for this observation.
+             */
             rubricId: string;
             versionTransition?: components["schemas"]["VersionTransition"];
+            /** @description Non-blank metric ID from the selected rubric version. */
             metricId: string;
+            /** @description Numeric value of this metric observation, within the optional bounds defined for the selected metric. */
             value: number;
-            /** @description ISO instant of the measurement; defaults to now. */
+            /**
+             * Format: date-time
+             * @description Optional measurement instant in ISO 8601 date-time format; defaults to now.
+             */
             measuredAt?: string;
+            /** @description Optional note; at most 2,000 characters. */
             note?: string;
         };
         /** @description Teacher assessment of the whole group against one criterion of a rubric version. */
         GroupGradeRequest: {
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description ID of the immutable rubric version used for this assessment.
+             */
             rubricId: string;
             versionTransition?: components["schemas"]["VersionTransition"];
+            /** @description Non-blank criterion ID from the selected rubric version. */
             criterionId: string;
+            /** @description Grade value within the selected criterion's configured scale. */
             grade: number;
+            /**
+             * Format: date
+             * @description Optional assessment date in YYYY-MM-DD format; defaults to today and cannot be in the future.
+             */
             assessedOn?: string;
+            /** @description Optional evidence text; at most 4,000 characters. */
             evidence?: string;
+            /** @description Optional comments; at most 4,000 characters. */
             comments?: string;
         };
         CompletionResponse: {
@@ -1463,17 +1636,21 @@ export interface components {
         };
         /** @description Multipart upload form; the artefact is stored privately and never published by upload. */
         ArtifactUploadRequest: {
-            /** @enum {string} */
+            /**
+             * @description Artefact type.
+             * @enum {string}
+             */
             type: "WEBSITE_ARCHIVE" | "POSTER" | "SOURCE_DATA";
+            /** @description Required, non-blank artefact title; at most 200 characters. */
             title: string;
-            /** @description Optional description. */
+            /** @description Optional description; at most 4,000 characters. */
             description?: string;
             /**
              * Format: binary
              * @description Artefact file, at most 10 MiB.
              */
             file: string;
-            /** @description Optional notes for the later publication review. */
+            /** @description Optional notes for the later publication review; at most 4,000 characters. */
             publicationSubmissionMetadata?: string;
         };
         /** @description Private artefact metadata for authorized project users; binary content is fetched separately. */
@@ -1502,125 +1679,211 @@ export interface components {
             reviewedAt?: string;
         };
         ReviewRequest: {
+            /** @description Required, non-blank decision. Formal applications accept APPROVE, REQUEST_REVISION, or DECLINE; specifications accept ACCEPT_FOR_APPLICATIONS, REQUEST_REVISION, or DECLINE. */
             decision: string;
+            /** @description Required, non-blank written feedback; at most 5,000 characters. */
             feedback: string;
-            /** Format: int32 */
+            /**
+             * Format: int32
+             * @description Optional rating from 1 to 5.
+             */
             workSize?: number;
-            /** Format: int32 */
+            /**
+             * Format: int32
+             * @description Optional rating from 1 to 5.
+             */
             curriculumRelevance?: number;
-            /** Format: int32 */
+            /**
+             * Format: int32
+             * @description Optional rating from 1 to 5.
+             */
             technicalComplexity?: number;
-            /** Format: int32 */
+            /**
+             * Format: int32
+             * @description Optional rating from 1 to 5.
+             */
             feasibility?: number;
-            /** Format: int32 */
+            /**
+             * Format: int32
+             * @description Optional rating from 1 to 5.
+             */
             learningValue?: number;
-            /** Format: int32 */
+            /**
+             * Format: int32
+             * @description Optional rating from 1 to 5.
+             */
             resourceNeeds?: number;
-            /** Format: int32 */
+            /**
+             * Format: int32
+             * @description Optional rating from 1 to 5.
+             */
             riskAndDependencies?: number;
+            /** @description Optional recommendation; at most 2,000 characters. */
             recommendation?: string;
         };
         IdeaReviewRequest: {
+            /** @description Required, non-blank idea-review decision: APPROVE_FOR_SPECIFICATION, REQUEST_REVISION, or DECLINE. */
             decision: string;
+            /** @description Required, non-blank written feedback; at most 5,000 characters. */
             feedback: string;
-            /** Format: int32 */
+            /**
+             * Format: int32
+             * @description Optional rating from 1 to 5.
+             */
             workSize?: number;
-            /** Format: int32 */
+            /**
+             * Format: int32
+             * @description Optional rating from 1 to 5.
+             */
             curriculumRelevance?: number;
-            /** Format: int32 */
+            /**
+             * Format: int32
+             * @description Optional rating from 1 to 5.
+             */
             technicalComplexity?: number;
-            /** Format: int32 */
+            /**
+             * Format: int32
+             * @description Optional rating from 1 to 5.
+             */
             feasibility?: number;
-            /** Format: int32 */
+            /**
+             * Format: int32
+             * @description Optional rating from 1 to 5.
+             */
             learningValue?: number;
-            /** Format: int32 */
+            /**
+             * Format: int32
+             * @description Optional rating from 1 to 5.
+             */
             resourceNeeds?: number;
-            /** Format: int32 */
+            /**
+             * Format: int32
+             * @description Optional rating from 1 to 5.
+             */
             riskAndDependencies?: number;
+            /** @description Optional recommendation; at most 2,000 characters. */
             recommendation?: string;
         };
         IdeaOwnerRequest: {
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description ID of the student to add as a co-owner.
+             */
             studentId: string;
         };
-        /** @description Explicitly configured weighted-average rule; no formula exists unless configured here. */
+        /** @description Explicitly configured weighted-average rule; at least one criterion or metric weight is required, and no formula exists unless configured here. */
         AggregationRuleDto: {
+            /** @description Unique aggregation-rule identifier; non-blank and at most 100 characters. */
             id: string;
-            /** Format: int32 */
+            /**
+             * Format: int32
+             * @description Positive aggregation-rule version number.
+             */
             version: number;
+            /** @description Required target scope: STUDENT or PROJECT. */
             scope: string;
+            /** @description Required aggregation method; currently WEIGHTED_AVERAGE. */
             type: string;
             /**
              * Format: int32
              * @description Decimal places of the computed grade (0 to 6).
              */
             decimals?: number;
-            /** @description Weight per criterion id. */
+            /** @description Optional positive weight by defined criterion ID; project-scope rules may weight only group-level criteria. */
             criterionWeights?: {
                 [key: string]: number;
             };
-            /** @description Weight per metric id. */
+            /** @description Optional positive weight by defined metric ID. */
             metricWeights?: {
                 [key: string]: number;
             };
         };
         /** @description Rubric category grouping criteria. */
         CategoryDto: {
+            /** @description Unique category identifier; non-blank and at most 100 characters. */
             id: string;
+            /** @description Non-blank category name; at most 200 characters. */
             name: string;
+            /** @description Optional category description; at most 2,000 characters. */
             description?: string;
+            /** @description At least one criterion. */
             criteria: components["schemas"]["CriterionDto"][];
         };
         /** @description Assessable criterion of a rubric category. */
         CriterionDto: {
+            /** @description Unique criterion identifier; non-blank and at most 100 characters. */
             id: string;
+            /** @description Non-blank criterion name; at most 200 characters. */
             name: string;
+            /** @description Optional criterion description; at most 2,000 characters. */
             description?: string;
-            /** @description Who may be assessed: STUDENT, GROUP or BOTH. */
+            /** @description Required assessment subject: STUDENT, GROUP or BOTH. */
             subject: string;
-            /** @description Optional project stage the criterion belongs to. */
+            /** @description Optional project stage; at most 100 characters. */
             stage?: string;
             /** @description Whether a grade needs written evidence. */
             evidenceRequired?: boolean;
+            /** @description Grade scale used for this criterion. */
             scale: components["schemas"]["ScaleDto"];
         };
         /** @description Versioned project metric definition with optional bounds. */
         MetricDefinitionDto: {
+            /** @description Unique metric identifier; non-blank and at most 100 characters. */
             id: string;
+            /** @description Non-blank metric name; at most 200 characters. */
             name: string;
-            /** Format: int32 */
+            /**
+             * Format: int32
+             * @description Positive metric-definition version number.
+             */
             version: number;
+            /** @description Optional metric description; at most 2,000 characters. */
             description?: string;
+            /** @description Optional metric unit; at most 50 characters. */
             unit?: string;
+            /** @description Optional inclusive lower bound used when validating recorded metric values. */
             min?: number;
+            /** @description Optional inclusive upper bound used when validating recorded metric values. */
             max?: number;
         };
         /** @description Request to publish a new immutable rubric version. */
         PublishRubricRequest: {
             /**
-             * @description Unique version label.
+             * @description Unique, non-blank rubric version label; at most 100 characters.
              * @example 2026-1
              */
             version: string;
+            /** @description Non-blank rubric name; at most 200 characters. */
             name: string;
+            /** @description Optional school year; at most 50 characters. */
             schoolYear?: string;
-            /** @example 2026-09-01 */
+            /**
+             * Format: date
+             * @description Required effective start date in YYYY-MM-DD format.
+             * @example 2026-09-01
+             */
             effectiveFrom: string;
+            /**
+             * Format: date
+             * @description Optional inclusive effective end date in YYYY-MM-DD format; must not be before effectiveFrom.
+             */
             effectiveTo?: string;
+            /** @description Scale used for final grades. */
             finalGradeScale: components["schemas"]["ScaleDto"];
+            /** @description At least one rubric category. */
             categories: components["schemas"]["CategoryDto"][];
             metricDefinitions?: components["schemas"]["MetricDefinitionDto"][];
             aggregationRules?: components["schemas"]["AggregationRuleDto"][];
         };
         /** @description Configured numeric scale; values must lie within min and max and be a multiple of step from min. */
         ScaleDto: {
-            /** @description Lowest value. */
+            /** @description Inclusive lowest grade value on this scale; must be less than max. */
             min: number;
-            /** @description Highest value. */
+            /** @description Inclusive highest grade value on this scale; must be greater than min. */
             max: number;
-            /** @description Step size from min; defaults to 1. */
+            /** @description Positive step size from min; defaults to 1. */
             step?: number;
-            /** @description Optional display label per scale value. */
+            /** @description Optional text labels keyed by string, typically a scale value. */
             labels?: {
                 [key: string]: string;
             };
@@ -1645,7 +1908,9 @@ export interface components {
             publishedAt?: string;
         };
         RegisterRequest: {
+            /** @description Required login name; 3 to 80 characters. */
             username: string;
+            /** @description Required password; 12 to 128 characters. */
             password: string;
             /** @description Required account name; trimmed before storage and limited to 120 characters after trimming. */
             displayName: string;
@@ -1656,6 +1921,7 @@ export interface components {
             /** Format: uuid */
             id?: string;
             username?: string;
+            /** @description Current account display name. */
             displayName: string;
             /** @enum {string} */
             role?: "STUDENT" | "TEACHER" | "ADMIN";
@@ -1665,7 +1931,9 @@ export interface components {
             electiveSubjectNames?: string[];
         };
         LoginRequest: {
+            /** @description Required login name; at least one non-whitespace character. */
             username: string;
+            /** @description Required password; at least one non-whitespace character. */
             password: string;
         };
         TokenResponse: {
@@ -1677,10 +1945,11 @@ export interface components {
         };
         PublicationReviewRequest: {
             /**
-             * @description SUBMIT, APPROVE, REJECT, or UNPUBLISH.
+             * @description Required action: SUBMIT, APPROVE, REJECT, or UNPUBLISH.
              * @example SUBMIT
              */
             decision: string;
+            /** @description Optional review note; at most 2,000 characters. */
             note?: string;
         };
         AllocationApplicationSnapshot: {
@@ -1691,11 +1960,20 @@ export interface components {
             preferences?: components["schemas"]["AllocationPreferenceSnapshot"][];
         };
         AllocationAssignmentResponse: {
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description Assigned student ID.
+             */
             studentId: string;
-            /** Format: uuid */
+            /**
+             * Format: uuid
+             * @description Assigned project ID.
+             */
             projectId: string;
-            /** Format: int32 */
+            /**
+             * Format: int32
+             * @description Rank of the assigned project in the student's preferences; zero when pinned.
+             */
             preferenceRank: number;
             /** @description True when fixed to this project by an administrator pin. */
             pinned: boolean;
@@ -1736,7 +2014,10 @@ export interface components {
             /** Format: date-time */
             createdAt?: string;
             initial?: boolean;
-            /** @default false */
+            /**
+             * @description True when this run was started before the application deadline; otherwise false.
+             * @default false
+             */
             early: boolean;
             projectIds?: string[];
             applications?: components["schemas"]["AllocationApplicationSnapshot"][];
@@ -1770,7 +2051,10 @@ export interface components {
             displayName: string;
         };
         RoleRequest: {
-            /** @enum {string} */
+            /**
+             * @description Account role to assign.
+             * @enum {string}
+             */
             role: "STUDENT" | "TEACHER" | "ADMIN";
         };
         PageResponseUserResponse: {

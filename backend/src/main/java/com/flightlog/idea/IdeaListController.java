@@ -2,6 +2,7 @@ package com.flightlog.idea;
 
 import com.flightlog.security.AuthenticatedUser;
 import com.flightlog.web.ApiDtos;
+import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -19,6 +20,7 @@ class IdeaListController {
     }
 
     @GetMapping
+    @Operation(summary = "List ideas visible to the authenticated user, optionally filtered by status.")
     ApiDtos.PageResponse<ApiDtos.IdeaResponse> list(@AuthenticationPrincipal AuthenticatedUser caller,
             @RequestParam(required = false) String status,
             @RequestParam(defaultValue = "0") int page,

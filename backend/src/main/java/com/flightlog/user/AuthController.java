@@ -28,7 +28,7 @@ public class AuthController {
 
     @PostMapping("/register")
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Register a student account pending administrator class assignment. Any supplied role is ignored.")
+    @Operation(summary = "Register an immediately usable student account with the default unassigned class; any supplied role is ignored.")
     public UserResponse register(@Valid @RequestBody RegisterRequest request) {
         return authService.register(request);
     }
