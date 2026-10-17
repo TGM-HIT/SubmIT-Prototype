@@ -43,8 +43,61 @@ class OpenApiContractTest {
         List<String> failures = new ArrayList<>();
         int operations = checkOperations(document.path("paths"), failures);
         assertEquals(77, operations, "The generated API operation count should be reviewed when endpoints change.");
-        checkComponentSchemas(document.path("components").path("schemas"), failures);
+        JsonNode schemas = document.path("components").path("schemas");
+        checkComponentSchemas(schemas, failures);
+        checkResponseRequiredness(schemas, failures);
         assertTrue(failures.isEmpty(), () -> String.join(System.lineSeparator(), failures));
+    }
+
+    private void checkResponseRequiredness(JsonNode schemas, List<String> failures) {
+        checkRequiredProperties(schemas, "IdeaResponse", List.of("id", "ownerId", "creatorId", "owners",
+                "ownerDisplayName", "status", "title", "description", "intendedOutcome", "scopePoints",
+                "learningTopics", "schoolYear", "specification", "reviews", "supervisionPreferences"), failures);
+        checkRequiredProperties(schemas, "UserResponse", List.of("id", "username", "displayName", "role"), failures);
+        checkOptionalProperties(schemas, "UserResponse", List.of("className", "electiveSubjectNames"), failures);
+        checkRequiredProperties(schemas, "IdeaOwnerResponse", List.of("id", "displayName", "creator"), failures);
+        checkOptionalProperties(schemas, "IdeaOwnerResponse", List.of("className", "electiveSubjectNames"), failures);
+        checkRequiredProperties(schemas, "PageResponseIdeaResponse",
+                List.of("content", "page", "size", "totalElements", "totalPages"), failures);
+        checkRequiredProperties(schemas, "PageResponseUserResponse",
+                List.of("content", "page", "size", "totalElements", "totalPages"), failures);
+
+        JsonNode specification = schemas.path("IdeaResponse").path("properties").path("specification");
+        if (!allowsNull(specification)) {
+            failures.add("IdeaResponse.specification is emitted as null when no specification exists but is not nullable");
+        }
+    }
+
+    private void checkRequiredProperties(JsonNode schemas, String schemaName, List<String> properties,
+            List<String> failures) {
+        JsonNode schema = schemas.path(schemaName);
+        for (String property : properties) {
+            if (!isRequired(schema.path("required"), property)) {
+                failures.add(schemaName + "." + property + " is always emitted but is not required");
+            }
+        }
+    }
+
+    private void checkOptionalProperties(JsonNode schemas, String schemaName, List<String> properties,
+            List<String> failures) {
+        JsonNode schema = schemas.path(schemaName);
+        for (String property : properties) {
+            if (isRequired(schema.path("required"), property)) {
+                failures.add(schemaName + "." + property + " is conditionally omitted but is required");
+            }
+        }
+    }
+
+    private boolean allowsNull(JsonNode schema) {
+        JsonNode type = schema.path("type");
+        if (type.isArray()) {
+            for (JsonNode value : type) {
+                if ("null".equals(value.asText())) {
+                    return true;
+                }
+            }
+        }
+        return schema.path("nullable").asBoolean();
     }
 
     private int checkOperations(JsonNode paths, List<String> failures) {

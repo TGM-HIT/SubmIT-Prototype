@@ -5,6 +5,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.flightlog.security.AuthenticatedUser;
@@ -92,6 +93,23 @@ class UserRoleControllerTest {
                         .value(org.hamcrest.Matchers.contains("Student Account Name")))
                 .andExpect(jsonPath("$.content[?(@.username == 'student')].username")
                         .value(org.hamcrest.Matchers.contains("student")));
+    }
+
+    @Test
+    void userResponseEmitsIdentityFieldsAndOmitsUnavailableStudentDetails() throws Exception {
+        var result = mockMvc.perform(get("/api/users").header("Authorization", bearer(admin)))
+                .andExpect(status().isOk()).andReturn();
+        var usersPage = objectMapper.readTree(result.getResponse().getContentAsByteArray());
+        var adminResponse = java.util.stream.StreamSupport.stream(usersPage.path("content").spliterator(), false)
+                .filter(value -> "admin".equals(value.path("username").asText()))
+                .findFirst().orElseThrow();
+
+        assertTrue(adminResponse.has("id"));
+        assertTrue(adminResponse.has("username"));
+        assertTrue(adminResponse.has("displayName"));
+        assertTrue(adminResponse.has("role"));
+        assertTrue(!adminResponse.has("className"));
+        assertTrue(!adminResponse.has("electiveSubjectNames"));
     }
 
     @Test

@@ -1089,94 +1089,233 @@ export interface components {
         };
         /** @description Stored final grade with its method, rationale and input snapshot. */
         FinalGradeResponse: {
-            /** Format: uuid */
-            id?: string;
-            status?: string;
-            createdAt?: string;
-            /** Format: uuid */
-            projectId?: string;
-            /** Format: uuid */
-            rubricId?: string;
-            rubricVersion?: string;
-            scope?: string;
-            /** Format: uuid */
-            studentId?: string;
-            grade?: number;
-            method?: string;
-            ruleId?: string;
-            /** Format: int32 */
-            ruleVersion?: number;
-            rationale?: string;
-            inputs?: components["schemas"]["Inputs"];
-            /** Format: uuid */
-            decidedBy?: string;
-            decidedAt?: string;
+            /**
+             * Format: uuid
+             * @description Final-grade record ID.
+             */
+            id: string;
+            /** @description Final-grade record status. */
+            status: string;
+            /** @description Instant when the final grade was created. */
+            createdAt: string;
+            /**
+             * Format: uuid
+             * @description Associated project ID.
+             */
+            projectId: string;
+            /**
+             * Format: uuid
+             * @description Immutable rubric version ID.
+             */
+            rubricId: string;
+            /** @description Rubric version label. */
+            rubricVersion: string;
+            /** @description Whether this grade is for a project or an individual student. */
+            scope: string;
+            /**
+             * Format: uuid
+             * @description Student account ID; null for a project-level grade.
+             */
+            studentId: string | null;
+            /** @description Calculated or manually entered final grade. */
+            grade: number;
+            /** @description Method used to determine the grade. */
+            method: string;
+            /** @description Aggregation-rule ID; null for a manual grade. */
+            ruleId: string | null;
+            /**
+             * Format: int32
+             * @description Aggregation-rule version; null for a manual grade.
+             */
+            ruleVersion: number | null;
+            /** @description Optional decision rationale; null when not recorded. */
+            rationale: string | null;
+            /** @description Snapshot of grade and metric inputs considered. */
+            inputs: components["schemas"]["Inputs"];
+            /**
+             * Format: uuid
+             * @description Account ID that recorded the decision.
+             */
+            decidedBy: string;
+            /** @description Instant when the decision was recorded. */
+            decidedAt: string;
         };
         /** @description Result of recording final grades. */
         FinalGradesResponse: {
-            project?: components["schemas"]["FinalGradeResponse"];
-            students?: components["schemas"]["FinalGradeResponse"][];
+            /** @description Project-level final grade, or null if none was included. */
+            project: {
+                /**
+                 * Format: uuid
+                 * @description Final-grade record ID.
+                 */
+                id: string;
+                /** @description Final-grade record status. */
+                status: string;
+                /** @description Instant when the final grade was created. */
+                createdAt: string;
+                /**
+                 * Format: uuid
+                 * @description Associated project ID.
+                 */
+                projectId: string;
+                /**
+                 * Format: uuid
+                 * @description Immutable rubric version ID.
+                 */
+                rubricId: string;
+                /** @description Rubric version label. */
+                rubricVersion: string;
+                /** @description Whether this grade is for a project or an individual student. */
+                scope: string;
+                /**
+                 * Format: uuid
+                 * @description Student account ID; null for a project-level grade.
+                 */
+                studentId: string | null;
+                /** @description Calculated or manually entered final grade. */
+                grade: number;
+                /** @description Method used to determine the grade. */
+                method: string;
+                /** @description Aggregation-rule ID; null for a manual grade. */
+                ruleId: string | null;
+                /**
+                 * Format: int32
+                 * @description Aggregation-rule version; null for a manual grade.
+                 */
+                ruleVersion: number | null;
+                /** @description Optional decision rationale; null when not recorded. */
+                rationale: string | null;
+                /** @description Snapshot of grade and metric inputs considered. */
+                inputs: components["schemas"]["Inputs"];
+                /**
+                 * Format: uuid
+                 * @description Account ID that recorded the decision.
+                 */
+                decidedBy: string;
+                /** @description Instant when the decision was recorded. */
+                decidedAt: string;
+            } | null;
+            /** @description Individual final grades included in the result. */
+            students: components["schemas"]["FinalGradeResponse"][];
         };
         /** @description Stored grade entry bound to an immutable rubric version and criterion. */
         GradeResponse: {
-            /** Format: uuid */
-            id?: string;
-            status?: string;
-            createdAt?: string;
-            /** Format: uuid */
-            projectId?: string;
-            /** Format: uuid */
-            studentId?: string;
+            /**
+             * Format: uuid
+             * @description Grade record ID.
+             */
+            id: string;
+            /** @description Grade record status. */
+            status: string;
+            /** @description Instant when the grade record was created. */
+            createdAt: string;
+            /**
+             * Format: uuid
+             * @description Associated project ID.
+             */
+            projectId: string;
+            /**
+             * Format: uuid
+             * @description Student account ID; null for a group grade.
+             */
+            studentId: string | null;
             /** @description Current student display name; included only for authenticated teacher and administrator responses. */
             studentDisplayName?: string;
             /** @description Current class name; included only for authenticated teacher and administrator responses. */
             className?: string;
             /** @description Current elective subject names; included only for authenticated teacher and administrator responses. */
             electiveSubjectNames?: string[];
-            /** Format: uuid */
-            rubricId?: string;
-            rubricVersion?: string;
-            criterionId?: string;
-            categoryId?: string;
-            grade?: number;
-            assessedOn?: string;
-            evidence?: string;
-            comments?: string;
-            /** Format: uuid */
-            teacherId?: string;
-            recordedAt?: string;
-            /** Format: uuid */
-            supersedesId?: string;
-            /** Format: uuid */
-            supersededById?: string;
-            reason?: string;
+            /**
+             * Format: uuid
+             * @description Immutable rubric version ID.
+             */
+            rubricId: string;
+            /** @description Rubric version label. */
+            rubricVersion: string;
+            /** @description Assessed criterion ID. */
+            criterionId: string;
+            /** @description Rubric category ID. */
+            categoryId: string;
+            /** @description Recorded grade value. */
+            grade: number;
+            /** @description Assessment date. */
+            assessedOn: string;
+            /** @description Optional evidence text; null when not supplied. */
+            evidence: string | null;
+            /** @description Optional comments; null when not supplied. */
+            comments: string | null;
+            /**
+             * Format: uuid
+             * @description Teacher account ID that recorded the grade.
+             */
+            teacherId: string;
+            /** @description Instant when the grade was recorded. */
+            recordedAt: string;
+            /**
+             * Format: uuid
+             * @description Prior grade record ID superseded by this revision, if any.
+             */
+            supersedesId: string | null;
+            /**
+             * Format: uuid
+             * @description Newer grade record ID that supersedes this record, if any.
+             */
+            supersededById: string | null;
+            /** @description Reason for revising the prior grade, if any. */
+            reason: string | null;
         };
         /** @description Grades and observations that were considered when the final grade was decided. */
         Inputs: {
-            studentGrades?: components["schemas"]["GradeResponse"][];
-            groupGrades?: components["schemas"]["GradeResponse"][];
-            metrics?: components["schemas"]["MetricResponse"][];
+            /** @description Student-level grade observations considered. */
+            studentGrades: components["schemas"]["GradeResponse"][];
+            /** @description Group-level grade observations considered. */
+            groupGrades: components["schemas"]["GradeResponse"][];
+            /** @description Metric observations considered. */
+            metrics: components["schemas"]["MetricResponse"][];
         };
         /** @description Stored metric observation referencing the metric definition version. */
         MetricResponse: {
-            /** Format: uuid */
-            id?: string;
-            status?: string;
-            createdAt?: string;
-            /** Format: uuid */
-            projectId?: string;
-            /** Format: uuid */
-            rubricId?: string;
-            rubricVersion?: string;
-            metricId?: string;
-            /** Format: int32 */
-            metricVersion?: number;
-            value?: number;
-            measuredAt?: string;
-            note?: string;
-            /** Format: uuid */
-            recordedBy?: string;
-            recordedAt?: string;
+            /**
+             * Format: uuid
+             * @description Metric observation record ID.
+             */
+            id: string;
+            /** @description Metric observation status. */
+            status: string;
+            /** @description Instant when the observation record was created. */
+            createdAt: string;
+            /**
+             * Format: uuid
+             * @description Associated project ID.
+             */
+            projectId: string;
+            /**
+             * Format: uuid
+             * @description Immutable rubric version ID.
+             */
+            rubricId: string;
+            /** @description Rubric version label. */
+            rubricVersion: string;
+            /** @description Metric definition ID. */
+            metricId: string;
+            /**
+             * Format: int32
+             * @description Metric definition version.
+             */
+            metricVersion: number;
+            /** @description Recorded metric value. */
+            value: number;
+            /** @description Instant when the metric was measured. */
+            measuredAt: string;
+            /** @description Optional note; null when not supplied. */
+            note: string | null;
+            /**
+             * Format: uuid
+             * @description Account ID that recorded the metric.
+             */
+            recordedBy: string;
+            /** @description Instant when the metric was recorded. */
+            recordedAt: string;
         };
         IdeaRequest: {
             /** @description Required, non-blank idea title; at most 200 characters. */
@@ -1195,86 +1334,183 @@ export interface components {
             collaboratorIds?: string[];
         };
         IdeaOwnerResponse: {
-            /** Format: uuid */
-            id?: string;
-            displayName?: string;
-            creator?: boolean;
+            /**
+             * Format: uuid
+             * @description Owner account ID.
+             */
+            id: string;
+            /** @description Current owner display name, or null when the account is unavailable. */
+            displayName: string | null;
+            /** @description Whether this owner created the idea. */
+            creator: boolean;
             /** @description Current class name; only included in authenticated teacher and administrator responses. */
             className?: string;
             /** @description Current elective subject names; only included in authenticated teacher and administrator responses. */
             electiveSubjectNames?: string[];
         };
         IdeaResponse: {
-            /** Format: uuid */
-            id?: string;
-            /** Format: uuid */
-            ownerId?: string;
-            /** Format: uuid */
-            creatorId?: string;
-            owners?: components["schemas"]["IdeaOwnerResponse"][];
+            /**
+             * Format: uuid
+             * @description Idea record ID.
+             */
+            id: string;
+            /**
+             * Format: uuid
+             * @description Primary owner's account ID.
+             */
+            ownerId: string;
+            /**
+             * Format: uuid
+             * @description Creator's account ID.
+             */
+            creatorId: string;
+            /** @description Owners of the idea, including its creator. */
+            owners: components["schemas"]["IdeaOwnerResponse"][];
             /** @description Current account display name; included only in authorized idea responses. */
-            ownerDisplayName?: string;
-            status?: string;
-            title?: string;
-            description?: string;
-            intendedOutcome?: string;
-            scopePoints?: string[];
-            learningTopics?: string[];
-            schoolYear?: string;
+            ownerDisplayName: string | null;
+            /** @description Idea workflow status. */
+            status: string;
+            /** @description Idea title. */
+            title: string;
+            /** @description Idea description. */
+            description: string;
+            /** @description Intended outcome of the idea. */
+            intendedOutcome: string;
+            /** @description Scope points supplied for the idea. */
+            scopePoints: string[];
+            /** @description Learning topics supplied for the idea. */
+            learningTopics: string[];
+            /** @description School year associated with the idea. */
+            schoolYear: string;
             confirmedSupervisorDisplayName?: string;
             /** @description Whether the current author account is a teacher; included only in staff responses. */
             teacherIdea?: boolean;
-            specification?: components["schemas"]["SpecificationResponse"];
-            reviews?: components["schemas"]["ReviewResponse"][];
-            supervisionPreferences?: components["schemas"]["SupervisionPreferenceResponse"][];
+            /** @description Current specification, or null if none exists. */
+            specification: {
+                /**
+                 * Format: uuid
+                 * @description Specification record ID.
+                 */
+                id: string;
+                /** @description Current specification workflow status. */
+                status: string;
+                /** @description Project objectives. */
+                objectives: string[];
+                /** @description Intended users of the project. */
+                intendedUsers: string[];
+                /** @description Project requirements. */
+                requirements: string[];
+                /** @description Project deliverables. */
+                deliverables: string[];
+                /** @description Project scope. */
+                scope: string;
+                /** @description External or internal project dependencies. */
+                dependencies: string[];
+                /** @description Identifier of the source revision, or null when unavailable. */
+                revisionId: string | null;
+            } | null;
+            /** @description Idea review history available to the caller. */
+            reviews: components["schemas"]["ReviewResponse"][];
+            /** @description Supervision preference history available to the caller. */
+            supervisionPreferences: components["schemas"]["SupervisionPreferenceResponse"][];
         };
         ReviewResponse: {
-            /** Format: uuid */
-            id?: string;
-            /** Format: uuid */
-            teacherId?: string;
+            /**
+             * Format: uuid
+             * @description Review record ID.
+             */
+            id: string;
+            /**
+             * Format: uuid
+             * @description Review author's account ID.
+             */
+            teacherId: string;
             /** @description Current account display name; included only in authorized idea history. */
-            teacherDisplayName?: string;
-            reviewType?: string;
-            decision?: string;
-            feedback?: string;
-            /** Format: int32 */
-            workSize?: number;
-            /** Format: int32 */
-            curriculumRelevance?: number;
-            /** Format: int32 */
-            technicalComplexity?: number;
-            /** Format: int32 */
-            feasibility?: number;
-            /** Format: int32 */
-            learningValue?: number;
-            /** Format: int32 */
-            resourceNeeds?: number;
-            /** Format: int32 */
-            riskAndDependencies?: number;
-            recommendation?: string;
+            teacherDisplayName: string | null;
+            /** @description Kind of review. */
+            reviewType: string;
+            /** @description Recorded review decision. */
+            decision: string;
+            /** @description Written reviewer feedback. */
+            feedback: string;
+            /**
+             * Format: int32
+             * @description Optional work-size rating; null when not recorded.
+             */
+            workSize: number | null;
+            /**
+             * Format: int32
+             * @description Optional curriculum-relevance rating; null when not recorded.
+             */
+            curriculumRelevance: number | null;
+            /**
+             * Format: int32
+             * @description Optional technical-complexity rating; null when not recorded.
+             */
+            technicalComplexity: number | null;
+            /**
+             * Format: int32
+             * @description Optional feasibility rating; null when not recorded.
+             */
+            feasibility: number | null;
+            /**
+             * Format: int32
+             * @description Optional learning-value rating; null when not recorded.
+             */
+            learningValue: number | null;
+            /**
+             * Format: int32
+             * @description Optional resource-needs rating; null when not recorded.
+             */
+            resourceNeeds: number | null;
+            /**
+             * Format: int32
+             * @description Optional risk-and-dependencies rating; null when not recorded.
+             */
+            riskAndDependencies: number | null;
+            /** @description Optional recommendation; null when not recorded. */
+            recommendation: string | null;
         };
         SpecificationResponse: {
-            /** Format: uuid */
-            id?: string;
-            status?: string;
-            objectives?: string[];
-            intendedUsers?: string[];
-            requirements?: string[];
-            deliverables?: string[];
-            scope?: string;
-            dependencies?: string[];
-            revisionId?: string;
+            /**
+             * Format: uuid
+             * @description Specification record ID.
+             */
+            id: string;
+            /** @description Current specification workflow status. */
+            status: string;
+            /** @description Project objectives. */
+            objectives: string[];
+            /** @description Intended users of the project. */
+            intendedUsers: string[];
+            /** @description Project requirements. */
+            requirements: string[];
+            /** @description Project deliverables. */
+            deliverables: string[];
+            /** @description Project scope. */
+            scope: string;
+            /** @description External or internal project dependencies. */
+            dependencies: string[];
+            /** @description Identifier of the source revision, or null when unavailable. */
+            revisionId: string | null;
         };
         SupervisionPreferenceResponse: {
-            /** Format: uuid */
-            id?: string;
-            /** Format: uuid */
-            teacherId?: string;
+            /**
+             * Format: uuid
+             * @description Preference record ID.
+             */
+            id: string;
+            /**
+             * Format: uuid
+             * @description Teacher account ID.
+             */
+            teacherId: string;
             /** @description Current account display name; included only in authorized idea history. */
-            teacherDisplayName?: string;
-            preference?: string;
-            note?: string;
+            teacherDisplayName: string | null;
+            /** @description Recorded supervision preference. */
+            preference: string;
+            /** @description Optional note; null when not recorded. */
+            note: string | null;
         };
         SupervisorRequest: {
             /**
@@ -1286,11 +1522,18 @@ export interface components {
             acknowledgeRefusal?: boolean;
         };
         SupervisorResponse: {
-            /** Format: uuid */
-            id?: string;
-            /** Format: uuid */
-            teacherId?: string;
-            status?: string;
+            /**
+             * Format: uuid
+             * @description Supervisor assignment record ID.
+             */
+            id: string;
+            /**
+             * Format: uuid
+             * @description Assigned teacher account ID.
+             */
+            teacherId: string;
+            /** @description Supervisor assignment status. */
+            status: string;
         };
         SupervisionPreferenceRequest: {
             /**
@@ -1361,61 +1604,117 @@ export interface components {
             text: string;
         };
         FormalApplicationResponse: {
-            /** Format: uuid */
-            id?: string;
-            /** Format: uuid */
-            projectId?: string;
-            status?: string;
-            topic?: string;
-            individualTopics?: components["schemas"]["IndividualTopic"][];
-            initialSituation?: string;
-            investigationConcerns?: components["schemas"]["StudentText"][];
-            objective?: string;
-            plannedResults?: components["schemas"]["StudentText"][];
-            milestones?: components["schemas"]["Milestone"][];
-            cooperationPartner?: string;
-            reviewHistory?: components["schemas"]["PageResponseFormalReviewResponse"];
+            /**
+             * Format: uuid
+             * @description Formal-application record ID.
+             */
+            id: string;
+            /**
+             * Format: uuid
+             * @description Associated project ID.
+             */
+            projectId: string;
+            /** @description Current formal-application status. */
+            status: string;
+            /** @description Project topic stated in the application. */
+            topic: string;
+            /** @description Individual topics recorded for group members. */
+            individualTopics: components["schemas"]["IndividualTopic"][];
+            /** @description Initial situation described by the group. */
+            initialSituation: string;
+            /** @description Investigation concerns recorded for group members. */
+            investigationConcerns: components["schemas"]["StudentText"][];
+            /** @description Objective stated in the application. */
+            objective: string;
+            /** @description Planned results recorded for group members. */
+            plannedResults: components["schemas"]["StudentText"][];
+            /** @description Application milestones. */
+            milestones: components["schemas"]["Milestone"][];
+            /** @description Optional cooperation partner; null when not supplied. */
+            cooperationPartner: string | null;
+            /** @description Paginated formal-review history. */
+            reviewHistory: components["schemas"]["PageResponseFormalReviewResponse"];
         };
         FormalReviewResponse: {
-            /** Format: uuid */
-            id?: string;
-            /** Format: uuid */
-            teacherId?: string;
-            decision?: string;
-            feedback?: string;
+            /**
+             * Format: uuid
+             * @description Formal-review record ID.
+             */
+            id: string;
+            /**
+             * Format: uuid
+             * @description Reviewing teacher account ID.
+             */
+            teacherId: string;
+            /** @description Recorded review decision. */
+            decision: string;
+            /** @description Written review feedback. */
+            feedback: string;
         };
         PageResponseFormalReviewResponse: {
-            content?: components["schemas"]["FormalReviewResponse"][];
-            /** Format: int32 */
-            page?: number;
-            /** Format: int32 */
-            size?: number;
-            /** Format: int64 */
-            totalElements?: number;
-            /** Format: int32 */
-            totalPages?: number;
+            /** @description Items returned in this page. */
+            content: components["schemas"]["FormalReviewResponse"][];
+            /**
+             * Format: int32
+             * @description Zero-based index of this page.
+             */
+            page: number;
+            /**
+             * Format: int32
+             * @description Maximum number of items requested per page.
+             */
+            size: number;
+            /**
+             * Format: int64
+             * @description Total number of matching items across all pages.
+             */
+            totalElements: number;
+            /**
+             * Format: int32
+             * @description Number of pages containing all matching items.
+             */
+            totalPages: number;
         };
         StudentApplicationRequest: {
             /** @description At least three distinct project IDs from the period catalogue, ranked in array order. */
             projectIds: string[];
         };
         PreferenceResponse: {
-            /** Format: uuid */
-            projectId?: string;
-            /** Format: int32 */
-            rank?: number;
-            projectTitle?: string;
+            /**
+             * Format: uuid
+             * @description Preferred project ID.
+             */
+            projectId: string;
+            /**
+             * Format: int32
+             * @description Preference rank, starting at one.
+             */
+            rank: number;
+            /** @description Current title of the preferred project. */
+            projectTitle: string;
         };
         StudentApplicationResponse: {
-            /** Format: uuid */
-            id?: string;
-            /** Format: uuid */
-            studentId?: string;
-            studentDisplayName?: string;
-            /** Format: uuid */
-            periodId?: string;
-            status?: string;
-            preferences?: components["schemas"]["PreferenceResponse"][];
+            /**
+             * Format: uuid
+             * @description Student application record ID.
+             */
+            id: string;
+            /**
+             * Format: uuid
+             * @description Applicant account ID.
+             */
+            studentId: string;
+            /** @description Current applicant display name. */
+            studentDisplayName: string;
+            /**
+             * Format: uuid
+             * @description Application-period ID.
+             */
+            periodId: string;
+            /** @description Current application status. */
+            status: string;
+            /** @description Ranked project preferences. */
+            preferences: components["schemas"]["PreferenceResponse"][];
             /** @description Current class name; only included in authenticated teacher and administrator responses. */
             className?: string;
             /** @description Current elective subject names; only included in authenticated teacher and administrator responses. */
@@ -1486,17 +1785,29 @@ export interface components {
             projectIds: string[];
         };
         ApplicationPeriodResponse: {
-            /** Format: uuid */
-            id?: string;
+            /**
+             * Format: uuid
+             * @description Application-period record ID.
+             */
+            id: string;
             /** @description Period label; legacy records without a label are presented using their school year. At most 100 characters. */
             label: string;
-            schoolYear?: string;
-            /** Format: date-time */
-            opensAt?: string;
-            /** Format: date-time */
-            closesAt?: string;
-            status?: string;
-            projectIds?: string[];
+            /** @description School year served by the application period. */
+            schoolYear: string;
+            /**
+             * Format: date-time
+             * @description Instant when applications open.
+             */
+            opensAt: string;
+            /**
+             * Format: date-time
+             * @description Instant when applications close.
+             */
+            closesAt: string;
+            /** @description Current application-period status. */
+            status: string;
+            /** @description Project IDs available in the period catalogue. */
+            projectIds: string[];
             projectTitles?: components["schemas"]["ProjectTitleResponse"][];
             /** @description Present only to the authenticated student; status of that student's application, or NOT_SUBMITTED. */
             studentApplicationStatus?: string;
@@ -1504,31 +1815,35 @@ export interface components {
             studentAssignment?: components["schemas"]["StudentAssignmentResponse"];
         };
         ProjectTitleResponse: {
-            /** Format: uuid */
-            projectId?: string;
-            title?: string;
+            /**
+             * Format: uuid
+             * @description Project idea ID.
+             */
+            projectId: string;
+            /** @description Current project title. */
+            title: string;
         };
         StudentAssignmentResponse: {
             /**
              * @description NO_RESULT, PRELIMINARY, FINAL, NOT_ASSIGNED_PRELIMINARY, or NOT_ASSIGNED_FINAL.
              * @enum {string}
              */
-            state?: "NO_RESULT" | "PRELIMINARY" | "FINAL" | "NOT_ASSIGNED_PRELIMINARY" | "NOT_ASSIGNED_FINAL";
+            state: "NO_RESULT" | "PRELIMINARY" | "FINAL" | "NOT_ASSIGNED_PRELIMINARY" | "NOT_ASSIGNED_FINAL";
             /** @description Current project title; present only when assigned. */
-            projectTitle?: string;
+            projectTitle: string | null;
             /**
              * Format: int32
              * @description The caller's rank for the assigned project, when present in their application.
              */
-            preferenceRank?: number;
+            preferenceRank: number | null;
             /** @description Current display names of this assigned project's group only; contains no IDs. */
-            groupMembers?: components["schemas"]["StudentGroupMemberResponse"][];
+            groupMembers: components["schemas"]["StudentGroupMemberResponse"][];
         };
         StudentGroupMemberResponse: {
             /** @description Current account display name, or Unknown student. */
-            displayName?: string;
+            displayName: string;
             /** @description True only for the authenticated caller. */
-            self?: boolean;
+            self: boolean;
         };
         CatalogueEntryRequest: {
             /** @description Unique case-insensitively shared class or elective-subject name; trimmed before storage; 1 to 100 characters. */
@@ -1629,10 +1944,15 @@ export interface components {
             comments?: string;
         };
         CompletionResponse: {
-            /** Format: uuid */
-            projectId?: string;
-            status?: string;
-            completedAt?: string;
+            /**
+             * Format: uuid
+             * @description Completed project ID.
+             */
+            projectId: string;
+            /** @description Project completion status. */
+            status: string;
+            /** @description Completion instant. */
+            completedAt: string;
         };
         /** @description Multipart upload form; the artefact is stored privately and never published by upload. */
         ArtifactUploadRequest: {
@@ -1655,28 +1975,58 @@ export interface components {
         };
         /** @description Private artefact metadata for authorized project users; binary content is fetched separately. */
         ArtifactResponse: {
-            /** Format: uuid */
-            id?: string;
-            /** Format: uuid */
-            projectId?: string;
-            /** @enum {string} */
-            type?: "WEBSITE_ARCHIVE" | "POSTER" | "SOURCE_DATA";
-            title?: string;
-            description?: string;
-            filename?: string;
-            contentType?: string;
-            /** Format: int64 */
-            size?: number;
-            /** Format: uuid */
-            uploaderId?: string;
-            /** Format: date-time */
-            uploadedAt?: string;
-            /** @enum {string} */
-            publicationStatus?: "PRIVATE" | "PENDING_REVIEW" | "APPROVED" | "REJECTED";
-            publicationSubmissionMetadata?: string;
-            reviewNote?: string;
-            /** Format: date-time */
-            reviewedAt?: string;
+            /**
+             * Format: uuid
+             * @description Artefact record ID.
+             */
+            id: string;
+            /**
+             * Format: uuid
+             * @description Associated project ID.
+             */
+            projectId: string;
+            /**
+             * @description Artefact category.
+             * @enum {string}
+             */
+            type: "WEBSITE_ARCHIVE" | "POSTER" | "SOURCE_DATA";
+            /** @description Artefact title. */
+            title: string;
+            /** @description Artefact description. */
+            description: string;
+            /** @description Stored filename. */
+            filename: string;
+            /** @description Media type of the stored file. */
+            contentType: string;
+            /**
+             * Format: int64
+             * @description Stored file size in bytes.
+             */
+            size: number;
+            /**
+             * Format: uuid
+             * @description Account ID of the uploader.
+             */
+            uploaderId: string;
+            /**
+             * Format: date-time
+             * @description Instant when the artefact was uploaded.
+             */
+            uploadedAt: string;
+            /**
+             * @description Current publication-review status.
+             * @enum {string}
+             */
+            publicationStatus: "PRIVATE" | "PENDING_REVIEW" | "APPROVED" | "REJECTED";
+            /** @description Optional metadata submitted for publication review; null if absent. */
+            publicationSubmissionMetadata: string | null;
+            /** @description Optional publication-review note; null if absent. */
+            reviewNote: string | null;
+            /**
+             * Format: date-time
+             * @description Instant when publication review occurred; null if not reviewed.
+             */
+            reviewedAt: string | null;
         };
         ReviewRequest: {
             /** @description Required, non-blank decision. Formal applications accept APPROVE, REQUEST_REVISION, or DECLINE; specifications accept ACCEPT_FOR_APPLICATIONS, REQUEST_REVISION, or DECLINE. */
@@ -1888,24 +2238,130 @@ export interface components {
                 [key: string]: string;
             };
         };
+        /** @description Response representation of a configured weighted-average rule. */
+        AggregationRuleResponseDto: {
+            /** @description Unique aggregation-rule identifier. */
+            id: string;
+            /**
+             * Format: int32
+             * @description Aggregation-rule version.
+             */
+            version: number;
+            /** @description Target scope of the rule. */
+            scope: string;
+            /** @description Aggregation method. */
+            type: string;
+            /**
+             * Format: int32
+             * @description Number of decimal places for the calculated grade.
+             */
+            decimals: number;
+            /** @description Configured criterion weights. */
+            criterionWeights: {
+                [key: string]: number;
+            };
+            /** @description Configured metric weights. */
+            metricWeights: {
+                [key: string]: number;
+            };
+        };
+        /** @description Response representation of a rubric category. */
+        CategoryResponseDto: {
+            /** @description Unique category identifier. */
+            id: string;
+            /** @description Category name. */
+            name: string;
+            /** @description Optional category description; null if absent. */
+            description: string | null;
+            /** @description Criteria belonging to the category. */
+            criteria: components["schemas"]["CriterionResponseDto"][];
+        };
+        /** @description Response representation of an assessable rubric criterion. */
+        CriterionResponseDto: {
+            /** @description Unique criterion identifier. */
+            id: string;
+            /** @description Criterion name. */
+            name: string;
+            /** @description Optional criterion description; null if absent. */
+            description: string | null;
+            /** @description Assessment subject. */
+            subject: string;
+            /** @description Optional project stage; null if absent. */
+            stage: string | null;
+            /** @description Whether written evidence is required. */
+            evidenceRequired: boolean;
+            /** @description Scale used for this criterion. */
+            scale: components["schemas"]["ScaleResponseDto"];
+        };
+        /** @description Response representation of a versioned project metric definition. */
+        MetricDefinitionResponseDto: {
+            /** @description Unique metric identifier. */
+            id: string;
+            /** @description Metric name. */
+            name: string;
+            /**
+             * Format: int32
+             * @description Metric definition version.
+             */
+            version: number;
+            /** @description Optional metric description; null if absent. */
+            description: string | null;
+            /** @description Optional metric unit; null if absent. */
+            unit: string | null;
+            /** @description Optional inclusive minimum value; null if unbounded. */
+            min: number | null;
+            /** @description Optional inclusive maximum value; null if unbounded. */
+            max: number | null;
+        };
         /** @description Published immutable rubric version. */
         RubricResponse: {
-            /** Format: uuid */
-            id?: string;
-            status?: string;
-            createdAt?: string;
-            version?: string;
-            name?: string;
-            schoolYear?: string;
-            effectiveFrom?: string;
-            effectiveTo?: string;
-            finalGradeScale?: components["schemas"]["ScaleDto"];
-            categories?: components["schemas"]["CategoryDto"][];
-            metricDefinitions?: components["schemas"]["MetricDefinitionDto"][];
-            aggregationRules?: components["schemas"]["AggregationRuleDto"][];
-            /** Format: uuid */
-            publishedBy?: string;
-            publishedAt?: string;
+            /**
+             * Format: uuid
+             * @description Published rubric ID.
+             */
+            id: string;
+            /** @description Rubric publication status. */
+            status: string;
+            /** @description Instant when the rubric was published. */
+            createdAt: string;
+            /** @description Published rubric version label. */
+            version: string;
+            /** @description Rubric name. */
+            name: string;
+            /** @description School year associated with the rubric, or null if not specified. */
+            schoolYear: string | null;
+            /** @description Date from which this rubric is effective. */
+            effectiveFrom: string;
+            /** @description Inclusive effective end date, or null if open-ended. */
+            effectiveTo: string | null;
+            /** @description Scale used for final grades. */
+            finalGradeScale: components["schemas"]["ScaleResponseDto"];
+            /** @description Rubric categories and criteria. */
+            categories: components["schemas"]["CategoryResponseDto"][];
+            /** @description Metric definitions in this rubric version. */
+            metricDefinitions: components["schemas"]["MetricDefinitionResponseDto"][];
+            /** @description Aggregation rules in this rubric version. */
+            aggregationRules: components["schemas"]["AggregationRuleResponseDto"][];
+            /**
+             * Format: uuid
+             * @description Administrator account that published the rubric.
+             */
+            publishedBy: string;
+            /** @description Instant when the rubric was published. */
+            publishedAt: string;
+        };
+        /** @description Response representation of a configured numeric scale. */
+        ScaleResponseDto: {
+            /** @description Inclusive minimum scale value. */
+            min: number;
+            /** @description Inclusive maximum scale value. */
+            max: number;
+            /** @description Scale step size. */
+            step: number | null;
+            /** @description Optional text labels keyed by scale value; null if absent. */
+            labels: {
+                [key: string]: string;
+            } | null;
         };
         RegisterRequest: {
             /** @description Required login name; whitespace-only values are rejected; 3 to 80 characters. */
@@ -1918,13 +2374,20 @@ export interface components {
             role?: "STUDENT" | "TEACHER" | "ADMIN";
         };
         UserResponse: {
-            /** Format: uuid */
-            id?: string;
-            username?: string;
+            /**
+             * Format: uuid
+             * @description Account ID.
+             */
+            id: string;
+            /** @description Login name. */
+            username: string;
             /** @description Current account display name. */
             displayName: string;
-            /** @enum {string} */
-            role?: "STUDENT" | "TEACHER" | "ADMIN";
+            /**
+             * @description Assigned account role.
+             * @enum {string}
+             */
+            role: "STUDENT" | "TEACHER" | "ADMIN";
             /** @description Current student class; returned only on the administrator account-list endpoint. */
             className?: string;
             /** @description Current elective subject names; returned only on the administrator account-list endpoint. */
@@ -1937,11 +2400,17 @@ export interface components {
             password: string;
         };
         TokenResponse: {
-            token?: string;
-            tokenType?: string;
-            /** Format: int64 */
-            expiresIn?: number;
-            user?: components["schemas"]["UserResponse"];
+            /** @description Signed authentication token. */
+            token: string;
+            /** @description Authentication scheme for the token. */
+            tokenType: string;
+            /**
+             * Format: int64
+             * @description Token lifetime in seconds.
+             */
+            expiresIn: number;
+            /** @description Authenticated account response. */
+            user: components["schemas"]["UserResponse"];
         };
         PublicationReviewRequest: {
             /**
@@ -1953,11 +2422,18 @@ export interface components {
             note?: string;
         };
         AllocationApplicationSnapshot: {
-            /** Format: uuid */
-            applicationId?: string;
-            /** Format: uuid */
-            studentId?: string;
-            preferences?: components["schemas"]["AllocationPreferenceSnapshot"][];
+            /**
+             * Format: uuid
+             * @description Application record ID.
+             */
+            applicationId: string;
+            /**
+             * Format: uuid
+             * @description Applicant account ID.
+             */
+            studentId: string;
+            /** @description Snapshot of ranked project preferences. */
+            preferences: components["schemas"]["AllocationPreferenceSnapshot"][];
         };
         AllocationAssignmentResponse: {
             /**
@@ -1977,51 +2453,91 @@ export interface components {
             preferenceRank: number;
             /** @description True when fixed to this project by an administrator pin. */
             pinned: boolean;
-            studentDisplayName?: string;
-            projectTitle?: string;
+            /** @description Current student display name. */
+            studentDisplayName: string;
+            /** @description Current project title. */
+            projectTitle: string;
             className?: string;
             electiveSubjectNames?: string[];
         };
         AllocationPinSnapshot: {
-            /** Format: uuid */
-            studentId?: string;
-            /** Format: uuid */
-            projectId?: string;
-            /** Format: date-time */
-            savedAt?: string;
+            /**
+             * Format: uuid
+             * @description Pinned student account ID.
+             */
+            studentId: string;
+            /**
+             * Format: uuid
+             * @description Pinned project ID.
+             */
+            projectId: string;
+            /**
+             * Format: date-time
+             * @description Instant when the pin was saved.
+             */
+            savedAt: string;
         };
         AllocationPreferenceSnapshot: {
-            /** Format: uuid */
-            projectId?: string;
-            /** Format: int32 */
-            rank?: number;
+            /**
+             * Format: uuid
+             * @description Preferred project ID.
+             */
+            projectId: string;
+            /**
+             * Format: int32
+             * @description Preference rank, starting at one.
+             */
+            rank: number;
         };
         AllocationResultResponse: {
-            assignments?: components["schemas"]["AllocationAssignmentResponse"][];
-            unassignedStudents?: components["schemas"]["AllocationUnassignedStudentResponse"][];
-            unassignedProjects?: components["schemas"]["AllocationUnassignedProjectResponse"][];
-            /** Format: int32 */
-            assignedStudents?: number;
-            /** Format: int64 */
-            preferenceScore?: number;
+            /** @description Project assignments produced by this run. */
+            assignments: components["schemas"]["AllocationAssignmentResponse"][];
+            /** @description Students without an assignment. */
+            unassignedStudents: components["schemas"]["AllocationUnassignedStudentResponse"][];
+            /** @description Projects without an assigned group. */
+            unassignedProjects: components["schemas"]["AllocationUnassignedProjectResponse"][];
+            /**
+             * Format: int32
+             * @description Number of students assigned to projects.
+             */
+            assignedStudents: number;
+            /**
+             * Format: int64
+             * @description Total preference score for the allocation.
+             */
+            preferenceScore: number;
         };
         AllocationRunResponse: {
-            /** Format: uuid */
-            id?: string;
-            status?: string;
-            /** Format: uuid */
-            periodId?: string;
-            /** Format: date-time */
-            createdAt?: string;
-            initial?: boolean;
+            /**
+             * Format: uuid
+             * @description Allocation-run ID.
+             */
+            id: string;
+            /** @description Current allocation-run status. */
+            status: string;
+            /**
+             * Format: uuid
+             * @description Application-period ID.
+             */
+            periodId: string;
+            /**
+             * Format: date-time
+             * @description Instant when the run was created.
+             */
+            createdAt: string;
+            /** @description Whether this is the initial allocation run. */
+            initial: boolean;
             /**
              * @description True when this run was started before the application deadline; otherwise false.
              * @default false
              */
             early: boolean;
-            projectIds?: string[];
-            applications?: components["schemas"]["AllocationApplicationSnapshot"][];
-            pins?: components["schemas"]["AllocationPinSnapshot"][];
+            /** @description Project IDs included in the run snapshot. */
+            projectIds: string[];
+            /** @description Application snapshots used by the run. */
+            applications: components["schemas"]["AllocationApplicationSnapshot"][];
+            /** @description Administrator pin snapshots used by the run. */
+            pins: components["schemas"]["AllocationPinSnapshot"][];
             result?: components["schemas"]["AllocationResultResponse"];
             error?: string;
             inputSnapshotComplete?: boolean;
@@ -2029,20 +2545,34 @@ export interface components {
             finalizedAt?: string;
         };
         AllocationUnassignedProjectResponse: {
-            /** Format: uuid */
-            projectId?: string;
-            reason?: string;
-            /** Format: int32 */
-            interestedStudents?: number;
-            projectTitle?: string;
+            /**
+             * Format: uuid
+             * @description Project ID without an assigned group.
+             */
+            projectId: string;
+            /** @description Reason no group was assigned. */
+            reason: string;
+            /**
+             * Format: int32
+             * @description Number of interested students.
+             */
+            interestedStudents: number;
+            /** @description Current project title. */
+            projectTitle: string;
         };
         AllocationUnassignedStudentResponse: {
-            /** Format: uuid */
-            studentId?: string;
-            reason?: string;
-            rankedProjectIds?: string[];
+            /**
+             * Format: uuid
+             * @description Unassigned student account ID.
+             */
+            studentId: string;
+            /** @description Reason no project assignment was made. */
+            reason: string;
+            /** @description Project IDs ranked by the student. */
+            rankedProjectIds: string[];
             explanation?: string;
-            studentDisplayName?: string;
+            /** @description Current student display name. */
+            studentDisplayName: string;
             className?: string;
             electiveSubjectNames?: string[];
         };
@@ -2058,218 +2588,452 @@ export interface components {
             role: "STUDENT" | "TEACHER" | "ADMIN";
         };
         PageResponseUserResponse: {
-            content?: components["schemas"]["UserResponse"][];
-            /** Format: int32 */
-            page?: number;
-            /** Format: int32 */
-            size?: number;
-            /** Format: int64 */
-            totalElements?: number;
-            /** Format: int32 */
-            totalPages?: number;
+            /** @description Items returned in this page. */
+            content: components["schemas"]["UserResponse"][];
+            /**
+             * Format: int32
+             * @description Zero-based index of this page.
+             */
+            page: number;
+            /**
+             * Format: int32
+             * @description Maximum number of items requested per page.
+             */
+            size: number;
+            /**
+             * Format: int64
+             * @description Total number of matching items across all pages.
+             */
+            totalElements: number;
+            /**
+             * Format: int32
+             * @description Number of pages containing all matching items.
+             */
+            totalPages: number;
         };
         PageResponseStudentLookupResponse: {
-            content?: components["schemas"]["StudentLookupResponse"][];
-            /** Format: int32 */
-            page?: number;
-            /** Format: int32 */
-            size?: number;
-            /** Format: int64 */
-            totalElements?: number;
-            /** Format: int32 */
-            totalPages?: number;
+            /** @description Items returned in this page. */
+            content: components["schemas"]["StudentLookupResponse"][];
+            /**
+             * Format: int32
+             * @description Zero-based index of this page.
+             */
+            page: number;
+            /**
+             * Format: int32
+             * @description Maximum number of items requested per page.
+             */
+            size: number;
+            /**
+             * Format: int64
+             * @description Total number of matching items across all pages.
+             */
+            totalElements: number;
+            /**
+             * Format: int32
+             * @description Number of pages containing all matching items.
+             */
+            totalPages: number;
         };
         StudentLookupResponse: {
-            /** Format: uuid */
-            id?: string;
-            displayName?: string;
+            /**
+             * Format: uuid
+             * @description Student account ID.
+             */
+            id: string;
+            /** @description Current student display name. */
+            displayName: string;
         };
         PageResponseCatalogueEntryResponse: {
-            content?: components["schemas"]["CatalogueEntryResponse"][];
-            /** Format: int32 */
-            page?: number;
-            /** Format: int32 */
-            size?: number;
-            /** Format: int64 */
-            totalElements?: number;
-            /** Format: int32 */
-            totalPages?: number;
+            /** @description Items returned in this page. */
+            content: components["schemas"]["CatalogueEntryResponse"][];
+            /**
+             * Format: int32
+             * @description Zero-based index of this page.
+             */
+            page: number;
+            /**
+             * Format: int32
+             * @description Maximum number of items requested per page.
+             */
+            size: number;
+            /**
+             * Format: int64
+             * @description Total number of matching items across all pages.
+             */
+            totalElements: number;
+            /**
+             * Format: int32
+             * @description Number of pages containing all matching items.
+             */
+            totalPages: number;
         };
         PageResponseString: {
-            content?: string[];
-            /** Format: int32 */
-            page?: number;
-            /** Format: int32 */
-            size?: number;
-            /** Format: int64 */
-            totalElements?: number;
-            /** Format: int32 */
-            totalPages?: number;
+            /** @description Items returned in this page. */
+            content: string[];
+            /**
+             * Format: int32
+             * @description Zero-based index of this page.
+             */
+            page: number;
+            /**
+             * Format: int32
+             * @description Maximum number of items requested per page.
+             */
+            size: number;
+            /**
+             * Format: int64
+             * @description Total number of matching items across all pages.
+             */
+            totalElements: number;
+            /**
+             * Format: int32
+             * @description Number of pages containing all matching items.
+             */
+            totalPages: number;
         };
         PageResponsePublicArtifactResponse: {
-            content?: components["schemas"]["PublicArtifactResponse"][];
-            /** Format: int32 */
-            page?: number;
-            /** Format: int32 */
-            size?: number;
-            /** Format: int64 */
-            totalElements?: number;
-            /** Format: int32 */
-            totalPages?: number;
+            /** @description Items returned in this page. */
+            content: components["schemas"]["PublicArtifactResponse"][];
+            /**
+             * Format: int32
+             * @description Zero-based index of this page.
+             */
+            page: number;
+            /**
+             * Format: int32
+             * @description Maximum number of items requested per page.
+             */
+            size: number;
+            /**
+             * Format: int64
+             * @description Total number of matching items across all pages.
+             */
+            totalElements: number;
+            /**
+             * Format: int32
+             * @description Number of pages containing all matching items.
+             */
+            totalPages: number;
         };
         /** @description Public archive entry; deliberately omits uploader and all internal metadata. */
         PublicArtifactResponse: {
-            /** Format: uuid */
-            id?: string;
-            /** @enum {string} */
-            type?: "WEBSITE_ARCHIVE" | "POSTER" | "SOURCE_DATA";
-            /** Format: int64 */
-            size?: number;
+            /**
+             * Format: uuid
+             * @description Public archive artefact ID.
+             */
+            id: string;
+            /**
+             * @description Publicly available artefact category.
+             * @enum {string}
+             */
+            type: "WEBSITE_ARCHIVE" | "POSTER" | "SOURCE_DATA";
+            /**
+             * Format: int64
+             * @description Stored file size in bytes.
+             */
+            size: number;
         };
         /** @description Current final grade plus the preserved history, newest first. */
         FinalGradeHistory: {
-            current?: components["schemas"]["FinalGradeResponse"];
-            history?: components["schemas"]["FinalGradeResponse"][];
+            /** @description Current final grade. */
+            current: components["schemas"]["FinalGradeResponse"];
+            /** @description Prior final grades, newest first. */
+            history: components["schemas"]["FinalGradeResponse"][];
         };
         PageResponseGradeResponse: {
-            content?: components["schemas"]["GradeResponse"][];
-            /** Format: int32 */
-            page?: number;
-            /** Format: int32 */
-            size?: number;
-            /** Format: int64 */
-            totalElements?: number;
-            /** Format: int32 */
-            totalPages?: number;
+            /** @description Items returned in this page. */
+            content: components["schemas"]["GradeResponse"][];
+            /**
+             * Format: int32
+             * @description Zero-based index of this page.
+             */
+            page: number;
+            /**
+             * Format: int32
+             * @description Maximum number of items requested per page.
+             */
+            size: number;
+            /**
+             * Format: int64
+             * @description Total number of matching items across all pages.
+             */
+            totalElements: number;
+            /**
+             * Format: int32
+             * @description Number of pages containing all matching items.
+             */
+            totalPages: number;
         };
         PageResponseMetricResponse: {
-            content?: components["schemas"]["MetricResponse"][];
-            /** Format: int32 */
-            page?: number;
-            /** Format: int32 */
-            size?: number;
-            /** Format: int64 */
-            totalElements?: number;
-            /** Format: int32 */
-            totalPages?: number;
+            /** @description Items returned in this page. */
+            content: components["schemas"]["MetricResponse"][];
+            /**
+             * Format: int32
+             * @description Zero-based index of this page.
+             */
+            page: number;
+            /**
+             * Format: int32
+             * @description Maximum number of items requested per page.
+             */
+            size: number;
+            /**
+             * Format: int64
+             * @description Total number of matching items across all pages.
+             */
+            totalElements: number;
+            /**
+             * Format: int32
+             * @description Number of pages containing all matching items.
+             */
+            totalPages: number;
         };
         PageResponseArtifactResponse: {
-            content?: components["schemas"]["ArtifactResponse"][];
-            /** Format: int32 */
-            page?: number;
-            /** Format: int32 */
-            size?: number;
-            /** Format: int64 */
-            totalElements?: number;
-            /** Format: int32 */
-            totalPages?: number;
+            /** @description Items returned in this page. */
+            content: components["schemas"]["ArtifactResponse"][];
+            /**
+             * Format: int32
+             * @description Zero-based index of this page.
+             */
+            page: number;
+            /**
+             * Format: int32
+             * @description Maximum number of items requested per page.
+             */
+            size: number;
+            /**
+             * Format: int64
+             * @description Total number of matching items across all pages.
+             */
+            totalElements: number;
+            /**
+             * Format: int32
+             * @description Number of pages containing all matching items.
+             */
+            totalPages: number;
         };
         PageResponseIdeaResponse: {
-            content?: components["schemas"]["IdeaResponse"][];
-            /** Format: int32 */
-            page?: number;
-            /** Format: int32 */
-            size?: number;
-            /** Format: int64 */
-            totalElements?: number;
-            /** Format: int32 */
-            totalPages?: number;
+            /** @description Items returned in this page. */
+            content: components["schemas"]["IdeaResponse"][];
+            /**
+             * Format: int32
+             * @description Zero-based index of this page.
+             */
+            page: number;
+            /**
+             * Format: int32
+             * @description Maximum number of items requested per page.
+             */
+            size: number;
+            /**
+             * Format: int64
+             * @description Total number of matching items across all pages.
+             */
+            totalElements: number;
+            /**
+             * Format: int32
+             * @description Number of pages containing all matching items.
+             */
+            totalPages: number;
         };
         PageResponseRubricSummary: {
-            content?: components["schemas"]["RubricSummary"][];
-            /** Format: int32 */
-            page?: number;
-            /** Format: int32 */
-            size?: number;
-            /** Format: int64 */
-            totalElements?: number;
-            /** Format: int32 */
-            totalPages?: number;
+            /** @description Items returned in this page. */
+            content: components["schemas"]["RubricSummary"][];
+            /**
+             * Format: int32
+             * @description Zero-based index of this page.
+             */
+            page: number;
+            /**
+             * Format: int32
+             * @description Maximum number of items requested per page.
+             */
+            size: number;
+            /**
+             * Format: int64
+             * @description Total number of matching items across all pages.
+             */
+            totalElements: number;
+            /**
+             * Format: int32
+             * @description Number of pages containing all matching items.
+             */
+            totalPages: number;
         };
         /** @description Compact rubric list entry. */
         RubricSummary: {
-            /** Format: uuid */
-            id?: string;
-            version?: string;
-            name?: string;
-            schoolYear?: string;
-            effectiveFrom?: string;
-            effectiveTo?: string;
-            publishedAt?: string;
+            /**
+             * Format: uuid
+             * @description Published rubric ID.
+             */
+            id: string;
+            /** @description Published rubric version label. */
+            version: string;
+            /** @description Rubric name. */
+            name: string;
+            /** @description School year associated with the rubric, or null if not specified. */
+            schoolYear: string | null;
+            /** @description Date from which this rubric is effective. */
+            effectiveFrom: string;
+            /** @description Inclusive date through which the rubric is effective, or null if open-ended. */
+            effectiveTo: string | null;
+            /** @description Instant when the rubric was published. */
+            publishedAt: string;
         };
         PageResponseObjectNode: {
-            content?: Record<string, never>[];
-            /** Format: int32 */
-            page?: number;
-            /** Format: int32 */
-            size?: number;
-            /** Format: int64 */
-            totalElements?: number;
-            /** Format: int32 */
-            totalPages?: number;
+            /** @description Items returned in this page. */
+            content: Record<string, never>[];
+            /**
+             * Format: int32
+             * @description Zero-based index of this page.
+             */
+            page: number;
+            /**
+             * Format: int32
+             * @description Maximum number of items requested per page.
+             */
+            size: number;
+            /**
+             * Format: int64
+             * @description Total number of matching items across all pages.
+             */
+            totalElements: number;
+            /**
+             * Format: int32
+             * @description Number of pages containing all matching items.
+             */
+            totalPages: number;
         };
         PageResponseApplicationPeriodResponse: {
-            content?: components["schemas"]["ApplicationPeriodResponse"][];
-            /** Format: int32 */
-            page?: number;
-            /** Format: int32 */
-            size?: number;
-            /** Format: int64 */
-            totalElements?: number;
-            /** Format: int32 */
-            totalPages?: number;
+            /** @description Items returned in this page. */
+            content: components["schemas"]["ApplicationPeriodResponse"][];
+            /**
+             * Format: int32
+             * @description Zero-based index of this page.
+             */
+            page: number;
+            /**
+             * Format: int32
+             * @description Maximum number of items requested per page.
+             */
+            size: number;
+            /**
+             * Format: int64
+             * @description Total number of matching items across all pages.
+             */
+            totalElements: number;
+            /**
+             * Format: int32
+             * @description Number of pages containing all matching items.
+             */
+            totalPages: number;
         };
         CatalogueProjectResponse: {
-            /** Format: uuid */
-            id?: string;
-            title?: string;
-            description?: string;
-            intendedOutcome?: string;
-            scopePoints?: string[];
-            learningTopics?: string[];
-            schoolYear?: string;
-            specification?: components["schemas"]["CatalogueSpecificationResponse"];
-        };
-        CatalogueSpecificationResponse: {
-            objectives?: string[];
-            intendedUsers?: string[];
-            requirements?: string[];
-            deliverables?: string[];
-            scope?: string;
-            dependencies?: string[];
+            /**
+             * Format: uuid
+             * @description Project idea ID.
+             */
+            id: string;
+            /** @description Project title. */
+            title: string;
+            /** @description Project description. */
+            description: string;
+            /** @description Intended project outcome. */
+            intendedOutcome: string;
+            /** @description Project scope points. */
+            scopePoints: string[];
+            /** @description Project learning topics. */
+            learningTopics: string[];
+            /** @description Associated school year. */
+            schoolYear: string;
+            /** @description Project specification, or null if it has not been recorded. */
+            specification: {
+                /** @description Project objectives. */
+                objectives: string[];
+                /** @description Intended users of the project. */
+                intendedUsers: string[];
+                /** @description Project requirements. */
+                requirements: string[];
+                /** @description Project deliverables. */
+                deliverables: string[];
+                /** @description Project scope. */
+                scope: string;
+                /** @description Project dependencies. */
+                dependencies: string[];
+            } | null;
         };
         PageResponseStudentApplicationResponse: {
-            content?: components["schemas"]["StudentApplicationResponse"][];
-            /** Format: int32 */
-            page?: number;
-            /** Format: int32 */
-            size?: number;
-            /** Format: int64 */
-            totalElements?: number;
-            /** Format: int32 */
-            totalPages?: number;
+            /** @description Items returned in this page. */
+            content: components["schemas"]["StudentApplicationResponse"][];
+            /**
+             * Format: int32
+             * @description Zero-based index of this page.
+             */
+            page: number;
+            /**
+             * Format: int32
+             * @description Maximum number of items requested per page.
+             */
+            size: number;
+            /**
+             * Format: int64
+             * @description Total number of matching items across all pages.
+             */
+            totalElements: number;
+            /**
+             * Format: int32
+             * @description Number of pages containing all matching items.
+             */
+            totalPages: number;
         };
         AllocationRunPageResponse: {
-            content?: components["schemas"]["AllocationRunResponse"][];
-            /** Format: int32 */
-            page?: number;
-            /** Format: int32 */
-            size?: number;
-            /** Format: int64 */
-            totalElements?: number;
-            /** Format: int32 */
-            totalPages?: number;
+            /** @description Allocation runs returned in this page. */
+            content: components["schemas"]["AllocationRunResponse"][];
+            /**
+             * Format: int32
+             * @description Zero-based index of this page.
+             */
+            page: number;
+            /**
+             * Format: int32
+             * @description Maximum number of items requested per page.
+             */
+            size: number;
+            /**
+             * Format: int64
+             * @description Total number of matching allocation runs.
+             */
+            totalElements: number;
+            /**
+             * Format: int32
+             * @description Number of pages containing all matching runs.
+             */
+            totalPages: number;
         };
         PageResponseAllocationPinResponse: {
-            content?: components["schemas"]["AllocationPinResponse"][];
-            /** Format: int32 */
-            page?: number;
-            /** Format: int32 */
-            size?: number;
-            /** Format: int64 */
-            totalElements?: number;
-            /** Format: int32 */
-            totalPages?: number;
+            /** @description Items returned in this page. */
+            content: components["schemas"]["AllocationPinResponse"][];
+            /**
+             * Format: int32
+             * @description Zero-based index of this page.
+             */
+            page: number;
+            /**
+             * Format: int32
+             * @description Maximum number of items requested per page.
+             */
+            size: number;
+            /**
+             * Format: int64
+             * @description Total number of matching items across all pages.
+             */
+            totalElements: number;
+            /**
+             * Format: int32
+             * @description Number of pages containing all matching items.
+             */
+            totalPages: number;
         };
     };
     responses: never;

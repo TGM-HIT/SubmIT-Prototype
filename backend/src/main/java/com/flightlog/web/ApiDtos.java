@@ -42,12 +42,21 @@ public final class ApiDtos {
                     minLength = 1) String password) {
     }
 
-    public record TokenResponse(String token, String tokenType, long expiresIn, UserResponse user) {
+    @Schema(requiredProperties = {"token", "tokenType", "expiresIn", "user"})
+    public record TokenResponse(
+            @Schema(description = "Signed authentication token.") String token,
+            @Schema(description = "Authentication scheme for the token.") String tokenType,
+            @Schema(description = "Token lifetime in seconds.") long expiresIn,
+            @Schema(description = "Authenticated account response.") UserResponse user) {
     }
 
-    public record UserResponse(UUID id, String username,
+    @Schema(requiredProperties = {"id", "username", "displayName", "role"})
+    public record UserResponse(
+            @Schema(description = "Account ID.") UUID id,
+            @Schema(description = "Login name.") String username,
             @Schema(description = "Current account display name.", requiredMode = Schema.RequiredMode.REQUIRED)
-            String displayName, Role role,
+            String displayName,
+            @Schema(description = "Assigned account role.") Role role,
             @Schema(description = "Current student class; returned only on the administrator account-list endpoint.")
             @JsonInclude(JsonInclude.Include.NON_NULL) String className,
             @Schema(description = "Current elective subject names; returned only on the administrator account-list endpoint.")
@@ -73,6 +82,7 @@ public final class ApiDtos {
             String name) {
     }
 
+    @Schema(requiredProperties = {"id", "name"})
     public record CatalogueEntryResponse(
             @NotNull @Schema(description = "Catalogue entry ID.", requiredMode = Schema.RequiredMode.REQUIRED,
                     format = "uuid") UUID id,
@@ -90,6 +100,8 @@ public final class ApiDtos {
             List<@NotNull UUID> electiveSubjectIds) {
     }
 
+    @Schema(requiredProperties = {"studentId", "displayName", "classId", "className", "electiveSubjectIds",
+            "electiveSubjectNames"})
     public record StudentDetailsResponse(
             @NotNull @Schema(description = "ID of the student.", requiredMode = Schema.RequiredMode.REQUIRED,
                     format = "uuid") UUID studentId,
@@ -107,6 +119,7 @@ public final class ApiDtos {
                     requiredMode = Schema.RequiredMode.REQUIRED)) List<String> electiveSubjectNames) {
     }
 
+    @Schema(requiredProperties = {"status", "error", "message"})
     public record ApiErrorResponse(
             @NotNull @Schema(description = "HTTP response status code.") int status,
             @NotNull @Schema(description = "Short error category.") String error,
@@ -357,16 +370,28 @@ public final class ApiDtos {
             List<@NotNull UUID> projectIds) {
     }
 
-    public record AllocationPinSnapshot(UUID studentId, UUID projectId, Instant savedAt) {
+    @Schema(requiredProperties = {"studentId", "projectId", "savedAt"})
+    public record AllocationPinSnapshot(
+            @Schema(description = "Pinned student account ID.") UUID studentId,
+            @Schema(description = "Pinned project ID.") UUID projectId,
+            @Schema(description = "Instant when the pin was saved.", format = "date-time") Instant savedAt) {
     }
 
-    public record AllocationPreferenceSnapshot(UUID projectId, int rank) {
+    @Schema(requiredProperties = {"projectId", "rank"})
+    public record AllocationPreferenceSnapshot(
+            @Schema(description = "Preferred project ID.") UUID projectId,
+            @Schema(description = "Preference rank, starting at one.") int rank) {
     }
 
-    public record AllocationApplicationSnapshot(UUID applicationId, UUID studentId,
-            List<AllocationPreferenceSnapshot> preferences) {
+    @Schema(requiredProperties = {"applicationId", "studentId", "preferences"})
+    public record AllocationApplicationSnapshot(
+            @Schema(description = "Application record ID.") UUID applicationId,
+            @Schema(description = "Applicant account ID.") UUID studentId,
+            @Schema(description = "Snapshot of ranked project preferences.") List<AllocationPreferenceSnapshot> preferences) {
     }
 
+    @Schema(requiredProperties = {"studentId", "projectId", "preferenceRank", "pinned", "studentDisplayName",
+            "projectTitle"})
     public record AllocationAssignmentResponse(
             @NotNull @Schema(description = "Assigned student ID.", requiredMode = Schema.RequiredMode.REQUIRED,
                     format = "uuid") UUID studentId,
@@ -376,35 +401,65 @@ public final class ApiDtos {
                     requiredMode = Schema.RequiredMode.REQUIRED) int preferenceRank,
             @NotNull @Schema(requiredMode = Schema.RequiredMode.REQUIRED,
                     description = "True when fixed to this project by an administrator pin.") Boolean pinned,
-            String studentDisplayName, String projectTitle, String className, List<String> electiveSubjectNames) {
-    }
-
-    public record AllocationUnassignedStudentResponse(UUID studentId, String reason,
-            List<UUID> rankedProjectIds, String explanation, String studentDisplayName,
+            @Schema(description = "Current student display name.") String studentDisplayName,
+            @Schema(description = "Current project title.") String projectTitle,
             String className, List<String> electiveSubjectNames) {
     }
 
-    public record AllocationUnassignedProjectResponse(UUID projectId, String reason,
-            int interestedStudents, String projectTitle) {
+    @Schema(requiredProperties = {"studentId", "reason", "rankedProjectIds", "studentDisplayName"})
+    public record AllocationUnassignedStudentResponse(
+            @Schema(description = "Unassigned student account ID.") UUID studentId,
+            @Schema(description = "Reason no project assignment was made.") String reason,
+            @Schema(description = "Project IDs ranked by the student.") List<UUID> rankedProjectIds,
+            String explanation,
+            @Schema(description = "Current student display name.") String studentDisplayName,
+            String className, List<String> electiveSubjectNames) {
     }
 
-    public record AllocationResultResponse(List<AllocationAssignmentResponse> assignments,
-            List<AllocationUnassignedStudentResponse> unassignedStudents,
-            List<AllocationUnassignedProjectResponse> unassignedProjects,
-            int assignedStudents, long preferenceScore) {
+    @Schema(requiredProperties = {"projectId", "reason", "interestedStudents", "projectTitle"})
+    public record AllocationUnassignedProjectResponse(
+            @Schema(description = "Project ID without an assigned group.") UUID projectId,
+            @Schema(description = "Reason no group was assigned.") String reason,
+            @Schema(description = "Number of interested students.") int interestedStudents,
+            @Schema(description = "Current project title.") String projectTitle) {
     }
 
-    public record AllocationRunResponse(UUID id, String status, UUID periodId, Instant createdAt,
-            Boolean initial, @Schema(description = "True when this run was started before the application deadline; otherwise false.",
+    @Schema(requiredProperties = {"assignments", "unassignedStudents", "unassignedProjects", "assignedStudents",
+            "preferenceScore"})
+    public record AllocationResultResponse(
+            @Schema(description = "Project assignments produced by this run.") List<AllocationAssignmentResponse> assignments,
+            @Schema(description = "Students without an assignment.") List<AllocationUnassignedStudentResponse> unassignedStudents,
+            @Schema(description = "Projects without an assigned group.") List<AllocationUnassignedProjectResponse> unassignedProjects,
+            @Schema(description = "Number of students assigned to projects.") int assignedStudents,
+            @Schema(description = "Total preference score for the allocation.") long preferenceScore) {
+    }
+
+    @Schema(requiredProperties = {"id", "status", "periodId", "createdAt", "initial", "early", "projectIds",
+            "applications", "pins"})
+    public record AllocationRunResponse(
+            @Schema(description = "Allocation-run ID.") UUID id,
+            @Schema(description = "Current allocation-run status.") String status,
+            @Schema(description = "Application-period ID.") UUID periodId,
+            @Schema(description = "Instant when the run was created.", format = "date-time") Instant createdAt,
+            @Schema(description = "Whether this is the initial allocation run.") Boolean initial,
+            @Schema(description = "True when this run was started before the application deadline; otherwise false.",
                     requiredMode = Schema.RequiredMode.REQUIRED,
                     defaultValue = "false")
-            Boolean early, List<UUID> projectIds, List<AllocationApplicationSnapshot> applications,
-            List<AllocationPinSnapshot> pins, AllocationResultResponse result, String error,
+            Boolean early,
+            @Schema(description = "Project IDs included in the run snapshot.") List<UUID> projectIds,
+            @Schema(description = "Application snapshots used by the run.") List<AllocationApplicationSnapshot> applications,
+            @Schema(description = "Administrator pin snapshots used by the run.") List<AllocationPinSnapshot> pins,
+            AllocationResultResponse result, String error,
             Boolean inputSnapshotComplete, Instant finalizedAt) {
     }
 
-    public record AllocationRunPageResponse(List<AllocationRunResponse> content, int page, int size,
-            long totalElements, int totalPages) {
+    @Schema(requiredProperties = {"content", "page", "size", "totalElements", "totalPages"})
+    public record AllocationRunPageResponse(
+            @Schema(description = "Allocation runs returned in this page.") List<AllocationRunResponse> content,
+            @Schema(description = "Zero-based index of this page.") int page,
+            @Schema(description = "Maximum number of items requested per page.") int size,
+            @Schema(description = "Total number of matching allocation runs.") long totalElements,
+            @Schema(description = "Number of pages containing all matching runs.") int totalPages) {
     }
 
     public record AllocationPinRequest(
@@ -414,6 +469,8 @@ public final class ApiDtos {
                     defaultValue = "false") Boolean acknowledgeUnranked) {
     }
 
+    @Schema(requiredProperties = {"studentId", "studentDisplayName", "projectId", "projectTitle", "rankedChoice",
+            "savedAt"})
     public record AllocationPinResponse(
             @NotNull @Schema(description = "Pinned student ID.", requiredMode = Schema.RequiredMode.REQUIRED,
                     format = "uuid") UUID studentId,
@@ -487,57 +544,94 @@ public final class ApiDtos {
             String cooperationPartner) {
     }
 
-    public record PageResponse<T>(List<T> content, int page, int size, long totalElements, int totalPages) {
+    @Schema(requiredProperties = {"content", "page", "size", "totalElements", "totalPages"})
+    public record PageResponse<T>(
+            @Schema(description = "Items returned in this page.") List<T> content,
+            @Schema(description = "Zero-based index of this page.") int page,
+            @Schema(description = "Maximum number of items requested per page.") int size,
+            @Schema(description = "Total number of matching items across all pages.") long totalElements,
+            @Schema(description = "Number of pages containing all matching items.") int totalPages) {
     }
 
+    @Schema(requiredProperties = {"id", "status", "objectives", "intendedUsers", "requirements", "deliverables",
+            "scope", "dependencies", "revisionId"})
     public record SpecificationResponse(
-            UUID id,
-            String status,
-            List<String> objectives,
-            List<String> intendedUsers,
-            List<String> requirements,
-            List<String> deliverables,
-            String scope,
-            List<String> dependencies,
-            String revisionId) {
+            @Schema(description = "Specification record ID.") UUID id,
+            @Schema(description = "Current specification workflow status.") String status,
+            @Schema(description = "Project objectives.") List<String> objectives,
+            @Schema(description = "Intended users of the project.") List<String> intendedUsers,
+            @Schema(description = "Project requirements.") List<String> requirements,
+            @Schema(description = "Project deliverables.") List<String> deliverables,
+            @Schema(description = "Project scope.") String scope,
+            @Schema(description = "External or internal project dependencies.") List<String> dependencies,
+            @Schema(description = "Identifier of the source revision, or null when unavailable.",
+                    types = {"string", "null"}) String revisionId) {
     }
 
+    @Schema(requiredProperties = {"id", "teacherId", "teacherDisplayName", "reviewType", "decision", "feedback",
+            "workSize", "curriculumRelevance", "technicalComplexity", "feasibility", "learningValue",
+            "resourceNeeds", "riskAndDependencies", "recommendation"})
     public record ReviewResponse(
-            UUID id,
-            UUID teacherId,
-            @Schema(description = "Current account display name; included only in authorized idea history.")
+            @Schema(description = "Review record ID.") UUID id,
+            @Schema(description = "Review author's account ID.") UUID teacherId,
+            @Schema(description = "Current account display name; included only in authorized idea history.",
+                    types = {"string", "null"})
             String teacherDisplayName,
-            String reviewType,
-            String decision,
-            String feedback,
-            Integer workSize,
-            Integer curriculumRelevance,
-            Integer technicalComplexity,
-            Integer feasibility,
-            Integer learningValue,
-            Integer resourceNeeds,
-            Integer riskAndDependencies,
-            String recommendation) {
+            @Schema(description = "Kind of review.") String reviewType,
+            @Schema(description = "Recorded review decision.") String decision,
+            @Schema(description = "Written reviewer feedback.") String feedback,
+            @Schema(description = "Optional work-size rating; null when not recorded.",
+                    types = {"integer", "null"}) Integer workSize,
+            @Schema(description = "Optional curriculum-relevance rating; null when not recorded.",
+                    types = {"integer", "null"}) Integer curriculumRelevance,
+            @Schema(description = "Optional technical-complexity rating; null when not recorded.",
+                    types = {"integer", "null"}) Integer technicalComplexity,
+            @Schema(description = "Optional feasibility rating; null when not recorded.",
+                    types = {"integer", "null"}) Integer feasibility,
+            @Schema(description = "Optional learning-value rating; null when not recorded.",
+                    types = {"integer", "null"}) Integer learningValue,
+            @Schema(description = "Optional resource-needs rating; null when not recorded.",
+                    types = {"integer", "null"}) Integer resourceNeeds,
+            @Schema(description = "Optional risk-and-dependencies rating; null when not recorded.",
+                    types = {"integer", "null"}) Integer riskAndDependencies,
+            @Schema(description = "Optional recommendation; null when not recorded.",
+                    types = {"string", "null"}) String recommendation) {
     }
 
+    @Schema(requiredProperties = {"id", "teacherId", "teacherDisplayName", "preference", "note"})
     public record SupervisionPreferenceResponse(
-            UUID id, UUID teacherId,
-            @Schema(description = "Current account display name; included only in authorized idea history.")
+            @Schema(description = "Preference record ID.") UUID id,
+            @Schema(description = "Teacher account ID.") UUID teacherId,
+            @Schema(description = "Current account display name; included only in authorized idea history.",
+                    types = {"string", "null"})
             String teacherDisplayName,
-            String preference, String note) {
+            @Schema(description = "Recorded supervision preference.") String preference,
+            @Schema(description = "Optional note; null when not recorded.", types = {"string", "null"}) String note) {
     }
 
-    public record SupervisorResponse(UUID id, UUID teacherId, String status) {
+    @Schema(requiredProperties = {"id", "teacherId", "status"})
+    public record SupervisorResponse(
+            @Schema(description = "Supervisor assignment record ID.") UUID id,
+            @Schema(description = "Assigned teacher account ID.") UUID teacherId,
+            @Schema(description = "Supervisor assignment status.") String status) {
     }
 
-    public record IdeaOwnerResponse(UUID id, String displayName, boolean creator,
+    @Schema(requiredProperties = {"id", "displayName", "creator"})
+    public record IdeaOwnerResponse(
+            @Schema(description = "Owner account ID.") UUID id,
+            @Schema(description = "Current owner display name, or null when the account is unavailable.",
+                    types = {"string", "null"}) String displayName,
+            @Schema(description = "Whether this owner created the idea.") boolean creator,
             @Schema(description = "Current class name; only included in authenticated teacher and administrator responses.")
             @JsonInclude(JsonInclude.Include.NON_NULL) String className,
             @Schema(description = "Current elective subject names; only included in authenticated teacher and administrator responses.")
             @JsonInclude(JsonInclude.Include.NON_NULL) List<String> electiveSubjectNames) {
     }
 
-    public record StudentLookupResponse(UUID id, String displayName) {
+    @Schema(requiredProperties = {"id", "displayName"})
+    public record StudentLookupResponse(
+            @Schema(description = "Student account ID.") UUID id,
+            @Schema(description = "Current student display name.") String displayName) {
     }
 
     public record IdeaOwnerRequest(
@@ -545,41 +639,49 @@ public final class ApiDtos {
             UUID studentId) {
     }
 
+    @Schema(requiredProperties = {"id", "ownerId", "creatorId", "owners", "ownerDisplayName", "status", "title",
+            "description", "intendedOutcome", "scopePoints", "learningTopics", "schoolYear", "specification",
+            "reviews", "supervisionPreferences"})
     public record IdeaResponse(
-            UUID id,
-            UUID ownerId,
-            UUID creatorId,
-            List<IdeaOwnerResponse> owners,
-            @Schema(description = "Current account display name; included only in authorized idea responses.")
+            @Schema(description = "Idea record ID.") UUID id,
+            @Schema(description = "Primary owner's account ID.") UUID ownerId,
+            @Schema(description = "Creator's account ID.") UUID creatorId,
+            @Schema(description = "Owners of the idea, including its creator.") List<IdeaOwnerResponse> owners,
+            @Schema(description = "Current account display name; included only in authorized idea responses.",
+                    types = {"string", "null"})
             String ownerDisplayName,
-            String status,
-            String title,
-            String description,
-            String intendedOutcome,
-            List<String> scopePoints,
-            List<String> learningTopics,
-            String schoolYear,
+            @Schema(description = "Idea workflow status.") String status,
+            @Schema(description = "Idea title.") String title,
+            @Schema(description = "Idea description.") String description,
+            @Schema(description = "Intended outcome of the idea.") String intendedOutcome,
+            @Schema(description = "Scope points supplied for the idea.") List<String> scopePoints,
+            @Schema(description = "Learning topics supplied for the idea.") List<String> learningTopics,
+            @Schema(description = "School year associated with the idea.") String schoolYear,
             @JsonInclude(JsonInclude.Include.NON_NULL) String confirmedSupervisorDisplayName,
             @JsonInclude(JsonInclude.Include.NON_NULL)
             @Schema(description = "Whether the current author account is a teacher; included only in staff responses.")
             Boolean teacherIdea,
+            @Schema(description = "Current specification, or null if none exists.",
+                    types = {"object", "null"}, schemaResolution = Schema.SchemaResolution.INLINE)
             SpecificationResponse specification,
-            List<ReviewResponse> reviews,
+            @Schema(description = "Idea review history available to the caller.") List<ReviewResponse> reviews,
+            @Schema(description = "Supervision preference history available to the caller.")
             List<SupervisionPreferenceResponse> supervisionPreferences) {
     }
 
+    @Schema(requiredProperties = {"id", "label", "schoolYear", "opensAt", "closesAt", "status", "projectIds"})
     public record ApplicationPeriodResponse(
-            UUID id,
+            @Schema(description = "Application-period record ID.") UUID id,
             @NotNull
             @Schema(maxLength = 100,
                     description = "Period label; legacy records without a label are presented using their "
                             + "school year. At most 100 characters.")
             String label,
-            String schoolYear,
-            Instant opensAt,
-            Instant closesAt,
-            String status,
-            List<UUID> projectIds,
+            @Schema(description = "School year served by the application period.") String schoolYear,
+            @Schema(description = "Instant when applications open.", format = "date-time") Instant opensAt,
+            @Schema(description = "Instant when applications close.", format = "date-time") Instant closesAt,
+            @Schema(description = "Current application-period status.") String status,
+            @Schema(description = "Project IDs available in the period catalogue.") List<UUID> projectIds,
             @JsonInclude(JsonInclude.Include.NON_NULL) List<ProjectTitleResponse> projectTitles,
             @JsonInclude(JsonInclude.Include.NON_NULL)
             @Schema(description = "Present only to the authenticated student; status of that student's application, or NOT_SUBMITTED.")
@@ -589,77 +691,105 @@ public final class ApiDtos {
             StudentAssignmentResponse studentAssignment) {
     }
 
+    @Schema(requiredProperties = {"objectives", "intendedUsers", "requirements", "deliverables", "scope",
+            "dependencies"})
     public record CatalogueSpecificationResponse(
-            List<String> objectives,
-            List<String> intendedUsers,
-            List<String> requirements,
-            List<String> deliverables,
-            String scope,
-            List<String> dependencies) {
+            @Schema(description = "Project objectives.") List<String> objectives,
+            @Schema(description = "Intended users of the project.") List<String> intendedUsers,
+            @Schema(description = "Project requirements.") List<String> requirements,
+            @Schema(description = "Project deliverables.") List<String> deliverables,
+            @Schema(description = "Project scope.") String scope,
+            @Schema(description = "Project dependencies.") List<String> dependencies) {
     }
 
+    @Schema(requiredProperties = {"id", "title", "description", "intendedOutcome", "scopePoints", "learningTopics",
+            "schoolYear", "specification"})
     public record CatalogueProjectResponse(
-            UUID id,
-            String title,
-            String description,
-            String intendedOutcome,
-            List<String> scopePoints,
-            List<String> learningTopics,
-            String schoolYear,
+            @Schema(description = "Project idea ID.") UUID id,
+            @Schema(description = "Project title.") String title,
+            @Schema(description = "Project description.") String description,
+            @Schema(description = "Intended project outcome.") String intendedOutcome,
+            @Schema(description = "Project scope points.") List<String> scopePoints,
+            @Schema(description = "Project learning topics.") List<String> learningTopics,
+            @Schema(description = "Associated school year.") String schoolYear,
+            @Schema(description = "Project specification, or null if it has not been recorded.",
+                    types = {"object", "null"}, schemaResolution = Schema.SchemaResolution.INLINE)
             CatalogueSpecificationResponse specification) {
     }
 
-    public record ProjectTitleResponse(UUID projectId, String title) {
+    @Schema(requiredProperties = {"projectId", "title"})
+    public record ProjectTitleResponse(
+            @Schema(description = "Project idea ID.") UUID projectId,
+            @Schema(description = "Current project title.") String title) {
     }
 
-    public record PreferenceResponse(UUID projectId, int rank, String projectTitle) {
+    @Schema(requiredProperties = {"projectId", "rank", "projectTitle"})
+    public record PreferenceResponse(
+            @Schema(description = "Preferred project ID.") UUID projectId,
+            @Schema(description = "Preference rank, starting at one.") int rank,
+            @Schema(description = "Current title of the preferred project.") String projectTitle) {
     }
 
+    @Schema(requiredProperties = {"state", "projectTitle", "preferenceRank", "groupMembers"})
     public record StudentAssignmentResponse(
             @Schema(description = "NO_RESULT, PRELIMINARY, FINAL, NOT_ASSIGNED_PRELIMINARY, or NOT_ASSIGNED_FINAL.",
                     allowableValues = {"NO_RESULT", "PRELIMINARY", "FINAL", "NOT_ASSIGNED_PRELIMINARY",
                             "NOT_ASSIGNED_FINAL"})
             String state,
-            @Schema(description = "Current project title; present only when assigned.") String projectTitle,
-            @Schema(description = "The caller's rank for the assigned project, when present in their application.")
-            Integer preferenceRank,
+            @Schema(description = "Current project title; present only when assigned.",
+                    types = {"string", "null"})
+            String projectTitle,
+            @Schema(description = "The caller's rank for the assigned project, when present in their application.",
+                    types = {"integer", "null"}) Integer preferenceRank,
             @Schema(description = "Current display names of this assigned project's group only; contains no IDs.")
             List<StudentGroupMemberResponse> groupMembers) {
     }
 
+    @Schema(requiredProperties = {"displayName", "self"})
     public record StudentGroupMemberResponse(
             @Schema(description = "Current account display name, or Unknown student.") String displayName,
             @Schema(description = "True only for the authenticated caller.") boolean self) {
     }
 
+    @Schema(requiredProperties = {"id", "studentId", "studentDisplayName", "periodId", "status", "preferences"})
     public record StudentApplicationResponse(
-            UUID id,
-            UUID studentId,
-            String studentDisplayName,
-            UUID periodId,
-            String status,
-            List<PreferenceResponse> preferences,
+            @Schema(description = "Student application record ID.") UUID id,
+            @Schema(description = "Applicant account ID.") UUID studentId,
+            @Schema(description = "Current applicant display name.") String studentDisplayName,
+            @Schema(description = "Application-period ID.") UUID periodId,
+            @Schema(description = "Current application status.") String status,
+            @Schema(description = "Ranked project preferences.") List<PreferenceResponse> preferences,
             @Schema(description = "Current class name; only included in authenticated teacher and administrator responses.")
             @JsonInclude(JsonInclude.Include.NON_NULL) String className,
             @Schema(description = "Current elective subject names; only included in authenticated teacher and administrator responses.")
             @JsonInclude(JsonInclude.Include.NON_NULL) List<String> electiveSubjectNames) {
     }
 
-    public record FormalReviewResponse(UUID id, UUID teacherId, String decision, String feedback) {
+    @Schema(requiredProperties = {"id", "teacherId", "decision", "feedback"})
+    public record FormalReviewResponse(
+            @Schema(description = "Formal-review record ID.") UUID id,
+            @Schema(description = "Reviewing teacher account ID.") UUID teacherId,
+            @Schema(description = "Recorded review decision.") String decision,
+            @Schema(description = "Written review feedback.") String feedback) {
     }
 
+    @Schema(requiredProperties = {"id", "projectId", "status", "topic", "individualTopics", "initialSituation",
+            "investigationConcerns", "objective", "plannedResults", "milestones", "cooperationPartner",
+            "reviewHistory"})
     public record FormalApplicationResponse(
-            UUID id,
-            UUID projectId,
-            String status,
-            String topic,
-            List<IndividualTopic> individualTopics,
-            String initialSituation,
+            @Schema(description = "Formal-application record ID.") UUID id,
+            @Schema(description = "Associated project ID.") UUID projectId,
+            @Schema(description = "Current formal-application status.") String status,
+            @Schema(description = "Project topic stated in the application.") String topic,
+            @Schema(description = "Individual topics recorded for group members.") List<IndividualTopic> individualTopics,
+            @Schema(description = "Initial situation described by the group.") String initialSituation,
+            @Schema(description = "Investigation concerns recorded for group members.")
             List<StudentText> investigationConcerns,
-            String objective,
-            List<StudentText> plannedResults,
-            List<Milestone> milestones,
-            String cooperationPartner,
-            PageResponse<FormalReviewResponse> reviewHistory) {
+            @Schema(description = "Objective stated in the application.") String objective,
+            @Schema(description = "Planned results recorded for group members.") List<StudentText> plannedResults,
+            @Schema(description = "Application milestones.") List<Milestone> milestones,
+            @Schema(description = "Optional cooperation partner; null when not supplied.",
+                    types = {"string", "null"}) String cooperationPartner,
+            @Schema(description = "Paginated formal-review history.") PageResponse<FormalReviewResponse> reviewHistory) {
     }
 }

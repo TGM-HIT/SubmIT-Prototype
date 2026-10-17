@@ -300,7 +300,7 @@ async function saveApplication(period: Period): Promise<void> {
   if (result) {
     currentApplications.value[id] = result
     period.studentApplicationStatus = result.status ?? 'SUBMITTED'
-    period.studentAssignment = { state: 'NO_RESULT', groupMembers: [] }
+    period.studentAssignment = { state: 'NO_RESULT', projectTitle: null, preferenceRank: null, groupMembers: [] }
   }
 }
 async function withdrawApplication(period: Period): Promise<void> {

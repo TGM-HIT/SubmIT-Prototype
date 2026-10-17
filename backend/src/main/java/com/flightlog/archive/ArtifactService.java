@@ -7,6 +7,7 @@ import com.flightlog.data.StoredRecord;
 import com.flightlog.security.AuthenticatedUser;
 import com.flightlog.security.Role;
 import com.flightlog.web.ApiDtos.PageResponse;
+import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.persistence.EntityNotFoundException;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -295,6 +296,10 @@ public class ArtifactService {
                 records.getTotalElements(), records.getTotalPages());
     }
 
-    public record CompletionResponse(UUID projectId, String status, String completedAt) {
+    @Schema(requiredProperties = {"projectId", "status", "completedAt"})
+    public record CompletionResponse(
+            @Schema(description = "Completed project ID.") UUID projectId,
+            @Schema(description = "Project completion status.") String status,
+            @Schema(description = "Completion instant.") String completedAt) {
     }
 }

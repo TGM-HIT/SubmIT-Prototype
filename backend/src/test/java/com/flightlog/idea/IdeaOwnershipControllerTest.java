@@ -120,6 +120,41 @@ class IdeaOwnershipControllerTest {
     }
 
     @Test
+    void responseContractEmitsRequiredIdeaFieldsAndNullSpecification() throws Exception {
+        String id = create(List.of());
+
+        MvcResult detailResult = getIdea(id, creatorToken).andExpect(status().isOk()).andReturn();
+        JsonNode detail = objectMapper.readTree(detailResult.getResponse().getContentAsByteArray());
+        for (String property : List.of("id", "ownerId", "creatorId", "owners", "ownerDisplayName", "status",
+                "title", "description", "intendedOutcome", "scopePoints", "learningTopics", "schoolYear",
+                "specification", "reviews", "supervisionPreferences")) {
+            assertTrue(detail.has(property), "Idea response should emit " + property);
+        }
+        assertTrue(detail.path("specification").isNull(), "Ideas without a specification serialize the property as null");
+        assertTrue(!detail.path("owners").isEmpty());
+        JsonNode owner = detail.path("owners").get(0);
+        assertTrue(owner.has("id") && owner.has("displayName") && owner.has("creator"));
+        assertTrue(!owner.has("className") && !owner.has("electiveSubjectNames"),
+                "Student responses omit staff-only owner details");
+
+        MvcResult pageResult = mockMvc.perform(get("/api/ideas?size=100")
+                        .header("Authorization", bearer(creatorToken)))
+                .andExpect(status().isOk()).andReturn();
+        JsonNode page = objectMapper.readTree(pageResult.getResponse().getContentAsByteArray());
+        for (String property : List.of("content", "page", "size", "totalElements", "totalPages")) {
+            assertTrue(page.has(property), "Idea page should emit " + property);
+        }
+        boolean found = false;
+        for (JsonNode idea : page.path("content")) {
+            if (id.equals(idea.path("id").asText())) {
+                found = true;
+                assertTrue(idea.has("specification") && idea.path("specification").isNull());
+            }
+        }
+        assertTrue(found, "The paginated response should contain the created idea");
+    }
+
+    @Test
     void creatorCanAddLaterAndCollaboratorCanLeaveButCannotManageOwners() throws Exception {
         String id = create(List.of());
         mockMvc.perform(post("/api/ideas/{id}/submit", id).header("Authorization", bearer(creatorToken)))

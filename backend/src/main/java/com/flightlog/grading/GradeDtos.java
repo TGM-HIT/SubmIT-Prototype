@@ -87,13 +87,17 @@ public final class GradeDtos {
             String comments) {
     }
 
-    @Schema(description = "Stored grade entry bound to an immutable rubric version and criterion.")
+    @Schema(description = "Stored grade entry bound to an immutable rubric version and criterion.",
+            requiredProperties = {"id", "status", "createdAt", "projectId", "studentId", "rubricId",
+                    "rubricVersion", "criterionId", "categoryId", "grade", "assessedOn", "evidence",
+                    "comments", "teacherId", "recordedAt", "supersedesId", "supersededById", "reason"})
     public record GradeResponse(
-            UUID id,
-            String status,
-            String createdAt,
-            UUID projectId,
-            UUID studentId,
+            @Schema(description = "Grade record ID.") UUID id,
+            @Schema(description = "Grade record status.") String status,
+            @Schema(description = "Instant when the grade record was created.") String createdAt,
+            @Schema(description = "Associated project ID.") UUID projectId,
+            @Schema(description = "Student account ID; null for a group grade.",
+                    types = {"string", "null"}, format = "uuid") UUID studentId,
             @Schema(description = "Current student display name; included only for authenticated teacher and administrator responses.")
             @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL) String studentDisplayName,
             @Schema(description = "Current class name; included only for authenticated teacher and administrator responses.")
@@ -101,19 +105,24 @@ public final class GradeDtos {
             @Schema(description = "Current elective subject names; included only for authenticated teacher and administrator responses.")
             @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
             java.util.List<String> electiveSubjectNames,
-            UUID rubricId,
-            String rubricVersion,
-            String criterionId,
-            String categoryId,
-            BigDecimal grade,
-            String assessedOn,
-            String evidence,
-            String comments,
-            UUID teacherId,
-            String recordedAt,
-            UUID supersedesId,
-            UUID supersededById,
-            String reason) {
+            @Schema(description = "Immutable rubric version ID.") UUID rubricId,
+            @Schema(description = "Rubric version label.") String rubricVersion,
+            @Schema(description = "Assessed criterion ID.") String criterionId,
+            @Schema(description = "Rubric category ID.") String categoryId,
+            @Schema(description = "Recorded grade value.") BigDecimal grade,
+            @Schema(description = "Assessment date.") String assessedOn,
+            @Schema(description = "Optional evidence text; null when not supplied.",
+                    types = {"string", "null"}) String evidence,
+            @Schema(description = "Optional comments; null when not supplied.",
+                    types = {"string", "null"}) String comments,
+            @Schema(description = "Teacher account ID that recorded the grade.") UUID teacherId,
+            @Schema(description = "Instant when the grade was recorded.") String recordedAt,
+            @Schema(description = "Prior grade record ID superseded by this revision, if any.",
+                    types = {"string", "null"}, format = "uuid") UUID supersedesId,
+            @Schema(description = "Newer grade record ID that supersedes this record, if any.",
+                    types = {"string", "null"}, format = "uuid") UUID supersededById,
+            @Schema(description = "Reason for revising the prior grade, if any.",
+                    types = {"string", "null"}) String reason) {
     }
 
     @Schema(description = "Records one observation of a metric defined in the rubric version.")
@@ -132,20 +141,23 @@ public final class GradeDtos {
             String note) {
     }
 
-    @Schema(description = "Stored metric observation referencing the metric definition version.")
+    @Schema(description = "Stored metric observation referencing the metric definition version.",
+            requiredProperties = {"id", "status", "createdAt", "projectId", "rubricId", "rubricVersion",
+                    "metricId", "metricVersion", "value", "measuredAt", "note", "recordedBy", "recordedAt"})
     public record MetricResponse(
-            UUID id,
-            String status,
-            String createdAt,
-            UUID projectId,
-            UUID rubricId,
-            String rubricVersion,
-            String metricId,
-            Integer metricVersion,
-            BigDecimal value,
-            String measuredAt,
-            String note,
-            UUID recordedBy,
-            String recordedAt) {
+            @Schema(description = "Metric observation record ID.") UUID id,
+            @Schema(description = "Metric observation status.") String status,
+            @Schema(description = "Instant when the observation record was created.") String createdAt,
+            @Schema(description = "Associated project ID.") UUID projectId,
+            @Schema(description = "Immutable rubric version ID.") UUID rubricId,
+            @Schema(description = "Rubric version label.") String rubricVersion,
+            @Schema(description = "Metric definition ID.") String metricId,
+            @Schema(description = "Metric definition version.") Integer metricVersion,
+            @Schema(description = "Recorded metric value.") BigDecimal value,
+            @Schema(description = "Instant when the metric was measured.") String measuredAt,
+            @Schema(description = "Optional note; null when not supplied.",
+                    types = {"string", "null"}) String note,
+            @Schema(description = "Account ID that recorded the metric.") UUID recordedBy,
+            @Schema(description = "Instant when the metric was recorded.") String recordedAt) {
     }
 }

@@ -123,32 +123,104 @@ public final class RubricDtos {
             @Valid List<AggregationRuleDto> aggregationRules) {
     }
 
-    @Schema(description = "Published immutable rubric version.")
+    @Schema(description = "Published immutable rubric version.",
+            requiredProperties = {"id", "status", "createdAt", "version", "name", "schoolYear", "effectiveFrom",
+                    "effectiveTo", "finalGradeScale", "categories", "metricDefinitions", "aggregationRules",
+                    "publishedBy", "publishedAt"})
     public record RubricResponse(
-            UUID id,
-            String status,
-            String createdAt,
-            String version,
-            String name,
-            String schoolYear,
-            String effectiveFrom,
-            String effectiveTo,
-            ScaleDto finalGradeScale,
-            List<CategoryDto> categories,
-            List<MetricDefinitionDto> metricDefinitions,
-            List<AggregationRuleDto> aggregationRules,
-            UUID publishedBy,
-            String publishedAt) {
+            @Schema(description = "Published rubric ID.") UUID id,
+            @Schema(description = "Rubric publication status.") String status,
+            @Schema(description = "Instant when the rubric was published.") String createdAt,
+            @Schema(description = "Published rubric version label.") String version,
+            @Schema(description = "Rubric name.") String name,
+            @Schema(description = "School year associated with the rubric, or null if not specified.",
+                    types = {"string", "null"}) String schoolYear,
+            @Schema(description = "Date from which this rubric is effective.") String effectiveFrom,
+            @Schema(description = "Inclusive effective end date, or null if open-ended.",
+                    types = {"string", "null"}) String effectiveTo,
+            @Schema(description = "Scale used for final grades.") ScaleResponseDto finalGradeScale,
+            @Schema(description = "Rubric categories and criteria.") List<CategoryResponseDto> categories,
+            @Schema(description = "Metric definitions in this rubric version.")
+            List<MetricDefinitionResponseDto> metricDefinitions,
+            @Schema(description = "Aggregation rules in this rubric version.")
+            List<AggregationRuleResponseDto> aggregationRules,
+            @Schema(description = "Administrator account that published the rubric.") UUID publishedBy,
+            @Schema(description = "Instant when the rubric was published.") String publishedAt) {
     }
 
-    @Schema(description = "Compact rubric list entry.")
+    @Schema(description = "Compact rubric list entry.",
+            requiredProperties = {"id", "version", "name", "schoolYear", "effectiveFrom", "effectiveTo", "publishedAt"})
     public record RubricSummary(
-            UUID id,
-            String version,
-            String name,
-            String schoolYear,
-            String effectiveFrom,
-            String effectiveTo,
-            String publishedAt) {
+            @Schema(description = "Published rubric ID.") UUID id,
+            @Schema(description = "Published rubric version label.") String version,
+            @Schema(description = "Rubric name.") String name,
+            @Schema(description = "School year associated with the rubric, or null if not specified.",
+                    types = {"string", "null"}) String schoolYear,
+            @Schema(description = "Date from which this rubric is effective.") String effectiveFrom,
+            @Schema(description = "Inclusive date through which the rubric is effective, or null if open-ended.",
+                    types = {"string", "null"}) String effectiveTo,
+            @Schema(description = "Instant when the rubric was published.") String publishedAt) {
+    }
+
+    @Schema(description = "Response representation of a configured numeric scale.",
+            requiredProperties = {"min", "max", "step", "labels"})
+    public record ScaleResponseDto(
+            @Schema(description = "Inclusive minimum scale value.") BigDecimal min,
+            @Schema(description = "Inclusive maximum scale value.") BigDecimal max,
+            @Schema(description = "Scale step size.", types = {"number", "null"}) BigDecimal step,
+            @Schema(description = "Optional text labels keyed by scale value; null if absent.",
+                    types = {"object", "null"}) Map<String, String> labels) {
+    }
+
+    @Schema(description = "Response representation of an assessable rubric criterion.",
+            requiredProperties = {"id", "name", "description", "subject", "stage", "evidenceRequired", "scale"})
+    public record CriterionResponseDto(
+            @Schema(description = "Unique criterion identifier.") String id,
+            @Schema(description = "Criterion name.") String name,
+            @Schema(description = "Optional criterion description; null if absent.",
+                    types = {"string", "null"}) String description,
+            @Schema(description = "Assessment subject.") String subject,
+            @Schema(description = "Optional project stage; null if absent.",
+                    types = {"string", "null"}) String stage,
+            @Schema(description = "Whether written evidence is required.") boolean evidenceRequired,
+            @Schema(description = "Scale used for this criterion.") ScaleResponseDto scale) {
+    }
+
+    @Schema(description = "Response representation of a rubric category.",
+            requiredProperties = {"id", "name", "description", "criteria"})
+    public record CategoryResponseDto(
+            @Schema(description = "Unique category identifier.") String id,
+            @Schema(description = "Category name.") String name,
+            @Schema(description = "Optional category description; null if absent.",
+                    types = {"string", "null"}) String description,
+            @Schema(description = "Criteria belonging to the category.") List<CriterionResponseDto> criteria) {
+    }
+
+    @Schema(description = "Response representation of a versioned project metric definition.",
+            requiredProperties = {"id", "name", "version", "description", "unit", "min", "max"})
+    public record MetricDefinitionResponseDto(
+            @Schema(description = "Unique metric identifier.") String id,
+            @Schema(description = "Metric name.") String name,
+            @Schema(description = "Metric definition version.") Integer version,
+            @Schema(description = "Optional metric description; null if absent.",
+                    types = {"string", "null"}) String description,
+            @Schema(description = "Optional metric unit; null if absent.",
+                    types = {"string", "null"}) String unit,
+            @Schema(description = "Optional inclusive minimum value; null if unbounded.",
+                    types = {"number", "null"}) BigDecimal min,
+            @Schema(description = "Optional inclusive maximum value; null if unbounded.",
+                    types = {"number", "null"}) BigDecimal max) {
+    }
+
+    @Schema(description = "Response representation of a configured weighted-average rule.",
+            requiredProperties = {"id", "version", "scope", "type", "decimals", "criterionWeights", "metricWeights"})
+    public record AggregationRuleResponseDto(
+            @Schema(description = "Unique aggregation-rule identifier.") String id,
+            @Schema(description = "Aggregation-rule version.") Integer version,
+            @Schema(description = "Target scope of the rule.") String scope,
+            @Schema(description = "Aggregation method.") String type,
+            @Schema(description = "Number of decimal places for the calculated grade.") Integer decimals,
+            @Schema(description = "Configured criterion weights.") Map<String, BigDecimal> criterionWeights,
+            @Schema(description = "Configured metric weights.") Map<String, BigDecimal> metricWeights) {
     }
 }
