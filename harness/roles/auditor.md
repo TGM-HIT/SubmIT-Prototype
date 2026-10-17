@@ -42,11 +42,14 @@ Before any commit containing Markdown files, including separate commits for fixe
 For each finding that is not fixed and not a duplicate, open one ticket:
 
 - Use follow-up IDs with these prefixes and plan groups: `Bug-` for Bugs, `Dev-` for Development, `Feature-` for Features, and `Optimization-` for Optimizations. Use `Bug-` for a documented behavior that the code, tests, or generated contract contradict (the specification is the source of truth). Use `Dev-` for documentation, guideline, or tooling work. Use `Feature-` only if the finding reveals a requirement no ticket covers and the user must decide.
-- Take the next free number in that group from `harness/plan.md` and the files under `harness/tickets/` and `harness/tickets/done/`.
+- Classify each finding and choose its ticket group before selecting an ID or creating a ticket. Then take the next free number in that group from `harness/plan.md` and the files under `harness/tickets/` and `harness/tickets/done/`; do not reserve an ID from another group and reclassify the ticket after committing it.
 - Create `harness/tickets/<ticket-id>.md` from `harness/templates/ticket.md`: concrete intent, scope, and acceptance criteria drawn from the finding, with a `Source:` line naming the run ID, report entry, and quoted evidence. Mark it `Draft from <run-id>: needs Ticket Author refinement before implementation` as the first line under the title; the Ticket Author removes that line when refining.
+- If the evidenced minimum deliverable necessarily includes paths not permitted by `harness/gates/commit-scope.java`, add a `Scope-gate allowances` bullet listing exactly those paths. Do not request broad directory exemptions or include paths not required by the minimum deliverable.
 - Add one `to-do` row to the matching group table in `harness/plan.md`, kept in ticket-ID order.
 - Before a follow-up ticket states that a link, path, or name has a correct replacement, resolve each one against the repository tree. List any target that does not resolve separately, with the decision it needs (retarget, turn into plain text, or accept), and do not count it among the mechanical repairs.
 - Before opening, search open tickets for the same finding; if one covers it, classify the finding `duplicate` and open nothing. For a `decision needed` finding, still open the ticket but state the exact competing statements and the decision required, and do not prescribe an answer.
+- In the report and handoff, state the classification rationale for each follow-up and duplicate, including why its ticket prefix is appropriate and which existing ticket covers a duplicate.
+- If a ticket's group or prefix is found to be wrong after a commit, preserve the earlier commit and make a narrow corrective commit before dispatching the Evaluator. Move or rename only the affected ticket as needed, update its plan row and affected follow-up references, and include the corrective paths in the audit's logged and evaluated delta.
 
 ## Ledger
 

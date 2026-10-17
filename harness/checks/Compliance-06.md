@@ -30,6 +30,7 @@ The harness works only if each role has one clear job, the hand-offs between rol
 - A finding is a contradiction, a duty with two owners or none, a hand-off mismatch, a reference to something that does not exist, or a format defect.
 - Trivial and fixable directly by the Auditor under its contract: format defects (trailing whitespace, missing final newline, table or fence syntax) and links or stale paths whose correct target is verified and unambiguous. Role contracts and agent files are editable only to that extent, and never to change a duty, permission, or limit. Check whether `Dev-09` has been closed and the Auditor contract amended; until then, role files are not editable by the Auditor and every defect in them is ticketed.
 - Always a ticket: overlaps, gaps, hand-off or status mismatches, and any permission change. Open one ticket per theme (not one per line), as a `Dev-` ticket.
+- Classify a finding as a duplicate only when an existing open ticket demonstrably covers it. For each duplicate, name the ticket, cite the matching acceptance criterion or explicit scoped path, and verify and state that the ticket is currently open; thematic similarity or matching keywords alone is not sufficient.
 - `decision needed`: two role files give conflicting instructions and the project documents do not say which is right. State both passages and the decision required, and do not prescribe an answer.
 - Do not redesign roles. Report only what is observably inconsistent.
 
@@ -44,6 +45,7 @@ The harness works only if each role has one clear job, the hand-offs between rol
 - A role matrix with one row per role and columns `Job`, `Inputs`, `Outputs`, `Must never`, `Agent file`, each `ok` or the finding number.
 - An ownership table with one row per shared duty or file from topic 2 and the columns `Duty or file`, `Owner(s)`, `Rule found`, `Result` (`single owner`, `consistent hand-over`, or the finding number).
 - A hand-off table with the columns `Producer`, `Block`, `Consumer`, `Fields match`.
+- For every duplicate classification, report the existing ticket ID, the matching acceptance criterion or explicitly scoped path, and its verified current open status.
 - A format table as in Compliance-04, limited to the files under Inspect.
 
 ## Cadence
