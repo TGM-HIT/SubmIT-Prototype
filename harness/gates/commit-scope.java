@@ -15,6 +15,7 @@ class CommitScope {
         "compose.yaml",
         "backend/README.md",
         "Makefile",
+        "scripts/check-startup-config.py",
         "frontend/index.html",
         "frontend/package.json",
         "frontend/DEV-GUIDELINES.md",

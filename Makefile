@@ -14,6 +14,7 @@ FRONTEND := frontend
 FRONTEND_DEV := cd $(FRONTEND) && (npm ci || npm install) && npm run dev
 
 .PHONY: help env install format-markdown build build-backend build-frontend test test-backend test-frontend \
+        startup-config-check \
         check run run-testing run-testing-minimal testing-stack run-backend run-backend-testing \
         run-frontend openapi clean
 
@@ -46,9 +47,12 @@ test-backend: ## Run backend tests
 test-frontend: install ## Typecheck and run frontend tests
 	cd $(FRONTEND) && npm run typecheck && npm test
 
-check: ## Full verification: backend checkstyle, build, tests
+check: startup-config-check ## Full verification: startup config, backend checkstyle, build, tests
 	cd $(BACKEND) && ./gradlew checkstyleMain
 	$(MAKE) build test
+
+startup-config-check: ## Verify sample, Compose and backend startup configuration wiring
+	python3 scripts/check-startup-config.py
 
 run: env ## Start backend and frontend dev server (Ctrl+C stops both)
 	@trap 'kill 0' INT TERM EXIT; \

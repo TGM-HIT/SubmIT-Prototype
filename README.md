@@ -13,27 +13,4 @@ The image builds run backend tests and Checkstyle plus frontend typecheck and te
 
 ## Startup wiring check
 
-Run this configuration-only check from the repository root to verify that the sample variables, Compose wiring and existing backend bootstrap bindings agree:
-
-```sh
-python3 - <<'PY'
-from pathlib import Path
-import re
-
-sample = Path(".env.example").read_text()
-compose = Path("compose.yaml").read_text()
-bootstrap = Path("backend/src/main/java/com/flightlog/user/BootstrapAdminConfiguration.java").read_text()
-
-admin_keys = ("DADB_BOOTSTRAPADMIN_USERNAME", "DADB_BOOTSTRAPADMIN_PASSWORD")
-for key in (*admin_keys, "DADB_PORT"):
-    assert re.search(rf"(?m)^{key}=", sample), f"{key} missing from .env.example"
-
-for key in admin_keys:
-    assert re.search(rf"(?m)^\s+{key}: \$\{{{key}(?::-[^}}]*)?\}}$", compose), f"{key} missing from Compose environment"
-    assert f'@Value("${{{key}:}}")' in bootstrap, f"{key} missing from backend binding"
-
-assert re.search(r'(?m)^\s+- "\$\{DADB_PORT:-8081\}:80"$', compose), "UI host port does not use DADB_PORT"
-assert "!username.isBlank() && !password.isBlank()" in bootstrap, "bootstrap must require both values"
-print("Startup configuration wiring is consistent.")
-PY
-```
+Run `make startup-config-check` from the repository root to verify that the sample administrator and UI-port variables, Compose wiring, existing backend bindings, and both-values bootstrap guard agree. This configuration-only check uses Python's standard library and also runs automatically as part of `make check`.
