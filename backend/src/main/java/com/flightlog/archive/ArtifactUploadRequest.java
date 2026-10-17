@@ -22,7 +22,7 @@ public class ArtifactUploadRequest {
     private String description;
 
     @NotNull
-    @Schema(type = "string", format = "binary", description = "Artefact file, at most 10 MiB.")
+    @Schema(type = "string", format = "binary", description = "Required, non-empty artefact file; at most 10 MiB.")
     private MultipartFile file;
 
     @Size(max = 4000)

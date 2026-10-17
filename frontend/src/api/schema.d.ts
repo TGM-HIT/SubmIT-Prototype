@@ -1647,7 +1647,7 @@ export interface components {
             description?: string;
             /**
              * Format: binary
-             * @description Artefact file, at most 10 MiB.
+             * @description Required, non-empty artefact file; at most 10 MiB.
              */
             file: string;
             /** @description Optional notes for the later publication review; at most 4,000 characters. */
