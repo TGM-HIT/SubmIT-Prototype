@@ -1553,10 +1553,10 @@ export interface components {
             versionTransition?: components["schemas"]["VersionTransition"];
             /**
              * Format: uuid
-             * @description ID of the student being assessed.
+             * @description ID of the student being assessed; must identify a member of the project's group.
              */
             studentId: string;
-            /** @description Non-blank criterion ID from the selected rubric version. */
+            /** @description Non-blank criterion ID from the selected rubric version that permits student assessment or BOTH. */
             criterionId: string;
             /** @description Grade value within the selected criterion's configured scale. */
             grade: number;
@@ -1565,7 +1565,7 @@ export interface components {
              * @description Optional assessment date in YYYY-MM-DD format; defaults to today and cannot be in the future.
              */
             assessedOn?: string;
-            /** @description Optional evidence text; at most 4,000 characters. */
+            /** @description Evidence is optional only when the criterion does not require it; when criterion.evidenceRequired is true, evidence must be non-blank. At most 4,000 characters. */
             evidence?: string;
             /** @description Optional comments; at most 4,000 characters. */
             comments?: string;
@@ -1581,7 +1581,7 @@ export interface components {
              * @description Optional assessment date in YYYY-MM-DD format; defaults to today and cannot be in the future.
              */
             assessedOn?: string;
-            /** @description Optional evidence text; at most 4,000 characters. */
+            /** @description Evidence is optional only when the criterion does not require it; when criterion.evidenceRequired is true, evidence must be non-blank. At most 4,000 characters. */
             evidence?: string;
             /** @description Optional comments; at most 4,000 characters. */
             comments?: string;
@@ -1614,7 +1614,7 @@ export interface components {
              */
             rubricId: string;
             versionTransition?: components["schemas"]["VersionTransition"];
-            /** @description Non-blank criterion ID from the selected rubric version. */
+            /** @description Non-blank criterion ID from the selected rubric version that permits group assessment or BOTH. */
             criterionId: string;
             /** @description Grade value within the selected criterion's configured scale. */
             grade: number;
@@ -1623,7 +1623,7 @@ export interface components {
              * @description Optional assessment date in YYYY-MM-DD format; defaults to today and cannot be in the future.
              */
             assessedOn?: string;
-            /** @description Optional evidence text; at most 4,000 characters. */
+            /** @description Evidence is optional only when the criterion does not require it; when criterion.evidenceRequired is true, evidence must be non-blank. At most 4,000 characters. */
             evidence?: string;
             /** @description Optional comments; at most 4,000 characters. */
             comments?: string;

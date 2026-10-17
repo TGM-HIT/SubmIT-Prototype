@@ -26,8 +26,10 @@ public final class GradeDtos {
             @NotNull @Schema(description = "ID of the immutable rubric version used for this assessment.", format = "uuid")
             UUID rubricId,
             @Valid VersionTransition versionTransition,
-            @NotNull @Schema(description = "ID of the student being assessed.", format = "uuid") UUID studentId,
-            @NotBlank @Schema(description = "Non-blank criterion ID from the selected rubric version.")
+            @NotNull @Schema(description = "ID of the student being assessed; must identify a member of the project's group.",
+                    format = "uuid") UUID studentId,
+            @NotBlank @Schema(description = "Non-blank criterion ID from the selected rubric version that permits "
+                    + "student assessment or BOTH.")
             String criterionId,
             @NotNull @Schema(description = "Grade value within the selected criterion's configured scale.")
             BigDecimal grade,
@@ -35,7 +37,9 @@ public final class GradeDtos {
             @Schema(description = "Optional assessment date in YYYY-MM-DD format; defaults to today and cannot be in the future.",
                     format = "date")
             String assessedOn,
-            @Size(max = 4000) @Schema(description = "Optional evidence text; at most 4,000 characters.")
+            @Size(max = 4000) @Schema(description = "Evidence is optional only when the criterion does not require it; "
+                    + "when criterion.evidenceRequired is true, evidence must be non-blank. "
+                    + "At most 4,000 characters.")
             String evidence,
             @Size(max = 4000) @Schema(description = "Optional comments; at most 4,000 characters.")
             String comments) {
@@ -46,7 +50,8 @@ public final class GradeDtos {
             @NotNull @Schema(description = "ID of the immutable rubric version used for this assessment.", format = "uuid")
             UUID rubricId,
             @Valid VersionTransition versionTransition,
-            @NotBlank @Schema(description = "Non-blank criterion ID from the selected rubric version.")
+            @NotBlank @Schema(description = "Non-blank criterion ID from the selected rubric version that permits "
+                    + "group assessment or BOTH.")
             String criterionId,
             @NotNull @Schema(description = "Grade value within the selected criterion's configured scale.")
             BigDecimal grade,
@@ -54,7 +59,9 @@ public final class GradeDtos {
             @Schema(description = "Optional assessment date in YYYY-MM-DD format; defaults to today and cannot be in the future.",
                     format = "date")
             String assessedOn,
-            @Size(max = 4000) @Schema(description = "Optional evidence text; at most 4,000 characters.")
+            @Size(max = 4000) @Schema(description = "Evidence is optional only when the criterion does not require it; "
+                    + "when criterion.evidenceRequired is true, evidence must be non-blank. "
+                    + "At most 4,000 characters.")
             String evidence,
             @Size(max = 4000) @Schema(description = "Optional comments; at most 4,000 characters.")
             String comments) {
@@ -72,7 +79,9 @@ public final class GradeDtos {
             @Schema(description = "Optional assessment date in YYYY-MM-DD format; defaults to today and cannot be in the future.",
                     format = "date")
             String assessedOn,
-            @Size(max = 4000) @Schema(description = "Optional evidence text; at most 4,000 characters.")
+            @Size(max = 4000) @Schema(description = "Evidence is optional only when the criterion does not require it; "
+                    + "when criterion.evidenceRequired is true, evidence must be non-blank. "
+                    + "At most 4,000 characters.")
             String evidence,
             @Size(max = 4000) @Schema(description = "Optional comments; at most 4,000 characters.")
             String comments) {
