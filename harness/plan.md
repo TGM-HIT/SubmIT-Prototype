@@ -53,7 +53,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-12](tickets/done/Dev-12.md) | done | Let the Orchestrator run compliance audits and leave a Learner-readable run record |
 | [Dev-13](tickets/done/Dev-13.md) | done | Include Optimizations in ticket-role workflows |
 | [Dev-14](tickets/done/Dev-14.md) | done | Align Auditor agent thinking guidance with check-specific requirements |
-| [Dev-15](tickets/Dev-15.md) | failed | Align preview Node.js prerequisite with Vite support |
+| [Dev-15](tickets/done/Dev-15.md) | done | Align preview Node.js prerequisite with Vite support |
 | [Dev-16](tickets/done/Dev-16.md) | done | Document accepted-catalogue and audit read endpoints |
 | [Dev-17](tickets/done/Dev-17.md) | done | Cover formal-application validation with API tests |
 | [Dev-18](tickets/done/Dev-18.md) | done | Use generated pagination response types in API services |

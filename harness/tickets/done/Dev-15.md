@@ -4,15 +4,15 @@
 
 The local browser preview starts the frontend through Vite, but its guide and CLI help say Node.js 22+, which incorrectly includes Node 22.0 through 22.11. The locked Vite dependency supports `^20.19.0 || >=22.12.0`. Align the preview prerequisite with that range so developers can choose a supported runtime.
 
-Source: `../runs/Compliance-01-20261016-0803/report.md`, finding 1. The locked Vite 7.3.6 engine is recorded in `../../frontend/package-lock.json`; `../../frontend/README.md` already names both minimums but uses shorthand that should be made unambiguous.
+Source: `../../runs/Compliance-01-20261016-0803/report.md`, finding 1. The locked Vite 7.3.6 engine is recorded in `../../../frontend/package-lock.json`; `../../../frontend/README.md` already names both minimums but uses shorthand that should be made unambiguous.
 
 ## Scope and contract
 
-- In `../../frontend/DEV-GUIDELINES.md` and the help output of `../../frontend/scripts/preview.mjs`, replace the broad `Node.js 22+` prerequisite with wording that accurately expresses Vite's locked engine range, `^20.19.0 || >=22.12.0`.
-- Update `../../frontend/README.md` to state the same supported range unambiguously, excluding Node 21 as well as Node 22.0 through 22.11.
-- Treat `../../frontend/package-lock.json` as the source of the currently locked Vite engine; do not change dependency versions or the lockfile.
+- In `../../../frontend/DEV-GUIDELINES.md` and the help output of `../../../frontend/scripts/preview.mjs`, replace the broad `Node.js 22+` prerequisite with wording that accurately expresses Vite's locked engine range, `^20.19.0 || >=22.12.0`.
+- Update `../../../frontend/README.md` to state the same supported range unambiguously, excluding Node 21 as well as Node 22.0 through 22.11.
+- Treat `../../../frontend/package-lock.json` as the source of the currently locked Vite engine; do not change dependency versions or the lockfile.
 - Do not change runtime enforcement, preview behavior, or unrelated documentation.
-- Scope-gate allowances: `../../frontend/README.md` is not currently allowed by `../gates/commit-scope.java`; the Orchestrator must add this exact repository path to the temporary allowlist.
+- Temporary scope-gate allowance: `frontend/README.md` required a narrow temporary addition to `../../gates/commit-scope.java` for this run; the allowance was removed during closeout.
 
 ## Mechanical checks (the Evaluator re-runs)
 
@@ -26,7 +26,7 @@ Standard project checks:
 
 ## One-time manual verification (in addition to automated tests)
 
-- **Implementor-performed:** From `../../frontend/`, run `npm run preview:help`. Verify the command succeeds and the displayed prerequisite states the exact supported range `^20.19.0 || >=22.12.0` (or equivalent unambiguous wording); specifically, it must not imply that Node 21 or Node 22.0 through 22.11 are supported. Compare it with `../../frontend/DEV-GUIDELINES.md`, `../../frontend/README.md`, and the locked Vite engine in `../../frontend/package-lock.json`. No browser or backend startup is required because preview behavior is unchanged.
+- **Implementor-performed:** From `../../../frontend/`, run `npm run preview:help`. Verify the command succeeds and the displayed prerequisite states the exact supported range `^20.19.0 || >=22.12.0` (or equivalent unambiguous wording); specifically, it must not imply that Node 21 or Node 22.0 through 22.11 are supported. Compare it with `../../../frontend/DEV-GUIDELINES.md`, `../../../frontend/README.md`, and the locked Vite engine in `../../../frontend/package-lock.json`. No browser or backend startup is required because preview behavior is unchanged.
 
 ## Acceptance criteria (the Evaluator judges)
 
