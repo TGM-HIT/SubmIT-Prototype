@@ -57,7 +57,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-16](tickets/done/Dev-16.md) | done | Document accepted-catalogue and audit read endpoints |
 | [Dev-17](tickets/done/Dev-17.md) | done | Cover formal-application validation with API tests |
 | [Dev-18](tickets/done/Dev-18.md) | done | Use generated pagination response types in API services |
-| [Dev-19](tickets/Dev-19.md) | failed | Document OpenAPI operations and constrained fields |
+| [Dev-19](tickets/done/Dev-19.md) | done | Document OpenAPI operations and constrained fields |
 | [Dev-20](tickets/Dev-20.md) | to-do | Align Docker startup configuration and documentation |
 | [Dev-21](tickets/Dev-21.md) | to-do | Resolve bug-register intake dispositions |
 | [Dev-22](tickets/Dev-22.md) | to-do | Align generated-artifact ticket guidance with tracking conventions |
