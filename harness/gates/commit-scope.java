@@ -27,7 +27,6 @@ class CommitScope {
         "harness/roles/implementor.md",
         "harness/roles/learner.md",
         "harness/roles/orchestrator.md",
-        "harness/templates/ticket.md",
         "harness/tickets/done/Bug-04.md",
         "harness/tickets/done/Bug-05.md",
         "harness/tickets/done/Feature-01.md",
