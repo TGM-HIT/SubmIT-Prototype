@@ -1278,7 +1278,7 @@ function buildUrl(options) {
 }
 
 function helpText() {
-  return `  Local browser preview (Node.js 22+ and Chrome/Chromium required; no browser automation package).
+  return `  Local browser preview (Node.js ^20.19.0 || >=22.12.0 and Chrome/Chromium required; no browser automation package).
 
   npm run preview -- [options]
 
