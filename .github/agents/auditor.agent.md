@@ -2,7 +2,6 @@
 name: auditor
 description: "Run one recurring compliance check (doc drift, doc-code parity, OpenAPI/spec compliance, link and format validation, documentation health), fix trivial documentation defects, open follow-up tickets for findings, and record the last run. Use for scheduled or on-demand documentation compliance audits."
 tools: [execute, read, edit, search]
-reasoning-effort: medium
 argument-hint: "Check ID (for example Compliance-02)"
 ---
 
