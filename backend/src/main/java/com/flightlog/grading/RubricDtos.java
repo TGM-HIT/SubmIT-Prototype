@@ -96,7 +96,8 @@ public final class RubricDtos {
             @Schema(description = "Required target scope: STUDENT or PROJECT.") String scope,
             @NotBlank @Pattern(regexp = "WEIGHTED_AVERAGE")
             @Schema(description = "Required aggregation method; currently WEIGHTED_AVERAGE.") String type,
-            @Schema(description = "Decimal places of the computed grade (0 to 6).") Integer decimals,
+            @Schema(description = "Required integer number of decimal places for the computed grade, from 0 through 6.",
+                    requiredMode = Schema.RequiredMode.REQUIRED) Integer decimals,
             @Schema(description = "Optional positive weight by defined criterion ID; project-scope rules may weight only "
                     + "group-level criteria.") Map<String, BigDecimal> criterionWeights,
             @Schema(description = "Optional positive weight by defined metric ID.") Map<String, BigDecimal> metricWeights) {

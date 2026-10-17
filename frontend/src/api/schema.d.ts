@@ -1052,9 +1052,9 @@ export interface components {
         Decision: {
             /** @description Configured aggregation rule; omit for a manual decision. */
             ruleId?: string;
-            /** @description Manual grade (required without ruleId); with ruleId it must equal the computed result. */
+            /** @description Manual grade (required without ruleId) must be within the inclusive bounds of the selected rubric version's final-grade scale and a multiple of its configured step from min (default 1). A rule-derived grade may be omitted; if supplied, it must equal the computed result. */
             grade?: number;
-            /** @description Rationale required for a manual grade; at most 4,000 characters. */
+            /** @description A nonblank rationale is required for a manual grade; at most 4,000 characters. */
             rationale?: string;
         };
         /** @description Records project and/or individual final grades; earlier ones are retained as superseded. */
@@ -1072,14 +1072,14 @@ export interface components {
         StudentDecision: {
             /**
              * Format: uuid
-             * @description ID of the student receiving this final grade.
+             * @description ID of a distinct member of the project group receiving this final grade; each group member may appear only once.
              */
             studentId: string;
             /** @description Configured aggregation rule; omit for a manual decision. */
             ruleId?: string;
-            /** @description Manual grade (required without ruleId); with ruleId it must equal the computed result. */
+            /** @description Manual grade (required without ruleId) must be within the inclusive bounds of the selected rubric version's final-grade scale and a multiple of its configured step from min (default 1). A rule-derived grade may be omitted; if supplied, it must equal the computed result. */
             grade?: number;
-            /** @description Rationale for a manual grade; at most 4,000 characters. */
+            /** @description A nonblank rationale is required for a manual grade; at most 4,000 characters. */
             rationale?: string;
         };
         /** @description Explicit, recorded switch to another rubric version for a project that is already bound. */
@@ -1786,9 +1786,9 @@ export interface components {
             type: string;
             /**
              * Format: int32
-             * @description Decimal places of the computed grade (0 to 6).
+             * @description Required integer number of decimal places for the computed grade, from 0 through 6.
              */
-            decimals?: number;
+            decimals: number;
             /** @description Optional positive weight by defined criterion ID; project-scope rules may weight only group-level criteria. */
             criterionWeights?: {
                 [key: string]: number;
@@ -1908,11 +1908,11 @@ export interface components {
             publishedAt?: string;
         };
         RegisterRequest: {
-            /** @description Required login name; 3 to 80 characters. */
+            /** @description Required login name; whitespace-only values are rejected; 3 to 80 characters. */
             username: string;
-            /** @description Required password; 12 to 128 characters. */
+            /** @description Required password; whitespace-only values are rejected; 12 to 128 characters. */
             password: string;
-            /** @description Required account name; trimmed before storage and limited to 120 characters after trimming. */
+            /** @description Required account name; leading and trailing whitespace is trimmed, a value blank after trimming is rejected, and the trimmed name is limited to 120 characters. */
             displayName: string;
             /** @enum {string} */
             role?: "STUDENT" | "TEACHER" | "ADMIN";

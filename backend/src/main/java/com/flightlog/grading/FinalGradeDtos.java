@@ -16,20 +16,27 @@ public final class FinalGradeDtos {
     @Schema(description = "Final grade decision: either a configured ruleId, or a manual grade with an explicit rationale.")
     public record Decision(
             @Schema(description = "Configured aggregation rule; omit for a manual decision.") String ruleId,
-            @Schema(description = "Manual grade (required without ruleId); with ruleId it must equal the computed result.")
+            @Schema(description = "Manual grade (required without ruleId) must be within the inclusive bounds of the "
+                    + "selected rubric version's final-grade scale and a multiple of its configured step from min "
+                    + "(default 1). A rule-derived grade may be omitted; if supplied, it must equal the computed result.")
             BigDecimal grade,
-            @Size(max = 4000) @Schema(description = "Rationale required for a manual grade; at most 4,000 characters.")
+            @Size(max = 4000) @Schema(description = "A nonblank rationale is required for a manual grade; at most "
+                    + "4,000 characters.")
             String rationale) {
     }
 
     @Schema(description = "Final grade decision for one student.")
     public record StudentDecision(
-            @NotNull @Schema(description = "ID of the student receiving this final grade.", format = "uuid")
+            @NotNull @Schema(description = "ID of a distinct member of the project group receiving this final grade; "
+                    + "each group member may appear only once.", format = "uuid")
             UUID studentId,
             @Schema(description = "Configured aggregation rule; omit for a manual decision.") String ruleId,
-            @Schema(description = "Manual grade (required without ruleId); with ruleId it must equal the computed result.")
+            @Schema(description = "Manual grade (required without ruleId) must be within the inclusive bounds of the "
+                    + "selected rubric version's final-grade scale and a multiple of its configured step from min "
+                    + "(default 1). A rule-derived grade may be omitted; if supplied, it must equal the computed result.")
             BigDecimal grade,
-            @Size(max = 4000) @Schema(description = "Rationale for a manual grade; at most 4,000 characters.")
+            @Size(max = 4000) @Schema(description = "A nonblank rationale is required for a manual grade; at most "
+                    + "4,000 characters.")
             String rationale) {
     }
 

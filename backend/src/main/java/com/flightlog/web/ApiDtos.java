@@ -24,13 +24,13 @@ public final class ApiDtos {
 
     public record RegisterRequest(
             @NotBlank @Size(min = 3, max = 80)
-            @Schema(description = "Required login name; 3 to 80 characters.")
+            @Schema(description = "Required login name; whitespace-only values are rejected; 3 to 80 characters.")
             String username,
             @NotBlank @Size(min = 12, max = 128)
-            @Schema(description = "Required password; 12 to 128 characters.")
+            @Schema(description = "Required password; whitespace-only values are rejected; 12 to 128 characters.")
             String password,
-            @NotNull @Schema(description = "Required account name; trimmed before storage and limited to 120 "
-                    + "characters after trimming.")
+            @NotNull @Schema(description = "Required account name; leading and trailing whitespace is trimmed, "
+                    + "a value blank after trimming is rejected, and the trimmed name is limited to 120 characters.")
             String displayName,
             Role role) {
     }
