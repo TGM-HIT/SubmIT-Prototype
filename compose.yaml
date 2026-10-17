@@ -7,8 +7,8 @@ services:
       context: .
       dockerfile: backend/Dockerfile
     environment:
-      FLIGHTLOG_BOOTSTRAPADMIN_USERNAME: ${FLIGHTLOG_BOOTSTRAPADMIN_USERNAME}
-      FLIGHTLOG_BOOTSTRAPADMIN_PASSWORD: ${FLIGHTLOG_BOOTSTRAPADMIN_PASSWORD}
+      DADB_BOOTSTRAPADMIN_USERNAME: ${DADB_BOOTSTRAPADMIN_USERNAME}
+      DADB_BOOTSTRAPADMIN_PASSWORD: ${DADB_BOOTSTRAPADMIN_PASSWORD}
       JWT_SECRET: ${JWT_SECRET}
     restart: unless-stopped
 
@@ -16,7 +16,7 @@ services:
     build:
       context: frontend
     ports:
-      - "${FLIGHTLOG_PORT:-8081}:80"
+      - "${DADB_PORT:-8081}:80"
     depends_on:
       backend:
         condition: service_healthy
