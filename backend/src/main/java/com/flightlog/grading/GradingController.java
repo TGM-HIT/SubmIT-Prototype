@@ -3,13 +3,9 @@ package com.flightlog.grading;
 import com.flightlog.grading.GradeDtos.GradeResponse;
 import com.flightlog.grading.GradeDtos.StudentGradeRequest;
 import com.flightlog.security.AuthenticatedUser;
-import com.flightlog.web.ApiDtos.ApiErrorResponse;
 import com.flightlog.web.ApiDtos.PageResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.Schema;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.UUID;
@@ -31,8 +27,6 @@ public class GradingController {
     private static final String PROJECT_DESCRIPTION = "Project identifier.";
     private static final String PAGE_DESCRIPTION = "Zero-based page index.";
     private static final String SIZE_DESCRIPTION = "Page size, at most 100.";
-    private static final String FORBIDDEN = "Caller lacks the required role or project access.";
-
     private final GradeService gradeService;
 
     public GradingController(GradeService gradeService) {
@@ -41,10 +35,7 @@ public class GradingController {
 
     @GetMapping("/student-grades")
     @Operation(summary = "List individual grade history; students see only their own grades.")
-    @ApiResponse(responseCode = "200", description = "Paginated individual grade history.",
-            useReturnTypeSchema = true)
-    @ApiResponse(responseCode = "403", description = FORBIDDEN,
-            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
+    @GradingApiResponses.StudentGradesList
     public PageResponse<GradeResponse> listStudentGrades(@AuthenticationPrincipal AuthenticatedUser caller,
             @Parameter(description = PROJECT_DESCRIPTION) @PathVariable UUID projectId,
             @Parameter(description = "Optional student filter.") @RequestParam(required = false) String studentId,
@@ -56,9 +47,7 @@ public class GradingController {
     @PostMapping("/student-grades")
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Record a teacher's assessment of one student against one rubric criterion.")
-    @ApiResponse(responseCode = "400", description = "Grade outside the criterion scale or invalid input.")
-    @ApiResponse(responseCode = "403", description = FORBIDDEN)
-    @ApiResponse(responseCode = "409", description = "Rubric version differs from the project's bound version.")
+    @GradingApiResponses.RecordStudentGrade
     public GradeResponse recordStudentGrade(@AuthenticationPrincipal AuthenticatedUser caller,
             @Parameter(description = PROJECT_DESCRIPTION) @PathVariable UUID projectId,
             @Valid @RequestBody StudentGradeRequest request) {

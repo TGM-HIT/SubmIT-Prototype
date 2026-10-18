@@ -3113,7 +3113,7 @@ export interface operations {
                     "*/*": components["schemas"]["FinalGradeHistory"];
                 };
             };
-            /** @description No final grade has been recorded. */
+            /** @description Project not found or no final grade has been recorded. */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3158,7 +3158,7 @@ export interface operations {
                     "*/*": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description A configured rule lacks required inputs. */
+            /** @description A configured rule lacks required inputs, the selected rubric is ineffective, or a rubric-binding transition lacks a reason. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -5011,7 +5011,7 @@ export interface operations {
                     "*/*": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description No final grade has been recorded. */
+            /** @description Project not found, student is not a project member, or no final grade has been recorded. */
             404: {
                 headers: {
                     [name: string]: unknown;

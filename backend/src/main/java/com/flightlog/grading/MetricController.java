@@ -3,13 +3,9 @@ package com.flightlog.grading;
 import com.flightlog.grading.GradeDtos.MetricRequest;
 import com.flightlog.grading.GradeDtos.MetricResponse;
 import com.flightlog.security.AuthenticatedUser;
-import com.flightlog.web.ApiDtos.ApiErrorResponse;
 import com.flightlog.web.ApiDtos.PageResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.Schema;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.UUID;
@@ -29,8 +25,6 @@ import org.springframework.web.bind.annotation.RestController;
 @Tag(name = "Project metrics")
 public class MetricController {
     private static final String PROJECT_DESCRIPTION = "Project identifier.";
-    private static final String FORBIDDEN = "Caller lacks the required role or project access.";
-
     private final MetricService metricService;
 
     public MetricController(MetricService metricService) {
@@ -39,10 +33,7 @@ public class MetricController {
 
     @GetMapping
     @Operation(summary = "List metric observations for teachers and project members.")
-    @ApiResponse(responseCode = "200", description = "Paginated metric observations.",
-            useReturnTypeSchema = true)
-    @ApiResponse(responseCode = "403", description = FORBIDDEN,
-            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
+    @GradingApiResponses.MetricsList
     public PageResponse<MetricResponse> listMetrics(@AuthenticationPrincipal AuthenticatedUser caller,
             @Parameter(description = PROJECT_DESCRIPTION) @PathVariable UUID projectId,
             @Parameter(description = "Zero-based page index.") @RequestParam(defaultValue = "0") int page,
@@ -53,7 +44,7 @@ public class MetricController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Record a metric observation validated against the configured metric definition.")
-    @ApiResponse(responseCode = "403", description = FORBIDDEN)
+    @GradingApiResponses.ForbiddenWithoutSchema
     public MetricResponse recordMetric(@AuthenticationPrincipal AuthenticatedUser caller,
             @Parameter(description = PROJECT_DESCRIPTION) @PathVariable UUID projectId,
             @Valid @RequestBody MetricRequest request) {

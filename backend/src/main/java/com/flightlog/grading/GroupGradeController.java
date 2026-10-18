@@ -3,13 +3,9 @@ package com.flightlog.grading;
 import com.flightlog.grading.GradeDtos.GradeResponse;
 import com.flightlog.grading.GradeDtos.GroupGradeRequest;
 import com.flightlog.security.AuthenticatedUser;
-import com.flightlog.web.ApiDtos.ApiErrorResponse;
 import com.flightlog.web.ApiDtos.PageResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.Schema;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.UUID;
@@ -31,8 +27,6 @@ public class GroupGradeController {
     private static final String PROJECT_DESCRIPTION = "Project identifier.";
     private static final String PAGE_DESCRIPTION = "Zero-based page index.";
     private static final String SIZE_DESCRIPTION = "Page size, at most 100.";
-    private static final String FORBIDDEN = "Caller lacks the required role or project access.";
-
     private final GradeService gradeService;
 
     public GroupGradeController(GradeService gradeService) {
@@ -41,10 +35,7 @@ public class GroupGradeController {
 
     @GetMapping("/group-grades")
     @Operation(summary = "List group-level assessment history for teachers and group members.")
-    @ApiResponse(responseCode = "200", description = "Paginated group-level assessment history.",
-            useReturnTypeSchema = true)
-    @ApiResponse(responseCode = "403", description = FORBIDDEN,
-            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
+    @GradingApiResponses.GroupGradesList
     public PageResponse<GradeResponse> listGroupGrades(@AuthenticationPrincipal AuthenticatedUser caller,
             @Parameter(description = PROJECT_DESCRIPTION) @PathVariable UUID projectId,
             @Parameter(description = PAGE_DESCRIPTION) @RequestParam(defaultValue = "0") int page,
@@ -55,7 +46,7 @@ public class GroupGradeController {
     @PostMapping("/group-grades")
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Record a teacher's assessment for a group-level rubric criterion.")
-    @ApiResponse(responseCode = "403", description = FORBIDDEN)
+    @GradingApiResponses.ForbiddenWithoutSchema
     public GradeResponse recordGroupGrade(@AuthenticationPrincipal AuthenticatedUser caller,
             @Parameter(description = PROJECT_DESCRIPTION) @PathVariable UUID projectId,
             @Valid @RequestBody GroupGradeRequest request) {

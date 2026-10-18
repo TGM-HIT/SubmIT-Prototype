@@ -38,7 +38,7 @@ public class FinalGradeController {
     @Operation(summary = "Get the current final project grade, its basis, and history.")
     @ApiResponse(responseCode = "200", description = "Current final project grade and history.",
             content = @Content(schema = @Schema(implementation = FinalGradeHistory.class)))
-    @ApiResponse(responseCode = "404", description = "No final grade has been recorded.",
+    @ApiResponse(responseCode = "404", description = "Project not found or no final grade has been recorded.",
             content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
     public FinalGradeHistory getFinalGrade(@AuthenticationPrincipal AuthenticatedUser caller,
             @Parameter(description = PROJECT_DESCRIPTION) @PathVariable UUID projectId) {
@@ -51,7 +51,8 @@ public class FinalGradeController {
             content = @Content(schema = @Schema(implementation = FinalGradeHistory.class)))
     @ApiResponse(responseCode = "403", description = FORBIDDEN,
             content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
-    @ApiResponse(responseCode = "404", description = "No final grade has been recorded.",
+    @ApiResponse(responseCode = "404", description = "Project not found, student is not a project member, "
+            + "or no final grade has been recorded.",
             content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
     public FinalGradeHistory getStudentFinalGrade(@AuthenticationPrincipal AuthenticatedUser caller,
             @Parameter(description = PROJECT_DESCRIPTION) @PathVariable UUID projectId,
@@ -65,7 +66,8 @@ public class FinalGradeController {
             content = @Content(schema = @Schema(implementation = FinalGradesResponse.class)))
     @ApiResponse(responseCode = "400", description = "Invalid grade, missing rationale, or unknown rule.",
             content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
-    @ApiResponse(responseCode = "409", description = "A configured rule lacks required inputs.",
+    @ApiResponse(responseCode = "409", description = "A configured rule lacks required inputs, the selected "
+            + "rubric is ineffective, or a rubric-binding transition lacks a reason.",
             content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
     public FinalGradesResponse putFinalGrade(@AuthenticationPrincipal AuthenticatedUser caller,
             @Parameter(description = PROJECT_DESCRIPTION) @PathVariable UUID projectId,

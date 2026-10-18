@@ -37,11 +37,14 @@ class OpenApiContractTest {
     private static final List<ExpectedOperation> GRADING_RESPONSE_CONTRACTS = List.of(
             operation("get", "/api/projects/{projectId}/final-grade", "FinalGradeHistory",
                     "Current final project grade and history.",
-                    Map.of("404", response("ApiErrorResponse", "No final grade has been recorded."))),
+                    Map.of("404", response("ApiErrorResponse",
+                            "Project not found or no final grade has been recorded."))),
             operation("put", "/api/projects/{projectId}/final-grade", "FinalGradesResponse",
                     "Recorded project and individual final grades.",
                     Map.of("400", response("ApiErrorResponse", "Invalid grade, missing rationale, or unknown rule."),
-                            "409", response("ApiErrorResponse", "A configured rule lacks required inputs."))),
+                            "409", response("ApiErrorResponse", "A configured rule lacks required inputs, the "
+                                    + "selected rubric is ineffective, or a rubric-binding transition lacks a "
+                                    + "reason."))),
             operation("get", "/api/projects/{projectId}/student-grades", "PageResponseGradeResponse",
                     "Paginated individual grade history.",
                     Map.of("403", response("ApiErrorResponse", "Caller lacks the required role or project access."))),
@@ -54,7 +57,9 @@ class OpenApiContractTest {
             operation("get", "/api/projects/{projectId}/students/{studentId}/final-grade", "FinalGradeHistory",
                     "Student's individual final grade and history.",
                     Map.of("403", response("ApiErrorResponse", "Caller lacks the required role or project access."),
-                            "404", response("ApiErrorResponse", "No final grade has been recorded."))),
+                            "404", response("ApiErrorResponse",
+                                    "Project not found, student is not a project member, or no final grade has "
+                                            + "been recorded."))),
             operation("get", "/api/grading-rubrics/{id}", "RubricResponse", "Specific immutable rubric version.",
                     Map.of("404", response("ApiErrorResponse", "Rubric version not found."))),
             operation("get", "/api/grading-rubrics/active", "RubricResponse", "Rubric version effective today.",
