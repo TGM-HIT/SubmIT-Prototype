@@ -21,6 +21,8 @@ Mint a run id `<check-id>-<yyyymmdd-hhmm>` from the system clock (for example `d
 
 Before handing the report to the Evaluator, verify every file-and-line citation in the report and each follow-up ticket against the current repository text. Confirm the cited lines exist and support the associated claim or quotation; correct inaccurate line references and unsupported citations before handoff.
 
+For an orchestrated run, include the exact audit start timestamp (including time zone) supplied by the Orchestrator in `## Scope inspected`; it is the timestamp used for the Compliance ledger's `Last run` cell.
+
 ## Source of truth
 
 Use explicit approved statements, in this order, and say which you used for each finding: the shared product rules in `docs/SPEC.md`; the owning technical specification (`backend/SPEC.md`, `frontend/SPEC.md`); the developer guides; the code, tests, and generated contract when the check compares documentation with behavior. When the documents do not settle which side is right, do not choose: classify the finding as `decision needed`. Never weaken a specification to match current behavior and never change code to match a specification.
@@ -55,7 +57,7 @@ For each finding that is not fixed and not a duplicate, open one ticket:
 
 ## Ledger
 
-After the run, update only the check's row in the `## Compliance checks` table: set `Last run` to the run's start date and time with time zone, `Result` to the outcome and finding counts (for example `findings: 3 ticketed, 1 fixed`), and `Run` to the run ID. Commit the ledger change together with the follow-up tickets and their rows, separately from the documentation-fix commit. Do not commit the run folder.
+After the run, update only the check's row in the `## Compliance checks` table: set `Last run` to the exact audit start timestamp supplied by the Orchestrator, including its time zone; do not take a later timestamp. Set `Result` to the outcome and finding counts (for example `findings: 3 ticketed, 1 fixed`) and `Run` to the run ID. Commit the ledger change together with the follow-up tickets and their rows, separately from the documentation-fix commit. Do not commit the run folder.
 
 ## Orchestrated run
 
