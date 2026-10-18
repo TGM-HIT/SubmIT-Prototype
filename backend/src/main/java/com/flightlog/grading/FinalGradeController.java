@@ -4,6 +4,9 @@ import com.flightlog.grading.FinalGradeDtos.FinalGradeHistory;
 import com.flightlog.grading.FinalGradeDtos.FinalGradesRequest;
 import com.flightlog.grading.FinalGradeDtos.FinalGradesResponse;
 import com.flightlog.security.AuthenticatedUser;
+import com.flightlog.web.ApiDtos.ApiErrorResponse;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -33,7 +36,10 @@ public class FinalGradeController {
 
     @GetMapping("/final-grade")
     @Operation(summary = "Get the current final project grade, its basis, and history.")
-    @ApiResponse(responseCode = "404", description = "No final grade has been recorded.")
+    @ApiResponse(responseCode = "200", description = "Current final project grade and history.",
+            content = @Content(schema = @Schema(implementation = FinalGradeHistory.class)))
+    @ApiResponse(responseCode = "404", description = "No final grade has been recorded.",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
     public FinalGradeHistory getFinalGrade(@AuthenticationPrincipal AuthenticatedUser caller,
             @Parameter(description = PROJECT_DESCRIPTION) @PathVariable UUID projectId) {
         return finalGradeService.getProjectFinalGrade(caller, projectId);
@@ -41,8 +47,12 @@ public class FinalGradeController {
 
     @GetMapping("/students/{studentId}/final-grade")
     @Operation(summary = "Get a student's individual final grade, basis, and history (that student or teachers).")
-    @ApiResponse(responseCode = "403", description = FORBIDDEN)
-    @ApiResponse(responseCode = "404", description = "No final grade has been recorded.")
+    @ApiResponse(responseCode = "200", description = "Student's individual final grade and history.",
+            content = @Content(schema = @Schema(implementation = FinalGradeHistory.class)))
+    @ApiResponse(responseCode = "403", description = FORBIDDEN,
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
+    @ApiResponse(responseCode = "404", description = "No final grade has been recorded.",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
     public FinalGradeHistory getStudentFinalGrade(@AuthenticationPrincipal AuthenticatedUser caller,
             @Parameter(description = PROJECT_DESCRIPTION) @PathVariable UUID projectId,
             @Parameter(description = "Student identifier.") @PathVariable UUID studentId) {
@@ -51,8 +61,12 @@ public class FinalGradeController {
 
     @PutMapping("/final-grade")
     @Operation(summary = "Record or confirm project and individual final grades, by configured rule or with rationale.")
-    @ApiResponse(responseCode = "400", description = "Invalid grade, missing rationale, or unknown rule.")
-    @ApiResponse(responseCode = "409", description = "A configured rule lacks required inputs.")
+    @ApiResponse(responseCode = "200", description = "Recorded project and individual final grades.",
+            content = @Content(schema = @Schema(implementation = FinalGradesResponse.class)))
+    @ApiResponse(responseCode = "400", description = "Invalid grade, missing rationale, or unknown rule.",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
+    @ApiResponse(responseCode = "409", description = "A configured rule lacks required inputs.",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
     public FinalGradesResponse putFinalGrade(@AuthenticationPrincipal AuthenticatedUser caller,
             @Parameter(description = PROJECT_DESCRIPTION) @PathVariable UUID projectId,
             @Valid @RequestBody FinalGradesRequest request) {

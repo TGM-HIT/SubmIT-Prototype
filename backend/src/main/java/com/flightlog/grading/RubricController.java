@@ -4,9 +4,12 @@ import com.flightlog.grading.RubricDtos.PublishRubricRequest;
 import com.flightlog.grading.RubricDtos.RubricResponse;
 import com.flightlog.grading.RubricDtos.RubricSummary;
 import com.flightlog.security.AuthenticatedUser;
+import com.flightlog.web.ApiDtos.ApiErrorResponse;
 import com.flightlog.web.ApiDtos.PageResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -43,14 +46,20 @@ public class RubricController {
 
     @GetMapping("/active")
     @Operation(summary = "Get the rubric version effective today, with criteria, scales, metrics, and rules.")
-    @ApiResponse(responseCode = "404", description = "No rubric version is currently effective.")
+    @ApiResponse(responseCode = "200", description = "Rubric version effective today.",
+            content = @Content(schema = @Schema(implementation = RubricResponse.class)))
+    @ApiResponse(responseCode = "404", description = "No rubric version is currently effective.",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
     public RubricResponse active(@AuthenticationPrincipal AuthenticatedUser caller) {
         return rubricService.active(caller);
     }
 
     @GetMapping("/{id}")
     @Operation(summary = "Get a specific immutable rubric version.")
-    @ApiResponse(responseCode = "404", description = "Rubric version not found.")
+    @ApiResponse(responseCode = "200", description = "Specific immutable rubric version.",
+            content = @Content(schema = @Schema(implementation = RubricResponse.class)))
+    @ApiResponse(responseCode = "404", description = "Rubric version not found.",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
     public RubricResponse get(@AuthenticationPrincipal AuthenticatedUser caller,
             @Parameter(description = "Rubric version identifier.") @PathVariable UUID id) {
         return rubricService.get(caller, id);

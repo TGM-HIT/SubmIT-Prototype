@@ -3,9 +3,12 @@ package com.flightlog.grading;
 import com.flightlog.grading.GradeDtos.MetricRequest;
 import com.flightlog.grading.GradeDtos.MetricResponse;
 import com.flightlog.security.AuthenticatedUser;
+import com.flightlog.web.ApiDtos.ApiErrorResponse;
 import com.flightlog.web.ApiDtos.PageResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -36,7 +39,10 @@ public class MetricController {
 
     @GetMapping
     @Operation(summary = "List metric observations for teachers and project members.")
-    @ApiResponse(responseCode = "403", description = FORBIDDEN)
+    @ApiResponse(responseCode = "200", description = "Paginated metric observations.",
+            useReturnTypeSchema = true)
+    @ApiResponse(responseCode = "403", description = FORBIDDEN,
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
     public PageResponse<MetricResponse> listMetrics(@AuthenticationPrincipal AuthenticatedUser caller,
             @Parameter(description = PROJECT_DESCRIPTION) @PathVariable UUID projectId,
             @Parameter(description = "Zero-based page index.") @RequestParam(defaultValue = "0") int page,

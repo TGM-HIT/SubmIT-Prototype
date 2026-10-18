@@ -1317,6 +1317,17 @@ export interface components {
             /** @description Instant when the metric was recorded. */
             recordedAt: string;
         };
+        ApiErrorResponse: {
+            /**
+             * Format: int32
+             * @description HTTP response status code.
+             */
+            status: number;
+            /** @description Short error category. */
+            error: string;
+            /** @description Human-readable error detail. */
+            message: string;
+        };
         IdeaRequest: {
             /** @description Required, non-blank idea title; at most 200 characters. */
             title: string;
@@ -1731,17 +1742,6 @@ export interface components {
              * @default false
              */
             acknowledgeUnranked: boolean;
-        };
-        ApiErrorResponse: {
-            /**
-             * Format: int32
-             * @description HTTP response status code.
-             */
-            status: number;
-            /** @description Short error category. */
-            error: string;
-            /** @description Human-readable error detail. */
-            message: string;
         };
         AllocationPinResponse: {
             /**
@@ -3104,13 +3104,22 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Current final project grade and history. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["FinalGradeHistory"];
+                };
+            };
             /** @description No final grade has been recorded. */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["FinalGradeHistory"];
+                    "*/*": components["schemas"]["ApiErrorResponse"];
                 };
             };
         };
@@ -3131,13 +3140,22 @@ export interface operations {
             };
         };
         responses: {
+            /** @description Recorded project and individual final grades. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["FinalGradesResponse"];
+                };
+            };
             /** @description Invalid grade, missing rationale, or unknown rule. */
             400: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["FinalGradesResponse"];
+                    "*/*": components["schemas"]["ApiErrorResponse"];
                 };
             };
             /** @description A configured rule lacks required inputs. */
@@ -3146,7 +3164,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["FinalGradesResponse"];
+                    "*/*": components["schemas"]["ApiErrorResponse"];
                 };
             };
         };
@@ -3592,13 +3610,22 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Paginated individual grade history. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PageResponseGradeResponse"];
+                };
+            };
             /** @description Caller lacks the required role or project access. */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["PageResponseGradeResponse"];
+                    "*/*": components["schemas"]["ApiErrorResponse"];
                 };
             };
         };
@@ -3712,13 +3739,22 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Paginated metric observations. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PageResponseMetricResponse"];
+                };
+            };
             /** @description Caller lacks the required role or project access. */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["PageResponseMetricResponse"];
+                    "*/*": components["schemas"]["ApiErrorResponse"];
                 };
             };
         };
@@ -3776,13 +3812,22 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Paginated group-level assessment history. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PageResponseGradeResponse"];
+                };
+            };
             /** @description Caller lacks the required role or project access. */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["PageResponseGradeResponse"];
+                    "*/*": components["schemas"]["ApiErrorResponse"];
                 };
             };
         };
@@ -4948,13 +4993,22 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Student's individual final grade and history. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["FinalGradeHistory"];
+                };
+            };
             /** @description Caller lacks the required role or project access. */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["FinalGradeHistory"];
+                    "*/*": components["schemas"]["ApiErrorResponse"];
                 };
             };
             /** @description No final grade has been recorded. */
@@ -4963,7 +5017,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["FinalGradeHistory"];
+                    "*/*": components["schemas"]["ApiErrorResponse"];
                 };
             };
         };
@@ -4980,13 +5034,22 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Specific immutable rubric version. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RubricResponse"];
+                };
+            };
             /** @description Rubric version not found. */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["RubricResponse"];
+                    "*/*": components["schemas"]["ApiErrorResponse"];
                 };
             };
         };
@@ -5000,13 +5063,22 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Rubric version effective today. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RubricResponse"];
+                };
+            };
             /** @description No rubric version is currently effective. */
             404: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["RubricResponse"];
+                    "*/*": components["schemas"]["ApiErrorResponse"];
                 };
             };
         };

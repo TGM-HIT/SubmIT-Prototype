@@ -3,9 +3,12 @@ package com.flightlog.grading;
 import com.flightlog.grading.GradeDtos.GradeResponse;
 import com.flightlog.grading.GradeDtos.GroupGradeRequest;
 import com.flightlog.security.AuthenticatedUser;
+import com.flightlog.web.ApiDtos.ApiErrorResponse;
 import com.flightlog.web.ApiDtos.PageResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -38,7 +41,10 @@ public class GroupGradeController {
 
     @GetMapping("/group-grades")
     @Operation(summary = "List group-level assessment history for teachers and group members.")
-    @ApiResponse(responseCode = "403", description = FORBIDDEN)
+    @ApiResponse(responseCode = "200", description = "Paginated group-level assessment history.",
+            useReturnTypeSchema = true)
+    @ApiResponse(responseCode = "403", description = FORBIDDEN,
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
     public PageResponse<GradeResponse> listGroupGrades(@AuthenticationPrincipal AuthenticatedUser caller,
             @Parameter(description = PROJECT_DESCRIPTION) @PathVariable UUID projectId,
             @Parameter(description = PAGE_DESCRIPTION) @RequestParam(defaultValue = "0") int page,

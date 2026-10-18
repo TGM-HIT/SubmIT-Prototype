@@ -3,9 +3,12 @@ package com.flightlog.grading;
 import com.flightlog.grading.GradeDtos.GradeResponse;
 import com.flightlog.grading.GradeDtos.StudentGradeRequest;
 import com.flightlog.security.AuthenticatedUser;
+import com.flightlog.web.ApiDtos.ApiErrorResponse;
 import com.flightlog.web.ApiDtos.PageResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -38,7 +41,10 @@ public class GradingController {
 
     @GetMapping("/student-grades")
     @Operation(summary = "List individual grade history; students see only their own grades.")
-    @ApiResponse(responseCode = "403", description = FORBIDDEN)
+    @ApiResponse(responseCode = "200", description = "Paginated individual grade history.",
+            useReturnTypeSchema = true)
+    @ApiResponse(responseCode = "403", description = FORBIDDEN,
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
     public PageResponse<GradeResponse> listStudentGrades(@AuthenticationPrincipal AuthenticatedUser caller,
             @Parameter(description = PROJECT_DESCRIPTION) @PathVariable UUID projectId,
             @Parameter(description = "Optional student filter.") @RequestParam(required = false) String studentId,

@@ -34,6 +34,31 @@ class OpenApiContractTest {
             "maxProperties", "multipleOf", "uniqueItems");
     private static final Set<String> PAGE_PROPERTIES =
             names("content,page,size,totalElements,totalPages");
+    private static final List<ExpectedOperation> GRADING_RESPONSE_CONTRACTS = List.of(
+            operation("get", "/api/projects/{projectId}/final-grade", "FinalGradeHistory",
+                    "Current final project grade and history.",
+                    Map.of("404", response("ApiErrorResponse", "No final grade has been recorded."))),
+            operation("put", "/api/projects/{projectId}/final-grade", "FinalGradesResponse",
+                    "Recorded project and individual final grades.",
+                    Map.of("400", response("ApiErrorResponse", "Invalid grade, missing rationale, or unknown rule."),
+                            "409", response("ApiErrorResponse", "A configured rule lacks required inputs."))),
+            operation("get", "/api/projects/{projectId}/student-grades", "PageResponseGradeResponse",
+                    "Paginated individual grade history.",
+                    Map.of("403", response("ApiErrorResponse", "Caller lacks the required role or project access."))),
+            operation("get", "/api/projects/{projectId}/metrics", "PageResponseMetricResponse",
+                    "Paginated metric observations.",
+                    Map.of("403", response("ApiErrorResponse", "Caller lacks the required role or project access."))),
+            operation("get", "/api/projects/{projectId}/group-grades", "PageResponseGradeResponse",
+                    "Paginated group-level assessment history.",
+                    Map.of("403", response("ApiErrorResponse", "Caller lacks the required role or project access."))),
+            operation("get", "/api/projects/{projectId}/students/{studentId}/final-grade", "FinalGradeHistory",
+                    "Student's individual final grade and history.",
+                    Map.of("403", response("ApiErrorResponse", "Caller lacks the required role or project access."),
+                            "404", response("ApiErrorResponse", "No final grade has been recorded."))),
+            operation("get", "/api/grading-rubrics/{id}", "RubricResponse", "Specific immutable rubric version.",
+                    Map.of("404", response("ApiErrorResponse", "Rubric version not found."))),
+            operation("get", "/api/grading-rubrics/active", "RubricResponse", "Rubric version effective today.",
+                    Map.of("404", response("ApiErrorResponse", "No rubric version is currently effective."))));
     private static final Map<String, ExpectedContract> CHANGED_RESPONSE_CONTRACTS = Map.ofEntries(
             Map.entry("TokenResponse", contract("token,tokenType,expiresIn,user", "", "")),
             Map.entry("UserResponse", contract("id,username,displayName,role", "className,electiveSubjectNames", "")),
@@ -174,6 +199,62 @@ class OpenApiContractTest {
         JsonNode schemas = document.path("components").path("schemas");
         checkComponentSchemas(schemas, failures);
         checkResponseRequiredness(schemas, failures);
+        assertTrue(failures.isEmpty(), () -> String.join(System.lineSeparator(), failures));
+    }
+
+    @Test
+    void gradingOperationsDocumentTheirSuccessAndErrorResponseSchemas() throws Exception {
+        MvcResult result = mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode paths = objectMapper.readTree(result.getResponse().getContentAsByteArray()).path("paths");
+        List<String> failures = new ArrayList<>();
+
+        for (ExpectedOperation expected : GRADING_RESPONSE_CONTRACTS) {
+            JsonNode operation = paths.path(expected.path()).path(expected.method());
+            if (operation.isMissingNode()) {
+                failures.add(expected.method().toUpperCase() + " " + expected.path() + " is missing");
+                continue;
+            }
+
+            Map<String, ExpectedResponse> expectedResponses = new java.util.HashMap<>(expected.errors());
+            expectedResponses.put("200", response(expected.successSchema(), expected.successDescription()));
+            JsonNode responses = operation.path("responses");
+            Set<String> actualStatusCodes = new TreeSet<>();
+            responses.fieldNames().forEachRemaining(actualStatusCodes::add);
+            if (!actualStatusCodes.equals(new TreeSet<>(expectedResponses.keySet()))) {
+                failures.add(expected.method().toUpperCase() + " " + expected.path() + " response statuses differ; "
+                        + "expected " + expectedResponses.keySet() + " but found " + actualStatusCodes);
+            }
+
+            for (Map.Entry<String, ExpectedResponse> expectedResponse : expectedResponses.entrySet()) {
+                JsonNode response = responses.path(expectedResponse.getKey());
+                if (response.isMissingNode()) {
+                    failures.add(expected.method().toUpperCase() + " " + expected.path() + " is missing response "
+                            + expectedResponse.getKey());
+                    continue;
+                }
+                ExpectedResponse contract = expectedResponse.getValue();
+                if (!contract.description().equals(response.path("description").asText())) {
+                    failures.add(expected.method().toUpperCase() + " " + expected.path() + " response "
+                            + expectedResponse.getKey() + " has unexpected description: "
+                            + response.path("description").asText());
+                }
+                Set<String> actualSchemas = new TreeSet<>();
+                response.path("content").fields().forEachRemaining(mediaType -> {
+                    String schema = mediaType.getValue().path("schema").path("$ref").asText();
+                    if (!schema.isBlank()) {
+                        actualSchemas.add(schema);
+                    }
+                });
+                Set<String> expectedSchemas = Set.of("#/components/schemas/" + contract.schema());
+                if (!expectedSchemas.equals(actualSchemas)) {
+                    failures.add(expected.method().toUpperCase() + " " + expected.path() + " response "
+                            + expectedResponse.getKey() + " schema differs; expected " + expectedSchemas
+                            + " but found " + actualSchemas);
+                }
+            }
+        }
         assertTrue(failures.isEmpty(), () -> String.join(System.lineSeparator(), failures));
     }
 
@@ -350,6 +431,15 @@ class OpenApiContractTest {
         return new ExpectedContract(names(required), names(optional), names(nullable));
     }
 
+    private static ExpectedOperation operation(String method, String path, String successSchema,
+            String successDescription, Map<String, ExpectedResponse> errors) {
+        return new ExpectedOperation(method, path, successSchema, successDescription, errors);
+    }
+
+    private static ExpectedResponse response(String schema, String description) {
+        return new ExpectedResponse(schema, description);
+    }
+
     private static Set<String> names(String commaSeparated) {
         if (commaSeparated.isBlank()) {
             return Set.of();
@@ -358,6 +448,13 @@ class OpenApiContractTest {
     }
 
     private record ExpectedContract(Set<String> required, Set<String> optional, Set<String> nullable) {
+    }
+
+    private record ExpectedOperation(String method, String path, String successSchema, String successDescription,
+            Map<String, ExpectedResponse> errors) {
+    }
+
+    private record ExpectedResponse(String schema, String description) {
     }
 
     private boolean hasConstraint(JsonNode schema) {
