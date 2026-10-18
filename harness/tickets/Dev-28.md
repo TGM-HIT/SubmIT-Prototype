@@ -13,6 +13,7 @@ Source: `Compliance-05-20261018-2017`, report finding 1: `list-of-bugs.md:3` say
 - Review each of the four entries in `list-of-bugs.md` against the current plan, open tickets, completed tickets, and repository state.
 - For each entry, either map it to an appropriate ticket with a concrete scope, or record an explicit disposition that preserves it as an idea, marks it superseded, or identifies the product decision still needed.
 - If `list-of-bugs.md` remains the active inventory, add a navigable Markdown link from the root `README.md` or `harness/plan.md`; if its content is moved or retired, ensure the surviving source is indexed instead.
+- Scope-gate allowances: `list-of-bugs.md` is the only required scope-gate allowance.
 - Preserve unresolved requests; do not infer or implement product policy, delete entries, or prescribe a product outcome.
 - Update the list and ticket ledger only as needed to make the chosen disposition and any ticket links unambiguous.
 
