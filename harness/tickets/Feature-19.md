@@ -8,6 +8,10 @@ The API exposes an optional `studentId` filter on the student-grade history list
 
 Source: Compliance-03-20261018-1757, report finding 7: `backend/SPEC.md:121` says “`GET /api/projects/{projectId}/student-grades` returns paginated individual grade history to teachers; a student may retrieve only their own grades.” The API operation states “Optional student filter.” (`contracts/openapi.yaml:541-546`), and `backend/src/main/java/com/flightlog/grading/GradingController.java:39-44` exposes the optional query parameter; `backend/src/main/java/com/flightlog/grading/GradeService.java:102-110` applies it for teachers while restricting students to their own ID. These statements leave the teacher-filter policy unsettled.
 
+## Product-owner decision
+
+- 2026-10-18, Markus Schabel selected option A: “Preserve the teacher `studentId` filter and document its intended behavior and student restrictions.” The completed human-acceptance record selects “Decisions given, continue”; no additional rationale was supplied.
+
 ## Scope and contract
 
 - Obtain an explicit decision between the following alternatives; neither is preferred by this ticket:
