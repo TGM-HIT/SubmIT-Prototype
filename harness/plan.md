@@ -33,7 +33,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Bug-10](tickets/done/Bug-10.md) | done | Show project titles instead of UUIDs to students in an open application period |
 | [Bug-11](tickets/done/Bug-11.md) | done | Align request-array constraints with API validation |
 | [Bug-12](tickets/done/Bug-12.md) | done | Complete response requiredness and nullability in OpenAPI |
-| [Bug-14](tickets/Bug-14.md) | to-do | Document successful OpenAPI response statuses |
+| [Bug-14](tickets/done/Bug-14.md) | done | Document successful OpenAPI response statuses |
 
 ### Development
 
