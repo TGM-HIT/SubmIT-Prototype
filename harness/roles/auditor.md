@@ -19,6 +19,8 @@ Mint a run id `<check-id>-<yyyymmdd-hhmm>` from the system clock (for example `d
 - `## Follow-ups`: each ticket opened, with its ID and path.
 - `## Outcome`: one of `clean`, `findings`, `stopped`, with a one-line reason.
 
+Before handing the report to the Evaluator, verify every file-and-line citation in the report and each follow-up ticket against the current repository text. Confirm the cited lines exist and support the associated claim or quotation; correct inaccurate line references and unsupported citations before handoff.
+
 ## Source of truth
 
 Use explicit approved statements, in this order, and say which you used for each finding: the shared product rules in `docs/SPEC.md`; the owning technical specification (`backend/SPEC.md`, `frontend/SPEC.md`); the developer guides; the code, tests, and generated contract when the check compares documentation with behavior. When the documents do not settle which side is right, do not choose: classify the finding as `decision needed`. Never weaken a specification to match current behavior and never change code to match a specification.
