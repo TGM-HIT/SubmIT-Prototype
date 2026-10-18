@@ -35,7 +35,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Bug-12](tickets/done/Bug-12.md) | done | Complete response requiredness and nullability in OpenAPI |
 | [Bug-14](tickets/done/Bug-14.md) | done | Document successful OpenAPI response statuses |
 | [Bug-15](tickets/Bug-15.md) | to-do | Provide safe browsing for approved website snapshots |
-| [Bug-16](tickets/Bug-16.md) | to-do | Align pagination defaults and maximum with the API contract |
+| [Bug-16](tickets/done/Bug-16.md) | done | Align pagination defaults and maximum with the API contract |
 | [Bug-17](tickets/Bug-17.md) | to-do | Document specified error responses in OpenAPI |
 | [Bug-18](tickets/Bug-18.md) | to-do | Implement documented idea-list filters |
 | [Bug-19](tickets/Bug-19.md) | to-do | Document applicable standard error responses in OpenAPI |
