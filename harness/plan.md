@@ -37,6 +37,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Bug-15](tickets/Bug-15.md) | to-do | Provide safe browsing for approved website snapshots |
 | [Bug-16](tickets/Bug-16.md) | to-do | Align pagination defaults and maximum with the API contract |
 | [Bug-17](tickets/Bug-17.md) | to-do | Document specified error responses in OpenAPI |
+| [Bug-18](tickets/Bug-18.md) | to-do | Implement documented idea-list filters |
 
 ### Development
 
@@ -105,7 +106,7 @@ Recurring documentation and contract checks, run by the [Auditor role](roles/aud
 | --- | --- | --- | --- | --- | --- |
 | [Compliance-01](checks/Compliance-01.md) | Monthly and after SPEC or guide changes | 2026-10-18 09:05 +0200 | clean: 0 findings | Compliance-01-20261018-0905 | Specification and guideline consistency |
 | [Compliance-02](checks/Compliance-02.md) | After each closed Feature or Bug; at least monthly | 2026-10-18 09:45 +0200 | findings: 3 ticketed, 0 fixed, 0 duplicate | Compliance-02-20261018-0945 | Documentation and code parity |
-| [Compliance-03](checks/Compliance-03.md) | After API changes; at least monthly | 2026-10-18 17:57 +0200 | findings: 3 ticketed, 0 fixed, 0 duplicate | Compliance-03-20261018-1757 | OpenAPI contract compliance |
+| [Compliance-03](checks/Compliance-03.md) | After API changes; at least monthly | 2026-10-18 17:57 +0200 | findings: 4 ticketed, 0 fixed, 0 duplicate | Compliance-03-20261018-1757 | OpenAPI contract compliance |
 | [Compliance-04](checks/Compliance-04.md) | Weekly and after file moves or renames | 2026-10-16 08:42 +0200 | clean: 0 findings | Compliance-04-20261016-0842 | Link and format validation |
 | [Compliance-05](checks/Compliance-05.md) | Quarterly and before planning | 2026-10-16 08:50 +0200 | findings: 2 fixed, 1 ticketed, 1 decision needed, 2 duplicate | Compliance-05-20261016-0850 | Documentation health |
 | [Compliance-06](checks/Compliance-06.md) | After each role-contract change or lesson application; at least monthly | 2026-10-16 09:07 +0200 | findings: 2 ticketed, 0 fixed, 2 duplicate | Compliance-06-20261016-0907 | Agent role consistency and role-file validation |
