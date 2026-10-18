@@ -1,7 +1,5 @@
 # Bug-19. Document applicable standard error responses in OpenAPI
 
-Draft from Compliance-03-20261018-1757: needs Ticket Author refinement before implementation
-
 ## Intent
 
 The generated API contract omits standard error responses that current protected operations can return. This leaves API clients without a complete description of validation failures, authentication/authorization failures, missing resources, and state or uniqueness conflicts.
@@ -13,6 +11,10 @@ Source: Compliance-03-20261018-1757, report finding 5; quoted evidence from `bac
 - Reconcile every operation in the generated contract against the applicable standard errors in `backend/SPEC.md:11`: `400` invalid input, `401` missing/invalid credentials, `403` insufficient authorization, `404` missing resources, and `409` state/uniqueness conflicts.
 - **401 classification:** apply the missing-authentication response to the 73 protected operations under `SecurityConfiguration.java:30-42`, not to public operations. The current contract declares `401` on only six protected operations; add it to the other 67, itemized below. The public `POST /api/auth/login` has a distinct invalid-credentials `401` behavior, which is included in its operation row; do not add a missing-bearer response to public routes.
 - The following operation inventory records the additional applicable `400`, `403`, `404`, and `409` conditions, by route. `401` is governed by the preceding rule. A status in this inventory is applicable only where the stated input, role, resource, or lifecycle path exists; do not add statuses to unrelated operations. Rows marked `Bug-17` retain their explicit refusal, self-review, or pinned-catalogue case there; this ticket does not duplicate those case-specific requirements.
+- Implement Bug-19 after Bug-17. OpenAPI has one response entry per status code for an operation: when Bug-17 and this ticket cover different conditions that produce the same status on one operation, preserve and describe both conditions in that single response entry. In particular, the `403` descriptions on the two review operations must retain Bug-17's teacher-author self-review case, and the `409` descriptions on supervisor assignment and period update must retain Bug-17's refusal and pinned-catalogue cases. Do not create duplicate response entries for a status.
+- Treat the route/status inventory below as the complete change matrix, not permission to infer additional errors from the shared status list. For each listed case, verify the described trigger against controller authorization and binding, service/domain failure paths, `SecurityConfiguration`, and `ApiExceptionHandler`. Where a status is marked already declared, preserve its current response description and schema unless the inventory explicitly identifies a needed correction.
+- For all 77 existing operations, preserve the successful response status and schema from the current generated contract. This ticket adds or corrects error documentation only; it does not change successful response annotations or runtime behavior.
+- Comparison baseline: the Git HEAD immediately before the Bug-19 implementation commit. When comparing regenerated `/v3/api-docs` at that baseline and after implementation, hold all 77 operation paths and methods constant and vary only the error-response documentation in this matrix; successful response codes and schemas, request contracts, security, and runtime behavior must remain unchanged.
 
 | Operation | Additional applicable standard errors (excluding the 401 rule above) |
 | --- | --- |
@@ -105,9 +107,11 @@ Source: Compliance-03-20261018-1757, report finding 5; quoted evidence from `bac
 
 Durable automated tests:
 
-- Add contract tests for the complete operation/status inventory in this ticket, including all 67 missing protected-operation `401` declarations, public-route exclusion, each operation-specific `400`/`403`/`404`/`409`, and the `Bug-17` overlap without duplicating its case requirements.
-- Assert that every applicable error response has an accurate condition description and references `ApiErrorResponse`.
-- Assert that every operation retains its existing successful response status and schema; do not change runtime behavior.
+- Add `OpenApiContractTest.protectedOperationsDocumentAuthenticationErrors` to inspect all 77 generated operations: assert all 73 protected operations have a `401` referencing `ApiErrorResponse` with a description of missing or invalid bearer authentication; assert the four public API operations do not describe missing-bearer authentication; and assert public `POST /api/auth/login` retains its distinct invalid-credentials `401`.
+- Add `OpenApiContractTest.operationsDocumentApplicableStandardErrorResponses` driven by the complete route/status inventory above. For every listed status, assert the expected response entry exists, has a non-empty condition-accurate description, and references `ApiErrorResponse`; also assert already-declared statuses remain present. Verify Bug-17's refusal, self-review, and pinned-catalogue conditions remain included in the corresponding single `409`/`403` response descriptions.
+- Add `OpenApiContractTest.allOperationSuccessResponsesMatchBaseline` or equivalent table-driven contract coverage. Use the baseline HEAD specified above to enumerate every operation's successful status and schema; assert all 77 remain unchanged after regeneration. Also assert the generated response-code sets contain no status outside that operation's baseline responses plus the changes explicitly listed in this ticket and Bug-17.
+- Add `GradingControllerErrorStatusTest.studentGradeErrorsDistinguishInvalidInputFromMissingResources` as a public HTTP regression test for `POST /api/projects/{projectId}/student-grades`: malformed UUID/request input and a student ID outside the project group return `400`, while `404` is limited to a missing project or rubric resource; retain the already-declared `403` and `409` behavior. Assert response bodies use `ApiErrorResponse`. This closes the specific classification gap identified in the report; do not claim existing service-level tests prove HTTP status mapping.
+- The full matrix test must assert descriptions against the actual trigger conditions recorded in this ticket, not merely that descriptions are non-empty. The Evaluator must trace each matrix condition to the cited implementation path and inspect each contract assertion.
 
 Standard project checks:
 
@@ -120,11 +124,11 @@ None; generated response declarations and the exact operation/status inventory a
 
 ## Acceptance criteria (the Evaluator judges)
 
-- Every protected operation documents missing/invalid-credential `401`; public operations are not given a missing-authentication response.
-- Every operation documents only the standard errors its actual validation, role/ownership, resource lookup, or state/uniqueness behavior can produce, as listed in the operation inventory.
+- Every protected operation documents missing/invalid-credential `401`; public operations are not given a missing-bearer response, and login's invalid-credentials `401` remains distinct.
+- Each operation documents only the standard errors its actual validation, role/ownership, resource lookup, or state/uniqueness behavior can produce, as listed in the operation inventory, with the stated trigger described accurately.
 - `POST /api/ideas` includes applicable `400`/`401`/`403`; `GET /api/ideas/{id}` includes applicable `401`/`403`/`404`; `PUT /api/ideas/{id}` includes applicable `400`/`401`/`403`/`404`/`409`.
-- `Bug-17`'s explicit refusal, self-review, and pinned-catalogue cases remain covered by that ticket, without being broadened or duplicated here.
+- `Bug-17`'s explicit refusal, self-review, and pinned-catalogue cases remain documented together with any Bug-19 standard error conditions sharing their status in the corresponding single OpenAPI response entry; neither ticket's condition is dropped or broadened.
 - Contract tests for `POST /api/projects/{projectId}/student-grades` must assert that malformed UUIDs and a student ID outside the project group are `400`, not `404`, and that `404` is limited to a missing project or rubric; retain the already-declared `400`, `403`, and `409` responses.
-- Every applicable response has an accurate description and shared `ApiErrorResponse` schema; successful responses and schemas remain unchanged.
+- Every applicable error response has an accurate, condition-specific description and the shared `ApiErrorResponse` schema. All 77 existing successful response statuses and schemas remain unchanged.
 - Generated OpenAPI is regenerated rather than hand-edited; ignored YAML is not committed.
 - Standard: no unrelated changes; no check is claimed that was not performed.

@@ -1,38 +1,41 @@
 # Dev-30. Reconcile Auditor seat guidance with global model guidance
 
-Draft from Compliance-06-20261018-2048: needs Ticket Author refinement before implementation
-
 ## Intent
 
-The Auditor's role contract assigns a solid mid tier and medium thinking level to most checks, while the repository-wide model guidance assigns Opus to judgment calls at every agent layer. Auditor runs classify documentation discrepancies, judge whether a defect is trivial or ticketable, and may identify unresolved decisions. The scope of the role-specific exception is not explicit, so different Auditor checks can receive conflicting seat guidance.
+The Auditor role contract assigns a solid mid tier and medium thinking level to most compliance checks, while repository-wide guidance assigns Opus to judgment calls at every agent layer. Compliance audits require judgment to classify findings, determine whether they are trivial or ticketable, and identify unresolved decisions. This makes the current Auditor model guidance conflicting and unclear.
 
-Source: run `Compliance-06-20261018-2048`, report finding 2, evidence: `CLAUDE.md` says “Use Opus for planning, decomposition, and judgment calls” and “This applies at every agent layer”; `harness/roles/auditor.md` says “a solid mid model tier at a medium thinking level, except for checks that compare many documents for contradictions (Compliance-01 and Compliance-06)”; `harness/roles/orchestrator.md` repeats “mid tier, or the most-capable tier for Compliance-01 and Compliance-06.”
+Source: Compliance-06-20261018-2048, report finding 2. `CLAUDE.md` says to use Opus for judgment calls and that this applies at every agent layer. `harness/roles/auditor.md` currently reserves the most-capable/high-thinking tier for Compliance-01 and Compliance-06, and `harness/roles/orchestrator.md` repeats that exception.
 
 ## Scope and contract
 
-- Resolve the model-guidance conflict before implementation. The decision is whether all Auditor checks are judgment work for which the Opus guidance applies, whether only specified checks receive the most-capable/high-thinking seat with a documented rationale for the exception, or whether a different explicit per-check rule should be used. Do not select an option on the implementor's behalf.
-- After the authorized decision is recorded, align the Auditor seat and thinking-level guidance in `harness/roles/auditor.md` and its summary in `harness/roles/orchestrator.md`. Update `CLAUDE.md` only if the decision explicitly requires clarifying the repository-wide rule.
+- Apply the user's confirmed decision: every Auditor check must use Opus at a high thinking level. This applies to all Compliance-01 through Compliance-06 checks and any future check, including checks that may appear primarily mechanical; Auditor work includes judgment and finding classification.
+- In both `harness/roles/auditor.md` and the Auditor dispatch summary in `harness/roles/orchestrator.md`, state: `Run every Auditor check on Opus at a high thinking level.` Remove the mid-tier/medium default and per-check exception.
+- Keep `CLAUDE.md` unchanged. Its global Opus-for-judgment guidance remains in force; this ticket does not alter repository-wide model guidance.
+- Do not change the `.github/agents/auditor.agent.md` file: it only identifies the Auditor and delegates its complete contract to `harness/roles/auditor.md`.
 - Preserve all unrelated role permissions, workflow instructions, and model guidance.
-- Scope-gate allowances: `CLAUDE.md`.
+- Comparison baseline: Git HEAD immediately before implementation. Hold all role responsibilities, permissions, workflow instructions, and non-Auditor model rules constant; change only the Auditor seat requirement from mid/medium for ordinary checks with two exceptions to Opus/high for every check.
 
 ## Mechanical checks (the Evaluator re-runs)
 
 Durable automated tests:
 
-- No application behavior changes; project tests do not apply.
+- No application behavior changes; application tests do not apply.
+- Confirm both role files contain the agreed sentence exactly: `rg -nF "Run every Auditor check on Opus at a high thinking level." harness/roles/auditor.md harness/roles/orchestrator.md`.
+- Confirm the superseded Auditor tier exception is absent from the active guidance: `! rg -n "solid mid model tier|medium thinking level|mid tier, or the most-capable tier for Compliance-01 and Compliance-06" harness/roles/auditor.md harness/roles/orchestrator.md`.
+- Confirm the global rule remains unchanged and the Auditor agent file still delegates to the role contract: `rg -n "Use Opus for planning, decomposition, and judgment calls|This applies at every agent layer" CLAUDE.md` and `rg -n "complete contract.*harness/roles/auditor.md" .github/agents/auditor.agent.md`.
 
 Standard project checks:
 
-- Documentation-only or harness-only changes: no project checks are required. Verify the changed Markdown and confirm the role and global guidance agree.
+- Documentation-only/harness-only change: no application build or test suite applies. Run `make format-markdown FILES="harness/roles/auditor.md harness/roles/orchestrator.md"` and `git diff --check`; verify the affected role and global guidance are consistent.
 
-## One-time manual verification (in addition to automated tests)
+## One-time manual verification
 
-No manual execution verification applies. The outstanding human input is the model-guidance decision stated in Scope and contract.
+- None; the change is limited to role guidance and is verified by the named text assertions and Markdown checks.
 
 ## Acceptance criteria
 
-- The authorized model-guidance decision is recorded without implying a choice that was not made.
-- The Auditor role gives an explicit tier and thinking-level rule for each check category and is consistent with the authorized decision and `CLAUDE.md`.
-- The Orchestrator's Auditor summary matches the Auditor role contract.
-- If `CLAUDE.md` changes, its global rule is clarified only as authorized and is not silently weakened.
-- No unrelated role, permission, workflow, or model guidance changes; no conflicting statements remain among the affected documents.
+- `harness/roles/auditor.md` requires Opus at a high thinking level for every compliance check, without a mid-tier/medium default or check-specific exception. The named positive and negative text checks verify the rule.
+- `harness/roles/orchestrator.md` describes the same all-check Opus/high requirement and no longer summarizes the former two-check exception. The named text checks verify agreement with the Auditor role.
+- `CLAUDE.md` remains unchanged, and `.github/agents/auditor.agent.md` continues to delegate to the role contract. The named checks verify both.
+- All unrelated Auditor and Orchestrator responsibilities, permissions, workflows, and non-Auditor model rules remain unchanged from the stated Git HEAD baseline.
+- Markdown formatting and whitespace checks pass. No application tests are required, and no check is claimed unless performed.

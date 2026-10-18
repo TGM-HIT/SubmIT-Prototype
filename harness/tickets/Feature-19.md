@@ -1,35 +1,50 @@
 # Feature-19. Decide the student-grade list student filter
 
-Draft from Compliance-03-20261018-1757: needs Ticket Author refinement before implementation
-
 ## Intent
 
-The API exposes an optional `studentId` filter on the student-grade history list, and the implementation applies it for teachers, but the approved specification does not say whether teachers may use that filter. A product decision is needed before the API contract can be aligned.
+The student-grade list already accepts an optional `studentId` filter for staff callers, but the approved API specification does not describe that behavior or clearly state the student's restriction. API consumers therefore cannot tell whether the filter is supported or whether it changes what a student may read.
 
-Source: Compliance-03-20261018-1757, report finding 7: `backend/SPEC.md:121` says “`GET /api/projects/{projectId}/student-grades` returns paginated individual grade history to teachers; a student may retrieve only their own grades.” The API operation states “Optional student filter.” (`contracts/openapi.yaml:541-546`), and `backend/src/main/java/com/flightlog/grading/GradingController.java:39-44` exposes the optional query parameter; `backend/src/main/java/com/flightlog/grading/GradeService.java:102-110` applies it for teachers while restricting students to their own ID. These statements leave the teacher-filter policy unsettled.
+Source: Compliance-03-20261018-1757, report finding 7. The human decision record at [`human-acceptance.md`](../runs/Compliance-03-20261018-1757/human-acceptance.md) selects option A: preserve the teacher filter and document its behavior and student restrictions. `GradingController` exposes the optional query parameter and `GradeService.listStudentGrades` applies it for staff callers while restricting students to their own grades.
 
 ## Product-owner decision
 
-- 2026-10-18, Markus Schabel selected option A: “Preserve the teacher `studentId` filter and document its intended behavior and student restrictions.” The completed human-acceptance record selects “Decisions given, continue”; no additional rationale was supplied.
+- On 2026-10-18, Markus Schabel selected: “Preserve the teacher `studentId` filter and document its intended behavior and student restrictions.”
+- No additional rationale was supplied in the decision record.
 
 ## Scope and contract
 
-- Obtain an explicit decision between the following alternatives; neither is preferred by this ticket:
-  - Preserve the teacher `studentId` filter and document its intended behavior and student restrictions.
-  - Remove the teacher filter and align the API contract and implementation with that decision.
-- Do not change application code, specifications, or generated contract before the decision is recorded.
-- After the decision, refine this ticket into a concrete implementation/documentation scope and list any dependent tickets.
+- Update `backend/SPEC.md` for `GET /api/projects/{projectId}/student-grades`: teachers may optionally filter the project's individual grade history by `studentId`; without the filter, teachers receive the paginated history for the project. Students may retrieve only their own grades, whether the filter is omitted or matches their own ID; requesting another student's ID is forbidden.
+- Update the `@Operation` summary and `studentId` `@Parameter` description in `GradingController` so generated OpenAPI communicates the teacher filter and the student-only-own-grades restriction.
+- Preserve current runtime behavior and authorization. Do not change grade-list pagination, response content, status codes, or access rules. Do not add new UUID validation or constrain `studentId` to a new schema format.
+- Preserve the existing request parameter as an optional query string; generated OpenAPI must continue to show `studentId` as an optional string query parameter.
+- Leave `docs/SPEC.md` and `frontend/SPEC.md` unchanged: their existing statements that students may view only their own grades remain consistent with this decision.
+- Implement this ticket after Bug-19, which also updates the student-grade list operation's OpenAPI responses. Preserve all Bug-19 response codes, descriptions, and schemas when updating this operation's summary and parameter documentation; each status remains represented by one response entry.
+- Comparison baseline: Git HEAD immediately before Feature-19 implementation, after Bug-19 if it is completed first. Hold project, caller, grade records, pagination, and authorization constant; vary only whether a staff request supplies `studentId`, and whether a student-supplied ID matches the caller. No runtime behavior change is intended.
+- Regenerate `contracts/openapi.yaml` from annotations and review its diff; it is ignored and must not be hand-edited or committed. Run `npm run api:types` because the tracked frontend schema includes this operation and query parameter. Commit generated frontend types only if their contents change.
+- No manual verification is required; runtime behavior is covered by HTTP tests, and contract changes by `/v3/api-docs` tests and generated-artifact review.
 
 ## Mechanical checks (the Evaluator re-runs)
 
-Documentation-only or harness-only until a decision is made: no checks required.
+Durable automated tests:
 
-## One-time manual verification (in addition to automated tests)
+- Add `GradingControllerStudentGradesFilterTest.teacherCanFilterProjectStudentGrades` as a public HTTP test. With two project-member students who each have grade history, assert an authenticated teacher's `GET /api/projects/{projectId}/student-grades` without `studentId` returns both students' records, and with `studentId=firstMemberId` returns only that member's records. Assert the expected `200` status and pagination metadata/content.
+- In the same test class, add `studentsCanReadOnlyTheirOwnFilteredOrUnfilteredGrades`. Assert a project-member student receives only their own records when `studentId` is omitted and when it matches their own ID; assert `studentId` naming the other project member returns `403`. Assert a non-member student receives `403` with the filter omitted. These are HTTP assertions; existing `GradingServiceTest.studentsReadOnlyOwnGradesAndOutsidersAreDenied` remains service-level coverage, not a substitute for the HTTP tests.
+- Add `OpenApiContractTest.studentGradeListDocumentsFilterAndStudentRestriction`. Read `/v3/api-docs` and assert the GET operation description communicates the staff `studentId` filter and student own-grade restriction; assert the `studentId` query parameter remains optional and string-typed, and its description states staff filtering and that students may request only their own ID. Preserve all response entries and schemas required by `OpenApiContractTest.gradingOperationsDocumentTheirSuccessAndErrorResponseSchemas` and, after Bug-19, the applicable standard-error contract assertions.
 
-- Human-only: record the authorized product decision in the ticket/run record before refinement or implementation.
+Standard project checks:
 
-## Acceptance criteria (the Evaluator judges)
+- Backend changes: from `backend/`, run `./gradlew test`, `./gradlew checkstyleMain`, and `./gradlew generateOpenApi`; review the generated `contracts/openapi.yaml` diff.
+- From `frontend/`, run `npm run api:types` and review tracked output. If generated frontend types change, also run `npm run typecheck`, `npm test`, and `npm run build`.
 
-- The decision record names which alternative is selected and its rationale; until that decision exists, neither alternative is implemented or documented as settled.
-- The ticket is refined after the decision and identifies the required follow-up changes.
-- No check or decision is claimed before it is performed.
+## One-time manual verification
+
+- None; the API behavior and runtime-generated contract are verified by automated tests.
+
+## Acceptance criteria
+
+- The backend specification and generated operation/parameter descriptions state that teachers may optionally filter a project's individual grade history by `studentId`, while students can retrieve only their own grades and are forbidden from requesting another student's ID. `OpenApiContractTest.studentGradeListDocumentsFilterAndStudentRestriction` verifies the generated wording and query-parameter shape.
+- For the same project and grade records, a teacher's unfiltered request returns both members' grade histories, while a request filtered to one member returns only that member's records. `GradingControllerStudentGradesFilterTest.teacherCanFilterProjectStudentGrades` verifies status, content, and pagination.
+- A student member can read only their own grade history with the filter omitted or set to their own ID; a different student's ID and a non-member's unfiltered request return `403`. `GradingControllerStudentGradesFilterTest.studentsCanReadOnlyTheirOwnFilteredOrUnfilteredGrades` verifies each case.
+- The endpoint remains paginated and the parameter remains optional and string-typed. No runtime authorization, validation, response, or pagination behavior changes. Existing and Bug-19 response documentation is preserved.
+- `backend/SPEC.md` contains no contradictory grade-visibility statement; the existing `docs/SPEC.md` and `frontend/SPEC.md` own-grade restrictions remain unchanged and consistent.
+- Generated OpenAPI is regenerated and reviewed, never hand-edited or committed; tracked frontend API types are committed only if they change. Standard checks pass; no check is claimed unless performed.

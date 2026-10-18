@@ -1,37 +1,40 @@
 # Dev-25. Describe allocation-run finalization timestamp in OpenAPI
 
-Draft from Compliance-03-20261018-1757: needs Ticket Author refinement before implementation
-
 ## Intent
 
-The generated `AllocationRunResponse.finalizedAt` field is a date-time but has no field description. API consumers cannot tell what event the timestamp represents from the generated schema.
+The generated `AllocationRunResponse.finalizedAt` property is a date-time but has no description, so API consumers cannot tell what event it records.
 
-Source: Compliance-03-20261018-1757, report finding 3: `backend/SPEC.md:170` says “Request, response, validation, and security annotations fully describe the generated OpenAPI contract”; `backend/src/main/java/com/flightlog/web/ApiDtos.java:453` declares `Instant finalizedAt` without a schema description, and `contracts/openapi.yaml:5061-5063` emits `type: string` and `format: date-time` with no description.
+Source: Compliance-03-20261018-1757, report finding 3. `backend/SPEC.md` requires request, response, validation, and security annotations to describe the generated contract. `backend/src/main/java/com/flightlog/web/ApiDtos.java` declares `finalizedAt` without a schema description, and the generated schema has no description for that property.
 
 ## Scope and contract
 
-- Add an accurate schema description for `AllocationRunResponse.finalizedAt` explaining that it is the instant the allocation run was finalized.
-- Preserve the generated `date-time` format, existing requiredness/nullability/serialization behavior, and all runtime behavior.
-- Regenerate and review `contracts/openapi.yaml`; never edit or commit the ignored generated file. Regenerate tracked frontend types and commit them only if generated output changes.
+- Add a schema description to `AllocationRunResponse.finalizedAt` stating that it is the instant when an administrator successfully finalized the allocation run.
+- Preserve the generated property type as `string` with `date-time` format and preserve its existing presence, requiredness, nullability, and serialized runtime behavior.
+- Do not change when or whether `finalizedAt` is set. The existing service sets it while finalizing a completed, non-early run; API behavior, authorization, and lifecycle rules are out of scope.
+- Comparison baseline: Git HEAD immediately before Dev-25 implementation. Hold all existing response fields, schema properties and constraints, JSON serialization, authorization, and lifecycle behavior constant; vary only the OpenAPI description for `AllocationRunResponse.finalizedAt`.
+- Add a focused generated-contract assertion to `OpenApiContractTest`; retain the existing `operationsHaveSummariesAndConstrainedFieldsHaveDescriptions` checks for complete response requiredness and nullability.
+- Regenerate `contracts/openapi.yaml` from backend annotations and review its diff. The file is ignored by Git; do not hand-edit or commit it. The tracked frontend API types include `AllocationRunResponse.finalizedAt`; run `npm run api:types` and review the tracked output, committing it only if it changes.
+- No manual verification is required; the generated contract assertion and regeneration review cover the schema-only change.
 
 ## Mechanical checks (the Evaluator re-runs)
 
 Durable automated tests:
 
-- Extend a generated-contract test to assert `AllocationRunResponse.finalizedAt` has a non-empty description and retains its `date-time` format.
+- Add `OpenApiContractTest.allocationRunFinalizedAtDocumentsFinalizationMeaning`. Read `/v3/api-docs` and assert `components.schemas.AllocationRunResponse.properties.finalizedAt` has the description `Instant when an administrator successfully finalized the allocation run.`, `type: string`, and `format: date-time`.
+- `OpenApiContractTest.operationsHaveSummariesAndConstrainedFieldsHaveDescriptions` continues to verify response-schema properties, requiredness, and nullability, including `AllocationRunResponse`; it must pass without changing the established property sets.
 
 Standard project checks:
 
-- Backend API annotation changes: from `backend/`, run `./gradlew test`, `./gradlew checkstyleMain`, and `./gradlew generateOpenApi`; review the generated contract.
-- From `frontend/`, run `npm run api:types`. If generated frontend types change, also run `npm run typecheck`, `npm test`, and `npm run build`.
+- Backend API annotation changes: from `backend/`, run `./gradlew test`, `./gradlew checkstyleMain`, and `./gradlew generateOpenApi`; review the generated `contracts/openapi.yaml` diff.
+- From `frontend/`, run `npm run api:types` because the generated frontend schema contains `AllocationRunResponse.finalizedAt`; inspect the result. If tracked types change, also run `npm run typecheck`, `npm test`, and `npm run build`. Commit generated frontend types only if their contents change.
 
-## One-time manual verification (in addition to automated tests)
+## One-time manual verification
 
-None; the generated property description and format are covered by the contract test and regenerated-contract review.
+- None; the generated schema and preserved contract shape are covered by automated tests and generated-contract review.
 
-## Acceptance criteria (the Evaluator judges)
+## Acceptance criteria
 
-- The generated `AllocationRunResponse.finalizedAt` property has an accurate non-empty description and remains `type: string`, `format: date-time`.
-- Existing requiredness, nullability, serialization and runtime behavior are unchanged.
-- Generated contract output is regenerated from annotations, not hand-edited or committed; tracked frontend types are committed only if their contents change.
-- Standard: no unrelated changes; no check is claimed that was not performed.
+- The runtime-generated `AllocationRunResponse.finalizedAt` schema has the exact description `Instant when an administrator successfully finalized the allocation run.`, remains `type: string` and `format: date-time`, and retains its existing requiredness and nullability. `OpenApiContractTest.allocationRunFinalizedAtDocumentsFinalizationMeaning` checks the description, type, and format; `OpenApiContractTest.operationsHaveSummariesAndConstrainedFieldsHaveDescriptions` checks the response schema's properties, requiredness, and nullability.
+- Finalization timing, authorization, eligibility, response serialization, and every other runtime behavior remain unchanged from the stated Git HEAD baseline.
+- `contracts/openapi.yaml` is regenerated from annotations and reviewed, never hand-edited or committed. Frontend API types are regenerated and reviewed; commit them only if their contents change.
+- Standard checks pass; no check is claimed unless performed, and no unrelated changes are included.
