@@ -7,6 +7,7 @@ import com.flightlog.web.ApiDtos.PageResponse;
 import com.flightlog.web.ApiDtos.StudentDetailsRequest;
 import com.flightlog.web.ApiDtos.StudentDetailsResponse;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -31,7 +32,9 @@ public class StudentDetailsController {
     @GetMapping("/api/student-classes")
     @Operation(summary = "List the shared student-class catalogue.")
     public PageResponse<CatalogueEntryResponse> classes(@AuthenticationPrincipal AuthenticatedUser caller,
-            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "100") int size) {
+            @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Page size; values are normalized to the inclusive range 1–100.")
+            @RequestParam(defaultValue = "20") int size) {
         return details.classes(caller, Math.max(page, 0), normalizeSize(size));
     }
 
@@ -52,7 +55,9 @@ public class StudentDetailsController {
     @GetMapping("/api/elective-subjects")
     @Operation(summary = "List the shared elective-subject catalogue.")
     public PageResponse<CatalogueEntryResponse> subjects(@AuthenticationPrincipal AuthenticatedUser caller,
-            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "100") int size) {
+            @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Page size; values are normalized to the inclusive range 1–100.")
+            @RequestParam(defaultValue = "20") int size) {
         return details.subjects(caller, Math.max(page, 0), normalizeSize(size));
     }
 

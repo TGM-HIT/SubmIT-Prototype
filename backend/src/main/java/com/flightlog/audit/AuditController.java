@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.flightlog.security.AuthenticatedUser;
 import com.flightlog.web.ApiDtos.PageResponse;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import java.util.UUID;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -24,7 +25,9 @@ public class AuditController {
     @GetMapping
     @Operation(summary = "List audit events visible to the authenticated user.")
     public PageResponse<ObjectNode> list(@AuthenticationPrincipal AuthenticatedUser caller,
-            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Page size; values are normalized to the inclusive range 1–100.")
+            @RequestParam(defaultValue = "20") int size) {
         return auditService.list(caller, Math.max(page, 0), Math.min(Math.max(size, 1), 100));
     }
 
@@ -32,7 +35,9 @@ public class AuditController {
     @Operation(summary = "List audit events for an entity visible to the authenticated user.")
     public PageResponse<ObjectNode> forEntity(@AuthenticationPrincipal AuthenticatedUser caller,
             @PathVariable String entityType, @PathVariable UUID entityId,
-            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Page size; values are normalized to the inclusive range 1–100.")
+            @RequestParam(defaultValue = "20") int size) {
         return auditService.forEntity(caller, entityType, entityId, Math.max(page, 0),
                 Math.min(Math.max(size, 1), 100));
     }

@@ -49,7 +49,8 @@ public class FormalApplicationController {
     @Operation(summary = "Get the formal application for a project.")
     public FormalApplicationResponse get(@AuthenticationPrincipal AuthenticatedUser caller,
             @PathVariable UUID projectId,
-            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
         return service.get(caller, projectId, Math.max(page, 0), Math.min(Math.max(size, 1), 100));
     }
 

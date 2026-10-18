@@ -34,7 +34,9 @@ public class PublicArchiveController {
     @GetMapping
     @Operation(summary = "List approved artefacts for a completed project without authentication.")
     public PageResponse<PublicArtifactResponse> archive(@PathVariable UUID projectId,
-            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Page size; values are normalized to the inclusive range 1–100.")
+            @RequestParam(defaultValue = "20") int size) {
         return service.publicArchive(projectId, Math.max(page, 0), normalizeSize(size));
     }
 

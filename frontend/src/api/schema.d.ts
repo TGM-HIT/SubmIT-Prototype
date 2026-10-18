@@ -3566,6 +3566,7 @@ export interface operations {
         parameters: {
             query?: {
                 page?: number;
+                /** @description Page size; values are normalized to the inclusive range 1–100. */
                 size?: number;
             };
             header?: never;
@@ -3616,7 +3617,7 @@ export interface operations {
                 studentId?: string;
                 /** @description Zero-based page index. */
                 page?: number;
-                /** @description Page size, at most 100. */
+                /** @description Page size; values are normalized to the inclusive range 1–100. */
                 size?: number;
             };
             header?: never;
@@ -3745,7 +3746,7 @@ export interface operations {
             query?: {
                 /** @description Zero-based page index. */
                 page?: number;
-                /** @description Page size, at most 100. */
+                /** @description Page size; values are normalized to the inclusive range 1–100. */
                 size?: number;
             };
             header?: never;
@@ -3818,7 +3819,7 @@ export interface operations {
             query?: {
                 /** @description Zero-based page index. */
                 page?: number;
-                /** @description Page size, at most 100. */
+                /** @description Page size; values are normalized to the inclusive range 1–100. */
                 size?: number;
             };
             header?: never;
@@ -3890,6 +3891,7 @@ export interface operations {
         parameters: {
             query?: {
                 page?: number;
+                /** @description Page size; values are normalized to the inclusive range 1–100. */
                 size?: number;
             };
             header?: never;
@@ -3963,6 +3965,7 @@ export interface operations {
         parameters: {
             query?: {
                 page?: number;
+                /** @description Page size; values are normalized to the inclusive range 1–100. */
                 size?: number;
             };
             header?: never;
@@ -4015,6 +4018,7 @@ export interface operations {
             query?: {
                 status?: string;
                 page?: number;
+                /** @description Page size; values are normalized to the inclusive range 1–100. */
                 size?: number;
             };
             header?: never;
@@ -4207,7 +4211,7 @@ export interface operations {
             query?: {
                 /** @description Zero-based page index. */
                 page?: number;
-                /** @description Page size, at most 100. */
+                /** @description Page size; values are normalized to the inclusive range 1–100. */
                 size?: number;
             };
             header?: never;
@@ -4330,6 +4334,7 @@ export interface operations {
         parameters: {
             query?: {
                 page?: number;
+                /** @description Page size; values are normalized to the inclusive range 1–100. */
                 size?: number;
             };
             header?: never;
@@ -4451,6 +4456,7 @@ export interface operations {
         parameters: {
             query?: {
                 page?: number;
+                /** @description Page size; values are normalized to the inclusive range 1–100. */
                 size?: number;
             };
             header?: never;
@@ -4498,6 +4504,7 @@ export interface operations {
         parameters: {
             query?: {
                 page?: number;
+                /** @description Page size; values are normalized to the inclusive range 1–100. */
                 size?: number;
             };
             header?: never;
@@ -4549,6 +4556,7 @@ export interface operations {
         parameters: {
             query?: {
                 page?: number;
+                /** @description Page size; values are normalized to the inclusive range 1–100. */
                 size?: number;
             };
             header?: never;
@@ -4844,6 +4852,7 @@ export interface operations {
         parameters: {
             query?: {
                 page?: number;
+                /** @description Page size; values are normalized to the inclusive range 1–100. */
                 size?: number;
                 role?: "STUDENT" | "TEACHER" | "ADMIN";
                 q?: string;
@@ -4887,6 +4896,7 @@ export interface operations {
         parameters: {
             query?: {
                 page?: number;
+                /** @description Page size; values are normalized to the inclusive range 1–100. */
                 size?: number;
                 q?: string;
             };
@@ -4929,6 +4939,7 @@ export interface operations {
         parameters: {
             query?: {
                 page?: number;
+                /** @description Page size; values are normalized to the inclusive range 1–100. */
                 size?: number;
             };
             header?: never;
@@ -4952,6 +4963,7 @@ export interface operations {
         parameters: {
             query?: {
                 page?: number;
+                /** @description Page size; values are normalized to the inclusive range 1–100. */
                 size?: number;
             };
             header?: never;
@@ -5105,6 +5117,7 @@ export interface operations {
         parameters: {
             query?: {
                 page?: number;
+                /** @description Page size; values are normalized to the inclusive range 1–100. */
                 size?: number;
             };
             header?: never;
@@ -5128,6 +5141,7 @@ export interface operations {
         parameters: {
             query?: {
                 page?: number;
+                /** @description Page size; values are normalized to the inclusive range 1–100. */
                 size?: number;
             };
             header?: never;
@@ -5263,6 +5277,7 @@ export interface operations {
         parameters: {
             query?: {
                 page?: number;
+                /** @description Page size; values are normalized to the inclusive range 1–100. */
                 size?: number;
             };
             header?: never;

@@ -212,6 +212,47 @@ class OpenApiContractTest {
     }
 
     @Test
+    void everyCollectionSizeParameterDocumentsNormalizationAndDefault() throws Exception {
+        MvcResult result = mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode paths = objectMapper.readTree(result.getResponse().getContentAsByteArray()).path("paths");
+        List<String> failures = new ArrayList<>();
+        int[] sizeParameters = {0};
+
+        paths.fields().forEachRemaining(path -> {
+            for (String method : HTTP_METHODS) {
+                JsonNode operation = path.getValue().path(method);
+                if (!operation.isObject()) {
+                    continue;
+                }
+                for (JsonNode parameter : operation.path("parameters")) {
+                    if (!"query".equals(parameter.path("in").asText())
+                            || !"size".equals(parameter.path("name").asText())) {
+                        continue;
+                    }
+                    sizeParameters[0]++;
+                    String location = method.toUpperCase() + " " + path.getKey() + " size";
+                    String description = parameter.path("description").asText();
+                    if (!description.contains("normalized") || !description.contains("1–100")) {
+                        failures.add(location + " does not document normalization to 1–100: " + description);
+                    }
+                    JsonNode schema = parameter.path("schema");
+                    if (!"20".equals(schema.path("default").asText())) {
+                        failures.add(location + " does not have default 20: " + schema.path("default"));
+                    }
+                    if (schema.has("maximum")) {
+                        failures.add(location + " incorrectly declares schema maximum " + schema.path("maximum"));
+                    }
+                }
+            }
+        });
+
+        assertEquals(19, sizeParameters[0], "All collection size parameters should be covered.");
+        assertTrue(failures.isEmpty(), () -> String.join(System.lineSeparator(), failures));
+    }
+
+    @Test
     void gradingOperationsDocumentTheirSuccessAndErrorResponseSchemas() throws Exception {
         MvcResult result = mockMvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk())

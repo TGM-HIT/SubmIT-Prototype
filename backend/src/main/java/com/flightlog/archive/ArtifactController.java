@@ -3,6 +3,7 @@ package com.flightlog.archive;
 import com.flightlog.security.AuthenticatedUser;
 import com.flightlog.web.ApiDtos.PageResponse;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.UUID;
@@ -34,6 +35,7 @@ public class ArtifactController {
     @Operation(summary = "List paginated project artefacts visible to the caller.")
     public PageResponse<ArtifactResponse> list(@AuthenticationPrincipal AuthenticatedUser caller,
             @PathVariable UUID projectId, @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Page size; values are normalized to the inclusive range 1–100.")
             @RequestParam(defaultValue = "20") int size) {
         return service.list(caller, projectId, Math.max(page, 0), normalizeSize(size));
     }

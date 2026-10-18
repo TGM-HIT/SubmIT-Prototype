@@ -135,6 +135,37 @@ class StudentDetailsControllerTest {
         assertTrue(subjects.count() == 5);
     }
 
+    @Test
+    void catalogueCollectionsDefaultToTwentyAndClampLargeSizes() throws Exception {
+        List<StudentClassEntity> classEntries = new ArrayList<>();
+        List<ElectiveSubjectEntity> subjectEntries = new ArrayList<>();
+        for (int i = 0; i < 105; i++) {
+            classEntries.add(new StudentClassEntity(UUID.randomUUID(), "Class " + i));
+            subjectEntries.add(new ElectiveSubjectEntity(UUID.randomUUID(), "Subject " + i));
+        }
+        classes.saveAll(classEntries);
+        subjects.saveAll(subjectEntries);
+
+        for (String path : List.of("/api/student-classes", "/api/elective-subjects")) {
+            JsonNode defaultPage = mapper.readTree(mvc.perform(get(path).header("Authorization", bearer(teacher)))
+                    .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+            assertEquals(0, defaultPage.path("page").asInt(), path + " default page");
+            assertEquals(20, defaultPage.path("size").asInt(), path + " default size");
+            assertEquals(105, defaultPage.path("totalElements").asInt(), path + " default totalElements");
+            assertEquals(6, defaultPage.path("totalPages").asInt(), path + " default totalPages");
+            assertEquals(20, defaultPage.path("content").size(), path + " default content size");
+
+            JsonNode oversizedPage = mapper.readTree(mvc.perform(get(path).param("size", "101")
+                            .header("Authorization", bearer(teacher)))
+                    .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+            assertEquals(0, oversizedPage.path("page").asInt(), path + " oversized page");
+            assertEquals(100, oversizedPage.path("size").asInt(), path + " oversized size");
+            assertEquals(105, oversizedPage.path("totalElements").asInt(), path + " oversized totalElements");
+            assertEquals(2, oversizedPage.path("totalPages").asInt(), path + " oversized totalPages");
+            assertEquals(100, oversizedPage.path("content").size(), path + " oversized content size");
+        }
+    }
+
 
     @Test
     void registrationAndRoleConversionReceiveDefaultClassAndRemainImmediatelyUsable() throws Exception {

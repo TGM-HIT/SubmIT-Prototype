@@ -52,7 +52,8 @@ public class ApplicationPeriodController {
     @GetMapping("/api/application-periods")
     @Operation(summary = "List application periods.")
     public PageResponse<ApplicationPeriodResponse> listPeriods(@AuthenticationPrincipal AuthenticatedUser caller,
-            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
         return service.list(caller, Math.max(page, 0), normalizeSize(size));
     }
 

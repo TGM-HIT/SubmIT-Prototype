@@ -6,6 +6,7 @@ import com.flightlog.web.ApiDtos.PageResponse;
 import com.flightlog.web.ApiDtos.StudentApplicationRequest;
 import com.flightlog.web.ApiDtos.StudentApplicationResponse;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -51,6 +52,7 @@ public class StudentApplicationController {
     @Operation(summary = "List applications for an application period.")
     public PageResponse<StudentApplicationResponse> list(@AuthenticationPrincipal AuthenticatedUser caller,
             @PathVariable UUID periodId, @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Page size; values are normalized to the inclusive range 1–100.")
             @RequestParam(defaultValue = "20") int size) {
         return service.applications(caller, periodId, Math.max(page, 0), normalizeSize(size));
     }

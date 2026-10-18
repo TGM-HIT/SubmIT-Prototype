@@ -36,7 +36,8 @@ public class RubricController {
     @GradingApiResponses.RubricList
     public PageResponse<RubricSummary> list(@AuthenticationPrincipal AuthenticatedUser caller,
             @Parameter(description = "Zero-based page index.") @RequestParam(defaultValue = "0") int page,
-            @Parameter(description = "Page size, at most 100.") @RequestParam(defaultValue = "20") int size) {
+            @Parameter(description = "Page size; values are normalized to the inclusive range 1–100.")
+            @RequestParam(defaultValue = "20") int size) {
         return rubricService.list(caller, page, size);
     }
 

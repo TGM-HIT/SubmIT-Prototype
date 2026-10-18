@@ -26,7 +26,8 @@ import org.springframework.web.bind.annotation.RestController;
 public class GroupGradeController {
     private static final String PROJECT_DESCRIPTION = "Project identifier.";
     private static final String PAGE_DESCRIPTION = "Zero-based page index.";
-    private static final String SIZE_DESCRIPTION = "Page size, at most 100.";
+    private static final String SIZE_DESCRIPTION =
+            "Page size; values are normalized to the inclusive range 1–100.";
     private final GradeService gradeService;
 
     public GroupGradeController(GradeService gradeService) {

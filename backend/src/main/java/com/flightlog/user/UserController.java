@@ -59,7 +59,8 @@ public class UserController {
     @ApiResponse(responseCode = "403", description = "Only students and administrators may use this lookup.",
             content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
     public PageResponse<StudentLookupResponse> lookupStudents(@AuthenticationPrincipal AuthenticatedUser caller,
-            @RequestParam(defaultValue = "0") int page, @RequestParam(defaultValue = "20") int size,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
             @RequestParam(required = false) String q) {
         return userService.lookupStudents(caller, Math.max(page, 0), normalizeSize(size), q);
     }

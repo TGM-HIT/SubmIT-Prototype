@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.flightlog.security.AuthenticatedUser;
 import com.flightlog.web.ApiDtos.PageResponse;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -53,6 +54,7 @@ public class AllocationController {
             content = @Content(schema = @Schema(implementation = AllocationRunPageResponse.class)))
     public PageResponse<Map<String, Object>> list(@AuthenticationPrincipal AuthenticatedUser caller,
             @PathVariable UUID periodId, @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Page size; values are normalized to the inclusive range 1–100.")
             @RequestParam(defaultValue = "20") int size) {
         PageResponse<ObjectNode> runs = service.listRuns(caller, periodId,
                 Math.max(page, 0), Math.min(Math.max(size, 1), 100));
