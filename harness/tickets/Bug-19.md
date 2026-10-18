@@ -35,7 +35,7 @@ Source: Compliance-03-20261018-1757, report finding 5; quoted evidence from `bac
 | `GET /api/student-classes` | `400` invalid pagination input; `403` insufficient role |
 | `POST /api/student-classes` | `400` invalid name; `403` insufficient role; `409` duplicate name |
 | `GET /api/projects/{projectId}/student-grades` | `400` invalid UUID/pagination; `403` role/grade visibility denied; `404` project absent |
-| `POST /api/projects/{projectId}/student-grades` | `400`, `403`, and `409` are already declared; `404` invalid UUID or absent project/student/rubric |
+| `POST /api/projects/{projectId}/student-grades` | `400` (already declared) for malformed UUID/request or a student ID not in the project group; `403` and `409` are already declared; `404` only for a missing project or rubric resource |
 | `POST /api/projects/{projectId}/student-grades/{gradeId}/revisions` | `400` invalid UUID/revision; `403` insufficient role; `404` project/grade absent; `409` already declared |
 | `GET /api/projects/{projectId}/metrics` | `400` invalid UUID/pagination; `403` insufficient project access; `404` project absent |
 | `POST /api/projects/{projectId}/metrics` | `400` invalid UUID/metric; `403` insufficient role; `404` project/metric definition absent |
@@ -95,6 +95,7 @@ Source: Compliance-03-20261018-1757, report finding 5; quoted evidence from `bac
 | `DELETE /api/ideas/{id}/owners/me` | `400` invalid UUID; `403` role/ownership denied; `404` idea absent; `409` creator-leave conflict |
 
 - Public operations are excluded from missing-bearer `401`; the login operation's invalid-credentials `401` is a separate observed service behavior. Public archive reads retain their applicable `400`/`404` conditions. Do not add standard errors to a route solely because that status exists in the shared status list.
+- For `POST /api/projects/{projectId}/student-grades`, malformed request UUIDs map to `400` (`GradeDtos.java:25-30`, `ApiExceptionHandler.java:38-45`), and a student ID not in the project's group is rejected as `400` (`GradeService.java:56-63`). A missing project maps to `404` (`ProjectAccess.java:29-33`); a missing rubric maps to `404` through rubric binding and lookup (`RubricBinding.java:39-44`, `RubricService.java:95-97`, `ApiExceptionHandler.java:48-50`). The adjacent student-grade list, revision, and group-grade rows assign `404` only to absent project/grade/rubric/group resources, not input or membership validation.
 - The generated contract is currently response-incomplete for these behaviors. The acceptance matrix must be checked against freshly generated `contracts/openapi.yaml`; where this ticket names a response as already declared, preserve its existing declaration and verify its description/schema as part of the same contract test.
 - Every applicable error response must have an accurate condition-specific description and reference the shared `ApiErrorResponse` schema. Preserve all successful responses and their schemas, existing specified errors, and runtime behavior. Do not edit or commit the ignored generated YAML by hand.
 - Keep the explicit refusal, self-review, and pinned-catalogue cases required by `Bug-17`; this ticket complements, not replaces or duplicates, those case-specific requirements.
@@ -123,6 +124,7 @@ None; generated response declarations and the exact operation/status inventory a
 - Every operation documents only the standard errors its actual validation, role/ownership, resource lookup, or state/uniqueness behavior can produce, as listed in the operation inventory.
 - `POST /api/ideas` includes applicable `400`/`401`/`403`; `GET /api/ideas/{id}` includes applicable `401`/`403`/`404`; `PUT /api/ideas/{id}` includes applicable `400`/`401`/`403`/`404`/`409`.
 - `Bug-17`'s explicit refusal, self-review, and pinned-catalogue cases remain covered by that ticket, without being broadened or duplicated here.
+- Contract tests for `POST /api/projects/{projectId}/student-grades` must assert that malformed UUIDs and a student ID outside the project group are `400`, not `404`, and that `404` is limited to a missing project or rubric; retain the already-declared `400`, `403`, and `409` responses.
 - Every applicable response has an accurate description and shared `ApiErrorResponse` schema; successful responses and schemas remain unchanged.
 - Generated OpenAPI is regenerated rather than hand-edited; ignored YAML is not committed.
 - Standard: no unrelated changes; no check is claimed that was not performed.
