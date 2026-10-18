@@ -47,6 +47,7 @@ The harness works only if each role has one clear job, the hand-offs between rol
 - A hand-off table with the columns `Producer`, `Block`, `Consumer`, `Fields match`.
 - For every duplicate classification, report the existing ticket ID, the matching acceptance criterion or explicitly scoped path, and its verified current open status.
 - A format table as in Compliance-04, limited to the files under Inspect.
+- For each topic-11 format criterion, record the exact command or script assertion and its observed result. Mark a format-table row `ok` only when the evidence covers each applicable criterion and its exceptions.
 
 ## Cadence
 
