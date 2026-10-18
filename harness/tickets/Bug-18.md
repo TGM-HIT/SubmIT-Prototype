@@ -6,7 +6,7 @@ Draft from Compliance-03-20261018-1757: needs Ticket Author refinement before im
 
 The approved API specification says the idea-list endpoint can filter by status, school year, and owner criteria, but the current endpoint and generated contract expose only status and pagination. Staff and students cannot use the documented school-year or owner filters.
 
-Source: Compliance-03-20261018-1757, report finding 4: `backend/SPEC.md:37` says `GET /api/ideas` is “filtered by supported status, school year, and owner criteria”; `contracts/openapi.yaml:962-981` exposes only `status`, `page`, and `size`; `backend/src/main/java/com/flightlog/idea/IdeaListController.java:22-29` and `IdeaListService.java:40-43` likewise accept/filter only status plus existing student visibility.
+Source: Compliance-03-20261018-1757, report finding 4: `backend/SPEC.md:37` says `GET /api/ideas` is “filtered by supported status, school year, and owner criteria”; `contracts/openapi.yaml:962-981` exposes only `status`, `page`, and `size`; `backend/src/main/java/com/flightlog/idea/IdeaListController.java:22-29` and `backend/src/main/java/com/flightlog/idea/IdeaListService.java:40-43` likewise accept/filter only status plus existing student visibility.
 
 ## Scope and contract
 
