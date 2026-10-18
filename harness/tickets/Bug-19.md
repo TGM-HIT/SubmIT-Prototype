@@ -22,7 +22,7 @@ Source: Compliance-03-20261018-1757, report finding 5; quoted evidence from `bac
 | `PUT /api/projects/{projectId}/final-grade` | `400` invalid UUID or grade input; `403` insufficient access; `404` project absent; `409` grade/state conflict |
 | `GET /api/ideas/{id}` | `400` invalid UUID; `403` idea visibility denied; `404` idea absent |
 | `PUT /api/ideas/{id}` | `400` invalid UUID or invalid idea fields; `403` role/ownership denied; `404` idea absent; `409` lifecycle conflict |
-| `PUT /api/ideas/{id}/supervisor` | `400` invalid UUID/request; `403` role/authorization denied; `404` idea absent; `409` explicit refusal (`Bug-17`) |
+| `PUT /api/ideas/{id}/supervisor` | `400` invalid UUID/request; `403` role/authorization denied; `404` idea absent; `409` is already scoped by Bug-17; no case-specific condition is repeated here |
 | `PUT /api/ideas/{id}/supervision-preference` | `400` invalid UUID/preference; `403` role denied; `404` idea absent |
 | `PUT /api/ideas/{id}/specification` | `400` invalid UUID/specification; `403` role/ownership denied; `404` idea absent; `409` lifecycle/specification conflict |
 | `PUT /api/formal-applications/{id}` | `400` invalid UUID/application fields; `403` authorization denied; `404` application absent; `409` lifecycle conflict |
@@ -31,7 +31,7 @@ Source: Compliance-03-20261018-1757, report finding 5; quoted evidence from `bac
 | `PUT /api/application-periods/{periodId}/allocation-pins/{studentId}` | `400`, `401`, `403`, `404`, and `409` are already declared; no additional standard status |
 | `DELETE /api/application-periods/{periodId}/allocation-pins/{studentId}` | `401`, `403`, `404`, and `409` are already declared; `400` invalid UUID |
 | `GET /api/application-periods/{id}` | `400` invalid UUID; `404` period absent |
-| `PUT /api/application-periods/{id}` | `400` invalid UUID/configuration; `403` insufficient role; `404` period/catalogue resource absent; `409` lifecycle or pinned-project conflict (`Bug-17`) |
+| `PUT /api/application-periods/{id}` | `400` invalid UUID/configuration; `403` insufficient role; `404` period/catalogue resource absent; `409` state conflict, with Bug-17's separate case left to that ticket |
 | `GET /api/student-classes` | `400` invalid pagination input; `403` insufficient role |
 | `POST /api/student-classes` | `400` invalid name; `403` insufficient role; `409` duplicate name |
 | `GET /api/projects/{projectId}/student-grades` | `400` invalid UUID/pagination; `403` role/grade visibility denied; `404` project absent |
@@ -51,8 +51,8 @@ Source: Compliance-03-20261018-1757, report finding 5; quoted evidence from `bac
 | `POST /api/ideas/{id}/withdraw` | `400` invalid UUID; `403` role/ownership denied; `404` idea absent; `409` lifecycle conflict |
 | `POST /api/ideas/{id}/submit` | `400` invalid UUID; `403` role/ownership denied; `404` idea absent; `409` lifecycle conflict |
 | `POST /api/ideas/{id}/specification/submit` | `400` invalid UUID; `403` role/ownership denied; `404` idea absent; `409` lifecycle/specification conflict |
-| `POST /api/ideas/{id}/specification/reviews` | `400` invalid UUID/review; `403` role denied, including self-review (`Bug-17`); `404` idea absent; `409` lifecycle conflict |
-| `POST /api/ideas/{id}/reviews` | `400` invalid UUID/review; `403` role denied, including self-review (`Bug-17`); `404` idea absent; `409` lifecycle conflict |
+| `POST /api/ideas/{id}/specification/reviews` | `400` invalid UUID/review; `403` role denied, with Bug-17's case-specific rule not restated; `404` idea absent; `409` lifecycle conflict |
+| `POST /api/ideas/{id}/reviews` | `400` invalid UUID/review; `403` role denied, with Bug-17's case-specific rule not restated; `404` idea absent; `409` lifecycle conflict |
 | `POST /api/ideas/{id}/owners` | `400` invalid UUID/collaborator input; `403` role/creator denied; `404` idea/student absent; `409` owner-count/duplicate conflict |
 | `GET /api/grading-rubrics` | `400` invalid pagination; `403` insufficient role |
 | `POST /api/grading-rubrics` | `400`, `403`, and `409` are already declared |
