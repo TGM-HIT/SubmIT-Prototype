@@ -33,7 +33,7 @@ Standard project checks:
 
 - API-level pagination behavior and generated parameter bounds are covered by the automated request and contract tests; no separate manual walkthrough is required.
 
-## Acceptance criteria
+## Acceptance criteria (the Evaluator judges)
 
 - All collection `size` parameters have generated OpenAPI maximum `100`.
 - Both student-class and elective-subject collection endpoints use default size `20`; other collection defaults remain as specified.

@@ -29,11 +29,11 @@ Standard project checks:
 - Backend API annotation changes: from `backend/`, run `./gradlew test`, `./gradlew checkstyleMain`, and `./gradlew generateOpenApi`; review the generated contract.
 - From `frontend/`, run `npm run api:types`. If generated frontend types change, also run `npm run typecheck`, `npm test`, and `npm run build`.
 
-## One-time manual verification
+## One-time manual verification (in addition to automated tests)
 
 None; generated operation responses and shared error schemas are covered by the contract test and regenerated-contract review.
 
-## Acceptance criteria
+## Acceptance criteria (the Evaluator judges)
 
 - The four operations document the explicit `409`, `403`, `403`, and `409` statuses respectively, with condition descriptions and the shared `ApiErrorResponse` schema.
 - Existing success and error response documentation is preserved; no speculative errors are added.

@@ -37,11 +37,11 @@ Standard project checks:
 - Backend API annotation changes: from `backend/`, run `./gradlew test`, `./gradlew checkstyleMain`, and `./gradlew generateOpenApi`; review the generated contract diff.
 - From `frontend/`, run `npm run api:types`. If this changes tracked frontend types, also run `npm run typecheck`, `npm test`, and `npm run build`.
 
-## One-time manual verification
+## One-time manual verification (in addition to automated tests)
 
 None; generated operation responses are covered by the contract test and generated-contract review.
 
-## Acceptance criteria
+## Acceptance criteria (the Evaluator judges)
 
 - Each of the eight operations in the table documents its specified `200` success response and matching schema.
 - Each listed error status remains present with an accurate description and the shared `ApiErrorResponse` schema; any additional documented error status is grounded in the endpoint's actual behavior and project API rules.

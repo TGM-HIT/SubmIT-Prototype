@@ -114,11 +114,11 @@ Standard project checks:
 - Backend API annotation changes: from `backend/`, run `./gradlew test`, `./gradlew checkstyleMain`, and `./gradlew generateOpenApi`; review the generated contract.
 - From `frontend/`, run `npm run api:types`; if tracked types change, also run `npm run typecheck`, `npm test`, and `npm run build`.
 
-## One-time manual verification
+## One-time manual verification (in addition to automated tests)
 
 None; generated response declarations and the exact operation/status inventory are covered by durable contract tests.
 
-## Acceptance criteria
+## Acceptance criteria (the Evaluator judges)
 
 - Every protected operation documents missing/invalid-credential `401`; public operations are not given a missing-authentication response.
 - Every operation documents only the standard errors its actual validation, role/ownership, resource lookup, or state/uniqueness behavior can produce, as listed in the operation inventory.

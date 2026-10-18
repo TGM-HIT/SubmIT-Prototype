@@ -20,11 +20,11 @@ Source: Compliance-03-20261018-1757, report finding 7: `backend/SPEC.md:121` say
 
 Documentation-only or harness-only until a decision is made: no checks required.
 
-## One-time manual verification
+## One-time manual verification (in addition to automated tests)
 
 - Human-only: record the authorized product decision in the ticket/run record before refinement or implementation.
 
-## Acceptance criteria
+## Acceptance criteria (the Evaluator judges)
 
 - The decision record names which alternative is selected and its rationale; until that decision exists, neither alternative is implemented or documented as settled.
 - The ticket is refined after the decision and identifies the required follow-up changes.

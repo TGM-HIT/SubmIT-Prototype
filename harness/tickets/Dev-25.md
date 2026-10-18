@@ -29,7 +29,7 @@ Standard project checks:
 
 None; the generated property description and format are covered by the contract test and regenerated-contract review.
 
-## Acceptance criteria
+## Acceptance criteria (the Evaluator judges)
 
 - The generated `AllocationRunResponse.finalizedAt` property has an accurate non-empty description and remains `type: string`, `format: date-time`.
 - Existing requiredness, nullability, serialization and runtime behavior are unchanged.

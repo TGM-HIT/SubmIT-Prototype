@@ -26,11 +26,11 @@ Standard project checks:
 - Backend API annotation changes: from `backend/`, run `./gradlew test`, `./gradlew checkstyleMain`, and `./gradlew generateOpenApi`; review the generated contract.
 - From `frontend/`, run `npm run api:types`; if tracked types change, also run `npm run typecheck`, `npm test`, and `npm run build`.
 
-## One-time manual verification
+## One-time manual verification (in addition to automated tests)
 
 None; generated descriptions and request validation are covered by automated checks.
 
-## Acceptance criteria
+## Acceptance criteria (the Evaluator judges)
 
 - Generated API documentation makes the same Java UTF-16 code-unit counting rule clear for both create and update operations that use the shared request constraints.
 - Existing limits, request shape, and runtime validation are unchanged.

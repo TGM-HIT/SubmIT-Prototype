@@ -34,7 +34,7 @@ Standard project checks:
 
 - API-level requests are covered by automated authorization and filter-combination scenarios; no separate manual walkthrough is required.
 
-## Acceptance criteria
+## Acceptance criteria (the Evaluator judges)
 
 - `GET /api/ideas` supports the documented status, school-year, and owner criteria filters, with their query parameters represented in generated OpenAPI.
 - Filters combine correctly before pagination and return accurate page metadata.

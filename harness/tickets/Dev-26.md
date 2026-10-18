@@ -26,11 +26,11 @@ Standard project checks:
 - Backend API annotation changes: from `backend/`, run `./gradlew test`, `./gradlew checkstyleMain`, and `./gradlew generateOpenApi`; review the generated contract.
 - From `frontend/`, run `npm run api:types`; if tracked types change, also run `npm run typecheck`, `npm test`, and `npm run build`.
 
-## One-time manual verification
+## One-time manual verification (in addition to automated tests)
 
 None; generated schema description and registration behavior are covered by automated checks.
 
-## Acceptance criteria
+## Acceptance criteria (the Evaluator judges)
 
 - The generated `RegisterRequest.role` property has a clear description that a supplied role is ignored; the description does not imply that the caller can select or obtain a role.
 - The enum and registration behavior are unchanged.
