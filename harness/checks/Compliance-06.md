@@ -8,7 +8,7 @@ The harness works only if each role has one clear job, the hand-offs between rol
 
 - `harness/roles/*.md` (Orchestrator, Implementor, Evaluator, Learner, Ticket Author, Auditor).
 - `.github/agents/*.agent.md`, which must only identify an agent and point at its role file.
-- `harness/templates/` (ticket, check, handoff and review templates), `harness/gates/` (gate scripts the roles call), `harness/plan.md` (status vocabulary and ledger rules), and `harness/checks/` (the Auditor's work items).
+- `harness/templates/` (ticket, check, and human-acceptance templates), `harness/gates/` (gate scripts the roles call), `harness/plan.md` (status vocabulary and ledger rules), and `harness/checks/` (the Auditor's work items).
 - Source-of-truth order for this check: `harness/roles/*.md` define behavior; agent files only identify; templates and gates are referenced by roles and must match what the roles say. Where two role files disagree, the Orchestrator contract owns the workflow and hand-offs, and each role file owns its own limits.
 
 ## Topics to check
