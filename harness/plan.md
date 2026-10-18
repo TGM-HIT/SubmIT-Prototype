@@ -74,6 +74,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-27](tickets/Dev-27.md) | to-do | Document UTF-16 limits for formal-application updates |
 | [Dev-28](tickets/Dev-28.md) | to-do | Reconcile and index the legacy bug list |
 | [Dev-29](tickets/Dev-29.md) | to-do | Clarify the unresolved Java package rename proposal |
+| [Dev-30](tickets/Dev-30.md) | to-do | Reconcile Auditor seat guidance with global model guidance |
 
 ### Features
 
@@ -116,4 +117,4 @@ Recurring documentation and contract checks, run by the [Auditor role](roles/aud
 | [Compliance-03](checks/Compliance-03.md) | After API changes; at least monthly | 2026-10-18 19:42 +0200 | findings: 1 ticketed, 0 decision needed, 0 fixed, 8 duplicate | Compliance-03-20261018-1941 | OpenAPI contract compliance |
 | [Compliance-04](checks/Compliance-04.md) | Weekly and after file moves or renames | 2026-10-18 19:09 +0200 | findings: 1 fixed | Compliance-04-20261018-1909 | Link and format validation |
 | [Compliance-05](checks/Compliance-05.md) | Quarterly and before planning | 2026-10-18T20:17+0200 | findings: 1 ticketed, 1 decision needed, 1 duplicate, 0 fixed | Compliance-05-20261018-2017 | Documentation health |
-| [Compliance-06](checks/Compliance-06.md) | After each role-contract change or lesson application; at least monthly | 2026-10-18T20:48+0200 | findings: 0 ticketed, 0 decision needed, 0 duplicate, 1 fixed | Compliance-06-20261018-2048 | Agent role consistency and role-file validation |
+| [Compliance-06](checks/Compliance-06.md) | After each role-contract change or lesson application; at least monthly | 2026-10-18T20:48+0200 | findings: 0 ticketed, 1 decision needed, 0 duplicate, 1 fixed | Compliance-06-20261018-2048 | Agent role consistency and role-file validation |
