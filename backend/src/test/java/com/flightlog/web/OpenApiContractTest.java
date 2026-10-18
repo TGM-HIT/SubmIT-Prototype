@@ -37,11 +37,15 @@ class OpenApiContractTest {
     private static final List<ExpectedOperation> GRADING_RESPONSE_CONTRACTS = List.of(
             operation("get", "/api/projects/{projectId}/final-grade", "FinalGradeHistory",
                     "Current final project grade and history.",
-                    Map.of("404", response("ApiErrorResponse",
-                            "Project not found or no final grade has been recorded."))),
+                    Map.of("403", response("ApiErrorResponse",
+                                    "A student caller is not a member of the project."),
+                            "404", response("ApiErrorResponse",
+                                    "Project not found or no final grade has been recorded."))),
             operation("put", "/api/projects/{projectId}/final-grade", "FinalGradesResponse",
                     "Recorded project and individual final grades.",
-                    Map.of("400", response("ApiErrorResponse", "Invalid grade, missing rationale, or unknown rule."),
+                    Map.of("400", response("ApiErrorResponse",
+                                    "Invalid request shape or student membership, grade, rationale, or rule."),
+                            "403", response("ApiErrorResponse", "Caller is not a teacher or administrator."),
                             "409", response("ApiErrorResponse", "A configured rule lacks required inputs, the "
                                     + "selected rubric is ineffective, or a rubric-binding transition lacks a "
                                     + "reason."))),

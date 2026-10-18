@@ -3113,6 +3113,15 @@ export interface operations {
                     "*/*": components["schemas"]["FinalGradeHistory"];
                 };
             };
+            /** @description A student caller is not a member of the project. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiErrorResponse"];
+                };
+            };
             /** @description Project not found or no final grade has been recorded. */
             404: {
                 headers: {
@@ -3149,8 +3158,17 @@ export interface operations {
                     "*/*": components["schemas"]["FinalGradesResponse"];
                 };
             };
-            /** @description Invalid grade, missing rationale, or unknown rule. */
+            /** @description Invalid request shape or student membership, grade, rationale, or rule. */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Caller is not a teacher or administrator. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

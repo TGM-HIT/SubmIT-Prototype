@@ -38,6 +38,8 @@ public class FinalGradeController {
     @Operation(summary = "Get the current final project grade, its basis, and history.")
     @ApiResponse(responseCode = "200", description = "Current final project grade and history.",
             content = @Content(schema = @Schema(implementation = FinalGradeHistory.class)))
+    @ApiResponse(responseCode = "403", description = "A student caller is not a member of the project.",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
     @ApiResponse(responseCode = "404", description = "Project not found or no final grade has been recorded.",
             content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
     public FinalGradeHistory getFinalGrade(@AuthenticationPrincipal AuthenticatedUser caller,
@@ -64,10 +66,13 @@ public class FinalGradeController {
     @Operation(summary = "Record or confirm project and individual final grades, by configured rule or with rationale.")
     @ApiResponse(responseCode = "200", description = "Recorded project and individual final grades.",
             content = @Content(schema = @Schema(implementation = FinalGradesResponse.class)))
-    @ApiResponse(responseCode = "400", description = "Invalid grade, missing rationale, or unknown rule.",
+    @ApiResponse(responseCode = "400", description = "Invalid request shape or student membership, grade, rationale, "
+            + "or rule.",
             content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
-    @ApiResponse(responseCode = "409", description = "A configured rule lacks required inputs, the selected "
-            + "rubric is ineffective, or a rubric-binding transition lacks a reason.",
+    @ApiResponse(responseCode = "403", description = "Caller is not a teacher or administrator.",
+            content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
+    @ApiResponse(responseCode = "409", description = "A configured rule lacks required inputs, the selected rubric "
+            + "is ineffective, or a rubric-binding transition lacks a reason.",
             content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
     public FinalGradesResponse putFinalGrade(@AuthenticationPrincipal AuthenticatedUser caller,
             @Parameter(description = PROJECT_DESCRIPTION) @PathVariable UUID projectId,
