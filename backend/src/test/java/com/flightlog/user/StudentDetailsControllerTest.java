@@ -17,7 +17,9 @@ import com.flightlog.security.AuthenticatedUser;
 import com.flightlog.security.JwtService;
 import com.flightlog.security.Role;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -152,6 +154,100 @@ class StudentDetailsControllerTest {
     }
 
     @Test
+    void catalogueNameBoundariesAndTrimmingAreEnforced() throws Exception {
+        for (String path : List.of("/api/student-classes", "/api/elective-subjects")) {
+            Map<String, String> persisted = new LinkedHashMap<>();
+            String catalogueLabel = path.endsWith("classes") ? "Class" : "Subject";
+            List<String> postNames = List.of("a", "B".repeat(100), "Trimmed Post " + catalogueLabel);
+
+            for (int i = 0; i < postNames.size(); i++) {
+                String expectedName = postNames.get(i);
+                String requestName = i == 2 ? "  " + expectedName + "  " : expectedName;
+                JsonNode created = postJson(path, mapper.writeValueAsString(Map.of("name", requestName)), admin, 201);
+                String id = assertCatalogueEntry(created, expectedName, path + " POST response");
+                persisted.put(id, expectedName);
+                assertCatalogueContents(path, persisted);
+            }
+
+            for (String invalidName : List.of("", "   ", "x".repeat(101))) {
+                mvc.perform(post(path).header("Authorization", bearer(admin)).contentType(MediaType.APPLICATION_JSON)
+                                .content(mapper.writeValueAsString(Map.of("name", invalidName))))
+                        .andExpect(status().isBadRequest());
+                assertCatalogueContents(path, persisted);
+            }
+
+            List<JsonNode> patchTargets = new ArrayList<>();
+            for (int i = 0; i < 3; i++) {
+                JsonNode seed = postJson(path, mapper.writeValueAsString(Map.of("name", "Patch target " + i)),
+                        admin, 201);
+                String id = assertCatalogueEntry(seed, "Patch target " + i, path + " PATCH seed response");
+                persisted.put(id, "Patch target " + i);
+                patchTargets.add(seed);
+                assertCatalogueContents(path, persisted);
+            }
+
+            List<String> patchNames = List.of("z", "C".repeat(100), "Trimmed Patch " + catalogueLabel);
+            for (int i = 0; i < patchTargets.size(); i++) {
+                String id = patchTargets.get(i).path("id").asText();
+                String expectedName = patchNames.get(i);
+                String requestName = i == 2 ? "  " + expectedName + "  " : expectedName;
+                JsonNode renamed = mapper.readTree(mvc.perform(patch(path + "/{id}", id)
+                                .header("Authorization", bearer(admin)).contentType(MediaType.APPLICATION_JSON)
+                                .content(mapper.writeValueAsString(Map.of("name", requestName))))
+                        .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+                assertEquals(id, assertCatalogueEntry(renamed, expectedName, path + " PATCH response"));
+                persisted.put(id, expectedName);
+                assertCatalogueContents(path, persisted);
+            }
+
+            String unchangedId = patchTargets.get(0).path("id").asText();
+            for (String invalidName : List.of("", "   ", "x".repeat(101))) {
+                mvc.perform(patch(path + "/{id}", unchangedId).header("Authorization", bearer(admin))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(mapper.writeValueAsString(Map.of("name", invalidName))))
+                        .andExpect(status().isBadRequest());
+                assertCatalogueContents(path, persisted);
+            }
+        }
+    }
+
+    @Test
+    void catalogueNamesAreUniqueIgnoringCase() throws Exception {
+        for (String path : List.of("/api/student-classes", "/api/elective-subjects")) {
+            Map<String, String> persisted = new LinkedHashMap<>();
+            JsonNode alpha = postJson(path, "{\"name\":\"Alpha\"}", admin, 201);
+            JsonNode beta = postJson(path, "{\"name\":\"Beta\"}", admin, 201);
+            String alphaId = assertCatalogueEntry(alpha, "Alpha", path + " first POST response");
+            String betaId = assertCatalogueEntry(beta, "Beta", path + " second POST response");
+            persisted.put(alphaId, "Alpha");
+            persisted.put(betaId, "Beta");
+            assertCatalogueContents(path, persisted);
+
+            for (String duplicateName : List.of("Alpha", "  aLpHa  ")) {
+                mvc.perform(post(path).header("Authorization", bearer(admin)).contentType(MediaType.APPLICATION_JSON)
+                                .content(mapper.writeValueAsString(Map.of("name", duplicateName))))
+                        .andExpect(status().isConflict());
+                assertCatalogueContents(path, persisted);
+            }
+
+            for (String conflictingName : List.of("Alpha", "  aLpHa  ")) {
+                mvc.perform(patch(path + "/{id}", betaId).header("Authorization", bearer(admin))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(mapper.writeValueAsString(Map.of("name", conflictingName))))
+                        .andExpect(status().isConflict());
+                assertCatalogueContents(path, persisted);
+            }
+
+            JsonNode unchanged = mapper.readTree(mvc.perform(patch(path + "/{id}", alphaId)
+                            .header("Authorization", bearer(admin)).contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"name\":\"Alpha\"}"))
+                    .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+            assertEquals(alphaId, assertCatalogueEntry(unchanged, "Alpha", path + " unchanged-name PATCH response"));
+            assertCatalogueContents(path, persisted);
+        }
+    }
+
+    @Test
     void rejectsInvalidAssignmentsWithoutPartialChangesAndProtectsCatalogues() throws Exception {
         var entry = classes.save(new StudentClassEntity(UUID.randomUUID(), "Class"));
         List<ElectiveSubjectEntity> entries = new ArrayList<>();
@@ -256,6 +352,33 @@ class StudentDetailsControllerTest {
     private JsonNode getJson(String path, UserAccount caller) throws Exception {
         return mapper.readTree(mvc.perform(get(path).header("Authorization", bearer(caller)))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+    }
+
+    private String assertCatalogueEntry(JsonNode entry, String expectedName, String context) {
+        assertTrue(entry.isObject(), context + " must be a JSON object");
+        assertTrue(entry.has("id") && entry.get("id").isTextual(), context + " must contain a string ID");
+        assertTrue(entry.has("name") && entry.get("name").isTextual(), context + " must contain a string name");
+        String id = entry.get("id").textValue();
+        assertEquals(id, UUID.fromString(id).toString(), context + " ID must be a UUID");
+        assertEquals(expectedName, entry.get("name").textValue(), context + " must contain the normalized name");
+        return id;
+    }
+
+    private void assertCatalogueContents(String path, Map<String, String> expected) throws Exception {
+        JsonNode catalogue = getJson(path, teacher);
+        assertTrue(catalogue.has("totalElements") && catalogue.get("totalElements").isIntegralNumber(),
+                path + " GET must contain a numeric totalElements");
+        assertTrue(catalogue.has("content") && catalogue.get("content").isArray(),
+                path + " GET must contain an entries array");
+        assertEquals(expected.size(), catalogue.get("totalElements").intValue(),
+                path + " GET must return the persisted entry count");
+        Map<String, String> actual = new LinkedHashMap<>();
+        for (JsonNode item : catalogue.get("content")) {
+            String id = assertCatalogueEntry(item, item.has("name") && item.get("name").isTextual()
+                    ? item.get("name").textValue() : "", path + " GET entry");
+            actual.put(id, item.get("name").textValue());
+        }
+        assertEquals(expected, actual, path + " GET must return all persisted IDs and names");
     }
 
     private UserAccount user(String name, Role role) {

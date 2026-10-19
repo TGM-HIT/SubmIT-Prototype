@@ -327,6 +327,54 @@ class OpenApiContractTest {
     }
 
     @Test
+    void catalogueEntryNameConstraintsAreDocumented() throws Exception {
+        MvcResult result = mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode schemas = objectMapper.readTree(result.getResponse().getContentAsByteArray())
+                .path("components").path("schemas");
+        JsonNode request = schemas.path("CatalogueEntryRequest");
+        JsonNode requestRequired = request.path("required");
+        JsonNode requestName = request.path("properties").path("name");
+        assertTrue(requestRequired.isArray() && requestRequired.toString().contains("\"name\""),
+                "CatalogueEntryRequest.name must be required");
+        assertTrue(requestName.isObject(), "CatalogueEntryRequest.name must have a schema");
+        assertTrue(requestName.has("type") && requestName.get("type").isTextual(),
+                "CatalogueEntryRequest.name must declare a string type");
+        assertEquals("string", requestName.get("type").textValue());
+        assertTrue(requestName.has("minLength") && requestName.get("minLength").isIntegralNumber(),
+                "CatalogueEntryRequest.name must declare minLength");
+        assertEquals(1, requestName.get("minLength").intValue());
+        assertTrue(requestName.has("maxLength") && requestName.get("maxLength").isIntegralNumber(),
+                "CatalogueEntryRequest.name must declare maxLength");
+        assertEquals(100, requestName.get("maxLength").intValue());
+        assertTrue(requestName.has("description") && requestName.get("description").isTextual(),
+                "CatalogueEntryRequest.name must document normalization and uniqueness");
+        String description = requestName.get("description").textValue().toLowerCase(java.util.Locale.ROOT);
+        assertTrue(description.contains("trim"), "CatalogueEntryRequest.name must document trimming");
+        assertTrue(description.contains("case-insensitively") && description.contains("unique"),
+                "CatalogueEntryRequest.name must document case-insensitive uniqueness");
+
+        JsonNode response = schemas.path("CatalogueEntryResponse");
+        JsonNode responseRequired = response.path("required");
+        assertTrue(responseRequired.isArray() && responseRequired.toString().contains("\"id\"")
+                        && responseRequired.toString().contains("\"name\""),
+                "CatalogueEntryResponse.id and name must be required");
+        JsonNode responseProperties = response.path("properties");
+        JsonNode id = responseProperties.path("id");
+        JsonNode name = responseProperties.path("name");
+        assertTrue(id.isObject() && id.has("type") && id.get("type").isTextual(),
+                "CatalogueEntryResponse.id must declare a string type");
+        assertEquals("string", id.get("type").textValue());
+        assertTrue(id.has("format") && id.get("format").isTextual(),
+                "CatalogueEntryResponse.id must declare a UUID format");
+        assertEquals("uuid", id.get("format").textValue());
+        assertTrue(name.isObject() && name.has("type") && name.get("type").isTextual(),
+                "CatalogueEntryResponse.name must declare a string type");
+        assertEquals("string", name.get("type").textValue());
+    }
+
+    @Test
     void gradingOperationsDocumentTheirSuccessAndErrorResponseSchemas() throws Exception {
         MvcResult result = mockMvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk())
