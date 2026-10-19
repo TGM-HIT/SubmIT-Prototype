@@ -71,7 +71,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-24](tickets/done/Dev-24.md) | done | Cover catalogue name boundaries and case-insensitive uniqueness |
 | [Dev-25](tickets/done/Dev-25.md) | done | Describe allocation-run finalization timestamp in OpenAPI |
 | [Dev-26](tickets/done/Dev-26.md) | done | Describe the ignored registration role in OpenAPI |
-| [Dev-27](tickets/Dev-27.md) | to-do | Document UTF-16 limits for formal-application updates |
+| [Dev-27](tickets/done/Dev-27.md) | done | Document UTF-16 limits for formal-application updates |
 | [Dev-28](tickets/Dev-28.md) | to-do | Reconcile and index the legacy bug list |
 | [Dev-29](tickets/Dev-29.md) | to-do | Clarify the unresolved Java package rename proposal |
 | [Dev-30](tickets/Dev-30.md) | to-do | Reconcile Auditor seat guidance with global model guidance |
