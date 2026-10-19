@@ -9,6 +9,13 @@ class CommitScope {
         "frontend/scripts/"
     };
     static final String[] ALLOWED_FILES = {
+        "list-of-bugs.md",
+        "bugs-and-ideas.md",
+        "CLAUDE.md",
+        "harness/checks/Compliance-05.md",
+        "harness/roles/ticket-author.md",
+        "harness/roles/evaluator.md",
+        "harness/roles/archiver.md",
         ".gitignore",
         ".env.example",
         "README.md",
