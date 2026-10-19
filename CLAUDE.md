@@ -58,6 +58,10 @@ After each change to the code:
 
 Do not continue with a failing build.
 
+## Human-maintained information outside harness scope
+
+`bugs-and-ideas.md` is a human-maintained information file, not requirements, an authoritative backlog, or a source of Compliance findings. Agents and harness runs must not inspect its contents for routine intake, implementation, evaluation, learning, archival, or audits; derive requirements or follow-up work from it; or edit, format, move, archive, or delete it. This applies to broad repository discovery and every Compliance check. Exclude the exact root path before reading file content; incidental path enumeration such as `git ls-files` is not content inspection. No incoming README or plan link is required. An incoming link from an in-scope document may be checked for target existence, but do not open the excluded file to validate its content or anchors. Only an explicit owner instruction naming the file can authorize a bounded exception. Dev-28 authorizes only the one-time byte-preserving rename and verification; it does not authorize reading the notes as intake or changing their content.
+
 ## Sub-Agents
 
 When implementation involves a large, bounded feature area, such as the allocation workflow or project archive, delegate that execution rather than implementing the whole feature inline. The orchestrator plans and integrates; the sub-agent executes. Keep changes scoped and ensure the orchestrator verifies integration and project checks.

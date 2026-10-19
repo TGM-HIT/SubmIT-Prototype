@@ -6,12 +6,12 @@ Broken links, malformed Markdown, and inconsistent formatting make documentation
 
 ## Inspect
 
-- All tracked Markdown files outside run and lesson folders: `README.md`, `CLAUDE.md`, `list-of-bugs.md`, `docs/`, `backend/` and `frontend/` Markdown, `harness/plan.md`, `harness/roles/`, `harness/templates/`, `harness/checks/`, `harness/tickets/`, `.github/agents/`.
+- All tracked Markdown files outside run and lesson folders except the exact root path `bugs-and-ideas.md`: `README.md`, `CLAUDE.md`, `docs/`, `backend/` and `frontend/` Markdown, `harness/plan.md`, `harness/roles/`, `harness/templates/`, `harness/checks/`, `harness/tickets/`, `.github/agents/`. Exclude the file before reading content; do not validate its content, anchors, or formatting. Incoming links from in-scope documents may be checked for target existence only, without opening the excluded target.
 - `harness/plan.md` links to tickets and checks; ticket files; agent files that point to role files.
 
 ## Topics to check
 
-1. Relative links and image references resolve to existing files, and in-page anchors resolve to existing headings.
+1. Relative links and image references resolve to existing files, and in-page anchors resolve to existing headings. For an incoming link to `bugs-and-ideas.md`, check target existence only; do not read it or validate its anchors.
 2. `harness/plan.md`: every ticket and check row links to an existing file, every ticket file has a row, a `done` row links under `tickets/done/`, and an open ticket is not stored under `done/`.
 3. Every `.github/agents/*.agent.md` has a matching `harness/roles/*.md` file and valid front matter (`name`, `description`, `tools`).
 4. Heading structure: one level-1 heading per file, no skipped heading levels, no duplicate headings that break anchors. Exempt prompt-format files (`.github/agents/*.agent.md` and `harness/roles/*.md`) from the single-level-1-heading rule.

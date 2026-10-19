@@ -6,7 +6,7 @@ Documents rot quietly: sections describe removed features, TODO markers outlive 
 
 ## Inspect
 
-- The five specification and guide documents, `README.md`, `CLAUDE.md`, and `list-of-bugs.md`.
+- The five specification and guide documents, `README.md`, and `CLAUDE.md`. Exclude the exact root path `bugs-and-ideas.md` from content inspection and all health, orphan, staleness, TODO, and removed-name scans; incidental path enumeration is not content inspection.
 - `harness/plan.md`, `harness/tickets/`, `harness/tickets/done/`, `harness/checks/`, `harness/roles/`, `harness/templates/`.
 - `git log` dates per file, and the source tree for any feature or name a document mentions.
 
@@ -17,10 +17,9 @@ Documents rot quietly: sections describe removed features, TODO markers outlive 
 3. Leftover markers: `TODO`, `TBD`, `FIXME`, `XXX`, `???`, placeholder text, and commented-out sections.
 4. Open tickets: tickets that stay `to-do` or `in-progress` while their work is already in the code, or that have not changed for a long period; `awaiting-human` tickets with no pending checklist.
 5. Orphans: Markdown files not linked from `README.md`, `harness/plan.md`, or another document; checks and tickets with no ledger row.
-6. `list-of-bugs.md` entries that correspond to closed tickets, or open entries with no ticket.
-7. Duplicated rules: the same rule restated in several documents with no clear owner (candidates for a single owner and a cross-reference). Report only; do not move rules.
-8. Roles and templates: harness role files that mention commands, paths, or gates that no longer exist.
-9. Size and structure: files or sections long enough to need splitting or a table of contents (report only).
+6. Duplicated rules: the same rule restated in several documents with no clear owner (candidates for a single owner and a cross-reference). Report only; do not move rules.
+7. Roles and templates: harness role files that mention commands, paths, or gates that no longer exist.
+8. Size and structure: files or sections long enough to need splitting or a table of contents (report only).
 
 ## Finding and fix rules
 
