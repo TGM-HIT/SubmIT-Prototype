@@ -308,7 +308,12 @@ class OpenApiContractTest {
 
         for (String cataloguePath : List.of("/api/student-classes", "/api/elective-subjects")) {
             JsonNode operations = paths.path(cataloguePath);
-            JsonNode postResponses = operations.path("post").path("responses");
+            JsonNode post = operations.path("post");
+            JsonNode postResponses = post.path("responses");
+            JsonNode postTags = post.path("tags");
+            assertEquals(1, postTags.size(), "POST " + cataloguePath + " must retain its baseline controller tag");
+            assertEquals("student-details-controller", postTags.path(0).asText(),
+                    "POST " + cataloguePath + " must retain its baseline controller tag");
             assertTrue(postResponses.has("201"), "POST " + cataloguePath + " must document 201 Created");
             assertFalse(postResponses.has("200"), "POST " + cataloguePath + " must not document 200 success");
             assertEquals("#/components/schemas/CatalogueEntryResponse",
