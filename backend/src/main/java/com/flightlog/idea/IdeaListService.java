@@ -28,7 +28,7 @@ class IdeaListService {
     }
 
     @Transactional(readOnly = true)
-    ApiDtos.PageResponse<ApiDtos.IdeaResponse> list(AuthenticatedUser caller, String status, int page, int size) {
+    ApiDtos.PageResponse<ApiDtos.IdeaResponse> list(AuthenticatedUser caller, IdeaListFilters filters, int page, int size) {
         PageRequest pageRequest = PageRequest.of(page, size);
         List<StoredRecord> ideas = new ArrayList<>();
         Page<StoredRecord> batch;
@@ -38,7 +38,11 @@ class IdeaListService {
             ideas.addAll(batch.getContent());
         } while (batch.hasNext());
         List<StoredRecord> visible = ideas.stream()
-                .filter(idea -> status == null || status.isBlank() || status.equals(idea.getStatus()))
+                .filter(idea -> filters.status() == null || filters.status().isBlank()
+                        || filters.status().equals(idea.getStatus()))
+                .filter(idea -> filters.schoolYear() == null
+                        || filters.schoolYear().equals(store.parse(idea).path("schoolYear").asText()))
+                .filter(idea -> filters.ownerId() == null || ownership.ownerIds(idea).contains(filters.ownerId()))
                 .filter(idea -> caller.role() != Role.STUDENT || ownership.ownerIds(idea).contains(caller.id()))
                 .toList();
         int start = Math.min((int) pageRequest.getOffset(), visible.size());

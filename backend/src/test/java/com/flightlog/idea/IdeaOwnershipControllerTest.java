@@ -1,5 +1,7 @@
 package com.flightlog.idea;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -14,18 +16,23 @@ import com.flightlog.data.RecordStore;
 import com.flightlog.data.StoredRecord;
 import com.flightlog.user.UserAccount;
 import com.flightlog.user.UserAccountRepository;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 
 @SpringBootTest(properties = "spring.datasource.url=jdbc:h2:mem:ideaowners;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE")
 @ActiveProfiles("testing")
@@ -559,6 +566,95 @@ class IdeaOwnershipControllerTest {
     }
 
     @Test
+    void ideaListFiltersBySchoolYearAndOwnerBeforePagination() throws Exception {
+        String year = "B18-2026A";
+        String nextYear = "B18-2027B";
+        String creatorIdea = createFor(creatorToken, year, List.of());
+        setIdeaStatus(creatorIdea, "BUG18_STATUS");
+        String sharedIdea = createFor(creatorToken, year, List.of(collaboratorId));
+        setIdeaStatus(sharedIdea, "IDEA_SUBMITTED");
+        String creatorNextYear = createFor(creatorToken, nextYear, List.of());
+        String legacyIdea = createFor(creatorToken, year, List.of());
+        StoredRecord legacy = records.get("idea", UUID.fromString(legacyIdea));
+        var legacyPayload = records.parse(legacy);
+        legacyPayload.remove("ownerIds");
+        records.update(legacy, "BUG18_STATUS", legacyPayload);
+        String otherOwnerIdea = createFor(outsiderToken, year, List.of());
+
+        JsonNode yearResults = ideaList(teacherToken, Map.of("schoolYear", year, "size", "100"));
+        assertEquals(Set.of(creatorIdea, sharedIdea, legacyIdea, otherOwnerIdea), ids(yearResults));
+        assertEquals(4, yearResults.path("totalElements").asInt());
+        assertEquals(1, yearResults.path("totalPages").asInt());
+        assertEquals(Set.of(), ids(ideaList(creatorToken, Map.of("schoolYear", year + " ", "size", "100"))));
+
+        JsonNode allCreatorOwned = ideaList(creatorToken,
+                Map.of("ownerId", creatorId, "schoolYear", year, "size", "100"));
+        assertEquals(Set.of(creatorIdea, sharedIdea, legacyIdea), ids(allCreatorOwned));
+        assertEquals(persistedOwnerIds(UUID.fromString(creatorId)),
+                ids(ideaList(teacherToken, Map.of("ownerId", creatorId, "size", "100"))));
+        assertEquals(Set.of(creatorNextYear), ids(ideaList(creatorToken,
+                Map.of("ownerId", creatorId, "schoolYear", nextYear, "size", "100"))));
+        JsonNode collaboratorOwned = ideaList(collaboratorToken,
+                Map.of("ownerId", collaboratorId, "schoolYear", year, "size", "100"));
+        assertEquals(Set.of(sharedIdea), ids(collaboratorOwned));
+        assertEquals(Set.of(), ids(ideaList(collaboratorToken,
+                Map.of("ownerId", users.findByUsername("student03").orElseThrow().getId().toString(),
+                        "schoolYear", year, "size", "100"))));
+
+        JsonNode exactStatus = ideaList(teacherToken, Map.of("status", "BUG18_STATUS", "size", "100"));
+        assertEquals(Set.of(creatorIdea, legacyIdea), ids(exactStatus));
+        assertEquals(Set.of(), ids(ideaList(teacherToken, Map.of("status", "bug18_status", "size", "100"))));
+        assertEquals(ids(ideaList(creatorToken, Map.of("schoolYear", year, "size", "100"))),
+                ids(ideaList(creatorToken, Map.of("schoolYear", year, "status", "", "size", "100"))));
+        assertEquals(ids(ideaList(teacherToken, Map.of("size", "100"))),
+                ids(ideaList(teacherToken, Map.of("status", "", "size", "100"))));
+        JsonNode firstCombined = ideaList(creatorToken,
+                Map.of("ownerId", creatorId, "schoolYear", year, "status", "BUG18_STATUS",
+                        "page", "0", "size", "1"));
+        JsonNode secondCombined = ideaList(creatorToken,
+                Map.of("ownerId", creatorId, "schoolYear", year, "status", "BUG18_STATUS",
+                        "page", "1", "size", "1"));
+        assertEquals(2, firstCombined.path("totalElements").asInt());
+        assertEquals(2, firstCombined.path("totalPages").asInt());
+        assertEquals(0, firstCombined.path("page").asInt());
+        assertEquals(1, firstCombined.path("size").asInt());
+        assertEquals(2, secondCombined.path("totalElements").asInt());
+        assertEquals(2, secondCombined.path("totalPages").asInt());
+        assertEquals(1, secondCombined.path("page").asInt());
+        assertEquals(1, firstCombined.path("content").size());
+        assertEquals(1, secondCombined.path("content").size());
+        assertEquals(Set.of(creatorIdea, legacyIdea), union(ids(firstCombined), ids(secondCombined)));
+        assertEquals(Set.of(), ids(ideaList(creatorToken,
+                Map.of("ownerId", UUID.randomUUID().toString(), "schoolYear", year, "size", "100"))));
+        mockMvc.perform(get("/api/ideas").param("ownerId", "not-a-uuid")
+                        .header("Authorization", bearer(creatorToken)))
+                .andExpect(status().isBadRequest());
+
+        assertEquals(Set.of(otherOwnerIdea), ids(ideaList(teacherToken,
+                Map.of("ownerId", users.findByUsername("student03").orElseThrow().getId().toString(),
+                        "schoolYear", year, "size", "100"))));
+        assertEquals(Set.of(otherOwnerIdea), ids(ideaList(adminToken,
+                Map.of("ownerId", users.findByUsername("student03").orElseThrow().getId().toString(),
+                        "schoolYear", year, "size", "100"))));
+
+        JsonNode allPages = ideaList(teacherToken, Map.of("schoolYear", year, "size", "100"));
+        List<String> ordered = ideaIds(allPages);
+        JsonNode first = ideaList(teacherToken, Map.of("schoolYear", year, "page", "0", "size", "2"));
+        JsonNode second = ideaList(teacherToken, Map.of("schoolYear", year, "page", "1", "size", "2"));
+        assertEquals(4, first.path("totalElements").asInt());
+        assertEquals(2, first.path("totalPages").asInt());
+        assertEquals(0, first.path("page").asInt());
+        assertEquals(2, first.path("size").asInt());
+        assertEquals(1, second.path("page").asInt());
+        assertEquals(2, second.path("totalPages").asInt());
+        assertEquals(ordered.subList(0, 2), ideaIds(first));
+        assertEquals(ordered.subList(2, 4), ideaIds(second));
+        assertEquals(Set.of(creatorIdea, sharedIdea, legacyIdea, otherOwnerIdea),
+                union(ids(first), ids(second)));
+        assertFalse(ids(first).containsAll(ids(second)));
+    }
+
+    @Test
     void studentLookupContainsOnlyStudentIdsAndDisplayNamesAndIsProtected() throws Exception {
         mockMvc.perform(get("/api/users/students?q=liam&page=0&size=1")
                         .header("Authorization", bearer(creatorToken)))
@@ -588,6 +684,64 @@ class IdeaOwnershipControllerTest {
                 .andExpect(status().isCreated()).andReturn();
         JsonNode response = objectMapper.readTree(result.getResponse().getContentAsString());
         return response.path("id").asText();
+    }
+
+    private String createFor(String token, String schoolYear, List<String> collaborators) throws Exception {
+        Map<String, Object> request = new HashMap<>(idea("Bug-18 filtered idea", collaborators));
+        request.put("schoolYear", schoolYear);
+        MvcResult result = mockMvc.perform(post("/api/ideas").header("Authorization", bearer(token))
+                        .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated()).andReturn();
+        return objectMapper.readTree(result.getResponse().getContentAsString()).path("id").asText();
+    }
+
+    private void setIdeaStatus(String id, String status) {
+        StoredRecord record = records.get("idea", UUID.fromString(id));
+        records.update(record, status, records.parse(record));
+    }
+
+    private JsonNode ideaList(String token, Map<String, String> parameters) throws Exception {
+        MockHttpServletRequestBuilder request = get("/api/ideas").header("Authorization", bearer(token));
+        parameters.forEach(request::param);
+        MvcResult result = mockMvc.perform(request).andExpect(status().isOk()).andReturn();
+        return objectMapper.readTree(result.getResponse().getContentAsByteArray());
+    }
+
+    private Set<String> ids(JsonNode page) {
+        return Set.copyOf(ideaIds(page));
+    }
+
+    private List<String> ideaIds(JsonNode page) {
+        List<String> result = new ArrayList<>();
+        page.path("content").forEach(idea -> result.add(idea.path("id").asText()));
+        return result;
+    }
+
+    private Set<String> union(Set<String> first, Set<String> second) {
+        java.util.HashSet<String> result = new java.util.HashSet<>(first);
+        result.addAll(second);
+        return Set.copyOf(result);
+    }
+
+    private Set<String> persistedOwnerIds(UUID ownerId) {
+        return records.page("idea", null, null, PageRequest.of(0, 1000)).getContent().stream()
+                .filter(record -> record.getOwnerId().equals(ownerId.toString())
+                        || hasStoredOwner(record, ownerId))
+                .map(record -> record.getId().toString())
+                .collect(java.util.stream.Collectors.toSet());
+    }
+
+    private boolean hasStoredOwner(StoredRecord record, UUID ownerId) {
+        JsonNode owners = records.parse(record).path("ownerIds");
+        if (!owners.isArray()) {
+            return false;
+        }
+        for (JsonNode owner : owners) {
+            if (ownerId.toString().equals(owner.asText())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private Map<String, Object> idea(String title) {

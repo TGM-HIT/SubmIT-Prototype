@@ -332,7 +332,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List ideas visible to the authenticated user, optionally filtered by status. */
+        /** List visible ideas filtered by status, exact school year, and owner. */
         get: operations["list_1"];
         put?: never;
         /** Create an idea draft for the authenticated student or teacher. */
@@ -4034,7 +4034,12 @@ export interface operations {
     list_1: {
         parameters: {
             query?: {
+                /** @description Exact status filter; absent or blank values do not restrict results. */
                 status?: string;
+                /** @description Exact-match school year filter. */
+                schoolYear?: string;
+                /** @description Owner UUID; matches the creator or any collaborator. */
+                ownerId?: string;
                 page?: number;
                 /** @description Page size; values are normalized to the inclusive range 1–100. */
                 size?: number;

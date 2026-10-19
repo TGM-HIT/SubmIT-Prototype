@@ -222,6 +222,38 @@ class OpenApiContractTest {
     }
 
     @Test
+    void ideaListDocumentsSchoolYearAndOwnerFilters() throws Exception {
+        MvcResult result = mockMvc.perform(get("/v3/api-docs")).andExpect(status().isOk()).andReturn();
+        JsonNode operation = objectMapper.readTree(result.getResponse().getContentAsByteArray())
+                .path("paths").path("/api/ideas").path("get");
+        Map<String, JsonNode> parameters = new java.util.HashMap<>();
+        operation.path("parameters").forEach(parameter ->
+                parameters.put(parameter.path("name").asText(), parameter));
+
+        for (String name : List.of("status", "schoolYear", "ownerId", "page", "size")) {
+            assertTrue(parameters.containsKey(name), "Missing GET /api/ideas query parameter " + name);
+            assertEquals("query", parameters.get(name).path("in").asText(), name + " must remain a query parameter");
+        }
+        JsonNode schoolYear = parameters.get("schoolYear");
+        assertFalse(schoolYear.path("required").asBoolean(), "schoolYear must be optional");
+        assertEquals("string", schoolYear.path("schema").path("type").asText());
+        assertTrue(schoolYear.path("description").asText().toLowerCase().contains("exact"));
+
+        JsonNode ownerId = parameters.get("ownerId");
+        assertFalse(ownerId.path("required").asBoolean(), "ownerId must be optional");
+        assertEquals("string", ownerId.path("schema").path("type").asText());
+        assertEquals("uuid", ownerId.path("schema").path("format").asText());
+        String ownerDescription = ownerId.path("description").asText().toLowerCase();
+        assertTrue(ownerDescription.contains("creator") && ownerDescription.contains("collaborator"));
+        assertEquals("string", parameters.get("status").path("schema").path("type").asText());
+        assertEquals("integer", parameters.get("page").path("schema").path("type").asText());
+        assertEquals("integer", parameters.get("size").path("schema").path("type").asText());
+        assertEquals("#/components/schemas/PageResponseIdeaResponse",
+                operation.path("responses").path("200").path("content").path("*/*")
+                        .path("schema").path("$ref").asText());
+    }
+
+    @Test
     void everyCollectionSizeParameterDocumentsNormalizationAndDefault() throws Exception {
         MvcResult result = mockMvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk())

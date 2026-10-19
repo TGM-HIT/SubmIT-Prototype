@@ -1,4 +1,4 @@
-import type { components } from './schema'
+import type { components, operations } from './schema'
 import { pageQuery, request } from './client'
 
 type IdeaRequest = components['schemas']['IdeaRequest']
@@ -21,15 +21,23 @@ type Data = Record<string, unknown>
 type Page<T extends { content?: unknown[] }> = Required<Omit<T, 'content'>> & {
   content: NonNullable<T['content']>
 }
+type IdeaListFilters = Pick<NonNullable<operations['list_1']['parameters']['query']>, 'schoolYear' | 'ownerId'>
 
 function json<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
   return request<T>(path, { method, ...(body === undefined ? {} : { body }) })
 }
 
 export const ideasApi = {
-  list(page: number, status?: string, size = 20): Promise<Page<components['schemas']['PageResponseIdeaResponse']>> {
+  list(
+    page: number,
+    status?: string,
+    size = 20,
+    filters?: IdeaListFilters,
+  ): Promise<Page<components['schemas']['PageResponseIdeaResponse']>> {
     const query = new URLSearchParams(pageQuery(page, size))
     if (status) query.set('status', status)
+    if (filters?.schoolYear !== undefined) query.set('schoolYear', filters.schoolYear)
+    if (filters?.ownerId !== undefined) query.set('ownerId', filters.ownerId)
     return json(`/api/ideas?${query}`)
   },
   lookupStudents(query: string, page = 0): Promise<Page<components['schemas']['PageResponseStudentLookupResponse']>> {
