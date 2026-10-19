@@ -68,6 +68,16 @@ class OpenApiContractTest {
                     Map.of("404", response("ApiErrorResponse", "Rubric version not found."))),
             operation("get", "/api/grading-rubrics/active", "RubricResponse", "Rubric version effective today.",
                     Map.of("404", response("ApiErrorResponse", "No rubric version is currently effective."))));
+    private static final List<SpecifiedErrorOperation> SPECIFIED_ERROR_OPERATIONS = List.of(
+            new SpecifiedErrorOperation("put", "/api/ideas/{id}/supervisor", "200", "SupervisorResponse",
+                    "409", "The selected teacher has a recorded preference of "
+                            + "NOT_WILLING_TO_SUPERVISE or NOT_AVAILABLE and acknowledgeRefusal is omitted or false."),
+            new SpecifiedErrorOperation("post", "/api/ideas/{id}/reviews", "201", "ReviewResponse",
+                    "403", "A teacher author cannot review their own idea."),
+            new SpecifiedErrorOperation("post", "/api/ideas/{id}/specification/reviews", "201", "ReviewResponse",
+                    "403", "A teacher author cannot review their own specification."),
+            new SpecifiedErrorOperation("put", "/api/application-periods/{id}", "200", "ApplicationPeriodResponse",
+                    "409", "The proposed catalogue removes a project that has an allocation pin."));
     private static final Map<String, ExpectedContract> CHANGED_RESPONSE_CONTRACTS = Map.ofEntries(
             Map.entry("TokenResponse", contract("token,tokenType,expiresIn,user", "", "")),
             Map.entry("UserResponse", contract("id,username,displayName,role", "className,electiveSubjectNames", "")),
@@ -309,6 +319,61 @@ class OpenApiContractTest {
     }
 
     @Test
+    void specifiedErrorStatusesAreDocumentedOnAffectedOperations() throws Exception {
+        MvcResult result = mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode paths = objectMapper.readTree(result.getResponse().getContentAsByteArray()).path("paths");
+        List<String> failures = new ArrayList<>();
+
+        for (SpecifiedErrorOperation expected : SPECIFIED_ERROR_OPERATIONS) {
+            JsonNode operation = paths.path(expected.path()).path(expected.method());
+            String location = expected.method().toUpperCase() + " " + expected.path();
+            if (operation.isMissingNode()) {
+                failures.add(location + " is missing");
+                continue;
+            }
+            JsonNode responses = operation.path("responses");
+            Set<String> expectedStatuses = Set.of(expected.successStatus(), expected.errorStatus());
+            Set<String> actualStatuses = new TreeSet<>();
+            responses.fieldNames().forEachRemaining(actualStatuses::add);
+            if (!expectedStatuses.equals(actualStatuses)) {
+                failures.add(location + " response statuses differ; expected " + expectedStatuses
+                        + " but found " + actualStatuses);
+            }
+            assertResponseSchema(responses, expected.successStatus(), expected.successSchema(), location, failures);
+            JsonNode errorResponse = responses.path(expected.errorStatus());
+            if (!expected.errorDescription().equals(errorResponse.path("description").asText())) {
+                failures.add(location + " error response " + expected.errorStatus()
+                        + " has unexpected condition description: " + errorResponse.path("description").asText());
+            }
+            assertResponseSchema(responses, expected.errorStatus(), "ApiErrorResponse", location, failures);
+        }
+        assertTrue(failures.isEmpty(), () -> String.join(System.lineSeparator(), failures));
+    }
+
+    private void assertResponseSchema(JsonNode responses, String statusCode, String schemaName, String location,
+            List<String> failures) {
+        JsonNode response = responses.path(statusCode);
+        if (response.isMissingNode()) {
+            failures.add(location + " is missing response " + statusCode);
+            return;
+        }
+        Set<String> actualSchemas = new TreeSet<>();
+        response.path("content").fields().forEachRemaining(mediaType -> {
+            String schema = mediaType.getValue().path("schema").path("$ref").asText();
+            if (!schema.isBlank()) {
+                actualSchemas.add(schema);
+            }
+        });
+        Set<String> expectedSchemas = Set.of("#/components/schemas/" + schemaName);
+        if (!expectedSchemas.equals(actualSchemas)) {
+            failures.add(location + " response " + statusCode + " schema differs; expected " + expectedSchemas
+                    + " but found " + actualSchemas);
+        }
+    }
+
+    @Test
     void representativeNestedAndLifecycleDtosKeepEmittedNullsAndConditionalOmissions() throws Exception {
         UUID id = UUID.randomUUID();
         ApiDtos.IdeaOwnerResponse owner = new ApiDtos.IdeaOwnerResponse(id, null, true, null, null);
@@ -505,6 +570,10 @@ class OpenApiContractTest {
     }
 
     private record ExpectedResponse(String schema, String description) {
+    }
+
+    private record SpecifiedErrorOperation(String method, String path, String successStatus, String successSchema,
+            String errorStatus, String errorDescription) {
     }
 
     private boolean hasConstraint(JsonNode schema) {

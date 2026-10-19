@@ -3259,6 +3259,15 @@ export interface operations {
                     "*/*": components["schemas"]["SupervisorResponse"];
                 };
             };
+            /** @description The selected teacher has a recorded preference of NOT_WILLING_TO_SUPERVISE or NOT_AVAILABLE and acknowledgeRefusal is omitted or false. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiErrorResponse"];
+                };
+            };
         };
     };
     setSupervisionPreference: {
@@ -3558,6 +3567,15 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ApplicationPeriodResponse"];
+                };
+            };
+            /** @description The proposed catalogue removes a project that has an allocation pin. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiErrorResponse"];
                 };
             };
         };
@@ -4152,6 +4170,15 @@ export interface operations {
                     "*/*": components["schemas"]["ReviewResponse"];
                 };
             };
+            /** @description A teacher author cannot review their own specification. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiErrorResponse"];
+                };
+            };
         };
     };
     review_1: {
@@ -4176,6 +4203,15 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["ReviewResponse"];
+                };
+            };
+            /** @description A teacher author cannot review their own idea. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiErrorResponse"];
                 };
             };
         };

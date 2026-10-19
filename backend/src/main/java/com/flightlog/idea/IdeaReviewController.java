@@ -8,7 +8,6 @@ import com.flightlog.web.ApiDtos.SupervisionPreferenceRequest;
 import com.flightlog.web.ApiDtos.SupervisionPreferenceResponse;
 import com.flightlog.web.ApiDtos.SupervisorRequest;
 import com.flightlog.web.ApiDtos.SupervisorResponse;
-import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -35,21 +34,21 @@ public class IdeaReviewController {
 
     @PostMapping("/api/ideas/{id}/reviews")
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Review an idea and record its decision and rubric ratings.")
+    @IdeaApiResponses.TeacherAuthorIdeaReview
     public ReviewResponse review(@AuthenticationPrincipal AuthenticatedUser caller, @PathVariable UUID id,
             @Valid @RequestBody IdeaReviewRequest request) {
         return ideaService.review(caller, id, false, objectMapper.valueToTree(request));
     }
 
     @PutMapping("/api/ideas/{id}/supervision-preference")
-    @Operation(summary = "Record or update a teacher's supervision preference for an idea.")
+    @IdeaApiResponses.SupervisionPreference
     public SupervisionPreferenceResponse setSupervisionPreference(@AuthenticationPrincipal AuthenticatedUser caller,
             @PathVariable UUID id, @Valid @RequestBody SupervisionPreferenceRequest request) {
         return supervisionService.setPreference(caller, id, objectMapper.valueToTree(request));
     }
 
     @PutMapping("/api/ideas/{id}/supervisor")
-    @Operation(summary = "Assign a teacher to supervise an idea.")
+    @IdeaApiResponses.SupervisorAssignment
     public SupervisorResponse assignSupervisor(@AuthenticationPrincipal AuthenticatedUser caller,
             @PathVariable UUID id, @Valid @RequestBody SupervisorRequest request) {
         return supervisionService.assign(caller, id, objectMapper.valueToTree(request));

@@ -7,7 +7,6 @@ import com.flightlog.web.ApiDtos.PageResponse;
 import com.flightlog.web.ApiDtos.ApplicationPeriodRequest;
 import com.flightlog.web.ApiDtos.CatalogueProjectResponse;
 import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
@@ -22,7 +21,7 @@ import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
-@Tag(name = "School years and applications")
+@ApplicationPeriodApiResponses.SchoolYearsAndApplications
 public class ApplicationPeriodController {
     private static final int MAX_PAGE_SIZE = 100;
 
@@ -73,6 +72,7 @@ public class ApplicationPeriodController {
 
     @PutMapping("/api/application-periods/{id}")
     @Operation(summary = "Update an application period and its project catalogue.")
+    @ApplicationPeriodApiResponses.PinnedCatalogueUpdate
     public ApplicationPeriodResponse updatePeriod(@AuthenticationPrincipal AuthenticatedUser caller,
             @PathVariable UUID id,
             @Valid @RequestBody ApplicationPeriodRequest request) {
