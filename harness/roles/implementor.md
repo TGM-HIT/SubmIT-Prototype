@@ -28,6 +28,8 @@ Run the ticket's completion checks yourself, and confirm they pass, before you r
 
 Before handoff, list each "Durable automated tests" bullet in the ticket and the test that covers it, and confirm each assertion could fail if the behavior regressed (for example, persistence assertions must reload from the repository rather than reuse a returned object). Put the mapping under "What was verified" and report any bullet with no test under "What's uncertain". On a revise pass, either redo the affected manual verification or state in "What's uncertain" which earlier evidence is reused and which changed UI behavior it does not cover.
 
+When asserting required JSON response fields, check presence and the appropriate JSON type before coercion if missing, null, or wrong-type values could otherwise become an expected default (for example, Jackson `path(...).asInt()` returning zero). Apply these guards to both sides of paired comparisons and to nested response objects. This does not require mutation-testing tooling or nonempty fixtures for every route.
+
 Then save and report back in the exact handoff file requested by the Orchestrator: a short prose block under three fixed headings, nothing more. Use these exact headings, including the Markdown heading marks, verbatim:
 
 ## What was done
