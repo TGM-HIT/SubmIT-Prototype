@@ -8,6 +8,7 @@ import io.swagger.v3.oas.models.media.Schema;
 import io.swagger.v3.oas.models.responses.ApiResponse;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import org.springdoc.core.customizers.OpenApiCustomizer;
 import org.springframework.stereotype.Component;
 
@@ -34,6 +35,97 @@ public class StandardErrorResponseCustomizer implements OpenApiCustomizer {
             "The project UUID or pagination query parameter is invalid.";
     private static final String PROJECT_NOT_FOUND = "The project does not exist.";
     private static final String PAGE_INVALID = "The pagination query parameter is invalid.";
+    private static final String USER_STUDENT_DETAILS = "/api/users/{id}/student-details";
+    private static final String PROJECT_FINAL_GRADE = "/api/projects/{projectId}/final-grade";
+    private static final String PROJECT_STUDENT_GRADES = "/api/projects/{projectId}/student-grades";
+    private static final String ALLOCATION_PIN_ROUTE =
+            "/api/application-periods/{periodId}/allocation-pins/{studentId}";
+    private static final String PROJECT_FORMAL_APPLICATIONS = "/api/projects/{projectId}/formal-applications";
+    private static final String APPLICATION_PERIOD_ID = "/api/application-periods/{id}";
+    private static final String PROJECT_OR_RUBRIC_NOT_FOUND = "The project or rubric resource does not exist.";
+    private static final String PROJECT_ID_INVALID = "The project ID is not a valid UUID.";
+    private static final String REVIEWER_ROLE_DENIED = "The caller lacks the required reviewer role.";
+    private static final Map<Route, Map<String, String>> CORRECTED_DESCRIPTIONS = Map.ofEntries(
+            Map.entry(new Route(GET, USER_STUDENT_DETAILS),
+                    Map.of(BAD_REQUEST, "The user ID is not a valid UUID or the existing user is not a student.",
+                            NOT_FOUND, "The requested student does not exist.")),
+            Map.entry(new Route(PUT, USER_STUDENT_DETAILS),
+                    Map.of(BAD_REQUEST, "The user ID is not a valid UUID, the account is not a student, or "
+                            + "class/elective-subject assignment "
+                            + "input is invalid.")),
+            Map.entry(new Route(GET, PROJECT_FINAL_GRADE),
+                    Map.of(NOT_FOUND, "The project does not exist.")),
+            Map.entry(new Route(PUT, PROJECT_FINAL_GRADE),
+                    Map.of(BAD_REQUEST, "The project UUID or grade request is invalid; nonmember or duplicate "
+                            + "students and undefined or wrong-scope rules are input validation errors.",
+                            NOT_FOUND, PROJECT_OR_RUBRIC_NOT_FOUND)),
+            Map.entry(new Route(POST, PROJECT_STUDENT_GRADES),
+                    Map.of(BAD_REQUEST, "The project UUID or grade request is invalid, including a student ID "
+                            + "outside the project group or a grade outside the criterion scale.")),
+            Map.entry(new Route(POST, "/api/projects/{projectId}/student-grades/{gradeId}/revisions"),
+                    Map.of(NOT_FOUND, "The project or source grade does not exist.",
+                            CONFLICT, "The source grade has already been superseded.")),
+            Map.entry(new Route(PUT, ALLOCATION_PIN_ROUTE),
+                    Map.of(NOT_FOUND, "The application period or target student does not exist.")),
+            Map.entry(new Route(PUT, "/api/ideas/{id}/supervisor"),
+                    Map.of(NOT_FOUND, IDEA_NOT_FOUND)),
+            Map.entry(new Route(POST, "/api/ideas/{id}/owners"),
+                    Map.of(NOT_FOUND, IDEA_NOT_FOUND,
+                            BAD_REQUEST, "The idea ID or collaborator input is invalid; a selected student that "
+                                    + "does not exist is rejected as invalid input.")),
+            Map.entry(new Route(POST, "/api/ideas/{id}/specification/reviews"),
+                    Map.of(NOT_FOUND, IDEA_NOT_FOUND,
+                            CONFLICT, "The full specification is missing or its lifecycle state does not permit "
+                                    + "a review.")),
+            Map.entry(new Route(POST, "/api/ideas/{id}/reviews"),
+                    Map.of(CONFLICT, "The full specification is missing or the idea lifecycle state does not permit "
+                            + "a review.")),
+            Map.entry(new Route(POST, "/api/application-periods/{periodId}/applications"),
+                    Map.of(BAD_REQUEST, "The period UUID or submitted project preferences are invalid, including "
+                            + "project IDs outside the period catalogue.",
+                            NOT_FOUND, PERIOD_NOT_FOUND)),
+            Map.entry(new Route(POST, "/api/projects/{projectId}/metrics"),
+                    Map.of(BAD_REQUEST, "The project UUID or metric observation is invalid; an undefined metric ID "
+                            + "is rejected as invalid input.",
+                            NOT_FOUND, PROJECT_OR_RUBRIC_NOT_FOUND)),
+            Map.entry(new Route(GET, "/api/projects/{projectId}/students/{studentId}/final-grade"),
+                    Map.of(NOT_FOUND, "The project, student, or recorded grade does not exist.")),
+            Map.entry(new Route(GET, "/api/artifacts/{artifactId}/content"),
+                    Map.of(NOT_FOUND, "The artifact or its project does not exist; absent stored content returns "
+                            + "an empty body.")),
+            Map.entry(new Route(PUT, APPLICATION_PERIOD_ID),
+                    Map.of(BAD_REQUEST,
+                                    "The period ID, configuration, or proposed project selection is invalid, "
+                                            + "including absent, ineligible, or out-of-catalogue projects.",
+                            NOT_FOUND, PERIOD_NOT_FOUND)),
+            Map.entry(new Route(POST, "/api/projects/{projectId}/complete"),
+                    Map.of(BAD_REQUEST, PROJECT_ID_INVALID,
+                            CONFLICT, "Required completion prerequisites are unmet or the project lifecycle state "
+                                    + "does not permit completion.")),
+            Map.entry(new Route(POST, PROJECT_FORMAL_APPLICATIONS),
+                    Map.of(CONFLICT, "The allocated project group is missing or invalid, or the application "
+                            + "lifecycle state conflicts with creation.")),
+            Map.entry(new Route(GET, "/api/audit/{entityType}/{entityId}"),
+                    Map.of(BAD_REQUEST, "The entity ID is not a valid UUID.")),
+            Map.entry(new Route(GET, "/api/public/projects/{projectId}/archive"),
+                    Map.of(NOT_FOUND, "The project does not exist or is not completed.")));
+    private static final Map<Route, Map<String, String>> REQUIRED_MERGES = Map.ofEntries(
+            Map.entry(new Route(PUT, ALLOCATION_PIN_ROUTE),
+                    Map.of(BAD_REQUEST, "The period or student path UUID is invalid.")),
+            Map.entry(new Route(PUT, APPLICATION_PERIOD_ID),
+                    Map.of(CONFLICT, "The application-period state does not permit the proposed update.")),
+            Map.entry(new Route(POST, "/api/ideas/{id}/reviews"),
+                    Map.of(FORBIDDEN, REVIEWER_ROLE_DENIED)),
+            Map.entry(new Route(POST, "/api/ideas/{id}/specification/reviews"),
+                    Map.of(FORBIDDEN, REVIEWER_ROLE_DENIED)));
+    private static final Map<Route, Set<String>> REMOVED_RESPONSES = Map.ofEntries(
+            Map.entry(new Route(GET, "/api/grading-rubrics"), Set.of(FORBIDDEN)),
+            Map.entry(new Route(GET, "/api/grading-rubrics/{id}"), Set.of(FORBIDDEN)),
+            Map.entry(new Route(GET, "/api/grading-rubrics/active"), Set.of(FORBIDDEN)),
+            Map.entry(new Route(GET, PROJECT_FORMAL_APPLICATIONS), Set.of(NOT_FOUND)),
+            Map.entry(new Route(POST, PROJECT_FORMAL_APPLICATIONS), Set.of(NOT_FOUND)),
+            Map.entry(new Route(POST, "/api/application-periods"), Set.of(CONFLICT)),
+            Map.entry(new Route(GET, "/api/audit/{entityType}/{entityId}"), Set.of(NOT_FOUND)));
 
     private static final Map<Route, Map<String, String>> ERRORS = errors();
 
@@ -50,41 +142,66 @@ public class StandardErrorResponseCustomizer implements OpenApiCustomizer {
         }
         openApi.getPaths().forEach((path, pathItem) -> pathItem.readOperationsMap().forEach((method, operation) -> {
             Route route = new Route(method.name().toLowerCase(), path);
-            Map<String, String> applicable = ERRORS.get(route);
-            if (applicable != null) {
-                applicable.forEach((status, description) -> declare(operation, status, description));
-                if (route.equals(new Route(PUT, "/api/application-periods/{periodId}/allocation-pins/{studentId}"))) {
-                    operation.getResponses().get(CONFLICT).setDescription(applicable.get(CONFLICT));
-                }
-            }
-            if (isProtected(route)) {
-                declare(operation, "401", "Missing or invalid bearer authentication credentials.");
-            } else if (route.equals(new Route("post", "/api/auth/login"))) {
-                declare(operation, "401", "The supplied username or password is invalid.");
-            }
+            customiseOperation(route, operation);
         }));
     }
 
-    private boolean isProtected(Route route) {
+    private void customiseOperation(Route route, Operation operation) {
+        ERRORS.getOrDefault(route, Map.of())
+                .forEach((status, description) -> declare(operation, route, status, description));
+        REMOVED_RESPONSES.getOrDefault(route, Set.of()).forEach(status -> operation.getResponses().remove(status));
+        if (isProtected(route)) {
+            declare(operation, route, "401", "Missing or invalid bearer authentication credentials.");
+        } else if (route.equals(new Route(POST, "/api/auth/login"))) {
+            declare(operation, route, "401", "The supplied username or password is invalid.");
+        }
+    }
+
+    private static boolean isProtected(Route route) {
         return !(route.path().equals("/api/auth/register")
                 || route.path().equals("/api/auth/login")
                 || route.path().startsWith("/api/public/"));
     }
 
-    private void declare(Operation operation, String status, String description) {
+    private void declare(Operation operation, Route route, String status, String description) {
         ApiResponse response = operation.getResponses().get(status);
         if (response == null) {
             response = new ApiResponse();
             operation.getResponses().addApiResponse(status, response);
-            response.setDescription(description);
-        } else {
-            String existing = response.getDescription();
-            if (existing == null || existing.isBlank()) {
-                response.setDescription(description);
-            } else if (!existing.contains(description)) {
-                response.setDescription(existing + " " + description);
-            }
         }
+        updateDescription(response, route, status, description);
+        setErrorSchema(response);
+    }
+
+    private void updateDescription(ApiResponse response, Route route, String status, String description) {
+        String correction = CORRECTED_DESCRIPTIONS.getOrDefault(route, Map.of()).get(status);
+        if (correction != null) {
+            response.setDescription(correction);
+            return;
+        }
+        String merge = REQUIRED_MERGES.getOrDefault(route, Map.of()).get(status);
+        if (merge != null) {
+            response.setDescription(appendIfMissing(response.getDescription(), merge));
+        } else if (status.equals("401") && !containsBearer(response.getDescription())) {
+            response.setDescription(append(response.getDescription(), description));
+        } else if (response.getDescription() == null) {
+            response.setDescription(description);
+        }
+    }
+
+    private static boolean containsBearer(String description) {
+        return description != null && description.toLowerCase().contains("bearer");
+    }
+
+    private static String appendIfMissing(String existing, String addition) {
+        return existing != null && existing.contains(addition) ? existing : append(existing, addition);
+    }
+
+    private static String append(String existing, String addition) {
+        return existing == null || existing.isBlank() ? addition : existing + " " + addition;
+    }
+
+    private void setErrorSchema(ApiResponse response) {
         Schema<?> schema = new Schema<>().$ref("#/components/schemas/ApiErrorResponse");
         response.setContent(new Content().addMediaType("application/json", new MediaType().schema(schema)));
     }
@@ -104,37 +221,40 @@ public class StandardErrorResponseCustomizer implements OpenApiCustomizer {
     }
 
     private static void addUserAndGradeErrors(Map<Route, Map<String, String>> result) {
-        add(result, GET, "/api/users/{id}/student-details",
-                BAD_REQUEST, "The user ID is not a valid UUID.",
+        add(result, GET, USER_STUDENT_DETAILS,
+                BAD_REQUEST, "The user ID is not a valid UUID or the existing user is not a student.",
                 FORBIDDEN, "The caller lacks the role required to view student details.",
-                NOT_FOUND, "The requested user is not a student or does not exist.");
-        add(result, PUT, "/api/users/{id}/student-details",
-                BAD_REQUEST, "The user ID, class UUID, or elective-subject assignment is invalid.",
+                NOT_FOUND, "The requested student does not exist.");
+        add(result, PUT, USER_STUDENT_DETAILS,
+                BAD_REQUEST, "The user ID is not a valid UUID, the account is not a student, or "
+                        + "class/elective-subject assignment input is invalid.",
                 FORBIDDEN, "The caller lacks the role required to assign student details.",
                 NOT_FOUND, "The requested student does not exist.");
-        add(result, GET, "/api/projects/{projectId}/final-grade",
-                BAD_REQUEST, "The project ID is not a valid UUID.",
+        add(result, GET, PROJECT_FINAL_GRADE,
+                BAD_REQUEST, PROJECT_ID_INVALID,
                 FORBIDDEN, "The caller does not have access to the project's final-grade data.",
-                NOT_FOUND, "The project or its recorded final grade does not exist.");
-        add(result, PUT, "/api/projects/{projectId}/final-grade",
-                BAD_REQUEST, "The project ID, request shape, student membership, grade, rationale, or rule input is invalid.",
+                NOT_FOUND, "The project does not exist.");
+        add(result, PUT, PROJECT_FINAL_GRADE,
+                BAD_REQUEST, "The project UUID or grade request is invalid; nonmember or duplicate students and "
+                        + "undefined or wrong-scope rules are input validation errors.",
                 FORBIDDEN, TEACHER_OR_ADMIN,
-                NOT_FOUND, "The project, requested student, rubric, or rule resource does not exist.",
+                NOT_FOUND, PROJECT_OR_RUBRIC_NOT_FOUND,
                 CONFLICT, "A configured rule lacks required inputs, the selected rubric is ineffective, or a rubric-binding transition lacks a reason.");
-        add(result, GET, "/api/projects/{projectId}/student-grades",
+        add(result, GET, PROJECT_STUDENT_GRADES,
                 BAD_REQUEST, PROJECT_UUID_AND_PAGE_INVALID,
                 FORBIDDEN, "The caller lacks the required role or project membership to view grades.",
                 NOT_FOUND, PROJECT_NOT_FOUND);
-        add(result, POST, "/api/projects/{projectId}/student-grades",
-                BAD_REQUEST, "The project UUID or grade request is invalid, including a student ID that is not in the project's group.",
+        add(result, POST, PROJECT_STUDENT_GRADES,
+                BAD_REQUEST, "The project UUID or grade request is invalid, including a student ID outside the "
+                        + "project group or a grade outside the criterion scale.",
                 FORBIDDEN, TEACHER_OR_ADMIN,
                 NOT_FOUND, "The project or requested rubric resource does not exist.",
                 CONFLICT, "The rubric is ineffective or a change from the project's bound rubric lacks a transition reason.");
         add(result, POST, "/api/projects/{projectId}/student-grades/{gradeId}/revisions",
                 BAD_REQUEST, "The project UUID, grade UUID, or revision request is invalid.",
                 FORBIDDEN, TEACHER_OR_ADMIN,
-                NOT_FOUND, "The project, grade, or rubric resource does not exist.",
-                CONFLICT, "The grade entry is already superseded, the rubric is ineffective, or a rubric transition lacks a reason.");
+                NOT_FOUND, "The project or source grade does not exist.",
+                CONFLICT, "The source grade has already been superseded.");
         add(result, GET, "/api/projects/{projectId}/metrics",
                 BAD_REQUEST, PROJECT_UUID_AND_PAGE_INVALID,
                 FORBIDDEN, "The caller lacks the required role or project access to view metrics.",
@@ -142,7 +262,8 @@ public class StandardErrorResponseCustomizer implements OpenApiCustomizer {
         add(result, POST, "/api/projects/{projectId}/metrics",
                 BAD_REQUEST, "The project UUID or metric observation is invalid; an undefined metric ID is rejected as invalid input.",
                 FORBIDDEN, TEACHER_OR_ADMIN,
-                NOT_FOUND, PROJECT_NOT_FOUND);
+                NOT_FOUND, PROJECT_OR_RUBRIC_NOT_FOUND,
+                CONFLICT, "The rubric binding is ineffective or a rubric-version transition lacks its required reason.");
         add(result, GET, "/api/projects/{projectId}/group-grades",
                 BAD_REQUEST, PROJECT_UUID_AND_PAGE_INVALID,
                 FORBIDDEN, "The caller lacks the required role or project access to view group grades.",
@@ -150,21 +271,21 @@ public class StandardErrorResponseCustomizer implements OpenApiCustomizer {
         add(result, POST, "/api/projects/{projectId}/group-grades",
                 BAD_REQUEST, "The project UUID or submitted group-grade request is invalid.",
                 FORBIDDEN, TEACHER_OR_ADMIN,
-                NOT_FOUND, "The project, group, or requested rubric resource does not exist.");
-        add(result, GET, "/api/projects/{projectId}/formal-applications",
-                BAD_REQUEST, "The project ID is not a valid UUID.",
+                NOT_FOUND, "The project, group, or requested rubric resource does not exist.",
+                CONFLICT, "The rubric binding is ineffective or a rubric-version transition lacks its required reason.");
+        add(result, GET, PROJECT_FORMAL_APPLICATIONS,
+                BAD_REQUEST, PROJECT_ID_INVALID,
                 FORBIDDEN, "The caller lacks the required role or project access.",
-                NOT_FOUND, "The project or its formal application does not exist.");
-        add(result, POST, "/api/projects/{projectId}/formal-applications",
+                CONFLICT, "The allocated project group is missing or invalid.");
+        add(result, POST, PROJECT_FORMAL_APPLICATIONS,
                 BAD_REQUEST, "The project ID or formal-application request is invalid.",
                 FORBIDDEN, "The caller is not authorized to create a formal application.",
-                NOT_FOUND, PROJECT_NOT_FOUND,
-                CONFLICT, "The project allocation, group membership, or application lifecycle state conflicts with creation.");
+                CONFLICT, "The allocated project group is missing or invalid, or the application lifecycle state conflicts with creation.");
         add(result, POST, "/api/projects/{projectId}/complete",
-                BAD_REQUEST, "The project ID is invalid or required completion conditions are unmet.",
+                BAD_REQUEST, PROJECT_ID_INVALID,
                 FORBIDDEN, "The caller is not authorized to complete this project.",
                 NOT_FOUND, PROJECT_NOT_FOUND,
-                CONFLICT, "The project is already complete or its lifecycle state does not permit completion.");
+                CONFLICT, "Required completion prerequisites are unmet or the project lifecycle state does not permit completion.");
         add(result, GET, "/api/projects/{projectId}/artifacts",
                 BAD_REQUEST, PROJECT_UUID_AND_PAGE_INVALID,
                 FORBIDDEN, "The caller lacks the required role or project access to list artifacts.",
@@ -189,13 +310,14 @@ public class StandardErrorResponseCustomizer implements OpenApiCustomizer {
         add(result, PUT, "/api/ideas/{id}/supervisor",
                 BAD_REQUEST, "The idea ID or supervisor-assignment request is invalid.",
                 FORBIDDEN, "The caller lacks the role or authorization required to assign a supervisor.",
-                NOT_FOUND, "The idea or selected supervisor does not exist.",
+                NOT_FOUND, IDEA_NOT_FOUND,
                 CONFLICT, "The selected teacher has a recorded preference of NOT_WILLING_TO_SUPERVISE or NOT_AVAILABLE "
                         + "and acknowledgeRefusal is omitted or false.");
         add(result, PUT, "/api/ideas/{id}/supervision-preference",
                 BAD_REQUEST, "The idea ID or submitted supervision preference is invalid.",
                 FORBIDDEN, "The caller lacks the role required to change the supervision preference.",
-                NOT_FOUND, IDEA_NOT_FOUND);
+                NOT_FOUND, IDEA_NOT_FOUND,
+                CONFLICT, "The idea is draft, withdrawn, or declined, so its supervision preference cannot be changed.");
         add(result, PUT, "/api/ideas/{id}/specification",
                 BAD_REQUEST, "The idea ID or submitted specification fields are invalid.",
                 FORBIDDEN, "The caller lacks the required role or ownership to update this specification.",
@@ -216,24 +338,25 @@ public class StandardErrorResponseCustomizer implements OpenApiCustomizer {
                 FORBIDDEN, "The caller is not authorized to delete this application.",
                 NOT_FOUND, "The application does not exist.",
                 CONFLICT, "The application period or application state does not permit deletion.");
-        add(result, PUT, "/api/application-periods/{periodId}/allocation-pins/{studentId}",
+        add(result, PUT, ALLOCATION_PIN_ROUTE,
                 BAD_REQUEST, "The path UUIDs, target student, or selected project are invalid.",
                 FORBIDDEN, "Only an administrator may change allocation pins.",
-                NOT_FOUND, "The period, student, or selected catalogue project does not exist.",
+                NOT_FOUND, "The application period or target student does not exist.",
                 CONFLICT, "The student did not rank the project without explicit acknowledgement, a project already "
                         + "has five pinned students, or the period is finalized.");
-        add(result, DELETE, "/api/application-periods/{periodId}/allocation-pins/{studentId}",
+        add(result, DELETE, ALLOCATION_PIN_ROUTE,
                 BAD_REQUEST, "The period or student path value is not a valid UUID.",
                 FORBIDDEN, "Only an administrator may remove allocation pins.",
                 NOT_FOUND, "The period or requested pin does not exist.",
                 CONFLICT, "Allocation pins cannot be changed after the period is finalized.");
-        add(result, GET, "/api/application-periods/{id}",
+        add(result, GET, APPLICATION_PERIOD_ID,
                 BAD_REQUEST, "The period ID is not a valid UUID.",
                 NOT_FOUND, PERIOD_NOT_FOUND);
-        add(result, PUT, "/api/application-periods/{id}",
-                BAD_REQUEST, "The period ID or submitted period configuration or catalogue is invalid.",
+        add(result, PUT, APPLICATION_PERIOD_ID,
+                BAD_REQUEST, "The period ID, configuration, or proposed project selection is invalid, including "
+                        + "absent, ineligible, or out-of-catalogue projects.",
                 FORBIDDEN, "The caller lacks the role required to update application periods.",
-                NOT_FOUND, "The application period or a referenced catalogue project does not exist.",
+                NOT_FOUND, PERIOD_NOT_FOUND,
                 CONFLICT, "The application-period state does not permit the proposed update.");
         add(result, GET, "/api/student-classes",
                 BAD_REQUEST, "The page or size query parameter is not a valid pagination value.",
@@ -267,22 +390,21 @@ public class StandardErrorResponseCustomizer implements OpenApiCustomizer {
                 CONFLICT, "The specification is incomplete or its lifecycle state does not permit submission.");
         add(result, POST, "/api/ideas/{id}/specification/reviews",
                 BAD_REQUEST, "The idea ID or submitted specification review is invalid.",
-                FORBIDDEN, "The caller lacks the required reviewer role.",
-                NOT_FOUND, "The idea or its specification does not exist.",
-                CONFLICT, "The specification lifecycle state does not permit a review.");
+                FORBIDDEN, REVIEWER_ROLE_DENIED,
+                NOT_FOUND, IDEA_NOT_FOUND,
+                CONFLICT, "The specification is incomplete or its lifecycle state does not permit a review.");
         add(result, POST, "/api/ideas/{id}/reviews",
                 BAD_REQUEST, "The idea ID or submitted review is invalid.",
-                FORBIDDEN, "The caller lacks the required reviewer role.",
+                FORBIDDEN, REVIEWER_ROLE_DENIED,
                 NOT_FOUND, IDEA_NOT_FOUND,
                 CONFLICT, "The idea lifecycle state does not permit a review.");
         add(result, POST, "/api/ideas/{id}/owners",
                 BAD_REQUEST, "The idea ID or collaborator input is invalid.",
                 FORBIDDEN, "The caller lacks the role or creator authorization required to add an owner.",
-                NOT_FOUND, "The idea or selected student does not exist.",
+                NOT_FOUND, IDEA_NOT_FOUND,
                 CONFLICT, "The owner limit is exceeded or the requested owner is already present.");
         add(result, GET, "/api/grading-rubrics",
-                BAD_REQUEST, PAGE_INVALID,
-                FORBIDDEN, "The caller lacks the role required to list grading rubrics.");
+                BAD_REQUEST, PAGE_INVALID);
         add(result, POST, "/api/grading-rubrics",
                 BAD_REQUEST, "The submitted rubric structure, scale, metric, or aggregation rule is invalid.",
                 FORBIDDEN, "The caller is not an administrator.",
@@ -318,11 +440,10 @@ public class StandardErrorResponseCustomizer implements OpenApiCustomizer {
 
     private static void addApplicationPeriodRoutes(Map<Route, Map<String, String>> result) {
         add(result, GET, "/api/application-periods",
-                BAD_REQUEST, "The pagination or application-period filter query parameter is invalid.");
+                BAD_REQUEST, "The pagination query parameter is invalid.");
         add(result, POST, "/api/application-periods",
                 BAD_REQUEST, "The submitted period configuration or catalogue is invalid.",
-                FORBIDDEN, "The caller lacks the role required to create application periods.",
-                CONFLICT, "The period state or a uniqueness constraint conflicts with the requested period.");
+                FORBIDDEN, "The caller lacks the role required to create application periods.");
         add(result, GET, "/api/application-periods/{periodId}/applications",
                 BAD_REQUEST, "The period UUID or pagination query parameter is invalid.",
                 FORBIDDEN, "The caller lacks the role required to list period applications.",
@@ -330,14 +451,14 @@ public class StandardErrorResponseCustomizer implements OpenApiCustomizer {
         add(result, POST, "/api/application-periods/{periodId}/applications",
                 BAD_REQUEST, "The period UUID or submitted project preferences are invalid.",
                 FORBIDDEN, "The caller lacks the role required to create a period application.",
-                NOT_FOUND, "The application period or a referenced project does not exist.",
+                NOT_FOUND, PERIOD_NOT_FOUND,
                 CONFLICT, "The application period is closed or its state does not permit an application.");
         add(result, GET, "/api/application-periods/{periodId}/allocation-runs",
                 BAD_REQUEST, "The period UUID or pagination query parameter is invalid.",
                 FORBIDDEN, "The caller lacks the role required to list allocation runs.",
                 NOT_FOUND, PERIOD_NOT_FOUND);
         add(result, POST, "/api/application-periods/{periodId}/allocation-runs",
-                BAD_REQUEST, "The period UUID or allocation request is invalid.",
+                BAD_REQUEST, "The period UUID is not valid.",
                 FORBIDDEN, "Only administrators may start allocation runs.",
                 NOT_FOUND, PERIOD_NOT_FOUND,
                 CONFLICT, "The period is not open for the requested run or has already been finalized.");
@@ -386,28 +507,25 @@ public class StandardErrorResponseCustomizer implements OpenApiCustomizer {
     private static void addPublicAndResourceRoutes(Map<Route, Map<String, String>> result) {
         add(result, GET, "/api/public/projects/{projectId}/archive",
                 BAD_REQUEST, PROJECT_UUID_AND_PAGE_INVALID,
-                NOT_FOUND, PROJECT_NOT_FOUND);
+                NOT_FOUND, "The project does not exist or is not completed.");
         add(result, GET, "/api/public/projects/{projectId}/archive/{artifactId}",
                 BAD_REQUEST, "The project or artifact ID is not a valid UUID.",
                 NOT_FOUND, "The project or artifact does not exist or the artifact is not public.");
         add(result, GET, "/api/projects/{projectId}/students/{studentId}/final-grade",
                 BAD_REQUEST, "The project or student ID is not a valid UUID.",
                 FORBIDDEN, "The caller lacks access to the requested student's project grade.",
-                NOT_FOUND, "The project, student membership, or recorded final grade does not exist.");
+                NOT_FOUND, "The project, student, or recorded grade does not exist.");
         add(result, GET, "/api/grading-rubrics/{id}",
                 BAD_REQUEST, "The rubric ID is not a valid UUID.",
-                FORBIDDEN, "The caller lacks the role required to view this rubric.",
                 NOT_FOUND, "The requested rubric version does not exist.");
         add(result, GET, "/api/grading-rubrics/active",
-                FORBIDDEN, "The caller lacks the role required to view the active rubric.",
                 NOT_FOUND, "No rubric version is currently effective.");
         add(result, GET, "/api/audit",
                 BAD_REQUEST, "A pagination query parameter is invalid.",
                 FORBIDDEN, "The caller lacks the role required to view the audit log.");
         add(result, GET, "/api/audit/{entityType}/{entityId}",
-                BAD_REQUEST, "The entity ID is not a valid UUID or entity type.",
-                FORBIDDEN, "The caller lacks the role required to view audit history.",
-                NOT_FOUND, "The requested entity does not exist.");
+                BAD_REQUEST, "The entity ID is not a valid UUID.",
+                FORBIDDEN, "The caller lacks the role required to view audit history.");
         add(result, GET, "/api/artifacts/{artifactId}",
                 BAD_REQUEST, "The artifact ID is not a valid UUID.",
                 FORBIDDEN, "The caller lacks project access to view this artifact.",
@@ -420,7 +538,7 @@ public class StandardErrorResponseCustomizer implements OpenApiCustomizer {
         add(result, GET, "/api/artifacts/{artifactId}/content",
                 BAD_REQUEST, "The artifact ID is not a valid UUID.",
                 FORBIDDEN, "The caller lacks project access to download this artifact.",
-                NOT_FOUND, "The artifact or its stored content does not exist.");
+                NOT_FOUND, "The artifact or its project does not exist; absent stored content returns an empty body.");
         add(result, GET, "/api/application-periods/{periodId}/catalogue/{projectId}",
                 BAD_REQUEST, "The period or project ID is not a valid UUID.",
                 FORBIDDEN, "The caller lacks the role required to view this catalogue entry.",

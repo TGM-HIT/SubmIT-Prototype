@@ -35,17 +35,19 @@ class OpenApiContractTest {
     private static final Set<String> PAGE_PROPERTIES =
             names("content,page,size,totalElements,totalPages");
     private static final List<BaselineSuccess> BASELINE_SUCCESS_RESPONSES = baselineSuccessResponses();
+    private static final Map<String, Set<String>> TICKET_ERROR_CODES = ticketErrorCodes();
     private static final List<ExpectedOperation> GRADING_RESPONSE_CONTRACTS = List.of(
             operation("get", "/api/projects/{projectId}/final-grade", "FinalGradeHistory",
                     "Current final project grade and history.",
                     Map.of("403", response("ApiErrorResponse",
                                     "A student caller is not a member of the project."),
                             "404", response("ApiErrorResponse",
-                                    "Project not found or no final grade has been recorded."))),
+                                    "The project does not exist."))),
             operation("put", "/api/projects/{projectId}/final-grade", "FinalGradesResponse",
                     "Recorded project and individual final grades.",
                     Map.of("400", response("ApiErrorResponse",
-                                    "Invalid request shape or student membership, grade, rationale, or rule."),
+                                    "nonmember or duplicate students and undefined or wrong-scope rules are "
+                                            + "input validation errors."),
                             "403", response("ApiErrorResponse", "Caller is not a teacher or administrator."),
                             "409", response("ApiErrorResponse", "A configured rule lacks required inputs, the "
                                     + "selected rubric is ineffective, or a rubric-binding transition lacks a "
@@ -63,8 +65,7 @@ class OpenApiContractTest {
                     "Student's individual final grade and history.",
                     Map.of("403", response("ApiErrorResponse", "Caller lacks the required role or project access."),
                             "404", response("ApiErrorResponse",
-                                    "Project not found, student is not a project member, or no final grade has "
-                                            + "been recorded."))),
+                                    "The project, student, or recorded grade does not exist."))),
             operation("get", "/api/grading-rubrics/{id}", "RubricResponse", "Specific immutable rubric version.",
                     Map.of("404", response("ApiErrorResponse", "Rubric version not found."))),
             operation("get", "/api/grading-rubrics/active", "RubricResponse", "Rubric version effective today.",
@@ -352,9 +353,14 @@ class OpenApiContractTest {
                 JsonNode unauthorized = methodField.getValue().path("responses").path("401");
                 if (publicOperations.contains(key)) {
                     if (key.equals("post /api/auth/login")) {
-                        assertSchemaAndDescription(unauthorized, "invalid", failures, key + " 401");
-                        if (unauthorized.path("description").asText().toLowerCase().contains("bearer")) {
-                            failures.add(key + " must document invalid credentials, not missing bearer auth");
+                        String description = unauthorized.path("description").asText().toLowerCase();
+                        assertSchemaAndDescription(unauthorized, "username or password", failures, key + " 401");
+                        if (!description.contains("invalid")) {
+                            failures.add(key + " 401 must describe invalid login credentials");
+                        }
+                        if (description.contains("bearer") || !description.contains("username")
+                                || !description.contains("password")) {
+                            failures.add(key + " must distinguish invalid username/password from bearer auth");
                         }
                     } else if (!unauthorized.isMissingNode()) {
                         failures.add(key + " must not document missing-bearer authentication");
@@ -362,9 +368,10 @@ class OpenApiContractTest {
                     continue;
                 }
                 protectedCount++;
-                assertSchemaAndDescription(unauthorized, "authentication", failures, key + " 401");
-                if (!unauthorized.path("description").asText().toLowerCase().contains("bearer")) {
-                    failures.add(key + " 401 must identify bearer authentication");
+                String description = unauthorized.path("description").asText().toLowerCase();
+                assertSchemaAndDescription(unauthorized, "missing or invalid bearer", failures, key + " 401");
+                if (!description.contains("credential")) {
+                    failures.add(key + " 401 must identify missing/invalid bearer credentials");
                 }
             }
         }
@@ -376,12 +383,20 @@ class OpenApiContractTest {
     @Test
     void operationsDocumentApplicableStandardErrorResponses() throws Exception {
         JsonNode paths = apiDocument().path("paths");
-        Map<String, Map<String, String>> inventory =
-                StandardErrorResponseCustomizer.applicableErrorDescriptions();
         List<String> failures = new ArrayList<>();
-        assertEquals(77, inventory.size(), "The complete ticket route matrix must remain covered.");
+        assertEquals(77, TICKET_ERROR_CODES.size(), "The independent ticket oracle must list all operations.");
+        Set<String> actualOperations = new java.util.TreeSet<>();
+        paths.fields().forEachRemaining(path -> path.getValue().fields().forEachRemaining(method -> {
+            if (HTTP_METHODS.contains(method.getKey())) {
+                actualOperations.add(method.getKey() + " " + path.getKey());
+            }
+        }));
+        Set<String> expectedOperations = new java.util.TreeSet<>(TICKET_ERROR_CODES.keySet());
+        expectedOperations.addAll(BASELINE_SUCCESS_RESPONSES.stream()
+                .map(operation -> operation.method() + " " + operation.path()).toList());
+        assertEquals(expectedOperations, actualOperations, "The complete set of routes must match the baseline.");
 
-        for (Map.Entry<String, Map<String, String>> route : inventory.entrySet()) {
+        for (Map.Entry<String, Set<String>> route : TICKET_ERROR_CODES.entrySet()) {
             String[] operationParts = route.getKey().split(" ", 2);
             String method = operationParts[0];
             String path = operationParts[1];
@@ -391,25 +406,158 @@ class OpenApiContractTest {
                 failures.add(location + " from the applicable-error inventory is missing");
                 continue;
             }
-            for (Map.Entry<String, String> expected : route.getValue().entrySet()) {
-                JsonNode response = operation.path("responses").path(expected.getKey());
+            for (String status : route.getValue()) {
+                JsonNode response = operation.path("responses").path(status);
                 if (response.isMissingNode()) {
-                    failures.add(location + " is missing inventory response " + expected.getKey());
+                    failures.add(location + " is missing ticket response " + status);
                     continue;
                 }
                 String actualDescription = response.path("description").asText();
-                if (actualDescription.isBlank() || !actualDescription.contains(expected.getValue())) {
-                    failures.add(location + " " + expected.getKey()
-                            + " does not document the condition: " + expected.getValue()
-                            + " (description: " + actualDescription + ")");
+                if (actualDescription.isBlank()) {
+                    failures.add(location + " " + status + " has no condition-specific description");
+                } else if (!describesStatusCondition(status, actualDescription.toLowerCase())) {
+                    failures.add(location + " " + status + " description does not state a matching condition: "
+                            + actualDescription);
                 }
-                assertResponseSchema(operation.path("responses"), expected.getKey(), "ApiErrorResponse",
+                assertResponseSchema(operation.path("responses"), status, "ApiErrorResponse",
                         location, failures);
+            }
+
+            Set<String> expectedErrors = new TreeSet<>(route.getValue());
+            if (isProtectedPath(path)) {
+                expectedErrors.add("401");
+            } else if (route.getKey().equals("post /api/auth/login")) {
+                expectedErrors.add("401");
+            }
+            Set<String> actualErrors = new TreeSet<>();
+            operation.path("responses").fieldNames().forEachRemaining(code -> {
+                if (code.matches("[45][0-9]{2}")) {
+                    actualErrors.add(code);
+                }
+            });
+            if (!actualErrors.equals(expectedErrors)) {
+                failures.add(location + " must have exactly ticket errors " + expectedErrors
+                        + " but has " + actualErrors);
             }
         }
 
         assertSharedBug17Conditions(paths, failures);
+        assertIndependentConditionCorrections(paths, failures);
         assertTrue(failures.isEmpty(), () -> String.join(System.lineSeparator(), failures));
+    }
+
+    private void assertIndependentConditionCorrections(JsonNode paths, List<String> failures) {
+        assertCondition(paths, "get", "/api/users/{id}/student-details", "400",
+                List.of("UUID", "not a student"), List.of());
+        assertCondition(paths, "get", "/api/users/{id}/student-details", "404",
+                List.of("student does not exist"), List.of("not a student"));
+        assertCondition(paths, "put", "/api/users/{id}/student-details", "400",
+                List.of("account is not a student", "assignment"), List.of());
+        assertCondition(paths, "get", "/api/projects/{projectId}/final-grade", "404",
+                List.of("project does not exist"), List.of("recorded final grade"));
+        assertCondition(paths, "put", "/api/projects/{projectId}/final-grade", "404",
+                List.of("project", "rubric"), List.of("requested student", "rule resource"));
+        assertCondition(paths, "put", "/api/projects/{projectId}/final-grade", "400",
+                List.of("nonmember", "duplicate", "undefined", "wrong-scope", "validation"), List.of());
+        assertCondition(paths, "post", "/api/projects/{projectId}/student-grades", "400",
+                List.of("project UUID", "student ID outside the project group", "criterion scale"), List.of());
+        assertCondition(paths, "post", "/api/projects/{projectId}/student-grades/{gradeId}/revisions", "409",
+                List.of("source grade", "superseded"), List.of("rubric", "transition"));
+        assertCondition(paths, "post", "/api/projects/{projectId}/student-grades/{gradeId}/revisions", "404",
+                List.of("project", "source grade"), List.of("rubric"));
+        assertCondition(paths, "put", "/api/application-periods/{periodId}/allocation-pins/{studentId}", "404",
+                List.of("period", "student", "does not exist"), List.of("selected catalogue project"));
+        assertCondition(paths, "put", "/api/application-periods/{periodId}/allocation-pins/{studentId}", "409",
+                List.of("unranked project", "more than five project pins", "finalized period"), List.of());
+        assertCondition(paths, "post", "/api/ideas/{id}/specification/reviews", "404",
+                List.of("idea does not exist"), List.of("specification"));
+        assertCondition(paths, "post", "/api/ideas/{id}/specification/reviews", "409",
+                List.of("full specification", "lifecycle"), List.of());
+        assertCondition(paths, "post", "/api/ideas/{id}/reviews", "409",
+                List.of("full specification", "lifecycle"), List.of());
+        assertCondition(paths, "get", "/api/public/projects/{projectId}/archive", "404",
+                List.of("project does not exist", "not completed"), List.of());
+        assertCondition(paths, "post", "/api/projects/{projectId}/metrics", "400",
+                List.of("undefined metric", "invalid input"), List.of("404"));
+        assertCondition(paths, "post", "/api/projects/{projectId}/metrics", "409",
+                List.of("ineffective", "transition", "reason"), List.of());
+        assertCondition(paths, "post", "/api/projects/{projectId}/group-grades", "409",
+                List.of("ineffective", "transition", "reason"), List.of());
+        assertCondition(paths, "put", "/api/ideas/{id}/supervision-preference", "409",
+                List.of("draft", "withdrawn", "declined"), List.of());
+        assertCondition(paths, "post", "/api/ideas/{id}/owners", "400",
+                List.of("selected student", "does not exist", "invalid input"), List.of());
+        assertCondition(paths, "put", "/api/application-periods/{id}", "400",
+                List.of("ineligible", "out-of-catalogue"), List.of());
+        assertCondition(paths, "post", "/api/application-periods/{periodId}/applications", "400",
+                List.of("outside the period catalogue"), List.of());
+        assertCondition(paths, "post", "/api/projects/{projectId}/complete", "409",
+                List.of("prerequisites", "unmet"), List.of());
+        assertCondition(paths, "get", "/api/projects/{projectId}/formal-applications", "409",
+                List.of("allocated project group", "missing or invalid"), List.of());
+        assertCondition(paths, "post", "/api/projects/{projectId}/formal-applications", "409",
+                List.of("allocated project group", "missing or invalid"), List.of());
+        assertCondition(paths, "get", "/api/audit/{entityType}/{entityId}", "400",
+                List.of("entity ID", "UUID"), List.of("entity type"));
+        assertCondition(paths, "get", "/api/application-periods", "400",
+                List.of("pagination"), List.of("filter"));
+        assertCondition(paths, "post", "/api/application-periods/{periodId}/allocation-runs", "400",
+                List.of("period UUID"), List.of("request body"));
+        assertCondition(paths, "get", "/api/artifacts/{artifactId}/content", "404",
+                List.of("artifact", "project", "empty body"), List.of("stored content does not exist"));
+        assertResponseDescription(paths, "put", "/api/application-periods/{periodId}/allocation-pins/{studentId}",
+                "409", "Unranked project without acknowledgement, more than five project pins, or finalized period.");
+        assertResponseDescription(paths, "put", "/api/application-periods/{periodId}/allocation-pins/{studentId}",
+                "403", "Administrator role required.");
+        assertResponseDescription(paths, "put", "/api/application-periods/{periodId}/allocation-pins/{studentId}",
+                "401", "Authentication is required. Missing or invalid bearer authentication credentials.");
+        assertResponseDescription(paths, "delete", "/api/application-periods/{periodId}/allocation-pins/{studentId}",
+                "403", "Administrator role required.");
+        assertResponseDescription(paths, "delete", "/api/application-periods/{periodId}/allocation-pins/{studentId}",
+                "404", "Period or pin not found.");
+        assertResponseDescription(paths, "delete", "/api/application-periods/{periodId}/allocation-pins/{studentId}",
+                "409", "Period is finalized.");
+        assertResponseDescription(paths, "get", "/api/application-periods/{periodId}/allocation-pins",
+                "403", "Teacher or administrator role required.");
+        assertResponseDescription(paths, "get", "/api/application-periods/{periodId}/allocation-pins",
+                "404", "Period not found.");
+        assertResponseDescription(paths, "put", "/api/application-periods/{id}", "409",
+                "The proposed catalogue removes a project that has an allocation pin. "
+                        + "The application-period state does not permit the proposed update.");
+        assertCondition(paths, "get", "/api/grading-rubrics", null, List.of(), List.of("403"));
+        assertCondition(paths, "get", "/api/grading-rubrics/{id}", null, List.of(), List.of("403"));
+        assertCondition(paths, "get", "/api/grading-rubrics/active", null, List.of(), List.of("403"));
+        assertCondition(paths, "post", "/api/application-periods", null, List.of(), List.of("409"));
+        assertCondition(paths, "get", "/api/projects/{projectId}/formal-applications", null, List.of(), List.of("404"));
+        assertCondition(paths, "post", "/api/projects/{projectId}/formal-applications", null, List.of(), List.of("404"));
+    }
+
+    private static void assertCondition(JsonNode paths, String method, String path, String status,
+            List<String> requiredFragments, List<String> forbiddenFragments) {
+        JsonNode responses = paths.path(path).path(method).path("responses");
+        if (status != null) {
+            String description = responses.path(status).path("description").asText().toLowerCase();
+            for (String fragment : requiredFragments) {
+                assertTrue(description.contains(fragment.toLowerCase()),
+                        method.toUpperCase() + " " + path + " " + status
+                                + " must document condition '" + fragment + "': " + description);
+            }
+            for (String fragment : forbiddenFragments) {
+                assertFalse(description.contains(fragment.toLowerCase()),
+                        method.toUpperCase() + " " + path + " " + status
+                                + " must not claim condition '" + fragment + "': " + description);
+            }
+        } else {
+            assertFalse(responses.has(forbiddenFragments.get(0)),
+                    method.toUpperCase() + " " + path + " must not expose " + forbiddenFragments.get(0));
+        }
+    }
+
+    private static void assertResponseDescription(JsonNode paths, String method, String path, String status,
+            String expected) {
+        assertEquals(expected, paths.path(path).path(method).path("responses").path(status)
+                .path("description").asText(),
+                method.toUpperCase() + " " + path + " " + status + " must preserve its baseline description");
     }
 
     @Test
@@ -425,23 +573,35 @@ class OpenApiContractTest {
                 failures.add(location + " lost baseline success response " + expected.status());
                 continue;
             }
-            Set<String> schemas = responseSchemas(response);
-            Set<String> expectedSchemas = expected.schema().isBlank()
-                    ? Set.of() : Set.of(expected.schema());
-            if (!schemas.equals(expectedSchemas)) {
-                failures.add(location + " success response " + expected.status() + " schema changed from "
-                        + expectedSchemas + " to " + schemas);
+            JsonNode actualContent = response.get("content");
+            if (expected.schema().isBlank()) {
+                if (actualContent != null) {
+                    failures.add(location + " success response " + expected.status()
+                            + " must remain content-free, but got " + actualContent);
+                }
+            } else {
+                JsonNode expectedContent;
+                if (expected.schema().equals("binary")) {
+                    expectedContent = objectMapper.readTree(
+                            "{\"application/octet-stream\":{\"schema\":{\"type\":\"string\",\"format\":\"binary\"}}}");
+                } else {
+                    expectedContent = objectMapper.readTree("{\"*/*\":{\"schema\":{\"$ref\":\""
+                            + expected.schema() + "\"}}}");
+                }
+                if (!expectedContent.equals(actualContent)) {
+                    failures.add(location + " success response " + expected.status()
+                            + " content/schema changed from baseline " + expectedContent + " to " + actualContent);
+                }
             }
             baselineCodes.computeIfAbsent(location, unused -> new TreeSet<>()).add(expected.status());
         }
         assertEquals(77, BASELINE_SUCCESS_RESPONSES.size(), "The checked-in baseline must cover all operations.");
 
-        for (Map.Entry<String, Map<String, String>> route
-                : StandardErrorResponseCustomizer.applicableErrorDescriptions().entrySet()) {
+        for (Map.Entry<String, Set<String>> route : TICKET_ERROR_CODES.entrySet()) {
             String[] parts = route.getKey().split(" ", 2);
             String location = parts[0].toUpperCase() + " " + parts[1];
             Set<String> expectedCodes = new TreeSet<>(baselineCodes.getOrDefault(location, Set.of()));
-            expectedCodes.addAll(route.getValue().keySet());
+            expectedCodes.addAll(route.getValue());
             if (isProtectedPath(parts[1])) {
                 expectedCodes.add("401");
             } else if (route.getKey().equals("post /api/auth/login")) {
@@ -491,6 +651,25 @@ class OpenApiContractTest {
         return schemas;
     }
 
+    private static boolean describesStatusCondition(String status, String description) {
+        return switch (status) {
+            case "400" -> containsAny(description, "invalid", "malformed", "missing", "pagination", "query", "uuid");
+            case "403" -> containsAny(description, "caller", "only", "role", "authoriz", "access", "permitted",
+                    "owner");
+            case "404" -> containsAny(description, "not found", "does not exist", "no active", "no rubric",
+                    "absent");
+            case "409" -> containsAny(description, "state", "conflict", "already", "cannot", "does not permit",
+                    "ineffective", "transition", "pin", "superseded", "preference", "unranked", "finalized",
+                    "owner limit", "duplicate", "lifecycle", "missing or invalid", "last administrator",
+                    "version differs", "already");
+            default -> false;
+        };
+    }
+
+    private static boolean containsAny(String description, String... fragments) {
+        return Arrays.stream(fragments).anyMatch(description::contains);
+    }
+
     private static void assertSharedBug17Conditions(JsonNode paths, List<String> failures) {
         assertContains(paths, "put", "/api/ideas/{id}/supervisor", "409",
                 "NOT_WILLING_TO_SUPERVISE", failures);
@@ -502,6 +681,8 @@ class OpenApiContractTest {
                 "teacher author cannot review their own specification", failures);
         assertContains(paths, "put", "/api/application-periods/{id}", "409",
                 "allocation pin", failures);
+        assertContains(paths, "put", "/api/application-periods/{id}", "409",
+                "application-period state", failures);
     }
 
     private static void assertContains(JsonNode paths, String method, String path, String statusCode,
@@ -512,6 +693,93 @@ class OpenApiContractTest {
             failures.add(method.toUpperCase() + " " + path + " " + statusCode
                     + " does not preserve Bug-17 condition '" + phrase + "'");
         }
+    }
+
+    private static Map<String, Set<String>> ticketErrorCodes() {
+        Map<String, Set<String>> inventory = new java.util.LinkedHashMap<>();
+        """
+                get|/api/users/{id}/student-details|400,403,404
+                put|/api/users/{id}/student-details|400,403,404
+                get|/api/projects/{projectId}/final-grade|400,403,404
+                put|/api/projects/{projectId}/final-grade|400,403,404,409
+                get|/api/projects/{projectId}/student-grades|400,403,404
+                post|/api/projects/{projectId}/student-grades|400,403,404,409
+                post|/api/projects/{projectId}/student-grades/{gradeId}/revisions|400,403,404,409
+                get|/api/projects/{projectId}/metrics|400,403,404
+                post|/api/projects/{projectId}/metrics|400,403,404,409
+                get|/api/projects/{projectId}/group-grades|400,403,404
+                post|/api/projects/{projectId}/group-grades|400,403,404,409
+                get|/api/projects/{projectId}/formal-applications|400,403,409
+                post|/api/projects/{projectId}/formal-applications|400,403,409
+                post|/api/projects/{projectId}/complete|400,403,404,409
+                get|/api/projects/{projectId}/artifacts|400,403,404
+                post|/api/projects/{projectId}/artifacts|400,403,404,409
+                get|/api/ideas/{id}|400,403,404
+                put|/api/ideas/{id}|400,403,404,409
+                put|/api/ideas/{id}/supervisor|400,403,404,409
+                put|/api/ideas/{id}/supervision-preference|400,403,404,409
+                put|/api/ideas/{id}/specification|400,403,404,409
+                put|/api/formal-applications/{id}|400,403,404,409
+                put|/api/applications/{id}|400,403,404,409
+                delete|/api/applications/{id}|400,403,404,409
+                put|/api/application-periods/{periodId}/allocation-pins/{studentId}|400,403,404,409
+                delete|/api/application-periods/{periodId}/allocation-pins/{studentId}|400,403,404,409
+                get|/api/application-periods/{id}|400,404
+                put|/api/application-periods/{id}|400,403,404,409
+                get|/api/student-classes|400,403
+                post|/api/student-classes|400,403,409
+                get|/api/ideas|400
+                post|/api/ideas|400,403
+                post|/api/ideas/{id}/withdraw|400,403,404,409
+                post|/api/ideas/{id}/submit|400,403,404,409
+                post|/api/ideas/{id}/specification/submit|400,403,404,409
+                post|/api/ideas/{id}/specification/reviews|400,403,404,409
+                post|/api/ideas/{id}/reviews|400,403,404,409
+                post|/api/ideas/{id}/owners|400,403,404,409
+                get|/api/grading-rubrics|400
+                post|/api/grading-rubrics|400,403,409
+                post|/api/formal-applications/{id}/submit|400,403,404,409
+                post|/api/formal-applications/{id}/reviews|400,403,404,409
+                get|/api/elective-subjects|400,403
+                post|/api/elective-subjects|400,403,409
+                post|/api/artifacts/{artifactId}/publication-review|400,403,404,409
+                get|/api/application-periods|400
+                post|/api/application-periods|400,403
+                get|/api/application-periods/{periodId}/applications|400,403,404
+                post|/api/application-periods/{periodId}/applications|400,403,404,409
+                get|/api/application-periods/{periodId}/allocation-runs|400,403,404
+                post|/api/application-periods/{periodId}/allocation-runs|400,403,404,409
+                post|/api/allocation-runs/{id}/finalize|400,403,404,409
+                patch|/api/users/{id}|400,403,404
+                patch|/api/users/{id}/role|400,403,404,409
+                patch|/api/student-classes/{id}|400,403,404,409
+                patch|/api/elective-subjects/{id}|400,403,404,409
+                get|/api/users|400,403
+                get|/api/users/students|400,403
+                get|/api/school-years|400
+                post|/api/auth/register|400,409
+                post|/api/auth/login|400
+                get|/api/public/projects/{projectId}/archive|400,404
+                get|/api/public/projects/{projectId}/archive/{artifactId}|400,404
+                get|/api/projects/{projectId}/students/{studentId}/final-grade|400,403,404
+                get|/api/grading-rubrics/{id}|400,404
+                get|/api/grading-rubrics/active|404
+                get|/api/audit|400,403
+                get|/api/audit/{entityType}/{entityId}|400,403
+                get|/api/artifacts/{artifactId}|400,403,404
+                delete|/api/artifacts/{artifactId}|400,403,404,409
+                get|/api/artifacts/{artifactId}/content|400,403,404
+                get|/api/application-periods/{periodId}/catalogue/{projectId}|400,403,404
+                get|/api/application-periods/{periodId}/applications/me|400,403,404
+                get|/api/application-periods/{periodId}/allocation-pins|400,403,404
+                get|/api/allocation-runs/{id}|400,403,404
+                delete|/api/ideas/{id}/owners/{studentId}|400,403,404,409
+                delete|/api/ideas/{id}/owners/me|400,403,404,409
+                """.lines().filter(line -> !line.isBlank()).forEach(line -> {
+                    String[] parts = line.split("\\|");
+                    inventory.put(parts[0] + " " + parts[1], Set.copyOf(Arrays.asList(parts[2].split(","))));
+                });
+        return Map.copyOf(inventory);
     }
 
     private static List<BaselineSuccess> baselineSuccessResponses() {
@@ -578,7 +846,7 @@ class OpenApiContractTest {
                 get|/api/users/students|200|#/components/schemas/PageResponseStudentLookupResponse
                 get|/api/school-years|200|#/components/schemas/PageResponseString
                 get|/api/public/projects/{projectId}/archive|200|#/components/schemas/PageResponsePublicArtifactResponse
-                get|/api/public/projects/{projectId}/archive/{artifactId}|200|
+                get|/api/public/projects/{projectId}/archive/{artifactId}|200|binary
                 get|/api/projects/{projectId}/students/{studentId}/final-grade|200|#/components/schemas/FinalGradeHistory
                 get|/api/grading-rubrics/{id}|200|#/components/schemas/RubricResponse
                 get|/api/grading-rubrics/active|200|#/components/schemas/RubricResponse
@@ -586,7 +854,7 @@ class OpenApiContractTest {
                 get|/api/audit/{entityType}/{entityId}|200|#/components/schemas/PageResponseObjectNode
                 get|/api/artifacts/{artifactId}|200|#/components/schemas/ArtifactResponse
                 delete|/api/artifacts/{artifactId}|204|
-                get|/api/artifacts/{artifactId}/content|200|
+                get|/api/artifacts/{artifactId}/content|200|binary
                 get|/api/application-periods/{periodId}/catalogue/{projectId}|200|#/components/schemas/CatalogueProjectResponse
                 get|/api/application-periods/{periodId}/applications/me|200|#/components/schemas/StudentApplicationResponse
                 get|/api/application-periods/{periodId}/allocation-pins|200|#/components/schemas/PageResponseAllocationPinResponse

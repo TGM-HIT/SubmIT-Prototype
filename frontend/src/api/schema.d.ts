@@ -3064,7 +3064,7 @@ export interface operations {
                     "*/*": components["schemas"]["StudentDetailsResponse"];
                 };
             };
-            /** @description The user ID is not a valid UUID. */
+            /** @description The user ID is not a valid UUID or the existing user is not a student. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -3091,7 +3091,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description The requested user is not a student or does not exist. */
+            /** @description The requested student does not exist. */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3126,7 +3126,7 @@ export interface operations {
                     "*/*": components["schemas"]["StudentDetailsResponse"];
                 };
             };
-            /** @description The user ID, class UUID, or elective-subject assignment is invalid. */
+            /** @description The user ID is not a valid UUID, the account is not a student, or class/elective-subject assignment input is invalid. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -3203,7 +3203,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description A student caller is not a member of the project. The caller does not have access to the project's final-grade data. */
+            /** @description A student caller is not a member of the project. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3212,7 +3212,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description Project not found or no final grade has been recorded. The project or its recorded final grade does not exist. */
+            /** @description The project does not exist. */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3248,7 +3248,7 @@ export interface operations {
                     "*/*": components["schemas"]["FinalGradesResponse"];
                 };
             };
-            /** @description Invalid request shape or student membership, grade, rationale, or rule. The project ID, request shape, student membership, grade, rationale, or rule input is invalid. */
+            /** @description The project UUID or grade request is invalid; nonmember or duplicate students and undefined or wrong-scope rules are input validation errors. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -3266,7 +3266,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description Caller is not a teacher or administrator. The caller is not a teacher or administrator. */
+            /** @description Caller is not a teacher or administrator. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3275,7 +3275,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description The project, requested student, rubric, or rule resource does not exist. */
+            /** @description The project or rubric resource does not exist. */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3475,7 +3475,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description The idea or selected supervisor does not exist. */
+            /** @description The idea does not exist. */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3548,6 +3548,15 @@ export interface operations {
             };
             /** @description The idea does not exist. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description The idea is draft, withdrawn, or declined, so its supervision preference cannot be changed. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -3860,7 +3869,7 @@ export interface operations {
                     "*/*": components["schemas"]["AllocationPinResponse"];
                 };
             };
-            /** @description Target is not a STUDENT account or project is outside the period catalogue. The path UUIDs, target student, or selected project are invalid. */
+            /** @description Target is not a STUDENT account or project is outside the period catalogue. The period or student path UUID is invalid. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -3878,7 +3887,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description Administrator role required. Only an administrator may change allocation pins. */
+            /** @description Administrator role required. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3887,7 +3896,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description Period or student not found. The period, student, or selected catalogue project does not exist. */
+            /** @description The application period or target student does not exist. */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3896,7 +3905,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description The student did not rank the project without explicit acknowledgement, a project already has five pinned students, or the period is finalized. */
+            /** @description Unranked project without acknowledgement, more than five project pins, or finalized period. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -3944,7 +3953,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description Administrator role required. Only an administrator may remove allocation pins. */
+            /** @description Administrator role required. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -3953,7 +3962,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description Period or pin not found. The period or requested pin does not exist. */
+            /** @description Period or pin not found. */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3962,7 +3971,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description Period is finalized. Allocation pins cannot be changed after the period is finalized. */
+            /** @description Period is finalized. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -4046,7 +4055,7 @@ export interface operations {
                     "*/*": components["schemas"]["ApplicationPeriodResponse"];
                 };
             };
-            /** @description The period ID or submitted period configuration or catalogue is invalid. */
+            /** @description The period ID, configuration, or proposed project selection is invalid, including absent, ineligible, or out-of-catalogue projects. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -4073,7 +4082,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description The application period or a referenced catalogue project does not exist. */
+            /** @description The application period does not exist. */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4250,7 +4259,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description Caller lacks the required role or project access. The caller lacks the required role or project membership to view grades. */
+            /** @description Caller lacks the required role or project access. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4295,7 +4304,7 @@ export interface operations {
                     "*/*": components["schemas"]["GradeResponse"];
                 };
             };
-            /** @description Grade outside the criterion scale or invalid input. The project UUID or grade request is invalid, including a student ID that is not in the project's group. */
+            /** @description The project UUID or grade request is invalid, including a student ID outside the project group or a grade outside the criterion scale. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -4313,7 +4322,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description Caller lacks the required role or project access. The caller is not a teacher or administrator. */
+            /** @description Caller lacks the required role or project access. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4331,7 +4340,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description Rubric version differs from the project's bound version. The rubric is ineffective or a change from the project's bound rubric lacks a transition reason. */
+            /** @description Rubric version differs from the project's bound version. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -4396,7 +4405,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description The project, grade, or rubric resource does not exist. */
+            /** @description The project or source grade does not exist. */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4405,7 +4414,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description The entry has already been superseded. The grade entry is already superseded, the rubric is ineffective, or a rubric transition lacks a reason. */
+            /** @description The source grade has already been superseded. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -4460,7 +4469,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description Caller lacks the required role or project access. The caller lacks the required role or project access to view metrics. */
+            /** @description Caller lacks the required role or project access. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4523,7 +4532,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description Caller lacks the required role or project access. The caller is not a teacher or administrator. */
+            /** @description Caller lacks the required role or project access. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4532,8 +4541,17 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description The project does not exist. */
+            /** @description The project or rubric resource does not exist. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description The rubric binding is ineffective or a rubric-version transition lacks its required reason. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4587,7 +4605,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description Caller lacks the required role or project access. The caller lacks the required role or project access to view group grades. */
+            /** @description Caller lacks the required role or project access. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4650,7 +4668,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description Caller lacks the required role or project access. The caller is not a teacher or administrator. */
+            /** @description Caller lacks the required role or project access. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -4661,6 +4679,15 @@ export interface operations {
             };
             /** @description The project, group, or requested rubric resource does not exist. */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description The rubric binding is ineffective or a rubric-version transition lacks its required reason. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4721,8 +4748,8 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description The project or its formal application does not exist. */
-            404: {
+            /** @description The allocated project group is missing or invalid. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4783,16 +4810,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description The project does not exist. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            /** @description The project allocation, group membership, or application lifecycle state conflicts with creation. */
+            /** @description The allocated project group is missing or invalid, or the application lifecycle state conflicts with creation. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -4823,7 +4841,7 @@ export interface operations {
                     "*/*": components["schemas"]["CompletionResponse"];
                 };
             };
-            /** @description The project ID is invalid or required completion conditions are unmet. */
+            /** @description The project ID is not a valid UUID. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -4859,7 +4877,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description The project is already complete or its lifecycle state does not permit completion. */
+            /** @description Required completion prerequisites are unmet or the project lifecycle state does not permit completion. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -5354,7 +5372,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description The idea or its specification does not exist. */
+            /** @description The idea does not exist. */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -5363,7 +5381,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description The specification lifecycle state does not permit a review. */
+            /** @description The full specification is missing or its lifecycle state does not permit a review. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -5434,7 +5452,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description The idea lifecycle state does not permit a review. */
+            /** @description The full specification is missing or the idea lifecycle state does not permit a review. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -5469,7 +5487,7 @@ export interface operations {
                     "*/*": components["schemas"]["IdeaResponse"];
                 };
             };
-            /** @description The idea ID or collaborator input is invalid. */
+            /** @description The idea ID or collaborator input is invalid; a selected student that does not exist is rejected as invalid input. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -5496,7 +5514,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description The idea or selected student does not exist. */
+            /** @description The idea does not exist. */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -5557,15 +5575,6 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description The caller lacks the role required to list grading rubrics. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
         };
     };
     publish: {
@@ -5590,7 +5599,7 @@ export interface operations {
                     "*/*": components["schemas"]["RubricResponse"];
                 };
             };
-            /** @description Invalid rubric structure, scale, metric, or rule. The submitted rubric structure, scale, metric, or aggregation rule is invalid. */
+            /** @description Invalid rubric structure, scale, metric, or rule. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -5608,7 +5617,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description Caller is not an administrator. The caller is not an administrator. */
+            /** @description Caller is not an administrator. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -6054,7 +6063,7 @@ export interface operations {
                     "*/*": components["schemas"]["PageResponseApplicationPeriodResponse"];
                 };
             };
-            /** @description The pagination or application-period filter query parameter is invalid. */
+            /** @description The pagination query parameter is invalid. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -6116,15 +6125,6 @@ export interface operations {
             };
             /** @description The caller lacks the role required to create application periods. */
             403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            /** @description The period state or a uniqueness constraint conflicts with the requested period. */
-            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6220,7 +6220,7 @@ export interface operations {
                     "*/*": components["schemas"]["StudentApplicationResponse"];
                 };
             };
-            /** @description The period UUID or submitted project preferences are invalid. */
+            /** @description The period UUID or submitted project preferences are invalid, including project IDs outside the period catalogue. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -6247,7 +6247,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description The application period or a referenced project does not exist. */
+            /** @description The application period does not exist. */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -6349,7 +6349,7 @@ export interface operations {
                     "*/*": components["schemas"]["AllocationRunResponse"];
                 };
             };
-            /** @description The period UUID or allocation request is invalid. */
+            /** @description The period UUID is not valid. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -6376,7 +6376,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description Application period was not found. The application period does not exist. */
+            /** @description Application period was not found. */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -6385,7 +6385,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description Period is not open for an early run or is finalized. The period is not open for the requested run or has already been finalized. */
+            /** @description Period is not open for an early run or is finalized. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -6443,7 +6443,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description Allocation run was not found. The allocation run does not exist. */
+            /** @description Allocation run was not found. */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -6452,7 +6452,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description Early, incomplete, or already finalized allocation cannot be finalized. An early, incomplete, or already finalized allocation run cannot be finalized. */
+            /** @description Early, incomplete, or already finalized allocation cannot be finalized. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -6762,7 +6762,7 @@ export interface operations {
                     "*/*": components["schemas"]["PageResponseUserResponse"];
                 };
             };
-            /** @description The role filter is invalid. The role filter or pagination query parameter is invalid. */
+            /** @description The role filter is invalid. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -6832,7 +6832,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description Only students and administrators may use this lookup. Only students and administrators may use this student lookup. */
+            /** @description Only students and administrators may use this lookup. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -6918,7 +6918,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description The project does not exist. */
+            /** @description The project does not exist or is not completed. */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -7012,7 +7012,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description Caller lacks the required role or project access. The caller lacks access to the requested student's project grade. */
+            /** @description Caller lacks the required role or project access. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -7021,7 +7021,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description Project not found, student is not a project member, or no final grade has been recorded. The project, student membership, or recorded final grade does not exist. */
+            /** @description The project, student, or recorded grade does not exist. */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -7071,16 +7071,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description The caller lacks the role required to view this rubric. */
-            403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            /** @description Rubric version not found. The requested rubric version does not exist. */
+            /** @description Rubric version not found. */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -7111,15 +7102,6 @@ export interface operations {
             };
             /** @description Missing or invalid bearer authentication credentials. */
             401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            /** @description The caller lacks the role required to view the active rubric. */
-            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7214,7 +7196,7 @@ export interface operations {
                     "*/*": components["schemas"]["PageResponseObjectNode"];
                 };
             };
-            /** @description The entity ID is not a valid UUID or entity type. */
+            /** @description The entity ID is not a valid UUID. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -7234,15 +7216,6 @@ export interface operations {
             };
             /** @description The caller lacks the role required to view audit history. */
             403: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
-            };
-            /** @description The requested entity does not exist. */
-            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7422,7 +7395,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description The artifact or its stored content does not exist. */
+            /** @description The artifact or its project does not exist; absent stored content returns an empty body. */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -7592,7 +7565,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description Teacher or administrator role required. Only teachers or administrators may view allocation pins. */
+            /** @description Teacher or administrator role required. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -7601,7 +7574,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description Period not found. The application period does not exist. */
+            /** @description Period not found. */
             404: {
                 headers: {
                     [name: string]: unknown;
