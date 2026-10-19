@@ -227,6 +227,33 @@ class OpenApiContractTest {
     }
 
     @Test
+    void formalApplicationUpdateDocumentsUtf16Limits() throws Exception {
+        JsonNode paths = apiDocument().path("paths");
+        JsonNode createOperation = paths.path("/api/projects/{projectId}/formal-applications").path("post");
+        JsonNode updateOperation = paths.path("/api/formal-applications/{id}").path("put");
+        JsonNode createDescription = createOperation.path("description");
+        JsonNode updateDescription = updateOperation.path("description");
+
+        assertTrue(createDescription.isTextual(), "The create operation must retain its text-limit description");
+        assertTrue(updateDescription.isTextual(), "The update operation must document its text limits");
+        assertEquals(createDescription.textValue(), updateDescription.textValue(),
+                "Create and update must communicate the same formal-application text limits");
+
+        String description = updateDescription.textValue().toLowerCase(java.util.Locale.ROOT);
+        assertTrue(description.contains("java utf-16 code units"),
+                "The update description must identify Java UTF-16 code units as the counting unit");
+        assertTrue(description.contains("3 to 5 members"), "The update description must state the group size");
+        assertTrue(description.contains("200 characters"), "The update description must state the individual-topic limit");
+        assertTrue(description.contains("investigation-concern text") && description.contains("2,400 characters")
+                        && description.contains("planned-result text")
+                        && description.contains("combined across all group members"),
+                "The update description must state the separate combined investigation and planned-result limits");
+
+        assertFormalApplicationRequestBody(createOperation);
+        assertFormalApplicationRequestBody(updateOperation);
+    }
+
+    @Test
     void registrationRoleIsDocumentedAsIgnored() throws Exception {
         JsonNode schema = apiDocument().path("components").path("schemas").path("RegisterRequest");
         JsonNode property = schema.path("properties").path("role");
@@ -782,6 +809,21 @@ class OpenApiContractTest {
     private JsonNode apiDocument() throws Exception {
         MvcResult result = mockMvc.perform(get("/v3/api-docs")).andExpect(status().isOk()).andReturn();
         return objectMapper.readTree(result.getResponse().getContentAsByteArray());
+    }
+
+    private static void assertFormalApplicationRequestBody(JsonNode operation) {
+        JsonNode requestBody = operation.path("requestBody");
+        assertTrue(requestBody.isObject(), "The formal-application operation must define a request body");
+        JsonNode required = requestBody.path("required");
+        assertTrue(required.isBoolean(), "The formal-application request body must declare requiredness");
+        assertTrue(required.booleanValue(), "The formal-application request body must be required");
+
+        JsonNode jsonContent = requestBody.path("content").path("application/json");
+        assertTrue(jsonContent.isObject(), "The formal-application request body must support application/json");
+        JsonNode schemaReference = jsonContent.path("schema").path("$ref");
+        assertTrue(schemaReference.isTextual(), "The JSON request schema must be a reference");
+        assertEquals("#/components/schemas/FormalApplicationRequest", schemaReference.textValue(),
+                "Both operations must use the shared FormalApplicationRequest schema");
     }
 
     private static boolean isProtectedPath(String path) {

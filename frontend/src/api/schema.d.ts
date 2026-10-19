@@ -117,7 +117,10 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Update a draft or returned formal application. */
+        /**
+         * Update a draft or returned formal application.
+         * @description Text limits count Java UTF-16 code units. For each allocated group member, provide exactly one individual topic, investigation concern, and planned result. A group has 3 to 5 members; each individual topic is at most 200 characters, and investigation-concern text and planned-result text are each limited to 2,400 characters combined across all group members.
+         */
         put: operations["update_1"];
         post?: never;
         delete?: never;

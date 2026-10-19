@@ -55,7 +55,11 @@ public class FormalApplicationController {
     }
 
     @PutMapping("/api/formal-applications/{id}")
-    @Operation(summary = "Update a draft or returned formal application.")
+    @Operation(summary = "Update a draft or returned formal application.",
+            description = "Text limits count Java UTF-16 code units. For each allocated group member, provide exactly one "
+                    + "individual topic, investigation concern, and planned result. A group has 3 to 5 members; each "
+                    + "individual topic is at most 200 characters, and investigation-concern text and planned-result "
+                    + "text are each limited to 2,400 characters combined across all group members.")
     public FormalApplicationResponse update(@AuthenticationPrincipal AuthenticatedUser caller, @PathVariable UUID id,
             @Valid @RequestBody FormalApplicationRequest request) {
         return service.update(caller, id, objectMapper.valueToTree(request));
