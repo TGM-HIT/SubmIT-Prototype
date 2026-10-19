@@ -30,6 +30,8 @@ Before handoff, list each "Durable automated tests" bullet in the ticket and the
 
 When asserting required JSON response fields, check presence and the appropriate JSON type before coercion if missing, null, or wrong-type values could otherwise become an expected default (for example, Jackson `path(...).asInt()` returning zero). Apply these guards to both sides of paired comparisons and to nested response objects. This does not require mutation-testing tooling or nonempty fixtures for every route.
 
+Assert JSON property and array membership structurally: inspect the intended node, verify the relevant type, and compare exact property names or member values rather than searching serialized JSON. Reuse existing typed membership helpers where available; compare complete sets only when the ticket requires complete-set equality. Semantic phrase checks within an actual description string remain appropriate; no new testing tools are required.
+
 Then save and report back in the exact handoff file requested by the Orchestrator: a short prose block under three fixed headings, nothing more. Use these exact headings, including the Markdown heading marks, verbatim:
 
 ## What was done
