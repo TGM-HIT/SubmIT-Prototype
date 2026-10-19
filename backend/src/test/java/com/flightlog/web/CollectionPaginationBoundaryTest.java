@@ -1,6 +1,7 @@
 package com.flightlog.web;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -91,6 +92,10 @@ class CollectionPaginationBoundaryTest {
             JsonNode oversizedMetadata = endpoint.metadataPath().isEmpty()
                     ? oversizedPage : oversizedPage.at(endpoint.metadataPath());
 
+            assertNumericField(defaultMetadata, PAGE, endpoint.path() + " default");
+            assertNumericField(oversizedMetadata, PAGE, endpoint.path() + " oversized");
+            assertNumericField(defaultMetadata, "totalElements", endpoint.path() + " default");
+            assertNumericField(oversizedMetadata, "totalElements", endpoint.path() + " oversized");
             assertEquals(0, defaultMetadata.path(PAGE).asInt(), endpoint.path() + " default page");
             assertEquals(20, defaultMetadata.path(SIZE).asInt(), endpoint.path() + " default size");
             assertEquals(0, oversizedMetadata.path(PAGE).asInt(), endpoint.path() + " oversized page");
@@ -113,6 +118,12 @@ class CollectionPaginationBoundaryTest {
         assertEquals(200, result.getResponse().getStatus(), endpoint.path() + " response: "
                 + result.getResponse().getContentAsString());
         return objectMapper.readTree(result.getResponse().getContentAsByteArray());
+    }
+
+    private void assertNumericField(JsonNode metadata, String field, String context) {
+        assertTrue(metadata.isObject(), context + " pagination metadata is an object");
+        assertTrue(metadata.has(field), context + " pagination metadata contains " + field);
+        assertTrue(metadata.get(field).isNumber(), context + " pagination metadata " + field + " is numeric");
     }
 
     private void seedFixtures() {

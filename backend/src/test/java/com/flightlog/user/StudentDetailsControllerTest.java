@@ -201,6 +201,7 @@ class StudentDetailsControllerTest {
         for (String path : List.of("/api/student-classes", "/api/elective-subjects")) {
             JsonNode defaultPage = mapper.readTree(mvc.perform(get(path).header("Authorization", bearer(teacher)))
                     .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+            assertTrue(defaultPage.has("page") && defaultPage.get("page").isNumber(), path + " default page is numeric");
             assertEquals(0, defaultPage.path("page").asInt(), path + " default page");
             assertEquals(20, defaultPage.path("size").asInt(), path + " default size");
             assertEquals(105, defaultPage.path("totalElements").asInt(), path + " default totalElements");
@@ -210,6 +211,8 @@ class StudentDetailsControllerTest {
             JsonNode oversizedPage = mapper.readTree(mvc.perform(get(path).param("size", "101")
                             .header("Authorization", bearer(teacher)))
                     .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+            assertTrue(oversizedPage.has("page") && oversizedPage.get("page").isNumber(),
+                    path + " oversized page is numeric");
             assertEquals(0, oversizedPage.path("page").asInt(), path + " oversized page");
             assertEquals(100, oversizedPage.path("size").asInt(), path + " oversized size");
             assertEquals(105, oversizedPage.path("totalElements").asInt(), path + " oversized totalElements");
