@@ -70,7 +70,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-23](tickets/done/Dev-23.md) | done | Include decision pauses in the awaiting-human status definition |
 | [Dev-24](tickets/done/Dev-24.md) | done | Cover catalogue name boundaries and case-insensitive uniqueness |
 | [Dev-25](tickets/done/Dev-25.md) | done | Describe allocation-run finalization timestamp in OpenAPI |
-| [Dev-26](tickets/Dev-26.md) | to-do | Describe the ignored registration role in OpenAPI |
+| [Dev-26](tickets/done/Dev-26.md) | done | Describe the ignored registration role in OpenAPI |
 | [Dev-27](tickets/Dev-27.md) | to-do | Document UTF-16 limits for formal-application updates |
 | [Dev-28](tickets/Dev-28.md) | to-do | Reconcile and index the legacy bug list |
 | [Dev-29](tickets/Dev-29.md) | to-do | Clarify the unresolved Java package rename proposal |
