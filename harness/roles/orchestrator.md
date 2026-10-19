@@ -95,7 +95,7 @@ End every return with this exact machine-readable block, using `none` when prefl
 
 If you must end after the run folder exists and before closeout, first append a `stopped` bullet with the reason to the run log, then report the real run folder, `Outcome: stopped`, `Ledger: in-progress`, and the real tree state. `none` and `unchanged` are valid only when preflight stopped the run.
 
-Resuming an interrupted run: when given an existing run folder whose log has no closeout, continue in that folder. Read the last log step and the saved handoff and evaluation artifacts, re-run only the unfinished step, and add a `resumed` bullet to the log.
+Resuming an interrupted run: when given an existing run folder whose log has no closeout, continue in that folder. Read the last log step and the saved handoff and evaluation artifacts, re-run only the unfinished step, and add a `resumed` bullet to the log. If a dispatch bullet was written before interruption but the role was not actually invoked, append a transparent correction identifying that the dispatch did not occur; immediately before retrying the role, record a new dispatch bullet with the actual timestamp and update the heartbeat. Do not treat a recorded dispatch as proof that the role ran.
 
 Role dispatch that ends without a handoff (for example an infrastructure or network error): log it as a bullet; it is not a pass and not a revise cycle. Re-dispatch the same pass number with the same handoff path, and tell the new Implementor to assess any uncommitted tree with `git status` and `git diff` before deciding what to keep. After two consecutive crashes of the same pass, stop: append a `stopped` bullet and report `Outcome: stopped` instead of a third retry.
 
