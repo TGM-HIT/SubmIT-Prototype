@@ -450,7 +450,9 @@ public final class ApiDtos {
             @Schema(description = "Application snapshots used by the run.") List<AllocationApplicationSnapshot> applications,
             @Schema(description = "Administrator pin snapshots used by the run.") List<AllocationPinSnapshot> pins,
             AllocationResultResponse result, String error,
-            Boolean inputSnapshotComplete, Instant finalizedAt) {
+            Boolean inputSnapshotComplete,
+            @Schema(description = "Instant when an administrator successfully finalized the allocation run.")
+            Instant finalizedAt) {
     }
 
     @Schema(requiredProperties = {"content", "page", "size", "totalElements", "totalPages"})

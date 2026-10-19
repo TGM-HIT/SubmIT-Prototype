@@ -227,6 +227,21 @@ class OpenApiContractTest {
     }
 
     @Test
+    void allocationRunFinalizedAtDocumentsFinalizationMeaning() throws Exception {
+        JsonNode property = apiDocument().path("components").path("schemas")
+                .path("AllocationRunResponse").path("properties").path("finalizedAt");
+
+        assertTrue(property.isObject(), "AllocationRunResponse.finalizedAt must remain a schema property");
+        assertTrue(property.path("description").isTextual());
+        assertEquals("Instant when an administrator successfully finalized the allocation run.",
+                property.path("description").textValue());
+        assertTrue(property.path("type").isTextual());
+        assertEquals("string", property.path("type").textValue());
+        assertTrue(property.path("format").isTextual());
+        assertEquals("date-time", property.path("format").textValue());
+    }
+
+    @Test
     void ideaListDocumentsSchoolYearAndOwnerFilters() throws Exception {
         MvcResult result = mockMvc.perform(get("/v3/api-docs")).andExpect(status().isOk()).andReturn();
         JsonNode operation = objectMapper.readTree(result.getResponse().getContentAsByteArray())

@@ -2541,7 +2541,10 @@ export interface components {
             result?: components["schemas"]["AllocationResultResponse"];
             error?: string;
             inputSnapshotComplete?: boolean;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description Instant when an administrator successfully finalized the allocation run.
+             */
             finalizedAt?: string;
         };
         AllocationUnassignedProjectResponse: {
