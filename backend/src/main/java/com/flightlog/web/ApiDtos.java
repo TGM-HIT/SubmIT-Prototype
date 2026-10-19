@@ -32,6 +32,7 @@ public final class ApiDtos {
             @NotNull @Schema(description = "Required account name; leading and trailing whitespace is trimmed, "
                     + "a value blank after trimming is rejected, and the trimmed name is limited to 120 characters.")
             String displayName,
+            @Schema(description = "Ignored. Registration always creates a STUDENT account, regardless of this value.")
             Role role) {
     }
 

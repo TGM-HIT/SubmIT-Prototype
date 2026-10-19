@@ -70,6 +70,43 @@ class AccountNameControllerTest {
     }
 
     @Test
+    void registrationAlwaysCreatesAStudentRegardlessOfSuppliedRole() throws Exception {
+        for (Role suppliedRole : List.of(Role.STUDENT, Role.TEACHER, Role.ADMIN)) {
+            String username = "registration-" + suppliedRole.name().toLowerCase(java.util.Locale.ROOT);
+            var request = new java.util.HashMap<String, String>();
+            request.put("username", username);
+            request.put("password", "a-long-password");
+            request.put("displayName", "Registration Test");
+            request.put("role", suppliedRole.name());
+
+            mockMvc.perform(post("/api/auth/register")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.role").value("STUDENT"));
+
+            UserAccount persisted = users.findByUsername(username).orElseThrow();
+            org.junit.jupiter.api.Assertions.assertEquals(Role.STUDENT, persisted.getRole(),
+                    "Registration must persist STUDENT when supplied role is " + suppliedRole);
+        }
+
+        String username = "registration-omitted-role";
+        var request = new java.util.HashMap<String, String>();
+        request.put("username", username);
+        request.put("password", "a-long-password");
+        request.put("displayName", "Registration Test");
+        mockMvc.perform(post("/api/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.role").value("STUDENT"));
+
+        UserAccount persisted = users.findByUsername(username).orElseThrow();
+        org.junit.jupiter.api.Assertions.assertEquals(Role.STUDENT, persisted.getRole(),
+                "Registration must persist STUDENT when role is omitted");
+    }
+
+    @Test
     void registrationEnforcesNameAfterTrimming() throws Exception {
         register("Boundary", " " + "n".repeat(120) + " ").andExpect(status().isCreated())
                 .andExpect(jsonPath("$.displayName").value("n".repeat(120)));

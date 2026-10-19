@@ -227,6 +227,40 @@ class OpenApiContractTest {
     }
 
     @Test
+    void registrationRoleIsDocumentedAsIgnored() throws Exception {
+        JsonNode schema = apiDocument().path("components").path("schemas").path("RegisterRequest");
+        JsonNode property = schema.path("properties").path("role");
+
+        assertTrue(property.isObject(), "RegisterRequest.role must remain a schema property");
+        assertTrue(property.path("type").isTextual(), "RegisterRequest.role type must be a string");
+        assertEquals("string", property.path("type").textValue());
+
+        JsonNode roleEnum = property.path("enum");
+        assertTrue(roleEnum.isArray(), "RegisterRequest.role enum must remain an array");
+        assertEquals(3, roleEnum.size(), "RegisterRequest.role must retain exactly three enum values");
+        Set<String> actualValues = new TreeSet<>();
+        for (JsonNode value : roleEnum) {
+            assertTrue(value.isTextual(), "Each RegisterRequest.role enum value must be a string");
+            actualValues.add(value.textValue());
+        }
+        assertEquals(Set.of("STUDENT", "TEACHER", "ADMIN"), actualValues);
+
+        JsonNode required = schema.path("required");
+        assertTrue(required.isArray(), "RegisterRequest.required must remain an array");
+        for (JsonNode requiredProperty : required) {
+            assertTrue(requiredProperty.isTextual(), "Required property names must be strings");
+            assertFalse("role".equals(requiredProperty.textValue()), "RegisterRequest.role must remain optional");
+        }
+
+        assertTrue(property.path("description").isTextual(), "RegisterRequest.role must have a description");
+        String description = property.path("description").textValue().toLowerCase(java.util.Locale.ROOT);
+        assertTrue(description.contains("ignored"), "Description must state that the supplied role is ignored");
+        assertTrue(description.contains("registration") && description.contains("always")
+                        && description.contains("student") && description.contains("regardless"),
+                "Description must state that registration creates a STUDENT");
+    }
+
+    @Test
     void allocationRunFinalizedAtDocumentsFinalizationMeaning() throws Exception {
         JsonNode property = apiDocument().path("components").path("schemas")
                 .path("AllocationRunResponse").path("properties").path("finalizedAt");

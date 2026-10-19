@@ -2370,7 +2370,10 @@ export interface components {
             password: string;
             /** @description Required account name; leading and trailing whitespace is trimmed, a value blank after trimming is rejected, and the trimmed name is limited to 120 characters. */
             displayName: string;
-            /** @enum {string} */
+            /**
+             * @description Ignored. Registration always creates a STUDENT account, regardless of this value.
+             * @enum {string}
+             */
             role?: "STUDENT" | "TEACHER" | "ADMIN";
         };
         UserResponse: {
