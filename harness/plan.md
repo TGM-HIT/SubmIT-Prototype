@@ -39,7 +39,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Bug-17](tickets/done/Bug-17.md) | done | Document specified error responses in OpenAPI |
 | [Bug-18](tickets/done/Bug-18.md) | done | Implement documented idea-list filters |
 | [Bug-19](tickets/done/Bug-19.md) | done | Document applicable standard error responses in OpenAPI |
-| [Bug-20](tickets/Bug-20.md) | to-do | Return 201 when creating catalogue entries |
+| [Bug-20](tickets/done/Bug-20.md) | done | Return 201 when creating catalogue entries |
 
 ### Development
 
