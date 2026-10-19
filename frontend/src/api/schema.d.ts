@@ -4166,8 +4166,8 @@ export interface operations {
             };
         };
         responses: {
-            /** @description OK */
-            200: {
+            /** @description Catalogue entry created. */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -5848,8 +5848,8 @@ export interface operations {
             };
         };
         responses: {
-            /** @description OK */
-            200: {
+            /** @description Catalogue entry created. */
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -14,7 +14,6 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -38,13 +37,6 @@ public class StudentDetailsController {
         return details.classes(caller, Math.max(page, 0), normalizeSize(size));
     }
 
-    @PostMapping("/api/student-classes")
-    @Operation(summary = "Create a shared student-class catalogue entry.")
-    public CatalogueEntryResponse createClass(@AuthenticationPrincipal AuthenticatedUser caller,
-            @Valid @RequestBody CatalogueEntryRequest request) {
-        return details.createClass(caller, request);
-    }
-
     @PatchMapping("/api/student-classes/{id}")
     @Operation(summary = "Rename a shared student-class catalogue entry.")
     public CatalogueEntryResponse renameClass(@AuthenticationPrincipal AuthenticatedUser caller,
@@ -59,13 +51,6 @@ public class StudentDetailsController {
             @Parameter(description = "Page size; values are normalized to the inclusive range 1–100.")
             @RequestParam(defaultValue = "20") int size) {
         return details.subjects(caller, Math.max(page, 0), normalizeSize(size));
-    }
-
-    @PostMapping("/api/elective-subjects")
-    @Operation(summary = "Create a shared elective-subject catalogue entry.")
-    public CatalogueEntryResponse createSubject(@AuthenticationPrincipal AuthenticatedUser caller,
-            @Valid @RequestBody CatalogueEntryRequest request) {
-        return details.createSubject(caller, request);
     }
 
     @PatchMapping("/api/elective-subjects/{id}")

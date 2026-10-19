@@ -300,6 +300,28 @@ class OpenApiContractTest {
     }
 
     @Test
+    void catalogueCreationDocumentsCreatedResponses() throws Exception {
+        MvcResult result = mockMvc.perform(get("/v3/api-docs"))
+                .andExpect(status().isOk())
+                .andReturn();
+        JsonNode paths = objectMapper.readTree(result.getResponse().getContentAsByteArray()).path("paths");
+
+        for (String cataloguePath : List.of("/api/student-classes", "/api/elective-subjects")) {
+            JsonNode operations = paths.path(cataloguePath);
+            JsonNode postResponses = operations.path("post").path("responses");
+            assertTrue(postResponses.has("201"), "POST " + cataloguePath + " must document 201 Created");
+            assertFalse(postResponses.has("200"), "POST " + cataloguePath + " must not document 200 success");
+            assertEquals("#/components/schemas/CatalogueEntryResponse",
+                    postResponses.path("201").path("content").path("*/*").path("schema").path("$ref").asText(),
+                    "POST " + cataloguePath + " must return CatalogueEntryResponse");
+            assertTrue(operations.path("get").path("responses").has("200"),
+                    "GET " + cataloguePath + " must retain its 200 response");
+            assertTrue(paths.path(cataloguePath + "/{id}").path("patch").path("responses").has("200"),
+                    "PATCH " + cataloguePath + "/{id} must retain its 200 response");
+        }
+    }
+
+    @Test
     void gradingOperationsDocumentTheirSuccessAndErrorResponseSchemas() throws Exception {
         MvcResult result = mockMvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk())
@@ -1194,7 +1216,7 @@ class OpenApiContractTest {
                 get|/api/application-periods/{id}|200|#/components/schemas/ApplicationPeriodResponse
                 put|/api/application-periods/{id}|200|#/components/schemas/ApplicationPeriodResponse
                 get|/api/student-classes|200|#/components/schemas/PageResponseCatalogueEntryResponse
-                post|/api/student-classes|200|#/components/schemas/CatalogueEntryResponse
+                post|/api/student-classes|201|#/components/schemas/CatalogueEntryResponse
                 get|/api/projects/{projectId}/student-grades|200|#/components/schemas/PageResponseGradeResponse
                 post|/api/projects/{projectId}/student-grades|201|#/components/schemas/GradeResponse
                 post|/api/projects/{projectId}/student-grades/{gradeId}/revisions|201|#/components/schemas/GradeResponse
@@ -1220,7 +1242,7 @@ class OpenApiContractTest {
                 post|/api/formal-applications/{id}/submit|200|#/components/schemas/FormalApplicationResponse
                 post|/api/formal-applications/{id}/reviews|201|#/components/schemas/FormalReviewResponse
                 get|/api/elective-subjects|200|#/components/schemas/PageResponseCatalogueEntryResponse
-                post|/api/elective-subjects|200|#/components/schemas/CatalogueEntryResponse
+                post|/api/elective-subjects|201|#/components/schemas/CatalogueEntryResponse
                 post|/api/auth/register|201|#/components/schemas/UserResponse
                 post|/api/auth/login|200|#/components/schemas/TokenResponse
                 post|/api/artifacts/{artifactId}/publication-review|200|#/components/schemas/ArtifactResponse

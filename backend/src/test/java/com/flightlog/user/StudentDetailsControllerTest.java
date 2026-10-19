@@ -55,13 +55,14 @@ class StudentDetailsControllerTest {
 
     @Test
     void administratorsMaintainSharedCataloguesAndAssignmentsSurviveReloadAndRenames() throws Exception {
-        JsonNode classA = postJson("/api/student-classes", "{\"name\":\"  Class A  \"}", admin, 200);
-        JsonNode classB = postJson("/api/student-classes", "{\"name\":\"Class B\"}", admin, 200);
+        JsonNode classA = postJson("/api/student-classes", "{\"name\":\"  Class A  \"}", admin, 201);
+        JsonNode classB = postJson("/api/student-classes", "{\"name\":\"Class B\"}", admin, 201);
         assertEquals("Class A", classA.path("name").asText());
-        JsonNode subjectOne = postJson("/api/elective-subjects", "{\"name\":\"Subject 1\"}", admin, 200);
+        JsonNode subjectOne = postJson("/api/elective-subjects", "{\"name\":\"Subject 1\"}", admin, 201);
         List<JsonNode> created = new ArrayList<>();
         created.add(subjectOne);
-        for (int i = 2; i <= 4; i++) created.add(postJson("/api/elective-subjects", "{\"name\":\"Subject " + i + "\"}", admin, 200));
+        for (int i = 2; i <= 4; i++) created.add(postJson("/api/elective-subjects",
+                "{\"name\":\"Subject " + i + "\"}", admin, 201));
         String four = "{\"classId\":\"" + classA.path("id").asText() + "\",\"electiveSubjectIds\":["
                 + String.join(",", created.stream().map(item -> "\"" + item.path("id").asText() + "\"").toList()) + "]}";
         mvc.perform(put("/api/users/{id}/student-details", student.getId()).header("Authorization", bearer(admin))
@@ -97,6 +98,57 @@ class StudentDetailsControllerTest {
         loaded = getJson("/api/users/" + student.getId() + "/student-details", teacher);
         assertEquals("Renamed Class B", loaded.path("className").asText());
         assertEquals(0, loaded.path("electiveSubjectIds").size());
+    }
+
+    @Test
+    void catalogueCreationReturnsCreatedWithEntryResponses() throws Exception {
+        List<String> paths = List.of("/api/student-classes", "/api/elective-subjects");
+        List<String> names = List.of("Class A", "Subject A");
+
+        for (int i = 0; i < paths.size(); i++) {
+            String path = paths.get(i);
+            String name = names.get(i);
+            JsonNode created = postJson(path, mapper.writeValueAsString(
+                    java.util.Map.of("name", "  " + name + "  ")), admin, 201);
+            String id = created.path("id").asText();
+            assertFalse(id.isBlank(), path + " response must contain a non-empty ID");
+            assertEquals(id, UUID.fromString(id).toString(), path + " ID must be a UUID");
+            assertEquals(name, created.path("name").asText(), path + " response must contain the normalized name");
+
+            JsonNode catalogue = getJson(path, teacher);
+            assertEquals(1, catalogue.path("totalElements").asInt(), path + " should contain the created entry");
+            boolean entryIsRetrievable = false;
+            for (JsonNode item : catalogue.path("content")) {
+                if (id.equals(item.path("id").asText()) && name.equals(item.path("name").asText())) {
+                    entryIsRetrievable = true;
+                }
+            }
+            assertTrue(entryIsRetrievable, path + " GET must return the created ID and normalized name");
+
+            for (String invalidName : List.of("   ", "x".repeat(101))) {
+                mvc.perform(post(path).header("Authorization", bearer(admin)).contentType(MediaType.APPLICATION_JSON)
+                                .content(mapper.writeValueAsString(java.util.Map.of("name", invalidName))))
+                        .andExpect(status().isBadRequest());
+            }
+            for (String duplicateName : List.of(name, name.toUpperCase(java.util.Locale.ROOT))) {
+                mvc.perform(post(path).header("Authorization", bearer(admin)).contentType(MediaType.APPLICATION_JSON)
+                                .content(mapper.writeValueAsString(java.util.Map.of("name", duplicateName))))
+                        .andExpect(status().isConflict());
+            }
+            assertEquals(1, getJson(path, teacher).path("totalElements").asInt(),
+                    path + " rejected requests must not create entries");
+
+            mvc.perform(post(path).header("Authorization", bearer(teacher)).contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"name\":\"Teacher denied\"}"))
+                    .andExpect(status().isForbidden());
+            mvc.perform(post(path).contentType(MediaType.APPLICATION_JSON).content("{\"name\":\"Anonymous denied\"}"))
+                    .andExpect(status().isUnauthorized());
+            mvc.perform(post(path).header("Authorization", "Bearer invalid").contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"name\":\"Invalid token denied\"}"))
+                    .andExpect(status().isUnauthorized());
+            assertEquals(1, getJson(path, teacher).path("totalElements").asInt(),
+                    path + " unauthorized requests must not create entries");
+        }
     }
 
     @Test
