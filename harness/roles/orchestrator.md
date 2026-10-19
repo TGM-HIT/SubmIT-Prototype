@@ -115,6 +115,6 @@ Dispatch the Evaluator with the check-definition path instead of a ticket path, 
 
 For audit closeout, do not move a ticket or change a plan-row status. On Evaluator `pass`, record outcome `done`; on terminal failure, record `failed`. In either case the ledger is `unchanged`, because the Auditor owns the Compliance ledger update. A paused or failed audit must not change the Compliance ledger beyond changes already committed by the Auditor. Awaiting-human and stopped work otherwise follow the ticket-run rules. Record the check's `Result` cell in the run log. In the return block, `Ticket:` contains the check ID, and `Follow-ups:` lists the Auditor's opened ticket IDs as well as any `OUT OF SCOPE:` lines.
 
-The Auditor retains its model-tier rule: mid tier, or the most-capable tier for Compliance-01 and Compliance-06. The Evaluator's tier is unchanged.
+Run every Auditor check on Opus at a high thinking level. The Evaluator's tier is unchanged.
 
 Run this seat on the most-capable model tier at a high thinking level: the loop is judgment work, and judgment work gets the judgment model.

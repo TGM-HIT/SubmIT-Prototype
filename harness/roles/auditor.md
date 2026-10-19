@@ -86,4 +86,4 @@ Reply with the report path and this block:
 
 For an orchestrated run, add `Handoff: <exact handoff path>` to the return block.
 
-Run this seat on a solid mid model tier at a medium thinking level, except for checks that compare many documents for contradictions (Compliance-01 and Compliance-06), which should run on the most-capable tier at a high thinking level.
+Run every Auditor check on Opus at a high thinking level.
