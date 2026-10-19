@@ -1,34 +1,46 @@
-# Dev-28. Reconcile and index the legacy bug list
-
-Draft from Compliance-05-20261018-2017: needs Ticket Author refinement before implementation
+# Dev-28. Rename and exclude the human-maintained bugs and ideas file
 
 ## Intent
 
-The four unresolved entries in `list-of-bugs.md` do not have corresponding entries in the plan's ticket ledger. The file also has no navigable link from the root README or plan, so readers cannot tell whether these proposals remain active, were superseded, or need a product decision.
+Rename the root information file from `list-of-bugs.md` to `bugs-and-ideas.md` and keep it outside the agent harness's managed documentation and ticket intake. Its contents are human-maintained notes, not requirements, an authoritative backlog, or a source of Compliance findings.
 
-Source: `Compliance-05-20261018-2017`, report finding 1: `list-of-bugs.md:3` says “Allow an allocation period to be modified later on (at least the dates, maybe add additional projects).”; lines 5, 7, and 9 list a documentation run with screenshots, renaming `java.com.flightlog` to `da-db`, and a DA-Excel run. The audit searched open and completed tickets and found no corresponding tickets. The link scan found no incoming Markdown link to `list-of-bugs.md` from `README.md` or `harness/plan.md`.
+The owner's decision on 2026-10-19 replaces the reconciliation/indexing proposal from Compliance-05-20261018-2017. Do not reconcile entries, create tickets from them, require links or dispositions, or restore entries already removed by the owner.
 
 ## Scope and contract
 
-- Review each of the four entries in `list-of-bugs.md` against the current plan, open tickets, completed tickets, and repository state.
-- For each entry, either map it to an appropriate ticket with a concrete scope, or record an explicit disposition that preserves it as an idea, marks it superseded, or identifies the product decision still needed.
-- If `list-of-bugs.md` remains the active inventory, add a navigable Markdown link from the root `README.md` or `harness/plan.md`; if its content is moved or retired, ensure the surviving source is indexed instead.
-- Scope-gate allowances: `list-of-bugs.md` is the only required scope-gate allowance.
-- Preserve unresolved requests; do not infer or implement product policy, delete entries, or prescribe a product outcome.
-- Update the list and ticket ledger only as needed to make the chosen disposition and any ticket links unambiguous.
+- Perform a one-time, content-preserving rename of the root file. Capture its bytes immediately before implementation and verify that `bugs-and-ideas.md` has exactly those bytes afterwards. Preserve the owner's current text, heading, ordering, whitespace and remaining ideas; do not regenerate it from an earlier commit. This explicitly authorized rename is the sole harness-managed change to that file.
+- Keep the renamed file tracked in Git. Do not add it to `.gitignore`, delete it, format it, annotate it, insert ticket links, or add a content disclaimer to it. Its policy belongs in harness guidance, not inside the human-maintained file.
+- Define the exclusion in the shared project guidance `CLAUDE.md`: the file is human-maintained information outside harness scope. Agents must not inspect its contents for routine intake, implementation, evaluation, learning, archival or audits, derive requirements or follow-up work from it, or edit, format, move, archive or delete it. A later explicit owner instruction naming the file may authorize a bounded exception; ordinary ticket work and Compliance runs do not. This ticket authorizes only the rename and content-preservation verification.
+- Wire the exclusion into all seven role contracts under `harness/roles/`: `orchestrator.md`, `ticket-author.md`, `implementor.md`, `evaluator.md`, `auditor.md`, `learner.md` and `archiver.md`. Use a short reference to the owning shared rule rather than duplicating a policy essay. Each role must respect the exclusion even when its usual task uses broad repository discovery. Agent wrappers already delegate to those contracts; change no wrappers unless a verified conflicting instruction requires separate owner authorization.
+- Make the Auditor's exclusion apply to every Compliance check, including broad file searches and future checks. Exclude the file from inspected-content lists, link/anchor/format validation, stale-content/TODO scans, orphan/indexing findings, backlog reconciliation, trivial fixes and follow-up generation. Do not require an incoming README or plan link.
+- Update `harness/checks/Compliance-04.md`: remove the old filename from the inspected set and explicitly exclude the new file from otherwise broad tracked-Markdown inspection. Incoming links from in-scope documents may still be checked for target existence; do not open the excluded target to validate its content or anchors.
+- Update `harness/checks/Compliance-05.md`: remove the old filename from the inspected set, remove the special topic requiring reconciliation of its entries with tickets, and explicitly exclude the new file from all health/orphan/staleness scans. Preserve unrelated check topics and reporting rules.
+- Inspect all remaining check definitions for conflicting broad scope language; the global Auditor exclusion must take precedence without requiring copies of the same policy in every check. Preserve all unrelated compliance coverage, preflight behavior, clean-tree requirements and gate semantics. Excluding content from harness management does not mean ignoring an uncommitted human change during preflight.
+- Correct verified live Markdown links to the renamed file in otherwise in-scope documentation, if any exist immediately before implementation. Do not add an index link or replace historical plain-text citations. At refinement, the two other open tickets that referenced the file, Dev-29 and Dev-31, were separately adapted with owner approval to remove that coupling.
+- Do not rewrite historical run reports, lessons, completed tickets or past findings. Historical mentions of the old filename remain valid evidence, not instructions to inspect the current file. Do not sweep history to eliminate the old name.
+- Dev-29 and Dev-31 have no dependency on this information file or on this ticket. Implement no listed idea, product feature, application code, API, schema, seed-data or documentation-generation changes here.
+- Scope-gate allowances, temporary for this ticket only: `list-of-bugs.md` (rename source), `bugs-and-ideas.md` (rename destination), `CLAUDE.md`, `harness/checks/Compliance-05.md`, `harness/roles/ticket-author.md`, `harness/roles/evaluator.md` and `harness/roles/archiver.md`. Compliance-04 and the other named role files are already allowed. Remove the temporary allowances at closeout; they are not permanent permission to modify the information file.
 
 ## Mechanical checks (the Evaluator re-runs)
 
-Documentation-only or harness-only changes: no application checks required. Verify that each original entry has an explicit disposition and that every linked ticket resolves. Run `git diff --check` and format exactly the changed Markdown files.
+Documentation/harness-only work: no application build, backend/frontend test suite, new test framework, or browser verification is required. The following named repeatable structural and contract checks cover every acceptance criterion:
+
+- **R1 — Exact rename preservation:** Retain the pre-rename byte snapshot or SHA-256 and the base commit in ignored run evidence. Verify the destination's bytes match, the old path is absent, the new path is tracked and not ignored, and Git's implementation diff records only a rename for that content. Compare against the actual pre-implementation file, not the original audit's four-entry description. Never run the Markdown formatter on the destination.
+- **R2 — Role coverage and authority:** Verify the shared policy and all seven named role references resolve and agree on no routine inspection, editing or task derivation, the explicit-owner exception, and this one-time rename boundary. Check each role individually; an Auditor-only exclusion does not satisfy the other six roles. Confirm preflight and scope-gate requirements remain unchanged.
+- **R3 — Compliance exclusion matrix:** For each current Compliance definition, record how the global Auditor rule excludes the file. For Compliance-04 and Compliance-05, verify their explicit inspect/topic changes and that no reconciliation requirement remains. Check that file discovery excludes the exact root path before reading content; incidental path enumeration by `git ls-files` is not a content inspection. Verify expected dispositions: a TODO, stale idea, malformed heading or broken outgoing link inside the excluded file yields no finding, edit or ticket; lack of an incoming link yields no orphan finding; the same defects in an ordinary in-scope document remain eligible findings. Use synthetic examples in the check report without inserting them into, or inspecting, the real human file.
+- **R4 — Live references and historical boundary:** Search only active guidance/check definitions and currently open tickets for obsolete operational requirements or broken Markdown links caused by the rename. Exclude this specification under both `harness/tickets/Dev-28.md` and `harness/tickets/done/Dev-28.md` from assertions that the old name is absent: it intentionally describes the rename. Also exclude historical citations, completed tickets, runs and lessons from rename-replacement checks. Verify Dev-29 and Dev-31 contain no reference or requirement concerning either filename. Historical artifacts remain unchanged.
+- **R5 — Scope and output hygiene:** Review the complete diff for only the rename, necessary guidance/check changes, and any verified live-link repairs. Confirm no content reconciliation, information-file formatting, automatic ticket creation, application change or permanent gate exemption. Format exactly changed managed Markdown files, excluding both rename paths, and run `git diff --check` on the managed-document changes. If the unchanged renamed file already has whitespace defects, record them as preserved bytes rather than "fixing" them or treating them as a Compliance finding.
+
+The Evaluator must retain the command output and per-role/per-check coverage tables in the run evidence. These are documentation-contract checks, not claims that an autonomous audit or application test suite was executed.
 
 ## One-time manual verification (in addition to automated tests)
 
-No manual verification is required; no UI, API, or application behavior changes are in scope.
+No UI or human-only verification is needed. The Implementor and Evaluator inspect the managed policy/check changes and retained rename evidence using R1–R5. Do not launch a Compliance audit that reads the excluded file as a way to prove the exclusion. If a live instruction conflicts with the exclusion and cannot be resolved within the named scope, report its exact path and conflicting rule rather than inspecting or changing the human information file.
 
 ## Acceptance criteria (the Evaluator judges)
 
-- Each of the four original entries has a clear, reviewable disposition and is either linked to its ticket or explicitly retained without an implementation ticket.
-- Any retained active inventory has a navigable entry point from the root README or plan.
-- No entry is silently deleted or converted into an unstated product requirement.
-- Any ticket created is recorded in the matching plan group and has scope supported by the entry and any required product decision.
-- No application behavior changes or unverified checks are claimed.
+1. The current human file is renamed to tracked `bugs-and-ideas.md` with byte-identical content and no remaining source path; existing owner edits are preserved. Covered by R1.
+2. All seven harness roles exclude the file from routine inspection, modification and work derivation, with only an explicit bounded owner instruction able to authorize an exception. No automatic indexing or ticket intake is required. Covered by R2.
+3. Every Compliance check ignores the file's contents and lack of indexing; Compliance-04/05 explicitly remove their conflicting inspection/reconciliation requirements. Ordinary in-scope documentation coverage remains intact. Covered by R3.
+4. Necessary live links resolve, Dev-29/Dev-31 remain independent, and historical citations and audit records are not rewritten. Covered by R4.
+5. The rename is the only change to the human file; no application behavior, idea implementation, formatting of the excluded file, permanent gate allowance or unrelated cleanup is introduced. Required managed-document checks pass and no unperformed checks are claimed. Covered by R1/R5.

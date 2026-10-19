@@ -4,7 +4,7 @@
 
 Provide German, screenshot-based Markdown guides explaining the complete project lifecycle for students, teachers, and administrators. Capture screenshots automatically from the real application using synthetic data, so the guides can be refreshed as the application changes. Structure documentation and capture configuration so further documentation languages can be added later without copying the lifecycle automation.
 
-The user confirmed full-lifecycle coverage, German initially with support for future languages, and Markdown guides with screenshots stored in the repository. This implements the documentation-run idea in [the legacy list](../../list-of-bugs.md); it does not reconcile the rest of that list.
+The user confirmed full-lifecycle coverage, German initially with support for future languages, and Markdown guides with screenshots stored in the repository.
 
 ## Scope and contract
 
@@ -64,7 +64,7 @@ Provide an overview connecting the three role guides, prerequisites for each cha
 - Validate a complete capture set before replacing tracked images; a failed run must leave the previous guide/image set intact rather than success-shaped partial output. Use stable logical filenames and relative Markdown links, not temporary absolute paths, tokens or transient IDs in output names.
 - Update the root README entry point and the preview/documentation-run usage in `frontend/DEV-GUIDELINES.md`; update `backend/DEV-GUIDELINES.md` only for actual new fixture capabilities. Document invocation, prerequisites, synthetic setup, captured states, output/tracking policy, language extension, and recovery/cleanup.
 - Scope-gate allowances: `docs/user-guide/README.md`, `docs/user-guide/de/README.md`, `docs/user-guide/de/schueler.md`, `docs/user-guide/de/lehrkraefte.md`, `docs/user-guide/de/administration.md`, and PNG capture outputs strictly below `docs/user-guide/de/images/`. Limit any gate extension to those files and that image directory; no general `docs/` allowance.
-- Coordinate with [Dev-28](Dev-28.md): it may link the legacy documentation proposal to this ticket; do not edit the legacy inventory here. [Dev-29](Dev-29.md) may move Java packages; do not introduce hard-coded bootstrap/package paths. No ordering dependency on either ticket is required.
+- [Dev-29](Dev-29.md) may move Java packages; do not introduce hard-coded bootstrap/package paths. No ordering dependency on that ticket is required.
 
 ## Mechanical checks (the Evaluator re-runs)
 
