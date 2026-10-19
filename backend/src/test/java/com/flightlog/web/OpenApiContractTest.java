@@ -336,8 +336,9 @@ class OpenApiContractTest {
         JsonNode request = schemas.path("CatalogueEntryRequest");
         JsonNode requestRequired = request.path("required");
         JsonNode requestName = request.path("properties").path("name");
-        assertTrue(requestRequired.isArray() && requestRequired.toString().contains("\"name\""),
-                "CatalogueEntryRequest.name must be required");
+        assertTrue(requestRequired.isArray(), "CatalogueEntryRequest.required must be an array");
+        assertTrue(containsTextualMember(requestRequired, "name"),
+                "CatalogueEntryRequest.required must contain the textual member name");
         assertTrue(requestName.isObject(), "CatalogueEntryRequest.name must have a schema");
         assertTrue(requestName.has("type") && requestName.get("type").isTextual(),
                 "CatalogueEntryRequest.name must declare a string type");
@@ -357,9 +358,11 @@ class OpenApiContractTest {
 
         JsonNode response = schemas.path("CatalogueEntryResponse");
         JsonNode responseRequired = response.path("required");
-        assertTrue(responseRequired.isArray() && responseRequired.toString().contains("\"id\"")
-                        && responseRequired.toString().contains("\"name\""),
-                "CatalogueEntryResponse.id and name must be required");
+        assertTrue(responseRequired.isArray(), "CatalogueEntryResponse.required must be an array");
+        assertTrue(containsTextualMember(responseRequired, "id"),
+                "CatalogueEntryResponse.required must contain the textual member id");
+        assertTrue(containsTextualMember(responseRequired, "name"),
+                "CatalogueEntryResponse.required must contain the textual member name");
         JsonNode responseProperties = response.path("properties");
         JsonNode id = responseProperties.path("id");
         JsonNode name = responseProperties.path("name");
@@ -1597,6 +1600,18 @@ class OpenApiContractTest {
     private boolean hasConstraint(JsonNode schema) {
         for (String keyword : SCHEMA_CONSTRAINTS) {
             if (schema.has(keyword)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean containsTextualMember(JsonNode array, String expectedMember) {
+        if (!array.isArray()) {
+            return false;
+        }
+        for (JsonNode member : array) {
+            if (member.isTextual() && expectedMember.equals(member.textValue())) {
                 return true;
             }
         }
