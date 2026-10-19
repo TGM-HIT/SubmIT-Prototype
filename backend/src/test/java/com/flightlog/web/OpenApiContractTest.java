@@ -35,14 +35,16 @@ class OpenApiContractTest {
     private static final Set<String> PAGE_PROPERTIES =
             names("content,page,size,totalElements,totalPages");
     private static final List<BaselineSuccess> BASELINE_SUCCESS_RESPONSES = baselineSuccessResponses();
+    private static final List<BaselineError> BASELINE_ERROR_RESPONSES = baselineErrorResponses();
     private static final Map<String, Set<String>> TICKET_ERROR_CODES = ticketErrorCodes();
+    private static final Map<String, List<String>> TICKET_ERROR_CONDITIONS = ticketErrorConditions();
     private static final List<ExpectedOperation> GRADING_RESPONSE_CONTRACTS = List.of(
             operation("get", "/api/projects/{projectId}/final-grade", "FinalGradeHistory",
                     "Current final project grade and history.",
                     Map.of("403", response("ApiErrorResponse",
                                     "A student caller is not a member of the project."),
                             "404", response("ApiErrorResponse",
-                                    "The project does not exist."))),
+                                    "Project not found or no final grade has been recorded."))),
             operation("put", "/api/projects/{projectId}/final-grade", "FinalGradesResponse",
                     "Recorded project and individual final grades.",
                     Map.of("400", response("ApiErrorResponse",
@@ -65,7 +67,8 @@ class OpenApiContractTest {
                     "Student's individual final grade and history.",
                     Map.of("403", response("ApiErrorResponse", "Caller lacks the required role or project access."),
                             "404", response("ApiErrorResponse",
-                                    "The project, student, or recorded grade does not exist."))),
+                                    "Project not found, student is not a project member, or no final grade has "
+                                            + "been recorded."))),
             operation("get", "/api/grading-rubrics/{id}", "RubricResponse", "Specific immutable rubric version.",
                     Map.of("404", response("ApiErrorResponse", "Rubric version not found."))),
             operation("get", "/api/grading-rubrics/active", "RubricResponse", "Rubric version effective today.",
@@ -396,6 +399,13 @@ class OpenApiContractTest {
                 .map(operation -> operation.method() + " " + operation.path()).toList());
         assertEquals(expectedOperations, actualOperations, "The complete set of routes must match the baseline.");
 
+        Set<String> expectedConditionKeys = new TreeSet<>();
+        TICKET_ERROR_CODES.forEach((route, statuses) -> statuses.stream()
+                .filter(status -> !status.equals("401"))
+                .forEach(status -> expectedConditionKeys.add(route + " " + status)));
+        assertEquals(expectedConditionKeys, TICKET_ERROR_CONDITIONS.keySet(),
+                "The independent semantic oracle must cover every non-authentication route/status in the matrix.");
+
         for (Map.Entry<String, Set<String>> route : TICKET_ERROR_CODES.entrySet()) {
             String[] operationParts = route.getKey().split(" ", 2);
             String method = operationParts[0];
@@ -413,11 +423,13 @@ class OpenApiContractTest {
                     continue;
                 }
                 String actualDescription = response.path("description").asText();
-                if (actualDescription.isBlank()) {
-                    failures.add(location + " " + status + " has no condition-specific description");
-                } else if (!describesStatusCondition(status, actualDescription.toLowerCase())) {
-                    failures.add(location + " " + status + " description does not state a matching condition: "
-                            + actualDescription);
+                if (!status.equals("401")) {
+                    for (String condition : TICKET_ERROR_CONDITIONS.get(route.getKey() + " " + status)) {
+                        if (!actualDescription.toLowerCase().contains(condition.toLowerCase())) {
+                            failures.add(location + " " + status + " must describe its independent trigger '"
+                                    + condition + "': " + actualDescription);
+                        }
+                    }
                 }
                 assertResponseSchema(operation.path("responses"), status, "ApiErrorResponse",
                         location, failures);
@@ -443,6 +455,7 @@ class OpenApiContractTest {
 
         assertSharedBug17Conditions(paths, failures);
         assertIndependentConditionCorrections(paths, failures);
+        assertBaselinePreservedErrorResponses(paths, failures);
         assertTrue(failures.isEmpty(), () -> String.join(System.lineSeparator(), failures));
     }
 
@@ -454,7 +467,7 @@ class OpenApiContractTest {
         assertCondition(paths, "put", "/api/users/{id}/student-details", "400",
                 List.of("account is not a student", "assignment"), List.of());
         assertCondition(paths, "get", "/api/projects/{projectId}/final-grade", "404",
-                List.of("project does not exist"), List.of("recorded final grade"));
+                List.of("project not found", "no final grade has been recorded"), List.of());
         assertCondition(paths, "put", "/api/projects/{projectId}/final-grade", "404",
                 List.of("project", "rubric"), List.of("requested student", "rule resource"));
         assertCondition(paths, "put", "/api/projects/{projectId}/final-grade", "400",
@@ -466,7 +479,7 @@ class OpenApiContractTest {
         assertCondition(paths, "post", "/api/projects/{projectId}/student-grades/{gradeId}/revisions", "404",
                 List.of("project", "source grade"), List.of("rubric"));
         assertCondition(paths, "put", "/api/application-periods/{periodId}/allocation-pins/{studentId}", "404",
-                List.of("period", "student", "does not exist"), List.of("selected catalogue project"));
+                List.of("period or student not found"), List.of("selected catalogue project"));
         assertCondition(paths, "put", "/api/application-periods/{periodId}/allocation-pins/{studentId}", "409",
                 List.of("unranked project", "more than five project pins", "finalized period"), List.of());
         assertCondition(paths, "post", "/api/ideas/{id}/specification/reviews", "404",
@@ -511,6 +524,8 @@ class OpenApiContractTest {
                 "403", "Administrator role required.");
         assertResponseDescription(paths, "put", "/api/application-periods/{periodId}/allocation-pins/{studentId}",
                 "401", "Authentication is required. Missing or invalid bearer authentication credentials.");
+        assertResponseDescription(paths, "put", "/api/application-periods/{periodId}/allocation-pins/{studentId}",
+                "404", "Period or student not found.");
         assertResponseDescription(paths, "delete", "/api/application-periods/{periodId}/allocation-pins/{studentId}",
                 "403", "Administrator role required.");
         assertResponseDescription(paths, "delete", "/api/application-periods/{periodId}/allocation-pins/{studentId}",
@@ -528,7 +543,6 @@ class OpenApiContractTest {
         assertCondition(paths, "get", "/api/grading-rubrics/{id}", null, List.of(), List.of("403"));
         assertCondition(paths, "get", "/api/grading-rubrics/active", null, List.of(), List.of("403"));
         assertCondition(paths, "post", "/api/application-periods", null, List.of(), List.of("409"));
-        assertCondition(paths, "get", "/api/projects/{projectId}/formal-applications", null, List.of(), List.of("404"));
         assertCondition(paths, "post", "/api/projects/{projectId}/formal-applications", null, List.of(), List.of("404"));
     }
 
@@ -558,6 +572,26 @@ class OpenApiContractTest {
         assertEquals(expected, paths.path(path).path(method).path("responses").path(status)
                 .path("description").asText(),
                 method.toUpperCase() + " " + path + " " + status + " must preserve its baseline description");
+    }
+
+    private void assertBaselinePreservedErrorResponses(JsonNode paths, List<String> failures) throws Exception {
+        JsonNode expectedContent = objectMapper.readTree(
+                "{\"application/json\":{\"schema\":{\"$ref\":\"#/components/schemas/ApiErrorResponse\"}}}");
+        for (BaselineError expected : BASELINE_ERROR_RESPONSES) {
+            String location = expected.method().toUpperCase() + " " + expected.path() + " " + expected.status();
+            JsonNode response = paths.path(expected.path()).path(expected.method()).path("responses")
+                    .path(expected.status());
+            if (!expected.description().equals(response.path("description").asText())) {
+                failures.add(location + " baseline description changed; expected '" + expected.description()
+                        + "' but found '" + response.path("description").asText() + "'");
+            }
+            if (!expectedContent.equals(response.path("content"))) {
+                failures.add(location + " baseline ApiErrorResponse media/schema changed: "
+                        + response.path("content"));
+            }
+        }
+        assertEquals(53, BASELINE_ERROR_RESPONSES.size(),
+                "The test-owned baseline table must cover every pre-existing error response.");
     }
 
     @Test
@@ -651,25 +685,6 @@ class OpenApiContractTest {
         return schemas;
     }
 
-    private static boolean describesStatusCondition(String status, String description) {
-        return switch (status) {
-            case "400" -> containsAny(description, "invalid", "malformed", "missing", "pagination", "query", "uuid");
-            case "403" -> containsAny(description, "caller", "only", "role", "authoriz", "access", "permitted",
-                    "owner");
-            case "404" -> containsAny(description, "not found", "does not exist", "no active", "no rubric",
-                    "absent");
-            case "409" -> containsAny(description, "state", "conflict", "already", "cannot", "does not permit",
-                    "ineffective", "transition", "pin", "superseded", "preference", "unranked", "finalized",
-                    "owner limit", "duplicate", "lifecycle", "missing or invalid", "last administrator",
-                    "version differs", "already");
-            default -> false;
-        };
-    }
-
-    private static boolean containsAny(String description, String... fragments) {
-        return Arrays.stream(fragments).anyMatch(description::contains);
-    }
-
     private static void assertSharedBug17Conditions(JsonNode paths, List<String> failures) {
         assertContains(paths, "put", "/api/ideas/{id}/supervisor", "409",
                 "NOT_WILLING_TO_SUPERVISE", failures);
@@ -709,7 +724,7 @@ class OpenApiContractTest {
                 post|/api/projects/{projectId}/metrics|400,403,404,409
                 get|/api/projects/{projectId}/group-grades|400,403,404
                 post|/api/projects/{projectId}/group-grades|400,403,404,409
-                get|/api/projects/{projectId}/formal-applications|400,403,409
+                get|/api/projects/{projectId}/formal-applications|400,403,404,409
                 post|/api/projects/{projectId}/formal-applications|400,403,409
                 post|/api/projects/{projectId}/complete|400,403,404,409
                 get|/api/projects/{projectId}/artifacts|400,403,404
@@ -780,6 +795,384 @@ class OpenApiContractTest {
                     inventory.put(parts[0] + " " + parts[1], Set.copyOf(Arrays.asList(parts[2].split(","))));
                 });
         return Map.copyOf(inventory);
+    }
+
+    private static Map<String, List<String>> ticketErrorConditions() {
+        Map<String, List<String>> conditions = new java.util.LinkedHashMap<>();
+        """
+                get|/api/users/{id}/student-details|400|user ID;UUID;not a student
+                get|/api/users/{id}/student-details|403|role required to view student details
+                get|/api/users/{id}/student-details|404|requested student does not exist
+                put|/api/users/{id}/student-details|400|user ID;not a student;assignment input
+                put|/api/users/{id}/student-details|403|role required to assign student details
+                put|/api/users/{id}/student-details|404|requested student does not exist
+                get|/api/projects/{projectId}/final-grade|400|project ID;UUID
+                get|/api/projects/{projectId}/final-grade|403|student caller;not a member
+                get|/api/projects/{projectId}/final-grade|404|project not found;no final grade has been recorded
+                put|/api/projects/{projectId}/final-grade|400|project UUID;nonmember;duplicate;undefined;wrong-scope
+                put|/api/projects/{projectId}/final-grade|403|teacher or administrator
+                put|/api/projects/{projectId}/final-grade|404|project or rubric resource
+                put|/api/projects/{projectId}/final-grade|409|configured rule;selected rubric is ineffective;transition lacks a reason
+                get|/api/projects/{projectId}/student-grades|400|project UUID;pagination
+                get|/api/projects/{projectId}/student-grades|403|required role or project access
+                get|/api/projects/{projectId}/student-grades|404|project does not exist
+                post|/api/projects/{projectId}/student-grades|400|project UUID;student ID outside the project group;criterion scale
+                post|/api/projects/{projectId}/student-grades|403|role or project access
+                post|/api/projects/{projectId}/student-grades|404|project or requested rubric resource
+                post|/api/projects/{projectId}/student-grades|409|rubric version differs;bound version
+                post|/api/projects/{projectId}/student-grades/{gradeId}/revisions|400|project UUID;grade UUID;revision request
+                post|/api/projects/{projectId}/student-grades/{gradeId}/revisions|403|teacher or administrator
+                post|/api/projects/{projectId}/student-grades/{gradeId}/revisions|404|project or source grade
+                post|/api/projects/{projectId}/student-grades/{gradeId}/revisions|409|source grade;superseded
+                get|/api/projects/{projectId}/metrics|400|project UUID;pagination
+                get|/api/projects/{projectId}/metrics|403|required role or project access
+                get|/api/projects/{projectId}/metrics|404|project does not exist
+                post|/api/projects/{projectId}/metrics|400|project UUID;undefined metric ID;invalid input
+                post|/api/projects/{projectId}/metrics|403|required role or project access
+                post|/api/projects/{projectId}/metrics|404|project or rubric resource
+                post|/api/projects/{projectId}/metrics|409|rubric binding is ineffective;transition;required reason
+                get|/api/projects/{projectId}/group-grades|400|project UUID;pagination
+                get|/api/projects/{projectId}/group-grades|403|required role or project access
+                get|/api/projects/{projectId}/group-grades|404|project does not exist
+                post|/api/projects/{projectId}/group-grades|400|project UUID;group-grade request
+                post|/api/projects/{projectId}/group-grades|403|required role or project access
+                post|/api/projects/{projectId}/group-grades|404|project, group, or requested rubric
+                post|/api/projects/{projectId}/group-grades|409|rubric binding is ineffective;transition;required reason
+                get|/api/projects/{projectId}/formal-applications|400|project ID;UUID
+                get|/api/projects/{projectId}/formal-applications|403|role or project access
+                get|/api/projects/{projectId}/formal-applications|404|formal application does not exist;valid allocated project group
+                get|/api/projects/{projectId}/formal-applications|409|allocated project group is missing or invalid
+                post|/api/projects/{projectId}/formal-applications|400|project ID;formal-application request
+                post|/api/projects/{projectId}/formal-applications|403|authorized to create a formal application
+                post|/api/projects/{projectId}/formal-applications|409|allocated project group is missing or invalid;lifecycle state
+                post|/api/projects/{projectId}/complete|400|project ID;UUID
+                post|/api/projects/{projectId}/complete|403|authorized to complete this project
+                post|/api/projects/{projectId}/complete|404|project does not exist
+                post|/api/projects/{projectId}/complete|409|completion prerequisites are unmet;project lifecycle state
+                get|/api/projects/{projectId}/artifacts|400|project UUID;pagination
+                get|/api/projects/{projectId}/artifacts|403|role or project access;list artifacts
+                get|/api/projects/{projectId}/artifacts|404|project does not exist
+                post|/api/projects/{projectId}/artifacts|400|project UUID;artifact metadata;content
+                post|/api/projects/{projectId}/artifacts|403|authorized to upload an artifact
+                post|/api/projects/{projectId}/artifacts|404|project does not exist
+                post|/api/projects/{projectId}/artifacts|409|lifecycle state;artifact upload
+                get|/api/ideas/{id}|400|idea ID;UUID
+                get|/api/ideas/{id}|403|not permitted to view this idea
+                get|/api/ideas/{id}|404|idea does not exist
+                put|/api/ideas/{id}|400|idea ID;submitted idea fields
+                put|/api/ideas/{id}|403|role or ownership;update this idea
+                put|/api/ideas/{id}|404|idea does not exist
+                put|/api/ideas/{id}|409|current lifecycle state;does not permit this update
+                put|/api/ideas/{id}/supervisor|400|idea ID;supervisor-assignment request
+                put|/api/ideas/{id}/supervisor|403|role or authorization;assign a supervisor
+                put|/api/ideas/{id}/supervisor|404|idea does not exist
+                put|/api/ideas/{id}/supervisor|409|NOT_WILLING_TO_SUPERVISE;NOT_AVAILABLE;acknowledgeRefusal
+                put|/api/ideas/{id}/supervision-preference|400|idea ID;supervision preference
+                put|/api/ideas/{id}/supervision-preference|403|role required to change the supervision preference
+                put|/api/ideas/{id}/supervision-preference|404|idea does not exist
+                put|/api/ideas/{id}/supervision-preference|409|draft;withdrawn;declined;preference cannot be changed
+                put|/api/ideas/{id}/specification|400|idea ID;specification fields
+                put|/api/ideas/{id}/specification|403|role or ownership;update this specification
+                put|/api/ideas/{id}/specification|404|idea does not exist
+                put|/api/ideas/{id}/specification|409|lifecycle state;specification status
+                put|/api/formal-applications/{id}|400|application ID;formal-application fields
+                put|/api/formal-applications/{id}|403|authorized to update this application
+                put|/api/formal-applications/{id}|404|formal application does not exist
+                put|/api/formal-applications/{id}|409|formal application's lifecycle state
+                put|/api/applications/{id}|400|application ID;ranked project preferences
+                put|/api/applications/{id}|403|authorized to update this application
+                put|/api/applications/{id}|404|application does not exist
+                put|/api/applications/{id}|409|application period;application state
+                delete|/api/applications/{id}|400|application ID;UUID
+                delete|/api/applications/{id}|403|authorized to delete this application
+                delete|/api/applications/{id}|404|application does not exist
+                delete|/api/applications/{id}|409|application period;application state;deletion
+                put|/api/application-periods/{periodId}/allocation-pins/{studentId}|400|STUDENT account;period catalogue;path UUID
+                put|/api/application-periods/{periodId}/allocation-pins/{studentId}|403|Administrator role
+                put|/api/application-periods/{periodId}/allocation-pins/{studentId}|404|Period or student not found
+                put|/api/application-periods/{periodId}/allocation-pins/{studentId}|409|Unranked project;five project pins;finalized period
+                delete|/api/application-periods/{periodId}/allocation-pins/{studentId}|400|period or student path;valid UUID
+                delete|/api/application-periods/{periodId}/allocation-pins/{studentId}|403|Administrator role
+                delete|/api/application-periods/{periodId}/allocation-pins/{studentId}|404|Period or pin not found
+                delete|/api/application-periods/{periodId}/allocation-pins/{studentId}|409|Period is finalized
+                get|/api/application-periods/{id}|400|period ID;UUID
+                get|/api/application-periods/{id}|404|application period does not exist
+                put|/api/application-periods/{id}|400|period ID;configuration;absent, ineligible, or out-of-catalogue
+                put|/api/application-periods/{id}|403|role required to update application periods
+                put|/api/application-periods/{id}|404|application period does not exist
+                put|/api/application-periods/{id}|409|allocation pin;application-period state
+                get|/api/student-classes|400|page or size;pagination
+                get|/api/student-classes|403|role required to list student classes
+                post|/api/student-classes|400|student-class name
+                post|/api/student-classes|403|role required to create student classes
+                post|/api/student-classes|409|student class;submitted name;already exists
+                get|/api/ideas|400|pagination;idea-filter
+                post|/api/ideas|400|idea request;collaborator input
+                post|/api/ideas|403|role;not permitted to create an idea
+                post|/api/ideas/{id}/withdraw|400|idea ID;UUID
+                post|/api/ideas/{id}/withdraw|403|role or ownership;withdraw the idea
+                post|/api/ideas/{id}/withdraw|404|idea does not exist
+                post|/api/ideas/{id}/withdraw|409|lifecycle state;withdrawal
+                post|/api/ideas/{id}/submit|400|idea ID;UUID
+                post|/api/ideas/{id}/submit|403|role or ownership;submit the idea
+                post|/api/ideas/{id}/submit|404|idea does not exist
+                post|/api/ideas/{id}/submit|409|lifecycle state;submission
+                post|/api/ideas/{id}/specification/submit|400|idea ID;UUID
+                post|/api/ideas/{id}/specification/submit|403|role or ownership;submit the specification
+                post|/api/ideas/{id}/specification/submit|404|idea does not exist
+                post|/api/ideas/{id}/specification/submit|409|specification is incomplete;lifecycle state
+                post|/api/ideas/{id}/specification/reviews|400|idea ID;specification review
+                post|/api/ideas/{id}/specification/reviews|403|teacher author;own specification;reviewer role
+                post|/api/ideas/{id}/specification/reviews|404|idea does not exist
+                post|/api/ideas/{id}/specification/reviews|409|full specification is missing;lifecycle state
+                post|/api/ideas/{id}/reviews|400|idea ID;submitted review
+                post|/api/ideas/{id}/reviews|403|teacher author;own idea;reviewer role
+                post|/api/ideas/{id}/reviews|404|idea does not exist
+                post|/api/ideas/{id}/reviews|409|full specification is missing;idea lifecycle state
+                post|/api/ideas/{id}/owners|400|idea ID;collaborator input;selected student;invalid input
+                post|/api/ideas/{id}/owners|403|role or creator authorization;add an owner
+                post|/api/ideas/{id}/owners|404|idea does not exist
+                post|/api/ideas/{id}/owners|409|owner limit;owner is already present
+                get|/api/grading-rubrics|400|pagination query parameter
+                post|/api/grading-rubrics|400|rubric structure;scale;metric;rule
+                post|/api/grading-rubrics|403|administrator
+                post|/api/grading-rubrics|409|rubric version label;already exists
+                post|/api/formal-applications/{id}/submit|400|formal-application ID;UUID
+                post|/api/formal-applications/{id}/submit|403|authorized to submit this application
+                post|/api/formal-applications/{id}/submit|404|formal application does not exist
+                post|/api/formal-applications/{id}/submit|409|formal application's lifecycle state
+                post|/api/formal-applications/{id}/reviews|400|application ID;formal review
+                post|/api/formal-applications/{id}/reviews|403|role required to review formal applications
+                post|/api/formal-applications/{id}/reviews|404|formal application does not exist
+                post|/api/formal-applications/{id}/reviews|409|formal application's lifecycle state
+                get|/api/elective-subjects|400|pagination query parameter
+                get|/api/elective-subjects|403|role required to list elective subjects
+                post|/api/elective-subjects|400|elective-subject name
+                post|/api/elective-subjects|403|role required to create elective subjects
+                post|/api/elective-subjects|409|elective subject;submitted name;already exists
+                post|/api/artifacts/{artifactId}/publication-review|400|artifact ID;publication review
+                post|/api/artifacts/{artifactId}/publication-review|403|role required to review publication
+                post|/api/artifacts/{artifactId}/publication-review|404|artifact does not exist
+                post|/api/artifacts/{artifactId}/publication-review|409|publication or lifecycle state
+                get|/api/application-periods|400|pagination query parameter
+                post|/api/application-periods|400|period configuration;catalogue
+                post|/api/application-periods|403|role required to create application periods
+                get|/api/application-periods/{periodId}/applications|400|period UUID;pagination
+                get|/api/application-periods/{periodId}/applications|403|role required to list period applications
+                get|/api/application-periods/{periodId}/applications|404|application period does not exist
+                post|/api/application-periods/{periodId}/applications|400|period UUID;project preferences;outside the period catalogue
+                post|/api/application-periods/{periodId}/applications|403|role required to create a period application
+                post|/api/application-periods/{periodId}/applications|404|application period does not exist
+                post|/api/application-periods/{periodId}/applications|409|application period is closed;state
+                get|/api/application-periods/{periodId}/allocation-runs|400|period UUID;pagination
+                get|/api/application-periods/{periodId}/allocation-runs|403|role required to list allocation runs
+                get|/api/application-periods/{periodId}/allocation-runs|404|application period does not exist
+                post|/api/application-periods/{periodId}/allocation-runs|400|period UUID;not valid
+                post|/api/application-periods/{periodId}/allocation-runs|403|administrators;start allocation runs
+                post|/api/application-periods/{periodId}/allocation-runs|404|application period
+                post|/api/application-periods/{periodId}/allocation-runs|409|not open;finalized
+                post|/api/allocation-runs/{id}/finalize|400|allocation-run ID;UUID
+                post|/api/allocation-runs/{id}/finalize|403|administrators;finalize allocation runs
+                post|/api/allocation-runs/{id}/finalize|404|allocation run was not found
+                post|/api/allocation-runs/{id}/finalize|409|early;incomplete;already finalized
+                patch|/api/users/{id}|400|name is missing;blank after trimming;120 characters
+                patch|/api/users/{id}|403|account owner;administrator;change the name
+                patch|/api/users/{id}|404|account does not exist
+                patch|/api/users/{id}/role|400|user ID;requested role
+                patch|/api/users/{id}/role|403|role required to change user roles
+                patch|/api/users/{id}/role|404|user does not exist
+                patch|/api/users/{id}/role|409|last administrator
+                patch|/api/student-classes/{id}|400|class ID;class name
+                patch|/api/student-classes/{id}|403|role required to update student classes
+                patch|/api/student-classes/{id}|404|student class does not exist
+                patch|/api/student-classes/{id}|409|student class;submitted name;already exists
+                patch|/api/elective-subjects/{id}|400|subject ID;submitted name
+                patch|/api/elective-subjects/{id}|403|role required to update elective subjects
+                patch|/api/elective-subjects/{id}|404|elective subject does not exist
+                patch|/api/elective-subjects/{id}|409|elective subject;submitted name;already exists
+                get|/api/users|400|role filter
+                get|/api/users|403|administrators;list user accounts
+                get|/api/users/students|400|pagination query parameter
+                get|/api/users/students|403|students and administrators;use this lookup
+                get|/api/school-years|400|pagination query parameter
+                post|/api/auth/register|400|registration fields
+                post|/api/auth/register|409|username;already registered
+                post|/api/auth/login|400|login request body;malformed
+                get|/api/public/projects/{projectId}/archive|400|project UUID;pagination
+                get|/api/public/projects/{projectId}/archive|404|project does not exist;not completed
+                get|/api/public/projects/{projectId}/archive/{artifactId}|400|project or artifact ID;UUID
+                get|/api/public/projects/{projectId}/archive/{artifactId}|404|project or artifact;not public
+                get|/api/projects/{projectId}/students/{studentId}/final-grade|400|project or student ID;UUID
+                get|/api/projects/{projectId}/students/{studentId}/final-grade|403|required role or project access
+                get|/api/projects/{projectId}/students/{studentId}/final-grade|404|project not found;student is not a project member;no final grade has been recorded
+                get|/api/grading-rubrics/{id}|400|rubric ID;UUID
+                get|/api/grading-rubrics/{id}|404|rubric version
+                get|/api/grading-rubrics/active|404|no rubric version;currently effective
+                get|/api/audit|400|pagination query parameter
+                get|/api/audit|403|role required to view the audit log
+                get|/api/audit/{entityType}/{entityId}|400|entity ID;UUID
+                get|/api/audit/{entityType}/{entityId}|403|role required to view audit history
+                get|/api/artifacts/{artifactId}|400|artifact ID;UUID
+                get|/api/artifacts/{artifactId}|403|project access;view this artifact
+                get|/api/artifacts/{artifactId}|404|artifact does not exist
+                delete|/api/artifacts/{artifactId}|400|artifact ID;UUID
+                delete|/api/artifacts/{artifactId}|403|role or project access;delete this artifact
+                delete|/api/artifacts/{artifactId}|404|artifact does not exist
+                delete|/api/artifacts/{artifactId}|409|artifact's lifecycle state;deletion
+                get|/api/artifacts/{artifactId}/content|400|artifact ID;UUID
+                get|/api/artifacts/{artifactId}/content|403|project access;download this artifact
+                get|/api/artifacts/{artifactId}/content|404|artifact or its project;empty body
+                get|/api/application-periods/{periodId}/catalogue/{projectId}|400|period or project ID;UUID
+                get|/api/application-periods/{periodId}/catalogue/{projectId}|403|role required to view this catalogue entry
+                get|/api/application-periods/{periodId}/catalogue/{projectId}|404|period, project, or period catalogue entry
+                get|/api/application-periods/{periodId}/applications/me|400|period ID;UUID
+                get|/api/application-periods/{periodId}/applications/me|403|role required to view their application
+                get|/api/application-periods/{periodId}/applications/me|404|period or caller's application
+                get|/api/application-periods/{periodId}/allocation-pins|400|period ID;UUID
+                get|/api/application-periods/{periodId}/allocation-pins|403|Teacher or administrator role required
+                get|/api/application-periods/{periodId}/allocation-pins|404|period not found
+                get|/api/allocation-runs/{id}|400|allocation-run ID;UUID
+                get|/api/allocation-runs/{id}|403|role required to view allocation runs
+                get|/api/allocation-runs/{id}|404|allocation run does not exist
+                delete|/api/ideas/{id}/owners/{studentId}|400|idea or student ID;UUID
+                delete|/api/ideas/{id}/owners/{studentId}|403|role or creator authorization;remove this owner
+                delete|/api/ideas/{id}/owners/{studentId}|404|idea or requested owner
+                delete|/api/ideas/{id}/owners/{studentId}|409|idea creator;cannot be removed
+                delete|/api/ideas/{id}/owners/me|400|idea ID;UUID
+                delete|/api/ideas/{id}/owners/me|403|role or ownership;leave this idea
+                delete|/api/ideas/{id}/owners/me|404|idea does not exist
+                delete|/api/ideas/{id}/owners/me|409|idea creator;cannot leave
+                """.lines().filter(line -> !line.isBlank()).forEach(line -> {
+                    String[] parts = line.split("\\|", 4);
+                    conditions.put(parts[0] + " " + parts[1] + " " + parts[2],
+                            Arrays.asList(parts[3].split(";")));
+                });
+        return Map.copyOf(conditions);
+    }
+
+    /**
+     * Snapshots every pre-existing error slot; corrected or merged descriptions reflect only ticket-authorized
+     * changes, while unchanged descriptions remain exact baseline text.
+     */
+    private static List<BaselineError> baselineErrorResponses() {
+        return List.of(
+                baselineError("get", "/api/projects/{projectId}/final-grade", "403",
+                        "A student caller is not a member of the project."),
+                baselineError("get", "/api/projects/{projectId}/final-grade", "404",
+                        "Project not found or no final grade has been recorded."),
+                baselineError("put", "/api/projects/{projectId}/final-grade", "400",
+                        "The project UUID or grade request is invalid; nonmember or duplicate students and "
+                                + "undefined or wrong-scope rules are input validation errors."),
+                baselineError("put", "/api/projects/{projectId}/final-grade", "403",
+                        "Caller is not a teacher or administrator."),
+                baselineError("put", "/api/projects/{projectId}/final-grade", "409",
+                        "A configured rule lacks required inputs, the selected rubric is ineffective, or a "
+                                + "rubric-binding transition lacks a reason."),
+                baselineError("put", "/api/ideas/{id}/supervisor", "409",
+                        "The selected teacher has a recorded preference of NOT_WILLING_TO_SUPERVISE or "
+                                + "NOT_AVAILABLE and acknowledgeRefusal is omitted or false."),
+                baselineError("put", "/api/application-periods/{periodId}/allocation-pins/{studentId}", "400",
+                        "Target is not a STUDENT account or project is outside the period catalogue. "
+                                + "The period or student path UUID is invalid."),
+                baselineError("put", "/api/application-periods/{periodId}/allocation-pins/{studentId}", "401",
+                        "Authentication is required. Missing or invalid bearer authentication credentials."),
+                baselineError("put", "/api/application-periods/{periodId}/allocation-pins/{studentId}", "403",
+                        "Administrator role required."),
+                baselineError("put", "/api/application-periods/{periodId}/allocation-pins/{studentId}", "404",
+                        "Period or student not found."),
+                baselineError("put", "/api/application-periods/{periodId}/allocation-pins/{studentId}", "409",
+                        "Unranked project without acknowledgement, more than five project pins, or finalized period."),
+                baselineError("delete", "/api/application-periods/{periodId}/allocation-pins/{studentId}", "401",
+                        "Authentication is required. Missing or invalid bearer authentication credentials."),
+                baselineError("delete", "/api/application-periods/{periodId}/allocation-pins/{studentId}", "403",
+                        "Administrator role required."),
+                baselineError("delete", "/api/application-periods/{periodId}/allocation-pins/{studentId}", "404",
+                        "Period or pin not found."),
+                baselineError("delete", "/api/application-periods/{periodId}/allocation-pins/{studentId}", "409",
+                        "Period is finalized."),
+                baselineError("put", "/api/application-periods/{id}", "409",
+                        "The proposed catalogue removes a project that has an allocation pin. "
+                                + "The application-period state does not permit the proposed update."),
+                baselineError("get", "/api/projects/{projectId}/student-grades", "403",
+                        "Caller lacks the required role or project access."),
+                baselineError("post", "/api/projects/{projectId}/student-grades", "400",
+                        "The project UUID or grade request is invalid, including a student ID outside the project "
+                                + "group or a grade outside the criterion scale."),
+                baselineError("post", "/api/projects/{projectId}/student-grades", "403",
+                        "Caller lacks the required role or project access."),
+                baselineError("post", "/api/projects/{projectId}/student-grades", "409",
+                        "Rubric version differs from the project's bound version."),
+                baselineError("post", "/api/projects/{projectId}/student-grades/{gradeId}/revisions", "409",
+                        "The source grade has already been superseded."),
+                baselineError("get", "/api/projects/{projectId}/metrics", "403",
+                        "Caller lacks the required role or project access."),
+                baselineError("post", "/api/projects/{projectId}/metrics", "403",
+                        "Caller lacks the required role or project access."),
+                baselineError("get", "/api/projects/{projectId}/group-grades", "403",
+                        "Caller lacks the required role or project access."),
+                baselineError("post", "/api/projects/{projectId}/group-grades", "403",
+                        "Caller lacks the required role or project access."),
+                baselineError("post", "/api/ideas/{id}/specification/reviews", "403",
+                        "A teacher author cannot review their own specification. "
+                                + "The caller lacks the required reviewer role."),
+                baselineError("post", "/api/ideas/{id}/reviews", "403",
+                        "A teacher author cannot review their own idea. The caller lacks the required reviewer role."),
+                baselineError("post", "/api/grading-rubrics", "400",
+                        "Invalid rubric structure, scale, metric, or rule."),
+                baselineError("post", "/api/grading-rubrics", "403",
+                        "Caller is not an administrator."),
+                baselineError("post", "/api/grading-rubrics", "409",
+                        "The rubric version label already exists."),
+                baselineError("post", "/api/application-periods/{periodId}/allocation-runs", "401",
+                        "Authentication is required. Missing or invalid bearer authentication credentials."),
+                baselineError("post", "/api/application-periods/{periodId}/allocation-runs", "403",
+                        "Only administrators may start allocation runs."),
+                baselineError("post", "/api/application-periods/{periodId}/allocation-runs", "404",
+                        "Application period was not found."),
+                baselineError("post", "/api/application-periods/{periodId}/allocation-runs", "409",
+                        "Period is not open for an early run or is finalized."),
+                baselineError("post", "/api/allocation-runs/{id}/finalize", "403",
+                        "Only administrators may finalize allocation runs."),
+                baselineError("post", "/api/allocation-runs/{id}/finalize", "404",
+                        "Allocation run was not found."),
+                baselineError("post", "/api/allocation-runs/{id}/finalize", "409",
+                        "Early, incomplete, or already finalized allocation cannot be finalized."),
+                baselineError("patch", "/api/users/{id}", "400",
+                        "The name is missing, blank after trimming, or longer than 120 characters after trimming."),
+                baselineError("patch", "/api/users/{id}", "401",
+                        "Authentication is required. Missing or invalid bearer authentication credentials."),
+                baselineError("patch", "/api/users/{id}", "403",
+                        "Only the account owner or an administrator may change the name."),
+                baselineError("patch", "/api/users/{id}", "404",
+                        "The account does not exist."),
+                baselineError("patch", "/api/users/{id}/role", "409",
+                        "The role change would remove the last administrator."),
+                baselineError("get", "/api/users", "400",
+                        "The role filter is invalid."),
+                baselineError("get", "/api/users", "403",
+                        "Only administrators may list user accounts."),
+                baselineError("get", "/api/users/students", "401",
+                        "Authentication is required. Missing or invalid bearer authentication credentials."),
+                baselineError("get", "/api/users/students", "403",
+                        "Only students and administrators may use this lookup."),
+                baselineError("get", "/api/projects/{projectId}/students/{studentId}/final-grade", "403",
+                        "Caller lacks the required role or project access."),
+                baselineError("get", "/api/projects/{projectId}/students/{studentId}/final-grade", "404",
+                        "Project not found, student is not a project member, or no final grade has been recorded."),
+                baselineError("get", "/api/grading-rubrics/{id}", "404",
+                        "Rubric version not found."),
+                baselineError("get", "/api/grading-rubrics/active", "404",
+                        "No rubric version is currently effective."),
+                baselineError("get", "/api/application-periods/{periodId}/allocation-pins", "401",
+                        "Authentication is required. Missing or invalid bearer authentication credentials."),
+                baselineError("get", "/api/application-periods/{periodId}/allocation-pins", "403",
+                        "Teacher or administrator role required."),
+                baselineError("get", "/api/application-periods/{periodId}/allocation-pins", "404",
+                        "Period not found."));
+    }
+
+    private static BaselineError baselineError(String method, String path, String status, String description) {
+        return new BaselineError(method, path, status, description);
     }
 
     private static List<BaselineSuccess> baselineSuccessResponses() {
@@ -1117,6 +1510,9 @@ class OpenApiContractTest {
     }
 
     private record BaselineSuccess(String method, String path, String status, String schema) {
+    }
+
+    private record BaselineError(String method, String path, String status, String description) {
     }
 
     private record SpecifiedErrorOperation(String method, String path, String successStatus, String successSchema,

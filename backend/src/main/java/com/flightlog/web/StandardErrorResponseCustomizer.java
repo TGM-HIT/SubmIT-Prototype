@@ -54,7 +54,7 @@ public class StandardErrorResponseCustomizer implements OpenApiCustomizer {
                             + "class/elective-subject assignment "
                             + "input is invalid.")),
             Map.entry(new Route(GET, PROJECT_FINAL_GRADE),
-                    Map.of(NOT_FOUND, "The project does not exist.")),
+                    Map.of(NOT_FOUND, "Project not found or no final grade has been recorded.")),
             Map.entry(new Route(PUT, PROJECT_FINAL_GRADE),
                     Map.of(BAD_REQUEST, "The project UUID or grade request is invalid; nonmember or duplicate "
                             + "students and undefined or wrong-scope rules are input validation errors.",
@@ -66,7 +66,7 @@ public class StandardErrorResponseCustomizer implements OpenApiCustomizer {
                     Map.of(NOT_FOUND, "The project or source grade does not exist.",
                             CONFLICT, "The source grade has already been superseded.")),
             Map.entry(new Route(PUT, ALLOCATION_PIN_ROUTE),
-                    Map.of(NOT_FOUND, "The application period or target student does not exist.")),
+                    Map.of(NOT_FOUND, "Period or student not found.")),
             Map.entry(new Route(PUT, "/api/ideas/{id}/supervisor"),
                     Map.of(NOT_FOUND, IDEA_NOT_FOUND)),
             Map.entry(new Route(POST, "/api/ideas/{id}/owners"),
@@ -88,8 +88,6 @@ public class StandardErrorResponseCustomizer implements OpenApiCustomizer {
                     Map.of(BAD_REQUEST, "The project UUID or metric observation is invalid; an undefined metric ID "
                             + "is rejected as invalid input.",
                             NOT_FOUND, PROJECT_OR_RUBRIC_NOT_FOUND)),
-            Map.entry(new Route(GET, "/api/projects/{projectId}/students/{studentId}/final-grade"),
-                    Map.of(NOT_FOUND, "The project, student, or recorded grade does not exist.")),
             Map.entry(new Route(GET, "/api/artifacts/{artifactId}/content"),
                     Map.of(NOT_FOUND, "The artifact or its project does not exist; absent stored content returns "
                             + "an empty body.")),
@@ -122,7 +120,6 @@ public class StandardErrorResponseCustomizer implements OpenApiCustomizer {
             Map.entry(new Route(GET, "/api/grading-rubrics"), Set.of(FORBIDDEN)),
             Map.entry(new Route(GET, "/api/grading-rubrics/{id}"), Set.of(FORBIDDEN)),
             Map.entry(new Route(GET, "/api/grading-rubrics/active"), Set.of(FORBIDDEN)),
-            Map.entry(new Route(GET, PROJECT_FORMAL_APPLICATIONS), Set.of(NOT_FOUND)),
             Map.entry(new Route(POST, PROJECT_FORMAL_APPLICATIONS), Set.of(NOT_FOUND)),
             Map.entry(new Route(POST, "/api/application-periods"), Set.of(CONFLICT)),
             Map.entry(new Route(GET, "/api/audit/{entityType}/{entityId}"), Set.of(NOT_FOUND)));
@@ -276,6 +273,7 @@ public class StandardErrorResponseCustomizer implements OpenApiCustomizer {
         add(result, GET, PROJECT_FORMAL_APPLICATIONS,
                 BAD_REQUEST, PROJECT_ID_INVALID,
                 FORBIDDEN, "The caller lacks the required role or project access.",
+                NOT_FOUND, "The formal application does not exist after a valid allocated project group check.",
                 CONFLICT, "The allocated project group is missing or invalid.");
         add(result, POST, PROJECT_FORMAL_APPLICATIONS,
                 BAD_REQUEST, "The project ID or formal-application request is invalid.",
@@ -514,7 +512,7 @@ public class StandardErrorResponseCustomizer implements OpenApiCustomizer {
         add(result, GET, "/api/projects/{projectId}/students/{studentId}/final-grade",
                 BAD_REQUEST, "The project or student ID is not a valid UUID.",
                 FORBIDDEN, "The caller lacks access to the requested student's project grade.",
-                NOT_FOUND, "The project, student, or recorded grade does not exist.");
+                NOT_FOUND, "Project not found, student is not a project member, or no final grade has been recorded.");
         add(result, GET, "/api/grading-rubrics/{id}",
                 BAD_REQUEST, "The rubric ID is not a valid UUID.",
                 NOT_FOUND, "The requested rubric version does not exist.");

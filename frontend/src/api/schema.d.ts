@@ -3212,7 +3212,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description The project does not exist. */
+            /** @description Project not found or no final grade has been recorded. */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -3896,7 +3896,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description The application period or target student does not exist. */
+            /** @description Period or student not found. */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -4741,6 +4741,15 @@ export interface operations {
             };
             /** @description The caller lacks the required role or project access. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description The formal application does not exist after a valid allocated project group check. */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7021,7 +7030,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description The project, student, or recorded grade does not exist. */
+            /** @description Project not found, student is not a project member, or no final grade has been recorded. */
             404: {
                 headers: {
                     [name: string]: unknown;
