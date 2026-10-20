@@ -43,7 +43,7 @@ final class FinalGradeCalculator {
 
     private static void accumulate(JsonNode weights, Map<String, BigDecimal> values, BigDecimal[] totals,
             List<String> missing) {
-        weights.fields().forEachRemaining(entry -> {
+        weights.properties().forEach(entry -> {
             BigDecimal value = values.get(entry.getKey());
             if (value == null) {
                 missing.add(entry.getKey());

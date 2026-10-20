@@ -41,7 +41,7 @@ Use unit, slice, integration, and limited end-to-end tests at the appropriate bo
 - Public archive access without authentication for approved completed-project artefacts, denial for unapproved/incomplete projects, and exclusion of private student/grading data.
 - Pagination, consistent API errors, transactions, and audit history for significant state changes.
 
-From `backend/`, run `./gradlew test` and `./gradlew checkstyleMain` after backend code changes. Run `./gradlew generateOpenApi` whenever endpoint annotations, models, or validation rules change, and review `contracts/openapi.yaml`.
+From `backend/`, run `./gradlew compileJava compileTestJava --rerun-tasks`, `./gradlew test`, and `./gradlew checkstyleMain` after backend code changes. Both Java source sets compile with detailed deprecation and removal diagnostics, and deprecated API use fails compilation. `./gradlew test` also compiles isolated deprecated/removal probes against the same compiler options for both source sets. Do not suppress or filter these diagnostics; replace owned usage with a supported API. Run `./gradlew generateOpenApi` whenever endpoint annotations, models, or validation rules change, and review `contracts/openapi.yaml`.
 
 ### Local workflow accounts
 

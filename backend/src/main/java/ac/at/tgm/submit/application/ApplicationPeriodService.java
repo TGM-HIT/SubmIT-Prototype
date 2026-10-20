@@ -258,7 +258,7 @@ public class ApplicationPeriodService {
         for (int index = 0; index < projectIds.size(); index++) {
             ranked.add(store.object().put("projectId", projectIds.get(index)).put("rank", index + 1));
         }
-        payload.put("preferences", ranked);
+        payload.set("preferences", ranked);
         return payload;
     }
 

@@ -114,7 +114,7 @@ final class RubricValidator {
             throw bad("'" + label + "' labels must be an object of value to label.");
         }
         ObjectNode result = JsonNodeFactory.instance.objectNode();
-        Iterator<Map.Entry<String, JsonNode>> fields = labels.fields();
+        Iterator<Map.Entry<String, JsonNode>> fields = labels.properties().iterator();
         while (fields.hasNext()) {
             Map.Entry<String, JsonNode> entry = fields.next();
             if (!entry.getValue().isTextual()) {
@@ -244,7 +244,7 @@ final class RubricValidator {
         if (!weights.isObject()) {
             throw bad("Weights must be an object of id to positive number.");
         }
-        Iterator<Map.Entry<String, JsonNode>> fields = weights.fields();
+        Iterator<Map.Entry<String, JsonNode>> fields = weights.properties().iterator();
         while (fields.hasNext()) {
             Map.Entry<String, JsonNode> entry = fields.next();
             if (!allowed.contains(entry.getKey()) || !isPositive(entry.getValue())) {

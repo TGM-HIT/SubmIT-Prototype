@@ -5,12 +5,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "typecheck": "vue-tsc --noEmit",
+    "check:deprecated": "node scripts/check-deprecated-apis.mjs",
+    "typecheck": "npm run check:deprecated && vue-tsc --noEmit",
     "test": "vitest run",
-    "build": "vue-tsc --noEmit && vite build",
+    "build": "npm run typecheck && vite build",
     "preview": "node scripts/preview.mjs",
     "preview:help": "node scripts/preview.mjs --help",
-    "preview:test": "node --test scripts/preview.smoke.mjs scripts/documentation/documentation.smoke.mjs",
+    "preview:test": "node --test scripts/preview.smoke.mjs scripts/documentation/documentation.smoke.mjs scripts/deprecated-apis.smoke.mjs",
     "api:types": "openapi-typescript ../contracts/openapi.yaml -o src/api/schema.d.ts"
   },
   "dependencies": {

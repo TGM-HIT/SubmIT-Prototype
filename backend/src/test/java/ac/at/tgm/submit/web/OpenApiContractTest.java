@@ -352,7 +352,7 @@ class OpenApiContractTest {
         List<String> failures = new ArrayList<>();
         int[] sizeParameters = {0};
 
-        paths.fields().forEachRemaining(path -> {
+        paths.properties().forEach(path -> {
             for (String method : HTTP_METHODS) {
                 JsonNode operation = path.getValue().path(method);
                 if (!operation.isObject()) {
@@ -590,10 +590,10 @@ class OpenApiContractTest {
                 "get /api/public/projects/{projectId}/archive",
                 "get /api/public/projects/{projectId}/archive/{artifactId}");
 
-        Iterator<Map.Entry<String, JsonNode>> pathFields = paths.fields();
+        Iterator<Map.Entry<String, JsonNode>> pathFields = paths.properties().iterator();
         while (pathFields.hasNext()) {
             Map.Entry<String, JsonNode> pathField = pathFields.next();
-            Iterator<Map.Entry<String, JsonNode>> operationFields = pathField.getValue().fields();
+            Iterator<Map.Entry<String, JsonNode>> operationFields = pathField.getValue().properties().iterator();
             while (operationFields.hasNext()) {
                 Map.Entry<String, JsonNode> methodField = operationFields.next();
                 if (!HTTP_METHODS.contains(methodField.getKey())) {
@@ -637,7 +637,7 @@ class OpenApiContractTest {
         List<String> failures = new ArrayList<>();
         assertEquals(77, TICKET_ERROR_CODES.size(), "The independent ticket oracle must list all operations.");
         Set<String> actualOperations = new java.util.TreeSet<>();
-        paths.fields().forEachRemaining(path -> path.getValue().fields().forEachRemaining(method -> {
+        paths.properties().forEach(path -> path.getValue().properties().forEach(method -> {
             if (HTTP_METHODS.contains(method.getKey())) {
                 actualOperations.add(method.getKey() + " " + path.getKey());
             }
@@ -939,7 +939,7 @@ class OpenApiContractTest {
 
     private static Set<String> responseSchemas(JsonNode response) {
         Set<String> schemas = new TreeSet<>();
-        response.path("content").fields().forEachRemaining(mediaType -> {
+        response.path("content").properties().forEach(mediaType -> {
             String schema = mediaType.getValue().path("schema").path("$ref").asText();
             if (!schema.isBlank()) {
                 schemas.add(schema);
@@ -1560,7 +1560,7 @@ class OpenApiContractTest {
             return;
         }
         Set<String> actualSchemas = new TreeSet<>();
-        response.path("content").fields().forEachRemaining(mediaType -> {
+        response.path("content").properties().forEach(mediaType -> {
             String schema = mediaType.getValue().path("schema").path("$ref").asText();
             if (!schema.isBlank()) {
                 actualSchemas.add(schema);
@@ -1642,7 +1642,7 @@ class OpenApiContractTest {
             }
 
             Set<String> actualNullable = new TreeSet<>();
-            properties.fields().forEachRemaining(property -> {
+            properties.properties().forEach(property -> {
                 if (allowsNull(property.getValue())) {
                     actualNullable.add(property.getKey());
                 }
@@ -1668,10 +1668,10 @@ class OpenApiContractTest {
 
     private int checkOperations(JsonNode paths, List<String> failures) {
         int operations = 0;
-        Iterator<Map.Entry<String, JsonNode>> pathEntries = paths.fields();
+        Iterator<Map.Entry<String, JsonNode>> pathEntries = paths.properties().iterator();
         while (pathEntries.hasNext()) {
             Map.Entry<String, JsonNode> path = pathEntries.next();
-            Iterator<Map.Entry<String, JsonNode>> methods = path.getValue().fields();
+            Iterator<Map.Entry<String, JsonNode>> methods = path.getValue().properties().iterator();
             while (methods.hasNext()) {
                 Map.Entry<String, JsonNode> method = methods.next();
                 if (!HTTP_METHODS.contains(method.getKey())) {
@@ -1687,7 +1687,7 @@ class OpenApiContractTest {
     }
 
     private void checkComponentSchemas(JsonNode schemas, List<String> failures) {
-        Iterator<Map.Entry<String, JsonNode>> entries = schemas.fields();
+        Iterator<Map.Entry<String, JsonNode>> entries = schemas.properties().iterator();
         while (entries.hasNext()) {
             Map.Entry<String, JsonNode> schema = entries.next();
             checkSchema(schema.getValue(), schema.getKey(), failures);
@@ -1697,7 +1697,7 @@ class OpenApiContractTest {
     private void checkSchema(JsonNode schema, String location, List<String> failures) {
         JsonNode properties = schema.path("properties");
         JsonNode required = schema.path("required");
-        Iterator<Map.Entry<String, JsonNode>> entries = properties.fields();
+        Iterator<Map.Entry<String, JsonNode>> entries = properties.properties().iterator();
         while (entries.hasNext()) {
             Map.Entry<String, JsonNode> property = entries.next();
             String propertyLocation = location + "." + property.getKey();

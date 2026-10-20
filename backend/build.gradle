@@ -15,6 +15,7 @@ java {
 
 tasks.withType(JavaCompile).configureEach {
     options.compilerArgs.add('-parameters')
+    options.compilerArgs.addAll(['-Xlint:deprecation', '-Xlint:removal', '-Werror'])
 }
 
 repositories {
@@ -36,6 +37,105 @@ dependencies {
 
 tasks.withType(Test).configureEach {
     useJUnitPlatform()
+}
+
+tasks.register('verifyDeprecationEnforcement') {
+    group = 'verification'
+    description = 'Verifies Java production and test compilation reject deprecated API use.'
+    doLast {
+        javax.tools.JavaCompiler compiler = javax.tools.ToolProvider.systemJavaCompiler
+        if (compiler == null) {
+            throw new GradleException('A full JDK is required to verify Java deprecation enforcement.')
+        }
+
+        File fixtureRoot = layout.buildDirectory.dir('tmp/dev33-deprecation-enforcement').get().asFile
+        delete(fixtureRoot)
+        File apiSource = new File(fixtureRoot, 'api/ac/at/tgm/submit/dev33/DeprecationFixtureApi.java')
+        File productionSource = new File(fixtureRoot, 'production/ac/at/tgm/submit/dev33/ProductionFixtureUse.java')
+        File testSource = new File(fixtureRoot, 'test/ac/at/tgm/submit/dev33/TestFixtureUse.java')
+        apiSource.parentFile.mkdirs()
+        productionSource.parentFile.mkdirs()
+        testSource.parentFile.mkdirs()
+        apiSource.text = '''package ac.at.tgm.submit.dev33;
+public final class DeprecationFixtureApi {
+    private DeprecationFixtureApi() {}
+    @Deprecated public static void deprecatedCall() {}
+    @Deprecated(forRemoval = true) public static void removeMe() {}
+    public static void supported() {}
+}
+'''
+        productionSource.text = '''package ac.at.tgm.submit.dev33;
+final class ProductionFixtureUse {
+    void verify() {
+        DeprecationFixtureApi.deprecatedCall();
+        DeprecationFixtureApi.removeMe();
+        DeprecationFixtureApi.supported();
+    }
+}
+'''
+        testSource.text = '''package ac.at.tgm.submit.dev33;
+final class TestFixtureUse {
+    void verify() {
+        DeprecationFixtureApi.deprecatedCall();
+        DeprecationFixtureApi.removeMe();
+        DeprecationFixtureApi.supported();
+    }
+}
+'''
+
+        def runCompilation = { String sourceSet, List<File> sources, List<String> compilerArgs,
+                               File outputDirectory, String classpath ->
+            outputDirectory.mkdirs()
+            javax.tools.DiagnosticCollector<javax.tools.JavaFileObject> diagnostics =
+                    new javax.tools.DiagnosticCollector<>()
+            javax.tools.StandardJavaFileManager fileManager =
+                    compiler.getStandardFileManager(diagnostics, java.util.Locale.ROOT, java.nio.charset.StandardCharsets.UTF_8)
+            boolean succeeded
+            try {
+                List<String> arguments = new ArrayList<>(compilerArgs)
+                arguments.addAll(['-d', outputDirectory.absolutePath])
+                if (classpath != null) {
+                    arguments.addAll(['-classpath', classpath])
+                }
+                def units = fileManager.getJavaFileObjectsFromFiles(sources)
+                succeeded = compiler.getTask(null, fileManager, diagnostics, arguments, null, units).call()
+            } finally {
+                fileManager.close()
+            }
+            [succeeded: succeeded, diagnostics: diagnostics.diagnostics, sourceSet: sourceSet]
+        }
+
+        def assertRejectedDeprecatedUses = { result, String sourceName ->
+            def inFixture = result.diagnostics.findAll {
+                it.source != null && it.source.name.endsWith(sourceName)
+            }
+            def messages = inFixture.collect { it.getMessage(java.util.Locale.ROOT) }
+            if (result.succeeded
+                    || !messages.any { it.contains('deprecatedCall') }
+                    || !messages.any { it.contains('removeMe') && it.toLowerCase().contains('removal') }
+                    || messages.any { it.contains('supported()') }) {
+                throw new GradleException(
+                        "${result.sourceSet} deprecation fixture did not fail only on deprecated APIs: ${messages}")
+            }
+            logger.lifecycle("Verified ${result.sourceSet} rejects deprecatedCall and removal-marked removeMe at ${sourceName}.")
+        }
+
+        List<String> productionArgs = tasks.named('compileJava', JavaCompile).get().options.compilerArgs
+        List<String> testArgs = tasks.named('compileTestJava', JavaCompile).get().options.compilerArgs
+        File productionOutput = new File(fixtureRoot, 'production-classes')
+        def productionResult = runCompilation('compileJava', [apiSource, productionSource],
+                productionArgs, productionOutput, null)
+        assertRejectedDeprecatedUses(productionResult, 'ProductionFixtureUse.java')
+
+        File apiOutput = new File(fixtureRoot, 'api-classes')
+        def apiResult = runCompilation('compileJava supported fixture', [apiSource], productionArgs, apiOutput, null)
+        if (!apiResult.succeeded || !apiResult.diagnostics.isEmpty()) {
+            throw new GradleException("Non-deprecated Java fixture did not compile cleanly: ${apiResult.diagnostics}")
+        }
+        File testOutput = new File(fixtureRoot, 'test-classes')
+        def testResult = runCompilation('compileTestJava', [testSource], testArgs, testOutput, apiOutput.absolutePath)
+        assertRejectedDeprecatedUses(testResult, 'TestFixtureUse.java')
+    }
 }
 
 tasks.register('checkstyleMain', JavaExec) {
@@ -156,4 +256,8 @@ tasks.register('verifyBootJarPackaging') {
 
 tasks.named('check') {
     dependsOn tasks.named('verifyBootJarPackaging')
+}
+
+tasks.named('test') {
+    dependsOn tasks.named('verifyDeprecationEnforcement')
 }

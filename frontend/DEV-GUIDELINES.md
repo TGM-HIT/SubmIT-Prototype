@@ -30,11 +30,13 @@ Every async view must define loading, empty, error, retry, and success states. F
 
 Run the scripts defined in `frontend/package.json` after frontend code changes:
 
+- `npm run check:deprecated` resolves `@deprecated` declarations in owned TypeScript/Vue source (including tests, generated API declarations, and Vite configuration) and JavaScript/Node `.mjs` preview and documentation tooling. Vue script blocks are parsed and analyzed. It fails on findings or source-analysis errors; do not suppress findings or exclude owned files.
 - `npm run typecheck`
 - `npm run test`
+- `npm run preview:test` (includes preview/documentation-tooling and deprecation-checker fixtures)
 - `npm run build`
 
-The production build includes Vue/TypeScript checking. Run all three checks before integrating frontend behavior changes. Documentation-only changes do not require these commands.
+`npm run typecheck` and `npm run build` run the deprecation check before Vue/TypeScript checking; the root `make check` reaches it through the frontend build. Run the deprecation check and relevant tests before integrating frontend changes. Documentation-only changes do not require these commands unless their Node tooling changes.
 
 ## Full-lifecycle local documentation
 

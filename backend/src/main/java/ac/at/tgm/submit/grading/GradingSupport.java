@@ -35,7 +35,7 @@ import org.springframework.http.HttpStatus;
 final class GradingSupport {
     private static final int MAX_PAGE_SIZE = 100;
     private static final ObjectMapper MAPPER = new ObjectMapper()
-            .setSerializationInclusion(JsonInclude.Include.NON_NULL)
+            .setDefaultPropertyInclusion(JsonInclude.Include.NON_NULL)
             .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
     private GradingSupport() {
