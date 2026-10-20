@@ -14,6 +14,7 @@ class CommitScope {
         "README.md",
         "compose.yaml",
         "backend/README.md",
+        "backend/build.gradle",
         "Makefile",
         "scripts/check-startup-config.py",
         "frontend/index.html",
