@@ -79,7 +79,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-29](tickets/done/Dev-29.md) | done | Clarify the unresolved Java package rename proposal |
 | [Dev-30](tickets/done/Dev-30.md) | done | Reconcile Auditor seat guidance with global model guidance |
 | [Dev-31](tickets/done/Dev-31.md) | done | Build a reproducible full-lifecycle documentation run |
-| [Dev-32](tickets/Dev-32.md) | to-do | Exclude generated user guides from Compliance checks |
+| [Dev-32](tickets/done/Dev-32.md) | done | Exclude generated user guides from Compliance checks |
 | [Dev-33](tickets/Dev-33.md) | to-do | Remove deprecated API usage and prevent regressions |
 
 ### Features
@@ -125,3 +125,4 @@ Recurring documentation and contract checks, run by the [Auditor role](roles/aud
 | [Compliance-04](checks/Compliance-04.md) | Weekly and after file moves or renames | 2026-10-18 19:09 +0200 | findings: 1 fixed | Compliance-04-20261018-1909 | Link and format validation |
 | [Compliance-05](checks/Compliance-05.md) | Quarterly and before planning | 2026-10-18T20:17+0200 | findings: 1 ticketed, 1 decision needed, 1 duplicate, 0 fixed | Compliance-05-20261018-2017 | Documentation health |
 | [Compliance-06](checks/Compliance-06.md) | After each role-contract change or lesson application; at least monthly | 2026-10-18T20:48+0200 | findings: 0 ticketed, 1 decision needed, 0 duplicate, 1 fixed | Compliance-06-20261018-2048 | Agent role consistency and role-file validation |
+| [Compliance-07](checks/Compliance-07.md) | After user-facing lifecycle, role, UI or guide-generation changes; at least monthly | — | — | — | User documentation completeness and correctness |
