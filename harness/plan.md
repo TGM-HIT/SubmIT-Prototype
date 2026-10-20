@@ -99,7 +99,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Feature-16](tickets/done/Feature-16.md) | done | Assign classes and elective subjects to students |
 | [Feature-17](tickets/done/Feature-17.md) | done | Let administrators run an early allocation before the deadline |
 | [Feature-18](tickets/done/Feature-18.md) | done | Let administrators pin students to projects before an allocation runs |
-| [Feature-19](tickets/Feature-19.md) | to-do | Decide the student-grade list student filter |
+| [Feature-19](tickets/done/Feature-19.md) | done | Decide the student-grade list student filter |
 
 ### Optimizations
 
