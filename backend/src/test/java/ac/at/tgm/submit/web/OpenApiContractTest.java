@@ -533,20 +533,31 @@ class OpenApiContractTest {
         responses.fieldNames().forEachRemaining(responseCodes::add);
         assertEquals(Set.of("200", "400", "401", "403", "404"), responseCodes,
                 "Bug-19 response entries must remain present exactly once");
+        // Test-owned full content snapshots from the pre-Feature-19 Bug-19 contract baseline.
         assertResponseContract(responses, "200", "Paginated individual grade history.",
-                "*/*", "PageResponseGradeResponse");
+                """
+                        {"*/*":{"schema":{"$ref":"#/components/schemas/PageResponseGradeResponse"}}}
+                        """);
         assertResponseContract(responses, "403", "Caller lacks the required role or project access.",
-                "application/json", "ApiErrorResponse");
+                """
+                        {"application/json":{"schema":{"$ref":"#/components/schemas/ApiErrorResponse"}}}
+                        """);
         assertResponseContract(responses, "404", "The project does not exist.",
-                "application/json", "ApiErrorResponse");
+                """
+                        {"application/json":{"schema":{"$ref":"#/components/schemas/ApiErrorResponse"}}}
+                        """);
         assertResponseContract(responses, "400", "The project UUID or pagination query parameter is invalid.",
-                "application/json", "ApiErrorResponse");
+                """
+                        {"application/json":{"schema":{"$ref":"#/components/schemas/ApiErrorResponse"}}}
+                        """);
         assertResponseContract(responses, "401", "Missing or invalid bearer authentication credentials.",
-                "application/json", "ApiErrorResponse");
+                """
+                        {"application/json":{"schema":{"$ref":"#/components/schemas/ApiErrorResponse"}}}
+                        """);
     }
 
     private void assertResponseContract(JsonNode responses, String statusCode, String expectedDescription,
-            String mediaType, String schemaName) {
+            String expectedContentJson) throws Exception {
         JsonNode response = responses.get(statusCode);
         assertTrue(response != null && response.isObject(), statusCode + " response must be an object");
         JsonNode description = response.get("description");
@@ -555,15 +566,8 @@ class OpenApiContractTest {
         assertEquals(expectedDescription, description.textValue(), statusCode + " response description");
         JsonNode content = response.get("content");
         assertTrue(content != null && content.isObject(), statusCode + " response content must be an object");
-        Set<String> mediaTypes = new TreeSet<>();
-        content.fieldNames().forEachRemaining(mediaTypes::add);
-        assertEquals(Set.of(mediaType), mediaTypes, statusCode + " response media type");
-        JsonNode schema = content.path(mediaType).get("schema");
-        assertTrue(schema != null && schema.isObject(), statusCode + " response schema must be an object");
-        JsonNode ref = schema.get("$ref");
-        assertTrue(ref != null && ref.isTextual(), statusCode + " response schema reference must be a string");
-        assertEquals("#/components/schemas/" + schemaName, ref.textValue(),
-                statusCode + " response schema reference");
+        assertEquals(objectMapper.readTree(expectedContentJson), content,
+                statusCode + " complete response content baseline");
     }
 
     @Test
