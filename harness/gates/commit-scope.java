@@ -17,6 +17,7 @@ class CommitScope {
         "Makefile",
         "scripts/check-startup-config.py",
         "frontend/index.html",
+        "frontend/README.md",
         "frontend/package.json",
         "frontend/DEV-GUIDELINES.md",
         "backend/DEV-GUIDELINES.md",
