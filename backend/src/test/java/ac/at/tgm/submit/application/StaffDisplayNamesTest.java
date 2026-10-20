@@ -141,23 +141,88 @@ class StaffDisplayNamesTest {
     void ideaAndStudentOwnedResponsesRespectStaffOnlyAssignmentPrivacy() throws Exception {
         for (String token : List.of(adminToken, teacherToken)) {
             JsonNode ideaResponse = getJson("/api/ideas/" + firstProject.getId(), token);
-            assertEquals(assignedClassName, ideaResponse.path("owners").get(0).path("className").asText());
-            assertEquals(assignedSubjectName, ideaResponse.path("owners").get(0).path("electiveSubjectNames").get(0).asText());
+            JsonNode owners = requiredArray(ideaResponse, "owners");
+            assertTrue(owners.size() > 0, "staff idea response should contain its owner");
+            JsonNode owner = requiredObject(owners.get(0), "staff idea owner");
+            assertEquals(assignedClassName, requiredText(owner, "className"));
+            JsonNode ownerSubjects = requiredArray(owner, "electiveSubjectNames");
+            assertTrue(ownerSubjects.size() > 0, "staff owner should have an assigned elective subject");
+            assertTrue(ownerSubjects.get(0).isTextual());
+            assertEquals(assignedSubjectName, ownerSubjects.get(0).textValue());
         }
         JsonNode studentIdea = getJson("/api/ideas/" + firstProject.getId(), studentToken);
-        assertFalse(studentIdea.path("owners").get(0).has("className"));
-        assertFalse(studentIdea.path("owners").get(0).has("electiveSubjectNames"));
+        JsonNode studentOwners = requiredArray(studentIdea, "owners");
+        assertTrue(studentOwners.size() > 0, "student idea response should contain its owner");
+        JsonNode studentOwner = requiredObject(studentOwners.get(0), "student idea owner");
+        assertFalse(studentOwner.has("className"));
+        assertFalse(studentOwner.has("electiveSubjectNames"));
         JsonNode ownApplication = getJson("/api/application-periods/" + period.getId() + "/applications/me", studentToken);
+        assertTrue(ownApplication.isObject());
         assertFalse(ownApplication.has("className"));
         assertFalse(ownApplication.has("electiveSubjectNames"));
-        JsonNode adminAccounts = getJson("/api/users?role=STUDENT", adminToken);
-        assertTrue(adminAccounts.path("content").findValuesAsText("className").contains(assignedClassName));
-        JsonNode accountRow = null;
-        for (JsonNode row : adminAccounts.path("content")) {
-            if (firstStudent.getId().toString().equals(row.path("id").asText())) accountRow = row;
-        }
-        assertTrue(accountRow != null);
-        assertEquals(assignedSubjectName, accountRow.path("electiveSubjectNames").get(0).asText());
+        JsonNode firstPage = getJson("/api/users?role=STUDENT&page=0&size=20", adminToken);
+        assertAccountPage(firstPage, 0, 20);
+        assertTrue(requiredLong(firstPage, "totalElements") > 20,
+                "the unfiltered account list should contain more than one page of students");
+
+        JsonNode selectedAccounts = getJson("/api/users?role=STUDENT&q=student01&page=0&size=20", adminToken);
+        assertAccountPage(selectedAccounts, 0, 20);
+        assertEquals(1, requiredLong(selectedAccounts, "totalElements"));
+        assertEquals(1, requiredArray(selectedAccounts, "content").size());
+        JsonNode accountRow = exactAccount(selectedAccounts, firstStudent.getId());
+        assertEquals(assignedClassName, requiredText(accountRow, "className"));
+        JsonNode electiveSubjects = requiredArray(accountRow, "electiveSubjectNames");
+        assertTrue(electiveSubjects.size() > 0);
+        assertTrue(electiveSubjects.get(0).isTextual());
+        assertEquals(assignedSubjectName, electiveSubjects.get(0).textValue());
+    }
+
+    @Test
+    void assignmentPrivacySelectionFindsTargetBeyondFirstAccountPage() throws Exception {
+        JsonNode allStudents = getJson("/api/users?role=STUDENT&page=0&size=100", adminToken);
+        assertAccountPage(allStudents, 0, 100);
+        JsonNode allStudentRows = requiredArray(allStudents, "content");
+        long totalStudents = requiredLong(allStudents, "totalElements");
+        assertTrue(totalStudents > 20, "fixture must contain more than one page of students");
+        assertTrue(allStudentRows.size() > 20, "the account response must expose the sorted target candidates");
+
+        JsonNode targetCandidate = requiredObject(allStudentRows.get(20), "student beyond first page");
+        UUID targetId = UUID.fromString(requiredText(targetCandidate, "id"));
+        String targetUsername = requiredText(targetCandidate, "username");
+
+        JsonNode firstPage = getJson("/api/users?role=STUDENT&page=0&size=20", adminToken);
+        assertAccountPage(firstPage, 0, 20);
+        assertEquals(totalStudents, requiredLong(firstPage, "totalElements"));
+        assertEquals(20, requiredArray(firstPage, "content").size());
+        assertEquals(accountIds(firstPage), accountIds(allStudents).subList(0, 20),
+                "page zero should contain the first 20 accounts in the observed ID sort");
+        assertFalse(accountIds(firstPage).contains(targetId.toString()),
+                "chosen target must be outside page zero: " + targetId);
+
+        UserAccount persistedTarget = users.findById(targetId).orElseThrow();
+        assertEquals(targetUsername, persistedTarget.getUsername());
+        String targetClassName = "Boundary class " + UUID.randomUUID();
+        String targetSubjectName = "Boundary subject " + UUID.randomUUID();
+        StudentClassEntity targetClass = classes.save(
+                new StudentClassEntity(UUID.randomUUID(), targetClassName));
+        ElectiveSubjectEntity targetSubject = subjects.save(
+                new ElectiveSubjectEntity(UUID.randomUUID(), targetSubjectName));
+        persistedTarget.setStudentClass(targetClass);
+        persistedTarget.setElectiveSubjects(List.of(targetSubject));
+        users.save(persistedTarget);
+
+        JsonNode filteredTarget = getJson("/api/users?role=STUDENT&q=" + targetUsername + "&page=0&size=20",
+                adminToken);
+        assertAccountPage(filteredTarget, 0, 20);
+        assertEquals(1, requiredLong(filteredTarget, "totalElements"));
+        JsonNode filteredRows = requiredArray(filteredTarget, "content");
+        assertEquals(1, filteredRows.size(), "username filter must select exactly one account");
+        JsonNode account = exactAccount(filteredTarget, targetId);
+        assertEquals(targetClassName, requiredText(account, "className"));
+        JsonNode assignedSubjects = requiredArray(account, "electiveSubjectNames");
+        assertEquals(1, assignedSubjects.size());
+        assertTrue(assignedSubjects.get(0).isTextual());
+        assertEquals(targetSubjectName, assignedSubjects.get(0).textValue());
     }
 
     @Test
@@ -221,6 +286,67 @@ class StaffDisplayNamesTest {
                 .andExpect(status().isUnauthorized());
         mockMvc.perform(get("/api/allocation-runs/{id}", run.getId()))
                 .andExpect(status().isUnauthorized());
+    }
+
+    private void assertAccountPage(JsonNode response, int expectedPage, int expectedSize) {
+        assertTrue(response.isObject(), "account page should be a JSON object");
+        requiredArray(response, "content");
+        assertEquals(expectedPage, requiredInt(response, "page"));
+        assertEquals(expectedSize, requiredInt(response, "size"));
+        long totalElements = requiredLong(response, "totalElements");
+        int expectedPages = (int) ((totalElements + expectedSize - 1) / expectedSize);
+        assertEquals(expectedPages, requiredInt(response, "totalPages"));
+    }
+
+    private JsonNode exactAccount(JsonNode response, UUID expectedId) {
+        JsonNode found = null;
+        int matches = 0;
+        for (JsonNode row : requiredArray(response, "content")) {
+            requiredObject(row, "account row");
+            if (expectedId.toString().equals(requiredText(row, "id"))) {
+                found = row;
+                matches++;
+            }
+        }
+        assertEquals(1, matches, "expected exactly account " + expectedId
+                + " in returned IDs " + accountIds(response));
+        return found;
+    }
+
+    private List<String> accountIds(JsonNode response) {
+        return requiredArray(response, "content").valueStream()
+                .map(row -> requiredText(requiredObject(row, "account row"), "id")).toList();
+    }
+
+    private JsonNode requiredObject(JsonNode node, String description) {
+        assertTrue(node != null && node.isObject(), description + " should be a JSON object");
+        return node;
+    }
+
+    private JsonNode requiredArray(JsonNode parent, String field) {
+        assertTrue(parent != null && parent.isObject() && parent.has(field) && parent.get(field).isArray(),
+                field + " should be a present JSON array");
+        return parent.get(field);
+    }
+
+    private String requiredText(JsonNode parent, String field) {
+        assertTrue(parent != null && parent.isObject() && parent.has(field) && parent.get(field).isTextual(),
+                field + " should be a present JSON string");
+        return parent.get(field).textValue();
+    }
+
+    private int requiredInt(JsonNode parent, String field) {
+        assertTrue(parent != null && parent.isObject() && parent.has(field) && parent.get(field).isIntegralNumber()
+                        && parent.get(field).canConvertToInt(),
+                field + " should be a present JSON integer");
+        return parent.get(field).intValue();
+    }
+
+    private long requiredLong(JsonNode parent, String field) {
+        assertTrue(parent != null && parent.isObject() && parent.has(field) && parent.get(field).isIntegralNumber()
+                        && parent.get(field).canConvertToLong(),
+                field + " should be a present JSON integer");
+        return parent.get(field).longValue();
     }
 
     private void assertApplicationNames(String token, String firstName, String secondName, String firstTitle)
