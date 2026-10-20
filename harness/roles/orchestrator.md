@@ -24,6 +24,8 @@ A failed scope gate sends the commit back with the out-of-scope path. Before dec
 
 With both gates clean, dispatch the Evaluator with the diff (or explicit no-diff baseline SHA), the resolved ticket specification, and that handoff note. Give it the exact artifact path `harness/runs/<run-id>/evaluation-N.md` for this pass and require it to save its complete verdict there before returning. Before dispatch, append a timestamped `Evaluator dispatched` bullet to the run log with the pass number and requested artifact path, and overwrite the heartbeat with the dispatch step. Read the saved evaluation artifact as the authoritative verdict record.
 
+If the Evaluator explicitly reports that it cannot write the verdict artifact, require its complete verdict text in its response. Save that exact text, without summarizing or changing its findings or verdict, to the requested `evaluation-N.md` path using a supported editing tool; read it back and log the fallback, its reported tool limitation and that the artifact was coordinator-preserved before proceeding. Do not overwrite an existing verdict artifact or invent missing evaluation text. If the complete verdict cannot be obtained or persisted, stop with the artifact failure recorded; a short returned status is not a substitute for the evaluation.
+
 Evaluator verdicts are `pass`, `revise`, or `awaiting-human`.
 
 - On `pass`, close out as done.
@@ -44,6 +46,8 @@ An authorized user may instead explicitly accept the current implementation afte
 
 ## Continuing a failed ticket
 
+When the coordinator explicitly requests a fresh run of a failed ticket, use the normal preflight and run procedure with the current HEAD as a new baseline, even if prior failed-run artifacts are missing. Do not reconstruct missing history, describe this as a continuation, or create `continuation.md`. Record the explicit fresh-run authorization, the new baseline SHA and any missing prior history in the new run log; preserve all existing commits and historical records. A request to continue instead follows the continuation prerequisites below; missing history is not permission to silently substitute a fresh run.
+
 A ticket whose ledger row is `failed` may be continued instead of restarted when the coordinator asks to continue it (optionally naming the failed run folder; default is the most recent failed run of that ticket). A continuation is a new run that builds on the failed run's commits already on the target branch. It is not a restart: do not revert, rebase, or discard the earlier deliverable.
 
 Preconditions, checked before any role is dispatched:
@@ -55,7 +59,7 @@ Preconditions, checked before any role is dispatched:
 
 Procedure:
 
-1. Mint a new run id `<ticket-id>-<yyyymmdd-hhmm>`; the failed run folder stays unchanged. Write `continuation.md` in the new folder with: the failed run id, baseline SHA, prior head SHA, ticket-revision commit, and the unresolved findings carried over (quoted from the failed run's last evaluation) with a note on which the revised ticket changed, dropped, or made explicit.
+1. Mint a new run id `<ticket-id>-<yyyymmdd-hhmm>`; the failed run folder stays unchanged. Write `continuation.md` in the new folder with: the failed run id, baseline SHA, prior head SHA, ticket-revision commit, and the unresolved findings carried over (quoted from the failed run's last evaluation) with a note on which the revised ticket changed, dropped, or made explicit. Label the carried-over findings, unmet requirements and any absence of evaluations as an immutable entry-state snapshot, anchored to the recorded continuation baseline and run start. Preserve that snapshot rather than rewriting it as later passes complete. In every subsequent Implementor or Evaluator dispatch, separately identify the latest handoff and evaluation (or explicitly state that none exists yet) and the cumulative deliverable diff ranges. State that the entry snapshot does not supersede subsequent artifacts or the authoritative ticket.
 2. Set the plan row `failed` -> `in-progress`, record the link in the run log and heartbeat, and number passes from 1 in the new folder. The continuation gets its own budget of three revise cycles.
 3. Dispatch the Implementor with the revised ticket, the path of `continuation.md`, and the failed run's handoffs and evaluations as read-only context. Instruct it to follow the ticket's "Current-state triage" section when present: inspect HEAD against each requirement, change only what is unmet or untested, and report a no-op for what is already met. The revised ticket, not the failed run's evaluations, defines the requirements.
 4. Run both gates on each pass as usual (own-commit changed paths; handoff headings).
