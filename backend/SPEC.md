@@ -118,7 +118,7 @@ Each allocated group member must have exactly one individual topic, investigatio
 - `GET /api/grading-rubrics/active` returns the active rubric version, including categories, criteria, assessment subject (individual, group, or both), rating scale and labels, evidence requirements, metric definitions, and configured aggregation rules.
 - `GET /api/grading-rubrics/{id}` returns a specific immutable rubric version.
 - `POST /api/grading-rubrics` publishes a new rubric version for `ADMIN`, with its effective date or school-year applicability.
-- `GET /api/projects/{projectId}/student-grades` returns paginated individual grade history to teachers; a student may retrieve only their own grades.
+- `GET /api/projects/{projectId}/student-grades` returns paginated individual grade history to teachers, who may optionally filter the project's history by `studentId`; without the filter, teachers receive the project's history. Students may retrieve only their own grades whether the filter is omitted or matches their ID; requesting another student's ID is forbidden.
 - `POST /api/projects/{projectId}/student-grades` records a teacher's assessment for one project student and rubric criterion, including rubric version, grade, assessment date, and evidence/comments.
 - `POST /api/projects/{projectId}/student-grades/{gradeId}/revisions` records a correction or reassessment without deleting the prior entry.
 - `GET /api/projects/{projectId}/group-grades` returns paginated group-level assessment history to teachers and authorized group members.

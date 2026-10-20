@@ -35,11 +35,13 @@ public class GradingController {
     }
 
     @GetMapping("/student-grades")
-    @Operation(summary = "List individual grade history; students see only their own grades.")
+    @Operation(summary = "List project individual grade history; teachers may filter by studentId, while students "
+            + "may read only their own grades.")
     @GradingApiResponses.StudentGradesList
     public PageResponse<GradeResponse> listStudentGrades(@AuthenticationPrincipal AuthenticatedUser caller,
             @Parameter(description = PROJECT_DESCRIPTION) @PathVariable UUID projectId,
-            @Parameter(description = "Optional student filter.") @RequestParam(required = false) String studentId,
+            @Parameter(description = "Optional teacher filter for a project member's grades; students may omit this "
+                    + "or request only their own ID.") @RequestParam(required = false) String studentId,
             @Parameter(description = PAGE_DESCRIPTION) @RequestParam(defaultValue = "0") int page,
             @Parameter(description = SIZE_DESCRIPTION) @RequestParam(defaultValue = "20") int size) {
         return gradeService.listStudentGrades(caller, projectId, studentId, page, size);

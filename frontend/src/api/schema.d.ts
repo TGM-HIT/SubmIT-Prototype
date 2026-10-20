@@ -208,7 +208,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List individual grade history; students see only their own grades. */
+        /** List project individual grade history; teachers may filter by studentId, while students may read only their own grades. */
         get: operations["listStudentGrades"];
         put?: never;
         /** Record a teacher's assessment of one student against one rubric criterion. */
@@ -4225,7 +4225,7 @@ export interface operations {
     listStudentGrades: {
         parameters: {
             query?: {
-                /** @description Optional student filter. */
+                /** @description Optional teacher filter for a project member's grades; students may omit this or request only their own ID. */
                 studentId?: string;
                 /** @description Zero-based page index. */
                 page?: number;

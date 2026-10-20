@@ -486,6 +486,87 @@ class OpenApiContractTest {
     }
 
     @Test
+    void studentGradeListDocumentsFilterAndStudentRestriction() throws Exception {
+        JsonNode operation = apiDocument().path("paths").path("/api/projects/{projectId}/student-grades").path("get");
+        assertTrue(operation.isObject(), "student-grade GET operation must exist");
+        JsonNode summary = operation.get("summary");
+        assertTrue(summary != null && summary.isTextual(), "operation summary must be a string");
+        String summaryText = summary.textValue().toLowerCase();
+        assertTrue(summaryText.contains("teacher") && summaryText.contains("filter")
+                        && summaryText.contains("studentid") && summaryText.contains("students")
+                        && summaryText.contains("own"),
+                "operation summary must describe teacher filtering and students' own-grade restriction");
+
+        JsonNode parameters = operation.get("parameters");
+        assertTrue(parameters != null && parameters.isArray(), "operation parameters must be an array");
+        JsonNode studentId = null;
+        for (JsonNode parameter : parameters) {
+            JsonNode name = parameter.get("name");
+            if (name != null && name.isTextual() && "studentId".equals(name.textValue())) {
+                studentId = parameter;
+                break;
+            }
+        }
+        assertTrue(studentId != null && studentId.isObject(), "studentId query parameter must exist");
+        JsonNode location = studentId.get("in");
+        JsonNode required = studentId.get("required");
+        JsonNode description = studentId.get("description");
+        JsonNode schema = studentId.get("schema");
+        assertTrue(location != null && location.isTextual(), "parameter location must be a string");
+        assertTrue(required != null && required.isBoolean(), "parameter required must be a boolean");
+        assertTrue(description != null && description.isTextual(), "parameter description must be a string");
+        assertTrue(schema != null && schema.isObject(), "studentId schema must be an object");
+        JsonNode type = schema.get("type");
+        assertTrue(type != null && type.isTextual(), "studentId schema type must be a string");
+        assertEquals("query", location.textValue());
+        assertEquals(false, required.booleanValue());
+        assertEquals("string", type.textValue());
+        String parameterDescription = description.textValue().toLowerCase();
+        assertTrue(parameterDescription.contains("teacher") && parameterDescription.contains("filter")
+                        && parameterDescription.contains("students") && parameterDescription.contains("own")
+                        && parameterDescription.contains("id"),
+                "studentId description must state teacher filtering and students' own-ID restriction");
+
+        JsonNode responses = operation.get("responses");
+        assertTrue(responses != null && responses.isObject(), "responses must be an object");
+        Set<String> responseCodes = new TreeSet<>();
+        responses.fieldNames().forEachRemaining(responseCodes::add);
+        assertEquals(Set.of("200", "400", "401", "403", "404"), responseCodes,
+                "Bug-19 response entries must remain present exactly once");
+        assertResponseContract(responses, "200", "Paginated individual grade history.",
+                "*/*", "PageResponseGradeResponse");
+        assertResponseContract(responses, "403", "Caller lacks the required role or project access.",
+                "application/json", "ApiErrorResponse");
+        assertResponseContract(responses, "404", "The project does not exist.",
+                "application/json", "ApiErrorResponse");
+        assertResponseContract(responses, "400", "The project UUID or pagination query parameter is invalid.",
+                "application/json", "ApiErrorResponse");
+        assertResponseContract(responses, "401", "Missing or invalid bearer authentication credentials.",
+                "application/json", "ApiErrorResponse");
+    }
+
+    private void assertResponseContract(JsonNode responses, String statusCode, String expectedDescription,
+            String mediaType, String schemaName) {
+        JsonNode response = responses.get(statusCode);
+        assertTrue(response != null && response.isObject(), statusCode + " response must be an object");
+        JsonNode description = response.get("description");
+        assertTrue(description != null && description.isTextual(),
+                statusCode + " response description must be a string");
+        assertEquals(expectedDescription, description.textValue(), statusCode + " response description");
+        JsonNode content = response.get("content");
+        assertTrue(content != null && content.isObject(), statusCode + " response content must be an object");
+        Set<String> mediaTypes = new TreeSet<>();
+        content.fieldNames().forEachRemaining(mediaTypes::add);
+        assertEquals(Set.of(mediaType), mediaTypes, statusCode + " response media type");
+        JsonNode schema = content.path(mediaType).get("schema");
+        assertTrue(schema != null && schema.isObject(), statusCode + " response schema must be an object");
+        JsonNode ref = schema.get("$ref");
+        assertTrue(ref != null && ref.isTextual(), statusCode + " response schema reference must be a string");
+        assertEquals("#/components/schemas/" + schemaName, ref.textValue(),
+                statusCode + " response schema reference");
+    }
+
+    @Test
     void protectedOperationsDocumentAuthenticationErrors() throws Exception {
         JsonNode paths = apiDocument().path("paths");
         List<String> failures = new ArrayList<>();
