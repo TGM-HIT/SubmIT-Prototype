@@ -3,6 +3,7 @@
 
 from pathlib import Path
 import re
+import subprocess
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -22,6 +23,7 @@ def require(condition: bool, message: str) -> None:
 sample = SAMPLE_PATH.read_text()
 compose = COMPOSE_PATH.read_text()
 bootstrap = BOOTSTRAP_PATH.read_text()
+makefile = (ROOT / "Makefile").read_text()
 
 
 def compose_service(name: str) -> str:
@@ -88,5 +90,41 @@ require(
     is not None,
     "bootstrap must require both the username and password to be nonblank",
 )
+
+require("DADB_BOOTSTRAPADMIN_USERNAME" in makefile, "Make must read the supported bootstrap username")
+require("DADB_BOOTSTRAPADMIN_PASSWORD" in makefile, "Make must read the supported bootstrap password")
+require(
+    "include .env" in makefile and re.search(r"(?m)^export$", makefile) is not None,
+    "Make must include and export the supported .env convention",
+)
+require(
+    re.search(r"(?i)FLIGHT[A-Z_]+ADMIN_USERNAME", makefile) is None,
+    "Make must not read the obsolete administrator variable",
+)
+warning = "Note: no initial admin configured (see .env.example)"
+secret = "startup-check-test-password"
+for username, password, should_warn in (
+    ("", "", True),
+    ("admin", "", True),
+    ("", secret, True),
+    ("admin", secret, False),
+):
+    result = subprocess.run(
+        [
+            "make",
+            "--no-print-directory",
+            "admin-config-diagnostic",
+            f"DADB_BOOTSTRAPADMIN_USERNAME={username}",
+            f"DADB_BOOTSTRAPADMIN_PASSWORD={password}",
+        ],
+        cwd=ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    require(result.returncode == 0, "Make administrator diagnostic command failed")
+    output = result.stdout + result.stderr
+    require((warning in output) == should_warn, "Make administrator warning does not match both-values convention")
+    require(secret not in output, "Make administrator diagnostic leaked a password value")
 
 print("Startup configuration wiring is consistent.")

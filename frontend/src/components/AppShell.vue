@@ -1,7 +1,7 @@
 <template>
   <div class="app-frame">
     <aside class="sidebar">
-      <RouterLink class="brand" to="/">Project<span>Ideas</span></RouterLink>
+      <RouterLink class="brand" to="/">Subm<span>IT</span></RouterLink>
       <p class="eyebrow">WORKSPACE</p>
       <nav aria-label="Main navigation" class="nav-list">
         <RouterLink
@@ -64,7 +64,7 @@ const pageTitle = computed(() => String(route.meta.title ?? {
   archive: 'Project archive',
   admin: 'Administration',
   settings: 'User Settings',
-}[String(route.name)] ?? 'Project Ideas'))
+}[String(route.name)] ?? 'SubmIT'))
 watch(() => auth.isAuthenticated, (signedIn) => {
   if (!signedIn && route.name !== 'public-archive' && route.name !== 'login' && route.name !== 'register') {
     void router.replace('/login')

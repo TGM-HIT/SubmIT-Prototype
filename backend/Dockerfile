@@ -10,10 +10,10 @@ COPY backend/src src
 RUN gradle --no-daemon test checkstyleMain bootJar
 
 FROM eclipse-temurin:23-jre
-RUN useradd --system --uid 1001 flightlog
+RUN useradd --system --uid 1001 submit
 WORKDIR /app
 COPY --from=build /workspace/backend/build/libs/*.jar app.jar
-USER flightlog
+USER submit
 EXPOSE 8080
 HEALTHCHECK --interval=15s --timeout=3s --start-period=30s \
   CMD bash -c 'exec 3<>/dev/tcp/localhost/8080' || exit 1

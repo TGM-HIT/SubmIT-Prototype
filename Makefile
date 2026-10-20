@@ -1,4 +1,4 @@
-# FlightLog - build, test and run the complete application.
+# SubmIT - build, test and run the complete application.
 # Run `make help` for available targets.
 
 SHELL := /bin/bash
@@ -75,8 +75,16 @@ testing-stack: env
 	wait
 
 run-backend: ## Start the backend on :8080
-	@test -n "$(FLIGHTLOG_ADMIN_USERNAME)" || echo "Note: no initial admin configured (see .env.example)"
+	$(call admin-config-warning)
 	cd $(BACKEND) && ./gradlew bootRun
+
+define admin-config-warning
+	@test -n "$(DADB_BOOTSTRAPADMIN_USERNAME)" -a -n "$(DADB_BOOTSTRAPADMIN_PASSWORD)" || echo "Note: no initial admin configured (see .env.example)"
+endef
+
+.PHONY: admin-config-diagnostic
+admin-config-diagnostic: ## Print the startup administrator diagnostic without starting the backend
+	$(call admin-config-warning)
 
 run-backend-testing: ## Start the backend on :8080 with the testing profile (seeded accounts)
 	cd $(BACKEND) && env -u DADB_TESTING_MINIMAL_FIXTURES ./gradlew bootRun --args='--spring.profiles.active=testing'

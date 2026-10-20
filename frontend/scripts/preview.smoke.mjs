@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
 import { createServer } from 'node:http'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
@@ -21,6 +21,8 @@ import {
   seedTestingIdeaHistory,
   stopChild,
   isPortFree,
+  launchBrowser,
+  run,
   RECORD_LOCATOR_EXPRESSION,
   viewportFor,
   waitForReady,
@@ -118,6 +120,69 @@ test('parses preview options and rejects incomplete or invalid invocations', () 
     () => parseArgs(['--auth', '--username', 'student01', '--no-start', '--url', 'https://example.com']),
     /restricted to localhost/,
   )
+})
+
+test('package and lockfile root identities agree', async () => {
+  const packageJson = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
+  const packageLock = JSON.parse(await readFile(new URL('../package-lock.json', import.meta.url), 'utf8'))
+  assert.equal(packageJson.name, 'submit-frontend')
+  assert.equal(packageLock.name, packageJson.name)
+  assert.equal(packageLock.packages[''].name, packageJson.name)
+})
+
+test('launchBrowser uses the submit profile prefix and removes only its failed profile', async (context) => {
+  const profileRoot = await mkdtemp(path.join(tmpdir(), 'preview-profile-test-'))
+  context.after(() => rm(profileRoot, { recursive: true, force: true }))
+  const unrelatedSession = path.join(profileRoot, 'unrelated-existing-session')
+  await writeFile(unrelatedSession, 'keep')
+  let capturedProfile
+  let capturedArgs
+
+  await assert.rejects(launchBrowser({
+    chrome: process.execPath,
+    profileRoot,
+    headed: false,
+  }, 'http://127.0.0.1:5173', {
+    env: process.env,
+    onBrowser: (_child, profile) => { capturedProfile = profile },
+    startBrowser: (_command, args) => {
+      capturedArgs = args
+      return { exitCode: 1, signalCode: null }
+    },
+    waitForDevtoolsReady: async () => { throw new Error('injected browser startup failure') },
+  }), /injected browser startup failure/)
+
+  assert.match(path.basename(capturedProfile), /^submit-preview-/)
+  assert.ok(capturedArgs.includes(`--user-data-dir=${capturedProfile}`))
+  await assert.rejects(readFile(capturedProfile), { code: 'ENOENT' })
+  assert.equal(await readFile(unrelatedSession, 'utf8'), 'keep')
+})
+
+test('successful and failed preview runs clean up only their own browser profiles', async (context) => {
+  const profileRoot = await mkdtemp(path.join(tmpdir(), 'preview-run-profile-test-'))
+  context.after(() => rm(profileRoot, { recursive: true, force: true }))
+  const unrelatedSession = path.join(profileRoot, 'unrelated-existing-session')
+  await writeFile(unrelatedSession, 'keep')
+  const options = parseArgs(['--no-start', '--url', 'http://127.0.0.1:5173'])
+  const browserLauncher = async (_options, _url, { onBrowser }) => {
+    const profile = await mkdtemp(path.join(profileRoot, 'submit-preview-'))
+    const browser = { exitCode: 1, signalCode: null }
+    onBrowser(browser, profile)
+    return { browser, profile, client: { close() {} }, errors: [], page: { title: 'Test', url: 'http://127.0.0.1:5173' } }
+  }
+
+  await run(options, { browserLauncher, capture: async () => {} })
+  assert.deepEqual(await readdir(profileRoot), ['unrelated-existing-session'])
+
+  await assert.rejects(run(options, {
+    browserLauncher: async (_options, _url, { onBrowser }) => {
+      const profile = await mkdtemp(path.join(profileRoot, 'submit-preview-'))
+      onBrowser({ exitCode: 1, signalCode: null }, profile)
+      throw new Error('injected preview failure')
+    },
+  }), /injected preview failure/)
+  assert.deepEqual(await readdir(profileRoot), ['unrelated-existing-session'])
+  assert.equal(await readFile(unrelatedSession, 'utf8'), 'keep')
 })
 
 test('seeds a synthetic submitted idea using only the local testing-profile API', async () => {
@@ -242,7 +307,7 @@ test('performs requested page interactions in fill, click, wait, expand, then ke
 })
 
 test('runs ordered preview steps and captures screenshots between interactions', async (context) => {
-  const outputDir = await mkdtemp(path.join(tmpdir(), 'flightlog-preview-steps-'))
+  const outputDir = await mkdtemp(path.join(tmpdir(), 'submit-preview-steps-'))
   context.after(() => rm(outputDir, { recursive: true, force: true }))
   const events = []
   let dialogCount = 2

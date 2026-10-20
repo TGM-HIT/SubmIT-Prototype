@@ -74,6 +74,7 @@ describe('authenticated shell profile and settings navigation', () => {
         ['/settings', 'User Settings'],
       ] as const) {
         const wrapper = await mountAt(path)
+        expect(wrapper.get('.brand').text()).toBe('SubmIT')
         const overview = wrapper.get('.nav-list a[href="/"]')
         const isOverviewSelected =
           overview.classes().includes('router-link-active') ||

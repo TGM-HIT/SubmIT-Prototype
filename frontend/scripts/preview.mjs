@@ -1208,12 +1208,20 @@ async function login(client, username, password) {
   console.log(`Authenticated as ${outcome.username} (${outcome.role}).`)
 }
 
-export async function launchBrowser(options, url, { signal, onBrowser, onClient, env }) {
+export async function launchBrowser(options, url, {
+  signal,
+  onBrowser,
+  onClient,
+  env,
+  startBrowser = startChild,
+  waitForDevtoolsReady = waitForDevtools,
+} = {}) {
   const executable = await findChrome(options.chrome)
-  const profile = await mkdtemp(path.join(options.profileRoot ?? tmpdir(), 'flightlog-preview-'))
+  const profile = await mkdtemp(path.join(options.profileRoot ?? tmpdir(), 'submit-preview-'))
+  console.log(`Browser profile: ${path.basename(profile)}`)
   const port = await unusedPort()
   let browserErrors = []
-  const browser = startChild(executable, [
+  const browser = startBrowser(executable, [
     ...(options.headed ? [] : ['--headless=new']),
     '--no-first-run',
     '--no-default-browser-check',
@@ -1225,7 +1233,7 @@ export async function launchBrowser(options, url, { signal, onBrowser, onClient,
   ], repoDir, 'chrome', env)
   onBrowser(browser, profile)
   try {
-    const response = await waitForDevtools(port, browser, signal)
+    const response = await waitForDevtoolsReady(port, browser, signal)
     const version = await response.json()
     const targetResponse = await fetch(`http://127.0.0.1:${port}/json/new?about:blank`, { method: 'PUT' })
     if (!targetResponse.ok) throw new Error(`Chrome could not open a page (HTTP ${targetResponse.status}).`)
@@ -1384,7 +1392,12 @@ function assertSpawnedAlive(child, label, port) {
   }
 }
 
-export async function run(options, { prepare, capture, serviceEnv = {} } = {}) {
+export async function run(options, {
+  prepare,
+  capture,
+  serviceEnv = {},
+  browserLauncher = launchBrowser,
+} = {}) {
   if (options.session) {
     const session = await requireSession({ sessionFile: options.sessionFile })
     options = { ...options, url: session.frontendUrl, start: false }
@@ -1459,7 +1472,7 @@ export async function run(options, { prepare, capture, serviceEnv = {} } = {}) {
     if (prepare) await prepare({ signal: controller.signal })
     if (interrupted) throw new Error('Preview interrupted.')
     console.log(`Opening ${url}`)
-    const launched = await launchBrowser(options, url, {
+    const launched = await browserLauncher(options, url, {
       signal: controller.signal,
       env: childEnv,
       onBrowser: (child, directory) => {

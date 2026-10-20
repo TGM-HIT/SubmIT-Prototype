@@ -4,7 +4,7 @@ plugins {
     id 'io.spring.dependency-management' version '1.1.7'
 }
 
-group = 'com.flightlog'
+group = 'ac.at.tgm.submit'
 version = '0.1.0'
 
 java {
@@ -94,23 +94,62 @@ tasks.register('verifyBootJarPackaging') {
     dependsOn tasks.named('bootJar')
     doLast {
         File archive = tasks.named('bootJar').get().archiveFile.get().asFile
-        java.util.jar.JarFile jar = new java.util.jar.JarFile(archive)
-        try {
-            String startClass = jar.manifest.mainAttributes.getValue('Start-Class')
+        String applicationEntry = 'BOOT-INF/classes/ac/at/tgm/submit/SubmITlication.class'
+        def verifyEntries = { List<String> entries, String startClass ->
             if (startClass != 'ac.at.tgm.submit.SubmITlication') {
                 throw new GradleException("Unexpected executable archive Start-Class: ${startClass}")
             }
-
-            List<String> entries = Collections.list(jar.entries()).collect { it.name }
-            String applicationEntry = 'BOOT-INF/classes/ac/at/tgm/submit/SubmITlication.class'
             if (entries.count { it == applicationEntry } != 1) {
                 throw new GradleException("Expected exactly one ${applicationEntry} archive entry")
             }
-            if (entries.any { it.startsWith('BOOT-INF/classes/com/flightlog/') }) {
-                throw new GradleException('Obsolete com.flightlog application classes remain in the archive')
+            List<String> foreignClasses = entries.findAll {
+                it.startsWith('BOOT-INF/classes/') && it.endsWith('.class')
+                        && !it.startsWith('BOOT-INF/classes/ac/at/tgm/submit/')
             }
+            if (!foreignClasses.isEmpty()) {
+                throw new GradleException("Application classes outside ac.at.tgm.submit namespace: ${foreignClasses}")
+            }
+        }
+
+        java.util.jar.JarFile jar = new java.util.jar.JarFile(archive)
+        try {
+            verifyEntries(Collections.list(jar.entries()).collect { it.name },
+                    jar.manifest.mainAttributes.getValue('Start-Class'))
         } finally {
             jar.close()
+        }
+
+        File testDirectory = layout.buildDirectory.dir('tmp').get().asFile
+        testDirectory.mkdirs()
+        File testArchive = File.createTempFile('bootjar-foreign-namespace-', '.jar', testDirectory)
+        try {
+            java.util.jar.Manifest manifest = new java.util.jar.Manifest()
+            manifest.mainAttributes.putValue('Manifest-Version', '1.0')
+            manifest.mainAttributes.putValue('Start-Class', 'ac.at.tgm.submit.SubmITlication')
+            new java.util.jar.JarOutputStream(new FileOutputStream(testArchive), manifest).withCloseable { output ->
+                [applicationEntry, 'BOOT-INF/classes/org/example/Foreign.class'].each { name ->
+                    output.putNextEntry(new java.util.jar.JarEntry(name))
+                    output.write(0)
+                    output.closeEntry()
+                }
+            }
+            java.util.jar.JarFile injected = new java.util.jar.JarFile(testArchive)
+            try {
+                boolean rejected = false
+                try {
+                    verifyEntries(Collections.list(injected.entries()).collect { it.name },
+                            injected.manifest.mainAttributes.getValue('Start-Class'))
+                } catch (GradleException expected) {
+                    rejected = true
+                }
+                if (!rejected) {
+                    throw new GradleException('Packaging verification accepted an injected foreign-namespace class')
+                }
+            } finally {
+                injected.close()
+            }
+        } finally {
+            testArchive.delete()
         }
     }
 }

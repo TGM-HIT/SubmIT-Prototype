@@ -21,12 +21,21 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.core.env.Environment;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
 @SpringBootTest(properties = "spring.datasource.url=jdbc:h2:mem:openapicontract;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE")
 @AutoConfigureMockMvc
 class OpenApiContractTest {
+    @Autowired
+    private Environment environment;
+
+    @Test
+    void ordinaryApplicationNameUsesProductIdentity() {
+        assertEquals("SubmIT", environment.getProperty("spring.application.name"));
+    }
+
     private static final List<String> HTTP_METHODS = List.of("get", "post", "put", "patch", "delete", "head",
             "options", "trace");
     private static final List<String> SCHEMA_CONSTRAINTS = List.of("minimum", "maximum", "exclusiveMinimum",
