@@ -36,7 +36,7 @@ Provide an overview connecting the three role guides, prerequisites for each cha
 
 - Demonstrate one coherent primary project across idea, acceptance, preference applications, finalized allocation, formal application, assessment, completion and public archive. Maintain identifiers across role changes; do not splice unrelated fixtures into a purported continuous story. Supporting accepted projects and applicants may be synthetic prerequisites for valid rankings and a group of three to five.
 - Show the main successful lifecycle plus the explicit idea-revision round. Other alternatives in the matrix require accurate explanatory text, not an exhaustive screenshot tour of every error or branch.
-- Preserve all role, lifecycle, grading and publication rules in [the shared specification](../../docs/SPEC.md), [backend specification](../../backend/SPEC.md), and [frontend specification](../../frontend/SPEC.md). This is documentation/tooling work, not authorization, workflow, grade-calculation or UI redesign.
+- Preserve all role, lifecycle, grading and publication rules in [the shared specification](../../../docs/SPEC.md), [backend specification](../../../backend/SPEC.md), and [frontend specification](../../../frontend/SPEC.md). This is documentation/tooling work, not authorization, workflow, grade-calculation or UI redesign.
 
 ### Tooling, fixtures and reachable states
 
@@ -64,7 +64,7 @@ Provide an overview connecting the three role guides, prerequisites for each cha
 - Validate a complete generated guide/capture set in ignored staging storage before replacing the previous local outputs; a failed run must leave the previous guide/image set intact rather than success-shaped partial output. Use stable logical filenames and relative Markdown links, not temporary absolute paths, tokens or transient IDs in output names.
 - Update the root README entry point and the preview/documentation-run usage in `frontend/DEV-GUIDELINES.md`; update `backend/DEV-GUIDELINES.md` only for actual new fixture capabilities. Document the repository-root `make doc LANGUAGE=de` invocation, both-service ownership, prerequisites, synthetic setup, captured states, ignored output versus tracked source policy, language extension, and recovery/cleanup. The Make target and guidance must not require a separately started backend or frontend.
 - Required tracked paths (`Makefile`, `.gitignore`, `README.md`, development guides, frontend package/scripts and any backend fixture/test sources) are already permitted by the scope gate. Generated guides/images are ignored outputs, not commit deliverables; do not add scope-gate allowances for them.
-- [Dev-29](done/Dev-29.md) completed the Java package move; do not introduce hard-coded bootstrap/package paths. No further ordering dependency on that ticket is required.
+- [Dev-29](Dev-29.md) completed the Java package move; do not introduce hard-coded bootstrap/package paths. No further ordering dependency on that ticket is required.
 
 ## Mechanical checks (the Evaluator re-runs)
 

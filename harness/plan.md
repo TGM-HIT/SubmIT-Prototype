@@ -75,7 +75,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-28](tickets/done/Dev-28.md) | done | Rename and exclude the human-maintained bugs and ideas file |
 | [Dev-29](tickets/done/Dev-29.md) | done | Clarify the unresolved Java package rename proposal |
 | [Dev-30](tickets/done/Dev-30.md) | done | Reconcile Auditor seat guidance with global model guidance |
-| [Dev-31](tickets/Dev-31.md) | failed | Build a reproducible full-lifecycle documentation run |
+| [Dev-31](tickets/done/Dev-31.md) | done | Build a reproducible full-lifecycle documentation run |
 | [Dev-32](tickets/Dev-32.md) | to-do | Exclude generated user guides from Compliance checks |
 
 ### Features

@@ -2,7 +2,7 @@
 
 ## Intent
 
-[Dev-31](Dev-31.md) will generate local Markdown guides and screenshots under `docs/user-guide/`, with the entire output tree ignored by Git. These reproducible outputs must not become additional audit inputs, sources of policy, or findings when absent or stale. Compliance checks must continue to inspect the authored documentation sources and tooling that generate them.
+[Dev-31](done/Dev-31.md) will generate local Markdown guides and screenshots under `docs/user-guide/`, with the entire output tree ignored by Git. These reproducible outputs must not become additional audit inputs, sources of policy, or findings when absent or stale. Compliance checks must continue to inspect the authored documentation sources and tooling that generate them.
 
 Source: user request to make Compliance checks ignore the generated documentation from Dev-31.
 
