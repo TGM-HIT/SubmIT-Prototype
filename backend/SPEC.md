@@ -1,6 +1,6 @@
-# Project Ideas - Backend Specification
+# SubmIT - Backend Specification
 
-This document defines backend behavior and the API contract. Shared business rules live in `docs/SPEC.md`; frontend behavior lives in `frontend/SPEC.md`.
+This document defines SubmIT backend behavior and the API contract. Its Spring Boot runtime entry point is `ac.at.tgm.submit.SubmITlication`. Shared business rules live in `docs/SPEC.md`; frontend behavior lives in `frontend/SPEC.md`.
 
 ## 1. API Boundary
 

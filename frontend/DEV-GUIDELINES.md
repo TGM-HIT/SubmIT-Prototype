@@ -1,6 +1,6 @@
 # Frontend Development Guidelines
 
-The frontend is a Vue 3 application using Vite, TypeScript, and Tailwind CSS. Functional behavior is defined in `frontend/SPEC.md`; shared product behavior is defined in `docs/SPEC.md`.
+The SubmIT frontend is a Vue 3 application using Vite, TypeScript, and Tailwind CSS. Functional behavior is defined in `frontend/SPEC.md`; shared product behavior is defined in `docs/SPEC.md`.
 
 ## Structure
 

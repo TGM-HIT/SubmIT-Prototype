@@ -1,10 +1,10 @@
-# Project Ideas - Product Specification
+# SubmIT - Product Specification
 
-This is the shared product specification. It defines behavior that both the backend and frontend must understand. Backend behavior and API boundaries live in `backend/SPEC.md`; frontend behavior lives in `frontend/SPEC.md`.
+This is the shared SubmIT product specification. It defines behavior that both the backend and frontend must understand. Backend behavior and API boundaries live in `backend/SPEC.md`; frontend behavior lives in `frontend/SPEC.md`.
 
 ## 1. Product Purpose
 
-The application helps students propose, develop, and join group projects for the next school year. Teachers review ideas, give structured feedback, decide which projects may proceed, and indicate whether they are willing to supervise them. Students apply to accepted projects by submitting a ranked list of preferences. After the application deadline, the system forms project groups of three to five students, honoring feasible administrator pins and optimizing the remaining assignments to match student preferences.
+SubmIT helps students propose, develop, and join group projects for the next school year. Teachers review ideas, give structured feedback, decide which projects may proceed, and indicate whether they are willing to supervise them. Students apply to accepted projects by submitting a ranked list of preferences. After the application deadline, the system forms project groups of three to five students, honoring feasible administrator pins and optimizing the remaining assignments to match student preferences.
 
 ## 2. People and Roles
 

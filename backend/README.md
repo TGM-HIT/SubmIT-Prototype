@@ -1,4 +1,4 @@
-# Project Ideas Backend
+# SubmIT Backend
 
 Requires JDK 23. The development datasource is an in-memory H2 database.
 

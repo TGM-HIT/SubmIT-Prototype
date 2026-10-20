@@ -1,4 +1,4 @@
-# FlightLog Frontend
+# SubmIT Frontend
 
 Requires Node.js `^20.19.0 || >=22.12.0` (matching Vite's supported engine range; Node 21.x and Node 22.0–22.11 are unsupported). Install dependencies with `npm install`.
 

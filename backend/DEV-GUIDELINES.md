@@ -1,6 +1,6 @@
 # Backend Development Guidelines
 
-The backend is a Spring Boot application built with Java 23 and Gradle using the Groovy DSL. Backend behavior is defined in this directory's `SPEC.md`; shared product behavior is defined in `docs/SPEC.md`.
+The SubmIT backend is a Spring Boot application built with Java 23 and Gradle using the Groovy DSL. Backend behavior is defined in this directory's `SPEC.md`; shared product behavior is defined in `docs/SPEC.md`.
 
 ## Architecture
 

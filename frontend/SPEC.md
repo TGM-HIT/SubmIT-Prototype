@@ -1,6 +1,6 @@
-# Project Ideas - Frontend Specification
+# SubmIT - Frontend Specification
 
-This document defines the Vue application behavior. Shared product behavior lives in `docs/SPEC.md`; API details and the generated contract live in `backend/SPEC.md` and `contracts/openapi.yaml`.
+This document defines the SubmIT Vue application behavior. Shared product behavior lives in `docs/SPEC.md`; API details and the generated contract live in `backend/SPEC.md` and `contracts/openapi.yaml`.
 
 ## 1. Application
 

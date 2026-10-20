@@ -1,4 +1,10 @@
-# FlightLog
+# SubmIT
+
+Think IT. Build IT. Keep IT.
+
+The platform for proposing, managing, evaluating, and preserving (diploma) projects.
+
+SubmIT supports the school-year group-project lifecycle from student ideas and teacher review through allocation, assessment, and publication-reviewed archives.
 
 ## Build, test and run
 

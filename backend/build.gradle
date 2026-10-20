@@ -87,3 +87,34 @@ tasks.register('generateOpenApi') {
         logger.lifecycle("Generated ${outputFile}")
     }
 }
+
+tasks.register('verifyBootJarPackaging') {
+    group = 'verification'
+    description = 'Verifies the executable archive uses the renamed SubmIT entry point.'
+    dependsOn tasks.named('bootJar')
+    doLast {
+        File archive = tasks.named('bootJar').get().archiveFile.get().asFile
+        java.util.jar.JarFile jar = new java.util.jar.JarFile(archive)
+        try {
+            String startClass = jar.manifest.mainAttributes.getValue('Start-Class')
+            if (startClass != 'ac.at.tgm.submit.SubmITlication') {
+                throw new GradleException("Unexpected executable archive Start-Class: ${startClass}")
+            }
+
+            List<String> entries = Collections.list(jar.entries()).collect { it.name }
+            String applicationEntry = 'BOOT-INF/classes/ac/at/tgm/submit/SubmITlication.class'
+            if (entries.count { it == applicationEntry } != 1) {
+                throw new GradleException("Expected exactly one ${applicationEntry} archive entry")
+            }
+            if (entries.any { it.startsWith('BOOT-INF/classes/com/flightlog/') }) {
+                throw new GradleException('Obsolete com.flightlog application classes remain in the archive')
+            }
+        } finally {
+            jar.close()
+        }
+    }
+}
+
+tasks.named('check') {
+    dependsOn tasks.named('verifyBootJarPackaging')
+}
