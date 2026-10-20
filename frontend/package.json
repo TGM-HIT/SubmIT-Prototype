@@ -10,7 +10,7 @@
     "build": "vue-tsc --noEmit && vite build",
     "preview": "node scripts/preview.mjs",
     "preview:help": "node scripts/preview.mjs --help",
-    "preview:test": "node --test scripts/preview.smoke.mjs",
+    "preview:test": "node --test scripts/preview.smoke.mjs scripts/documentation/documentation.smoke.mjs",
     "api:types": "openapi-typescript ../contracts/openapi.yaml -o src/api/schema.d.ts"
   },
   "dependencies": {

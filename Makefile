@@ -16,10 +16,13 @@ FRONTEND_DEV := cd $(FRONTEND) && (npm ci || npm install) && npm run dev
 .PHONY: help env install format-markdown build build-backend build-frontend test test-backend test-frontend \
         startup-config-check \
         check run run-testing run-testing-minimal testing-stack run-backend run-backend-testing \
-        run-frontend openapi clean
+        run-frontend openapi clean doc
 
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z_-]+:.*##/ {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+
+doc: ## Generate local screenshot guides: make doc LANGUAGE=de
+	node frontend/scripts/documentation/run.mjs --language "$(LANGUAGE)"
 
 env: ## Create .env from .env.example if missing
 	@test -f .env || { cp .env.example .env && echo "Created .env - review the values."; }

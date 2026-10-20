@@ -1,0 +1,161 @@
+{
+  "language": "de",
+  "title": "SubmIT – Wegweiser durch das Projektjahr",
+  "overview": "Diese lokal erzeugten Anleitungen zeigen ein zusammenhängendes synthetisches Projekt: den Schulgarten-Sensor. Beginnen Sie bei der passenden Rolle und folgen Sie den Querverweisen. Alle Bilder stammen aus der echten Testanwendung (Desktop 1440 × 1000). Namen und Inhalte sind ausschließlich Beispieldaten. Zugangsdaten werden nicht veröffentlicht. Die englischen Bedienelemente werden jeweils erklärt. Die Vorbereitung erzeugt zwei unterstützende, bereits angenommene Projekte sowie eine gültige Bewertungsrubrik über autorisierte APIs. Initiale gültige Ranglisten und vorläufige Abschlussnoten werden ausdrücklich als technische Lesevoraussetzungen vorbereitet, nicht als durchgeführte UI-Schritte. Die Hauptidee, ihre Überarbeitung und die weiteren Entscheidungen werden durch die tatsächlichen Oberflächen geführt.",
+  "example": {
+    "className": "Dokumentation Modellklasse",
+    "subjectName": "Umweltsensorik",
+    "title": "Schulgarten-Sensor",
+    "description": "Ein synthetisches Schulprojekt zur sparsamen Bewässerung eines Modellgartens.",
+    "outcome": "Eine sichere, öffentlich vorzeigbare Messwertübersicht ohne personenbezogene Daten.",
+    "scope": "Bodenfeuchte messen\nMesswerte verständlich darstellen",
+    "learning": "Sensorik\nDatenschutz",
+    "revision": "Der Modellgarten wird ohne personenbezogene Daten und mit nachvollziehbaren Messgrenzen untersucht.",
+    "feedback": "Bitte Messgrenzen und Datenschutz in der Beschreibung präzisieren.",
+    "approval": "Die überarbeitete Idee ist klar abgegrenzt; die Spezifikation kann ausgearbeitet werden.",
+    "acceptance": "Die vollständige Spezifikation ist für die Bewerbungsphase geeignet.",
+    "specification": {
+      "objectives": ["Bewässerungsbedarf nachvollziehbar darstellen"],
+      "intendedUsers": ["Schulgarten-Team"],
+      "requirements": ["Synthetische Messwerte übersichtlich anzeigen"],
+      "deliverables": ["Website-Snapshot", "Poster", "Quelldaten"],
+      "scope": "Ein abgegrenzter Modellgarten; keine personenbezogenen Messungen.",
+      "dependencies": ["Synthetischer Sensor"]
+    },
+    "supportTitles": ["Regenwasser-Modell", "Solarbeet-Modell"],
+    "period": "Dokumentation – Projektwahl",
+    "formalTopic": "Schulgarten-Sensor – Gruppenantrag",
+    "situation": "Ein Modellgarten wird bisher ohne nachvollziehbare Messdaten bewässert.",
+    "objective": "Sparsame Bewässerung anhand synthetischer Messwerte verständlich machen.",
+    "memberTopics": ["Sensorik", "Auswertung", "Darstellung"],
+    "concern": "Wie lässt sich der Bewässerungsbedarf zuverlässig erkennen?",
+    "result": "Ein überprüfbarer, dokumentierter Teil des Modellversuchs.",
+    "milestone": "Modellversuch und Dokumentation abgeschlossen",
+    "formalFeedback": "Aufgaben und Meilenstein sind nachvollziehbar. Die Projektarbeit ist genehmigt.",
+    "rubricName": "Modellprojekt – Bewertung",
+    "categoryName": "Umsetzung und Zusammenarbeit",
+    "criterionName": "Nachvollziehbare Umsetzung",
+    "groupCriterionName": "Zusammenarbeit",
+    "metricName": "Dokumentierte Versuche",
+    "evidence": "Der Modellversuch und seine Grenzen sind durch synthetische Testfälle belegt.",
+    "metricNote": "Drei dokumentierte Versuche im Modellgarten.",
+    "rationale": "Lehrkraftentscheidung: Umsetzung und dokumentierte Versuche wurden gemeinsam geprüft; keine automatische Gewichtung.",
+    "draftRationale": "Vorbereiteter Datensatz für die erste autorisierte Anzeige; noch nicht die abschließende UI-Bestätigung.",
+    "artifactTitles": ["Schulgarten – Website", "Schulgarten – Poster", "Schulgarten – Quelldaten"],
+    "artifactDescription": "Synthetischer Modellversuch ohne personenbezogene Inhalte.",
+    "publicationNote": "Inhalt auf persönliche Angaben und aktive Inhalte geprüft.",
+    "publicWebsite": "<!doctype html><html lang=\"de\"><meta charset=\"utf-8\"><title>Schulgarten</title><h1>Modellgarten</h1><p>Synthetischer Bewässerungsversuch.</p></html>",
+    "publicPoster": "Schulgarten – synthetischer Bewässerungsversuch. Drei Messungen, ein Modell.",
+    "publicData": "versuch,feuchte\n1,40\n2,45\n3,42\n"
+  },
+  "guides": {
+    "schueler": {
+      "title": "Schülerinnen und Schüler",
+      "intro": "Voraussetzung: ein Schülerkonto und später eine endgültig zugeteilte Gruppe. In dieser Geschichte erstellt student01 die Hauptidee; student02 und student03 bewerben sich ebenfalls. Die Idee bleibt über alle Rollenwechsel dasselbe Projekt.",
+      "chapters": [
+        {
+          "id": "konto",
+          "title": "Konto, Anmeldung und Profil",
+          "text": "Auf `/register` erstellt **Create account** ein Schülerkonto; bestehende Testkonten melden sich auf `/login` mit **Sign in** an. Veröffentlichen Sie keine Passwörter. Der persönliche Arbeitsbereich liegt auf `/`. Auf `/settings` ändern Sie **Account name** und bestätigen mit **Save changes**. Benutzername und Rolle werden hier nicht verändert. Die Administration ordnet Klasse und Wahlfächer zu: [Kontenverwaltung](administration.md#konten).",
+          "images": [{"key":"workspace","alt":"Persönlicher Arbeitsbereich des angemeldeten synthetischen Schülerkontos","caption":"Der Arbeitsbereich gehört zum angemeldeten Schülerkonto."}]
+        },
+        {
+          "id": "idee",
+          "title": "Idee entwickeln und einreichen",
+          "text": "Auf `/ideas` öffnet **＋ New idea** den Entwurf. Füllen Sie **Title**, **School year**, **Description**, **Intended outcome** und **Initial scope points** aus. Über **Find students by display name** und **Add** lassen sich Mitautorinnen und Mitautoren ergänzen (höchstens fünf Eigentümer insgesamt); die erstellende Person verwaltet sie auch unter **Details & history**. **Save draft** speichert, **Edit** bearbeitet und **Submit** reicht ein. Während der Prüfung ist die Bearbeitung gesperrt. **Withdraw** ist eine Alternative, nicht der Erfolgsweg. Lehrkräfte können eigene Ideen erstellen, aber nicht selbst prüfen. Weiter zur [Ideenprüfung](lehrkraefte.md#ideenpruefung).",
+          "images": [{"key":"idea-draft","alt":"Gespeicherter Entwurf Schulgarten-Sensor mit Bearbeiten- und Einreichen-Aktionen","caption":"Ein gespeicherter Entwurf kann vor dem Einreichen bearbeitet werden."},{"key":"idea-submitted","alt":"Eingereichte Hauptidee im Schülerkonto","caption":"Nach Submit wartet dieselbe Idee auf eine andere prüfende Lehrkraft."}]
+        },
+        {
+          "id": "ueberarbeitung",
+          "title": "Rückmeldung aufgreifen und Spezifikation einreichen",
+          "text": "Nach **Request revision** erscheint die Idee als überarbeitungsbedürftig. Unter **Details & history** lesen Sie die Rückmeldung. Mit **Edit**, **Save draft** und erneut **Submit** wird sie überarbeitet und wieder eingereicht. Nach **Approve full specification work** öffnen Sie **Details & history → Develop full specification**. Tragen Sie Ziele, Zielgruppen, Anforderungen, Ergebnisse, Umfang und Abhängigkeiten ein; **Save specification** speichert und schließt die Detailansicht. Öffnen Sie **Details & history** erneut; **Submit specification for acceptance review** reicht die vollständige Spezifikation ein. Die Freigabe zur Ausarbeitung ist noch keine Aufnahme in den Katalog: erst [die Annahme](lehrkraefte.md#annahme) ermöglicht Bewerbungen.",
+          "images": [{"key":"idea-revision","alt":"Zur Überarbeitung zurückgegebene Hauptidee mit Lehrkraft-Rückmeldung","caption":"Diese Geschichte zeigt eine echte Rückgabe und erneute Einreichung."},{"key":"specification","alt":"Vollständige eingereichte Spezifikation der Hauptidee","caption":"Die Spezifikation wartet auf die gesonderte Annahmeentscheidung."}]
+        },
+        {
+          "id": "praeferenzen",
+          "title": "Projekte ansehen und Rangliste speichern",
+          "text": "Voraussetzung: eine offene [Bewerbungsphase](administration.md#bewerbungsphase) mit mindestens drei angenommenen Projekten. Auf `/applications` zeigt **Accepted project** die Katalogdetails. **Add accepted project**, **Add choice** und die Pfeile ordnen mindestens drei unterschiedliche Wünsche. **Submit ranked application** reicht ein; bei einem vorhandenen Antrag heißt die Schaltfläche **Save ranking changes**. Die Dokumentationsvorbereitung legt vorher echte Bewerbungsdatensätze an, um einen leeren Einzelabruf zu vermeiden; das Speichern der Rangliste erfolgt danach sichtbar. Eigentum an einer Idee reserviert keinen Gruppenplatz. Änderungen sind nur vor dem Stichtag möglich.",
+          "images": [{"key":"preferences","alt":"Gespeicherte Rangliste mit der Hauptidee an erster Stelle","caption":"Alle drei Demonstrationskonten speichern ihre Wünsche vor Ablauf der Frist."}]
+        },
+        {
+          "id": "gruppe",
+          "title": "Endgültige Gruppe und offizieller Antrag",
+          "text": "Die Zuordnung startet automatisch nach dem Stichtag; die Administration [prüft und finalisiert](administration.md#zuteilung) das Ergebnis. Eine vorläufige Zuteilung ist noch keine endgültige Mitgliedschaft. Auf `/applications` zeigt **Assignment** nach der Finalisierung die Gruppe. Auf `/formal-application` die berechtigte Projekt-ID eingeben und zuerst **Start a group application** wählen (nicht einen noch nicht vorhandenen Antrag laden). Für alle zugeteilten Mitglieder individuelle Themen, Untersuchungsanliegen und geplante Ergebnisse ergänzen, außerdem Ausgangslage, Ziel und Meilensteine. **Save draft** speichert und schließt den Editor. Mit **Edit application** erneut öffnen und dann **Submit for teacher review** wählen. Erst [die formale Genehmigung](lehrkraefte.md#formal) erlaubt den Arbeitsbeginn.",
+          "images": [{"key":"group","alt":"Endgültig zugeteilte Gruppe des Schulgarten-Projekts im Schülerkonto","caption":"Die drei Mitglieder gehören nach Finalisierung tatsächlich zu derselben Gruppe."},{"key":"formal","alt":"Eingereichter offizieller Gruppenantrag für das zugeteilte Projekt","caption":"Der offizielle Antrag ist nicht die frühere Präferenzrangliste."}]
+        },
+        {
+          "id": "noten",
+          "title": "Eigene Bewertung und Projektabschluss",
+          "text": "Nach der formalen Genehmigung wird gearbeitet. Auf `/grading` mit **Project ID → Load authorized project record** die eigene Bewertung laden. Individuelle Einträge sind auf die eigene Person begrenzt; Rubrikversion, Datum und Nachweise bleiben zugeordnet. Lehrkräfte erfassen [Bewertungen und Abschlussnoten](lehrkraefte.md#bewertung), nicht eine hier erfundene Formel. Auf `/archive` mit **Load private artefacts** die privaten Dateien laden; über **Upload privately** Website-Snapshot, Poster und Quelldaten hochladen. Prüfen Sie alle Inhalte auf Personenbezug und aktive Inhalte. **Request publication review** ist nur eine Prüfanforderung, keine Veröffentlichung. Erst nach [Prüfung und Abschluss](lehrkraefte.md#abschluss) ist das freigegebene Archiv anonym sichtbar.",
+          "images": [{"key":"own-grades","alt":"Eigene individuelle Bewertung des angemeldeten Gruppenmitglieds mit Rubrikversion","caption":"Das Schülerkonto sieht nicht die individuellen Noten anderer Mitglieder."}]
+        }
+      ]
+    },
+    "lehrkraefte": {
+      "title": "Lehrkräfte",
+      "intro": "Voraussetzung: ein Lehrkraftkonto; für projektbezogene Aufgaben die bestehende Berechtigung. teacher01 prüft die von student01 erstellte Hauptidee. Die Administration trifft keine Qualitätsentscheidungen der Lehrkraft.",
+      "chapters": [
+        {
+          "id": "ideenpruefung",
+          "title": "Idee prüfen und Überarbeitung begleiten",
+          "text": "Auf `/ideas` die eingereichte Hauptidee mit **Review** öffnen. **Decision → Request revision**, **Written feedback** und **Record decision** geben sie zurück. Nach [Überarbeitung und Wiedereinreichung](schueler.md#ueberarbeitung) erlaubt **Approve full specification work** die Ausarbeitung. **Decline** lehnt ab und ist eine Alternative. Optionale Ratings und **Overall recommendation** unterstützen die Beurteilung, entscheiden aber nicht automatisch. **Your supervision preference** dokumentiert Interesse getrennt von der Freigabe. Eigene Ideen dürfen Lehrkräfte nicht selbst prüfen.",
+          "images": [{"key":"teacher-review","alt":"Lehrkraft prüft die fremde Hauptidee mit Rückgabeentscheidung und begründeter Rückmeldung","caption":"Eine andere Person als der Autor trifft die Prüfentscheidung."}]
+        },
+        {
+          "id": "annahme",
+          "title": "Vollständige Spezifikation annehmen",
+          "text": "Die eingereichte Spezifikation wird erneut unter **Review** geprüft. Hier **Work size** (Arbeitsumfang), **Curriculum relevance** (Lehrplanbezug), **Technical complexity** (technische Komplexität), **Feasibility** (Machbarkeit), **Learning value** (Lernwert), **Resource needs** (Ressourcenbedarf), **Risk & dependencies** (Risiken und Abhängigkeiten) sowie **Overall recommendation** ausfüllen; die optionalen Ratings der ersten Ideenprüfung sind davon zu unterscheiden. **Accept for student applications** und **Record decision** nehmen sie in den Bewerbungskatalog auf. Das ist eine andere Entscheidung als die frühere Freigabe zur Spezifikationsarbeit. Anschließend richtet die [Administration die Phase](administration.md#bewerbungsphase) ein und weist die Betreuung zu.",
+          "images": [{"key":"accepted","alt":"Von einer Lehrkraft angenommenes Schulgarten-Projekt","caption":"Erst die Annahme der Spezifikation macht das Projekt für Bewerbungen verfügbar."}]
+        },
+        {
+          "id": "formal",
+          "title": "Offiziellen Gruppenantrag genehmigen",
+          "text": "Voraussetzung: endgültige Zuteilung und eingereichter Gruppenantrag mit den zuvor von der Gruppe erfassten Einzelbeiträgen und Meilensteinen. Auf `/formal-application` Projekt-ID eingeben und **Load group application** wählen. Die geladene Übersicht zeigt Projektthema, Ausgangslage, Ziel und Entscheidungshistorie. Unter **Teacher decision** mit **Approve — group may begin**, begründetem **Feedback** und **Record teacher decision** genehmigen. **Request revisions** und **Decline** sind Alternativen; vor Genehmigung ist die Arbeit nicht freigegeben.",
+          "images": [{"key":"formal-approved","alt":"Von der Lehrkraft genehmigter formaler Antrag mit sichtbarer Arbeitsfreigabe","caption":"Die Genehmigung gilt dem tatsächlich zugeteilten Hauptprojekt."}]
+        },
+        {
+          "id": "bewertung",
+          "title": "Bewertungen, Metriken und Abschlussnoten erfassen",
+          "text": "Voraussetzung: genehmigtes Projekt und [veröffentlichte Rubrik](administration.md#rubrik). Auf `/grading` **Project ID** eingeben. Im Abschnitt **Record individual assessment** Kriterium, Gruppenmitglied, Wert, Datum, Nachweis und Kommentar ausfüllen und mit **Record assessment** speichern; **Record group assessment** gilt einem konfigurierten Gruppenkriterium. **Record observation** speichert eine konfigurierte Metrik. **Load authorized project record** und die Register **Individual assessments**, **Group assessments**, **Metric observations**, **Final grades** zeigen die Historie mit Originalrubrikversion. Ein Versionswechsel benötigt eine ausdrückliche Begründung. Die Vorbereitung erzeugt minimale Abschlussnotendatensätze für die erste fehlerfreie Anzeige; anschließend bestätigt die Lehrkraft die tatsächliche Abschlussentscheidung über **Save final project grade** und **Save individual final grade** mit **Teacher rationale** beziehungsweise **Rationale**. Ohne konfigurierte Rechenregel ist dies eine Lehrkraftentscheidung, kein automatischer Durchschnitt und keine erfundene Gewichtung.",
+          "images": [{"key":"assessment","alt":"Lehrkraftansicht mit tatsächlich gespeicherter individueller Bewertung und Nachweis","caption":"Die Bewertung bleibt ihrer Rubrikversion zugeordnet."},{"key":"metrics","alt":"Gespeicherte Metrikbeobachtung mit drei dokumentierten Modellversuchen","caption":"Die Metrik ist eine echte Beobachtung, keine automatisch erfundene Notenformel."},{"key":"final-grade","alt":"Gespeicherte Abschlussnote mit ausdrücklicher Lehrkraftbegründung","caption":"Die Abschlussentscheidung wird begründet; es wird keine Berechnungsformel erfunden."}]
+        },
+        {
+          "id": "abschluss",
+          "title": "Private Artefakte prüfen und abgeschlossenes Projekt veröffentlichen",
+          "text": "Auf `/archive` Projekt-ID eingeben und **Load private artefacts** wählen. Private Uploads werden erst durch **Request publication review** zur Prüfung eingereicht. **Approve publication** gibt ausschließlich die geprüfte Datei frei; **Reject** belässt abgelehnte Inhalte privat. Ein privates synthetisches Kontrollartefakt bleibt in dieser Geschichte ausdrücklich ungeprüft. Vor dem Projektabschluss kann eine berechtigte Lehrkraft mit **Unpublish** eine Freigabe zurücknehmen. Nicht freigegebene Dateien können im aktiven Projekt über **Remove** entfernt werden; Schülerkonten dürfen nur ihre eigenen Uploads entfernen. Nach vollständigen Pflichtartefakten und Abschlussnote bestätigt eine berechtigte Lehrkraft **Confirm project completion**. Danach sind Änderungen einschließlich Freigabeentzug und Entfernung gesperrt; das Archiv ist schreibgeschützt. Nur abgeschlossene Projekte haben ein anonymes Archiv unter `/archive/{projectId}`. Dort lädt **Download approved snapshot** die jeweilige freigegebene Datei herunter; ein Website-Snapshot wird nicht als aktive Website im Anwendungskontext ausgeführt. Das öffentliche Archiv darf keine Identitäten, Mitgliedschaft, Anträge, Noten, Rückmeldungen, privaten Metriken oder Auditdaten enthalten.",
+          "images": [{"key":"artifact-review","alt":"Authentifizierte Artefaktprüfung mit freigegebenen Dateien und weiterhin privatem Kontrollartefakt","caption":"Dateifreigabe und Projektabschluss sind getrennte Schritte."},{"key":"public-archive","alt":"Anonym geöffnetes Archiv des abgeschlossenen Modellprojekts mit ausschließlich geprüften Dateien","caption":"Die anonyme Ansicht und Downloads enthalten nur freigegebene synthetische Inhalte."}]
+        }
+      ]
+    },
+    "administration": {
+      "title": "Administration",
+      "intro": "Voraussetzung: ein Administrationskonto. Die Administration verwaltet Konten, Kataloge, Bewerbungsphasen, Zuteilung und Rubrikversionen; sie ersetzt nicht die fachlichen Entscheidungen einer Lehrkraft.",
+      "chapters": [
+        {
+          "id": "konten",
+          "title": "Konten, Klassen und Wahlfächer verwalten",
+          "text": "Auf `/admin` zeigt **Users & roles** die Kontenverwaltung. Registrierung erzeugt Schülerkonten; Rollenänderungen werden serverseitig geprüft. Unter **Classes & subjects** legen **Add class** und **Add subject** Klassen und Wahlfächer an; **Rename** benennt bestehende Einträge um. Zurück unter **Users & roles** das Schülerkonto suchen und **Edit** öffnen. Nach dem Laden **Class** auswählen, unter **Elective subjects** bis zu vier Fächer markieren und **Save** bestätigen. Verwenden Sie ausschließlich synthetische Testkonten; ändern Sie deren grundlegende Rollen für die Dokumentation nicht. [Schülerinnen und Schüler](schueler.md#konto) pflegen ihren Anzeigenamen selbst.",
+          "images": [{"key":"accounts","alt":"Administrationsansicht der synthetischen Kontenverwaltung","caption":"Kontenverwaltung ist nur authentifiziert für die Administration zugänglich."}]
+        },
+        {
+          "id": "bewerbungsphase",
+          "title": "Bewerbungsphase und Betreuung einrichten",
+          "text": "Voraussetzung: mindestens drei [angenommene Projekte](lehrkraefte.md#annahme) desselben Schuljahres. Die Vorbereitung erzeugt zwei zusätzliche angenommene Modellprojekte über bestehende autorisierte Dienste; sie sind nicht die Hauptgeschichte. Auf `/ideas` unter **Details & history** mit **Teacher → Confirm supervisor** die Betreuung zuweisen. Auf `/applications` **＋ Configure period** öffnen, **Label**, **School year**, **Opens at**, **Closes at** und die angenommenen Projekte wählen; **Create period** speichert. Die Dokumentationsphase erhält eine kurze echte zukünftige Frist. Danach speichern alle drei [Bewerberkonten ihre Ranglisten](schueler.md#praeferenzen).",
+          "images": [{"key":"period","alt":"Administrativ konfigurierte offene Bewerbungsphase mit drei angenommenen Projekten und echter Frist","caption":"Die Phase verbindet die Hauptidee mit den unterstützenden Projekten."}]
+        },
+        {
+          "id": "zuteilung",
+          "title": "Automatische Zuteilung prüfen und finalisieren",
+          "text": "Nach der Frist schließen Bewerbungen automatisch; der vorhandene Scheduler startet die Zuteilung. Der Dokumentationslauf wartet begrenzt auf genau diesen automatischen Lauf und startet keinen Ersatzlauf als vermeintlichen Automatismus. Auf `/allocation` mit **Application period** auswählen, feste Zuordnungen unter **Fixed assignments** prüfen und **Inspect result** öffnen. Das Ergebnis zeigt Gruppen von drei bis fünf Personen sowie **Unassigned outcomes** für nicht zugeteilte Personen oder unbesetzte Projekte mit jeweiligem Grund. Hier sind alle drei Bewerber zugeteilt; die zwei unterstützenden Projekte bleiben unbesetzt. Pins gelten für künftige Läufe und müssen weiterhin eine zulässige Gruppengröße erlauben. **Finalize result** bestätigt einen geeigneten nicht-vorläufigen Lauf. Erst dann ist die [Gruppenmitgliedschaft](schueler.md#gruppe) endgültig.",
+          "images": [{"key":"allocation","alt":"Ergebnis der automatisch nach Fristablauf gestarteten Zuteilung mit einer zulässigen Dreiergruppe","caption":"Die Administration prüft das Ergebnis vor der Finalisierung."}]
+        },
+        {
+          "id": "rubrik",
+          "title": "Versionierte Bewertungsrubrik veröffentlichen",
+          "text": "Auf `/grading` nimmt **Rubric configuration JSON** die schulisch freigegebene Konfiguration auf. **Publish immutable version** veröffentlicht eine unveränderliche Version mit Gültigkeit, Skalen, Kategorien, Einzel- und gegebenenfalls Gruppenkriterien, Nachweispflichten sowie Metriken. Die Vorbereitung veröffentlicht eine gültige Basisversion, bevor diese Seite erstmals geladen wird; eine weitere Version wird sichtbar durch die Administration veröffentlicht. Frühere Bewertungen behalten ihre ursprüngliche Version. Nur ausdrücklich konfigurierte Aggregationsregeln dürfen berechnen; hier wird keine Formel konfiguriert. Weiter zur [Bewertung durch die Lehrkraft](lehrkraefte.md#bewertung).",
+          "images": [{"key":"rubric","alt":"Administrativ veröffentlichte unveränderliche Rubrik mit Einzel- und Gruppenkriterium sowie Messdefinition","caption":"Die Rubrik ist Konfiguration und keine fest im Leitfaden erfundene Notenformel."}]
+        }
+      ]
+    }
+  }
+}

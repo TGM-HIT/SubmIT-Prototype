@@ -610,7 +610,7 @@ function chromeCandidates() {
   return ['/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser']
 }
 
-async function findChrome(selected) {
+export async function findChrome(selected) {
   const candidates = selected ? [selected] : chromeCandidates()
   for (const candidate of candidates) {
     try {
@@ -772,7 +772,7 @@ export function collectBrowserErrors(client) {
   return errors
 }
 
-async function evaluatePage(client, expression, description) {
+export async function evaluatePage(client, expression, description) {
   const evaluation = await client.send('Runtime.evaluate', {
     expression,
     awaitPromise: true,
@@ -1148,7 +1148,7 @@ export function formatNativeInputFailure(code, output) {
   return `macOS native selector input failed (${code}): ${details}`
 }
 
-async function navigate(client, url, signal) {
+export async function navigate(client, url, signal) {
   if (signal?.aborted) throw new Error('Preview interrupted.')
   let loadHandler
   let abortHandler
@@ -1208,9 +1208,9 @@ async function login(client, username, password) {
   console.log(`Authenticated as ${outcome.username} (${outcome.role}).`)
 }
 
-async function launchBrowser(options, url, { signal, onBrowser, onClient, env }) {
+export async function launchBrowser(options, url, { signal, onBrowser, onClient, env }) {
   const executable = await findChrome(options.chrome)
-  const profile = await mkdtemp(path.join(tmpdir(), 'flightlog-preview-'))
+  const profile = await mkdtemp(path.join(options.profileRoot ?? tmpdir(), 'flightlog-preview-'))
   const port = await unusedPort()
   let browserErrors = []
   const browser = startChild(executable, [
@@ -1344,14 +1344,16 @@ keyboard input to a collapsed popup (Terminal may require Accessibility permissi
 `
 }
 
-async function waitForTestingAccount(baseUrl, username, password, timeoutMs) {
+export async function waitForTestingAccount(baseUrl, username, password, timeoutMs, signal) {
   const deadline = Date.now() + timeoutMs
   let lastResponse
   while (Date.now() < deadline) {
+    if (signal?.aborted) throw new Error('Testing-profile readiness interrupted.')
     const response = await fetch(`${baseUrl}/api/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ username, password }),
+      ...(signal ? { signal: AbortSignal.any([signal, AbortSignal.timeout(10_000)]) } : {}),
     })
     if (response.ok) return
     const body = await response.text()
@@ -1382,7 +1384,7 @@ function assertSpawnedAlive(child, label, port) {
   }
 }
 
-async function run(options) {
+export async function run(options, { prepare, capture, serviceEnv = {} } = {}) {
   if (options.session) {
     const session = await requireSession({ sessionFile: options.sessionFile })
     options = { ...options, url: session.frontendUrl, start: false }
@@ -1397,7 +1399,7 @@ async function run(options) {
   }
   const url = buildUrl(options)
   const children = []
-  const childEnv = { ...process.env }
+  const childEnv = { ...process.env, ...serviceEnv }
   if (options.seedAllocationPinPreview) childEnv.DADB_TESTING_ALLOCATION_PIN_PREVIEW = 'true'
   delete childEnv.PREVIEW_PASSWORD
   if (options.passwordEnv) delete childEnv[options.passwordEnv]
@@ -1454,6 +1456,7 @@ async function run(options) {
       assertSpawnedAlive(backend, 'backend', backendPort)
       assertSpawnedAlive(frontend, 'frontend', frontendPort)
     }
+    if (prepare) await prepare({ signal: controller.signal })
     if (interrupted) throw new Error('Preview interrupted.')
     console.log(`Opening ${url}`)
     const launched = await launchBrowser(options, url, {
@@ -1469,8 +1472,12 @@ async function run(options) {
     profile = launched.profile
     client = launched.client
     if (launched.page) console.log(`Rendered: ${launched.page.title || '(untitled)'} — ${launched.page.url}`)
-    const outputPath = await saveScreenshot(client, options.outputDir, options.screenshot)
-    console.log(`Screenshot saved: ${outputPath}`)
+    if (capture) {
+      await capture({ client, errors: launched.errors, signal: controller.signal })
+    } else {
+      const outputPath = await saveScreenshot(client, options.outputDir, options.screenshot)
+      console.log(`Screenshot saved: ${outputPath}`)
+    }
     if (launched.errors.length) {
       for (const error of launched.errors) console.error(`Browser error: ${error}`)
       throw new Error(`${launched.errors.length} browser console or request error(s) detected; see details above.`)
