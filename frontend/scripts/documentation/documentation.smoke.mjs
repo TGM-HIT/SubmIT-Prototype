@@ -9,7 +9,7 @@ import { execFileSync } from 'node:child_process'
 import { generate, repo } from './run.mjs'
 import { loadLocale, renderGuides, validateGuides, validateLocale, validatePng, checkpoints, roles } from './guides.mjs'
 import { collectBrowserErrors } from '../preview.mjs'
-import { Lifecycle } from './scenario.mjs'
+import { assertMatchingRubricIds, Lifecycle } from './scenario.mjs'
 import { assertPublicBoundary } from './privacy.mjs'
 import { createServer } from 'node:http'
 
@@ -291,6 +291,29 @@ test('D4/D5 scenario refuses browser errors, absent expected state and interrupt
   await assert.rejects(scenario.wait('false', 'required state', 1), /Timeout.*required state/)
   scenario.signal = AbortSignal.abort()
   await assert.rejects(scenario.wait('false', 'required state'), /interrupted/)
+})
+
+test('D3 rubric identity requires non-empty string IDs on both API responses before equality', () => {
+  assert.doesNotThrow(() => assertMatchingRubricIds({ id: 'rubric-1' }, { id: 'rubric-1' }))
+  for (const invalid of [
+    { label: 'missing', value: undefined },
+    { label: 'null', value: null },
+    { label: 'empty', value: '' },
+    { label: 'same wrong-type', value: 7 },
+  ]) {
+    assert.throws(() => assertMatchingRubricIds(
+      invalid.label === 'missing' ? {} : { id: invalid.value },
+      invalid.label === 'missing' ? {} : { id: invalid.value },
+    ), /ID must be a non-empty string/, `Both ${invalid.label} IDs must be rejected`)
+    assert.throws(() => assertMatchingRubricIds(
+      invalid.label === 'missing' ? {} : { id: invalid.value },
+      { id: 'rubric-1' },
+    ), /ID must be a non-empty string/, `Invalid created ${invalid.label} ID must be rejected`)
+    assert.throws(() => assertMatchingRubricIds(
+      { id: 'rubric-1' },
+      invalid.label === 'missing' ? {} : { id: invalid.value },
+    ), /ID must be a non-empty string/, `Invalid freshly read ${invalid.label} ID must be rejected`)
+  }
 })
 
 test('D5 anonymous allowlist and private sentinels guard metadata, DOM, links and all downloaded files', () => {

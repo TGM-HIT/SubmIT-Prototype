@@ -14,6 +14,15 @@ const specificationRatings = Object.fromEntries([
 ].map((key) => [key, 3]))
 const isApiRequest = (request) => new URL(request.url).pathname.startsWith('/api/')
 
+export function assertMatchingRubricIds(createdRubric, initialRubric) {
+  for (const [label, rubric] of [['Created rubric', createdRubric], ['Freshly read rubric', initialRubric]]) {
+    assert.ok(rubric && typeof rubric === 'object' && !Array.isArray(rubric), `${label} response must be an object`)
+    assert.equal(typeof rubric.id, 'string', `${label} ID must be a non-empty string`)
+    assert.ok(rubric.id.length > 0, `${label} ID must be a non-empty string`)
+  }
+  assert.equal(initialRubric.id, createdRubric.id, 'Fresh persisted active rubric must match the created doc-v1 identity')
+}
+
 // This is shared across documentation languages. Text and example files come from the locale.
 // Supporting records use only existing, authorized HTTP operations in this command-owned testing JVM.
 export class Lifecycle {
@@ -89,7 +98,7 @@ export class Lifecycle {
     }
     const rubric = await this.api('admin01', '/api/grading-rubrics', 'POST', this.rubric)
     const initialRubric = await this.api('admin01', '/api/grading-rubrics/active')
-    assert.equal(initialRubric.id, rubric.id, 'Fresh persisted active rubric must match the created doc-v1 identity')
+    assertMatchingRubricIds(rubric, initialRubric)
     assert.equal(initialRubric.version, 'doc-v1')
     assert.equal(initialRubric.status, 'PUBLISHED')
     assert.equal(initialRubric.schoolYear, this.year)
