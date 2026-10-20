@@ -11,6 +11,8 @@ Product behavior and developer workflow are documented across three SPEC files a
 - `CLAUDE.md` and the three README files only where they restate rules from the documents above.
 - Division of responsibility: `docs/SPEC.md` states shared product rules, the backend and frontend specs state their technical detail, and the guides explain workflow and must not contradict the specs. Source-of-truth order is as in `harness/roles/auditor.md`.
 
+**Generated-guide boundary:** Before reading, searching, discovering, or traversing link targets, recursively exclude only the exact repository-root subtree `docs/user-guide/`, regardless of ignore or tracking state. Do not inspect its contents, age, links, images, chapters, orphan status, or presence or absence, and do not derive findings from them. For incoming links, inspect the authored source but skip generated-target existence, content, image, and anchor validation; do not open the target or follow its links. Keep this check's authored-input scope above, including relevant authored specifications and guides, unchanged; similarly named paths such as `docs/user-guide-notes/` remain in scope. Do not run `make doc`. Compliance-07 alone may generate and inspect this output for its dedicated audit, but must not hand-edit, stage, or commit it. Under `## Scope inspected`, report this subtree as excluded, not inspected, and note incoming generated-target checks skipped.
+
 ## Topics to check
 
 1. Roles, ownership, and co-ownership of ideas and projects (including teacher-authored ideas and student co-owners).

@@ -12,6 +12,8 @@ The specifications and guides describe behavior, endpoints, validation, and tool
 - `backend/DEV-GUIDELINES.md` and `frontend/DEV-GUIDELINES.md` against `backend/build.gradle`, `frontend/package.json`, `frontend/scripts/`, `Makefile`, `compose.yaml`, and the seeded fixtures.
 - Source of truth for behavior is the approved specification; the code is the thing being checked.
 
+**Generated-guide boundary:** Before reading, searching, discovering, or traversing link targets, recursively exclude only the exact repository-root subtree `docs/user-guide/`, regardless of ignore or tracking state. Do not inspect its contents, age, links, images, chapters, orphan status, or presence or absence, and do not derive findings from them. For incoming links, inspect the authored source but skip generated-target existence, content, image, and anchor validation; do not open the target or follow its links. Keep this check's authored-input scope above, including relevant specifications, developer guides, and tooling, unchanged; similarly named paths such as `docs/user-guide-notes/` remain in scope. Do not run `make doc`. Compliance-07 alone may generate and inspect this output for its dedicated audit, but must not hand-edit, stage, or commit it. Under `## Scope inspected`, report this subtree as excluded, not inspected, and note incoming generated-target checks skipped.
+
 ## Topics to check
 
 1. Every endpoint described in `backend/SPEC.md` exists with the documented method, path, and role restrictions, and no implemented endpoint is missing from it.

@@ -10,6 +10,8 @@ Documents rot quietly: sections describe removed features, TODO markers outlive 
 - `harness/plan.md`, `harness/tickets/`, `harness/tickets/done/`, `harness/checks/`, `harness/roles/`, `harness/templates/`.
 - `git log` dates per file, and the source tree for any feature or name a document mentions.
 
+**Generated-guide boundary:** Before reading, searching, discovering, or traversing link targets, recursively exclude only the exact repository-root subtree `docs/user-guide/`, regardless of ignore or tracking state. Do not inspect its contents, age, links, images, chapters, orphan status, or presence or absence, and do not derive findings from them. For incoming links, inspect the authored source but skip generated-target existence, content, image, and anchor validation; do not open the target or follow its links. Keep this check's authored-input scope above, including relevant authored documentation and harness records, unchanged; similarly named paths such as `docs/user-guide-notes/` remain in scope. Do not run `make doc`. Compliance-07 alone may generate and inspect this output for its dedicated audit, but must not hand-edit, stage, or commit it. Under `## Scope inspected`, report this subtree as excluded, not inspected, and note incoming generated-target checks skipped.
+
 ## Topics to check
 
 1. Staleness: documents or sections not touched since the last change to the code area they describe (compare the last commit date of the document with the last commit date of the code it documents).

@@ -1,0 +1,61 @@
+# Compliance-07. User documentation completeness and correctness
+
+## Purpose
+
+The generated user guides and screenshots explain a multi-role application lifecycle and must remain complete, accurate, and safe to publish as the application evolves. This check freshly generates each supported locale and audits its content and evidence against approved requirements and actual behavior; generated prose is the subject of the audit, never a source of product policy.
+
+## Inspect
+
+- Freshly generated `docs/user-guide/README.md`, each supported locale's entry point and student, teacher, and administrator guides, every referenced screenshot, and the current capture report produced by the generator. Determine the report's exact path from the authored generator sources; do not treat pre-existing output as fresh evidence.
+- Authored Dev-31 sources: `frontend/scripts/documentation/README.md`, `frontend/scripts/documentation/locales/` and its supported locale configurations, `frontend/scripts/documentation/guides.mjs` (guide templates), `frontend/scripts/documentation/scenario.mjs`, `frontend/scripts/documentation/privacy.mjs`, `frontend/scripts/documentation/run.mjs`, and `frontend/scripts/documentation/documentation.smoke.mjs`.
+- `README.md`, `Makefile`, `.gitignore`, `docs/SPEC.md`, `backend/SPEC.md`, `frontend/SPEC.md`, `backend/DEV-GUIDELINES.md`, and `frontend/DEV-GUIDELINES.md`.
+- Only the minimal relevant source and tests needed to verify a guide claim, route, permission, lifecycle transition, configured grading behavior, or privacy assertion. Follow the Auditor's source-of-truth order: shared product rules in `docs/SPEC.md`, owning technical specification, developer guides, then code, tests, and generated contract when comparing documented claims with behavior. The completed Dev-31 lifecycle matrix is a coverage checklist, not authority to override later approved specifications.
+- From the repository root, for each supported locale run `make doc LANGUAGE=<locale>` with `PREVIEW_PASSWORD` supplied through the documented environment convention. Begin with `make doc LANGUAGE=de`; enumerate any additional supported locales from the authored locale configuration and run the same root command for each. Prerequisites are the existing Make, Java/Gradle, Node dependencies, and Chrome/Chromium setup. Start with no prestarted owned application services. Do not install dependencies automatically, expose credentials, stop unrelated sessions, or change generator error or cleanup behavior.
+- Retain sanitized capture reports and review notes under the ignored audit run's `evidence/` directory. For each locale, record the exact command (redacting the password), baseline HEAD SHA, locale, generation outcome, capture-report path, checkpoint inventory, and observed screenshot dimensions. Keep generated output ignored; never hand-edit, stage, or commit anything under `docs/user-guide/`.
+
+## Topics to check
+
+1. **Freshness and scope:** Verify generation succeeded for each supported locale from the current baseline, not from stale output. Inspect the freshly generated root entry point, every locale entry point and role guide, referenced screenshots, and the current capture report. Record the exact generated inventory and evidence inspected.
+2. **Lifecycle completeness:** For every stage below, identify the responsible role, prerequisites, navigation and controls, expected result, cross-role handoff, guide chapter, and screenshot/checkpoint:
+   - account and profile setup, including administrator-created accounts, classes, and subjects;
+   - idea creation, collaborators, review and revision, and supervision interest;
+   - specification approval distinguished from project acceptance;
+   - application periods, catalogue, and ranked preferences;
+   - deadline processing, allocation, and finalized groups;
+   - formal application and teacher approval;
+   - versioned rubrics, individual and group assessments, and metrics;
+   - explicit final grades and rationale;
+   - private upload, publication review, completion, and the anonymous archive. Check continuity of the same primary project across the lifecycle and distinguish prepared supporting records from actions actually performed in the UI.
+3. **Behavioral correctness:** Compare guide text and screenshots with actual roles and permissions, current routes and visible control labels, reachable setup, lifecycle transitions, pagination where used, own-grade visibility, rubric-version association, and configured-only calculation rules. Use minimal relevant implementation or test evidence; do not infer behavior from generated prose.
+4. **Locale and presentation:** Review German explanations, captions, and alternative text for accurate meaning and usable screenshot framing. Review every supported locale independently. Verify internal and cross-guide links and anchors, and confirm referenced screenshots are nonempty valid PNG files with dimensions consistent with the capture report.
+5. **Publication and privacy:** Check anonymous-archive instructions and visible or downloadable synthetic public content against approved-publication rules. Verify public content excludes private, student, grade, feedback, uploader, audit, and credential information. Do not treat authenticated teacher or student screenshots in their respective guides as public leakage. Never use production data or claim private/public isolation from a screenshot alone; cite the generator's request/state/privacy assertions and relevant implementation evidence.
+6. **Evidence and results:** Separate generation status, structural validation, and semantic/presentation review in the report. A successful generator exit or link validator alone does not establish semantic accuracy or lifecycle completeness. Give every lifecycle topic a result supported by evidence, a finding, or an explicit not-inspected reason.
+
+## Finding and fix rules
+
+- Absence of generated output before a fresh run is normal. A failed generation, missing prerequisite, occupied service/session, or unreachable UI state must produce an honest `stopped` outcome: record the exact command, stage, route, request, and status available; preserve completed partial observations; list every uninspected topic; and do not waive checks, fake screenshots, or infer correctness from stale output.
+- Only a successful fresh generation for a locale permits completeness or correctness conclusions about that locale. If generation fails while older output exists, do not inspect or use that older output as evidence.
+- After successful generation, missing chapters or images, misleading instructions, inaccurate translations, or mismatched screenshots are findings. Never repair generated output directly. Follow-ups target authored templates, locale configuration, scenario/tooling, or an evidenced product defect. Apply existing Bug/Dev/Feature classification, duplicate, and decision-needed rules; unresolved product policy remains a decision, not an invented guide rule.
+- For privacy or behavior conclusions, cite request/state/privacy assertions and minimal relevant implementation or test evidence. A screenshot alone cannot establish private/public isolation. Do not classify authorized authenticated screenshots as public leakage.
+- Never hand-edit, stage, or commit generated files. Generated-output defects are corrected only through their authored source or a separately evidenced product fix.
+
+## Commands and verification
+
+- From the repository root, run `make doc LANGUAGE=de` with the documented environment-based `PREVIEW_PASSWORD`; enumerate supported locales from `frontend/scripts/documentation/locales/` and run the same command separately for each. Do not expose the password in commands retained in the report.
+- Record baseline SHA, locale, exact redacted command, generation exit/result, stage or route on failure, capture-report path, checkpoint inventory, and screenshot dimensions. Retain sanitized reports and review notes under `harness/runs/<run-id>/evidence/`.
+- Inspect current locale configuration and authored generator/scenario/privacy sources alongside relevant specifications, developer guides, source, tests, and UI/capture evidence. Check links, anchors, image validity and dimensions, then perform a separate semantic review of content, roles, lifecycle, presentation, and privacy.
+- Do not pre-start services, automatically install prerequisites, stop unrelated sessions, change generator behavior, or run the audit against production data. On any failed prerequisite or generation stage, stop that locale's audit and explicitly record completed and uninspected work.
+- Generated guide output is ignored and must never be staged or committed. Do not use a generator exit status or structural validator as a substitute for the required manual semantic review.
+
+## Report requirements
+
+- Retain the Auditor's standard report headings and outcome rules.
+- Under `## Scope inspected`, record baseline SHA, each locale and exact command, generation outcome, generated inventory actually inspected, capture-report path, checkpoint inventory and dimensions, and evidence-file paths. Redact credentials.
+- Add a per-locale stage matrix with exactly these columns: `Stage`, `Role`, `Guide/chapter`, `Screenshot/checkpoint`, `Requirement/source`, `Observed UI or implementation evidence`, and `Result`. Include every lifecycle stage in Topic 2; mark partial and uninspected topics explicitly.
+- Report generation status, structural validation, and semantic/presentation review separately. For every topic, include evidence, a finding, or an explicit not-inspected reason; do not claim broad correctness from generation success alone.
+- For each privacy conclusion, cite generator request/state/privacy assertions and relevant implementation evidence. Explicitly identify authenticated role-guide screenshots as such when needed to distinguish them from anonymous public content.
+- A failed run must have outcome `stopped`, the exact available diagnostics and completed partial observations, and an explicit list of uninspected topics. Do not report stale output as checked.
+
+## Cadence
+
+After user-facing lifecycle, role, UI, or guide-generation changes, and at least monthly.
