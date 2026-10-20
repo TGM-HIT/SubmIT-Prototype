@@ -78,6 +78,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-30](tickets/done/Dev-30.md) | done | Reconcile Auditor seat guidance with global model guidance |
 | [Dev-31](tickets/done/Dev-31.md) | done | Build a reproducible full-lifecycle documentation run |
 | [Dev-32](tickets/Dev-32.md) | to-do | Exclude generated user guides from Compliance checks |
+| [Dev-33](tickets/Dev-33.md) | to-do | Remove deprecated API usage and prevent regressions |
 
 ### Features
 
