@@ -105,6 +105,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Feature-17](tickets/done/Feature-17.md) | done | Let administrators run an early allocation before the deadline |
 | [Feature-18](tickets/done/Feature-18.md) | done | Let administrators pin students to projects before an allocation runs |
 | [Feature-19](tickets/done/Feature-19.md) | done | Decide the student-grade list student filter |
+| [Feature-20](tickets/Feature-20.md) | to-do | Let students apply together before allocation |
 
 ### Optimizations
 
