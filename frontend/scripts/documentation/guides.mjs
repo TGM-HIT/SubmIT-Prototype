@@ -56,7 +56,7 @@ export function validateLocale(locale, language) {
       throw new Error(`Incomplete language ${language}: ${key}`)
     }
     for (const key of [
-      'className', 'subjectName', 'title', 'description', 'outcome', 'scope', 'learning', 'revision', 'feedback', 'approval', 'acceptance',
+      'registrationDisplayName', 'className', 'subjectName', 'title', 'description', 'outcome', 'scope', 'learning', 'revision', 'feedback', 'approval', 'acceptance',
       'specification', 'supportTitles', 'period', 'formalTopic', 'situation', 'objective', 'memberTopics',
       'concern', 'result', 'milestone', 'formalFeedback', 'rubricName', 'categoryName', 'criterionName',
       'groupCriterionName', 'metricName', 'evidence', 'metricNote', 'rationale', 'draftRationale',

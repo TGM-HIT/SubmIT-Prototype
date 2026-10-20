@@ -21,9 +21,10 @@ export function assertPublicBoundary({ catalogue, dom, downloads, sentinels, pri
   }
   visit(catalogue)
   strings.push(dom, ...downloads)
-  for (const sentinel of sentinels) {
-    assert.equal(typeof sentinel, 'string')
-    assert.ok(sentinel.length > 0)
-    assert.ok(strings.every((value) => !value.includes(sentinel)), `Private sentinel in anonymous surface: ${sentinel}`)
+  for (const forbidden of [...sentinels, privateArtifactId]) {
+    assert.equal(typeof forbidden, 'string')
+    assert.ok(forbidden.length > 0)
+    assert.ok(strings.every((value) => !value.includes(forbidden)),
+      `Private sentinel or artifact ID in anonymous surface: ${forbidden}`)
   }
 }

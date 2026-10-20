@@ -88,7 +88,28 @@ export class Lifecycle {
       aggregationRules: [],
     }
     const rubric = await this.api('admin01', '/api/grading-rubrics', 'POST', this.rubric)
-    this.report.prepared.push({ kind: 'initial-rubric', id: rubric.id, reason: 'Active rubric read before first /grading load' })
+    const initialRubric = await this.api('admin01', '/api/grading-rubrics/active')
+    assert.equal(initialRubric.id, rubric.id, 'Fresh persisted active rubric must match the created doc-v1 identity')
+    assert.equal(initialRubric.version, 'doc-v1')
+    assert.equal(initialRubric.status, 'PUBLISHED')
+    assert.equal(initialRubric.schoolYear, this.year)
+    assert.equal(initialRubric.effectiveFrom, this.rubric.effectiveFrom)
+    assert.equal(initialRubric.effectiveTo, null)
+    assert.ok(Array.isArray(initialRubric.metricDefinitions))
+    assert.equal(initialRubric.metricDefinitions.length, 1)
+    const initialMetric = initialRubric.metricDefinitions[0]
+    assert.equal(initialMetric.id, 'experiments')
+    assert.equal(initialMetric.name, this.text.metricName)
+    assert.equal(initialMetric.version, 1)
+    assert.equal(initialMetric.min, 0)
+    assert.equal(initialMetric.max, null)
+    this.report.prepared.push({
+      kind: 'initial-rubric', id: initialRubric.id, version: initialRubric.version,
+      schoolYear: initialRubric.schoolYear, effectiveFrom: initialRubric.effectiveFrom,
+      effectiveTo: initialRubric.effectiveTo,
+      metrics: initialRubric.metricDefinitions.map(({ id, name, version, min, max }) => ({ id, name, version, min, max })),
+      reason: 'Fresh authorized active-rubric readback after publication and before the first /grading load',
+    })
     this.support = []
     for (const title of this.text.supportTitles) {
       const idea = await this.api('teacher02', '/api/ideas', 'POST', {
@@ -282,15 +303,20 @@ export class Lifecycle {
     }
   }
 
-  async story() {
-    this.stage = 'account-and-setup'
+  async registerStudent() {
     // Registration uses a distinct identity and never changes a seeded account's role.
     await this.go('/register')
     await this.fill('#username', 'doc-student')
-    await this.fill('#display-name', 'Dokumentation Modellkonto')
+    await this.fill('#display-name', this.text.registrationDisplayName)
     await this.fill('#password', this.password)
     await this.button('Create account')
     await this.wait(`location.pathname === '/'`, 'new student workspace')
+  }
+
+  async story({ registrationOnly = false } = {}) {
+    this.stage = 'account-and-setup'
+    await this.registerStudent()
+    if (registrationOnly) return
     await this.as('student01', '/settings')
     await this.fill('#settings-account-name', this.sessions.student01.user.displayName)
     await this.button('Save changes')

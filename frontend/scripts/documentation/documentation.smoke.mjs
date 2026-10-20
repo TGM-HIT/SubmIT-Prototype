@@ -113,7 +113,7 @@ for (const failure of ['missing', 'corrupt', 'dimensions', 'payload', 'link', 'a
   })
 }
 
-test('D2 temporary second-language configuration reuses generation without modifying German output', async (t) => {
+test('D2 temporary second-language configuration reuses the shared registration story without modifying German output', async (t) => {
   const root = await temporary(t)
   const de = await generate('de', dependencies(root))
   const oldGuide = await readFile(path.join(root, 'docs/user-guide/de/schueler.md'))
@@ -122,14 +122,35 @@ test('D2 temporary second-language configuration reuses generation without modif
   const second = structuredClone(await loadLocale('de'))
   second.language = 'xy'
   second.title = 'Separate test language'
+  second.example.registrationDisplayName = 'XY registration display name'
   second.guides.schueler.title = 'Separate student guide'
   await writeFile(path.join(locales, 'xy.json'), JSON.stringify(second))
   const load = (language) => loadLocale(language, pathToFileURL(locales + '/'))
-  const xy = await generate('xy', dependencies(root, { load }))
+  class SharedStoryCapture extends Lifecycle {
+    async prepare() { this.report.prepared = [] }
+    async capture() {
+      this.registrationDisplayNames = []
+      this.go = async () => {}
+      this.fill = async (selector, value) => {
+        if (selector === '#display-name') this.registrationDisplayNames.push(value)
+      }
+      this.button = async () => {}
+      this.wait = async () => {}
+      await this.story({ registrationOnly: true })
+      this.report.registrationDisplayNames = this.registrationDisplayNames
+      this.report.checkpoints = checkpoints.map((key) => ({ key }))
+      await images(this.output, this.locale.language)
+    }
+  }
+  const xy = await generate('xy', dependencies(root, { load, scenarioClass: SharedStoryCapture }))
   assert.deepEqual(xy.inventory.checkpoints, de.inventory.checkpoints)
   assert.deepEqual(await readFile(path.join(root, 'docs/user-guide/de/schueler.md')), oldGuide)
   assert.ok((await readFile(path.join(root, 'docs/user-guide/xy/README.md'), 'utf8')).includes(second.title))
   assert.equal((await readdir(path.join(root, 'docs/user-guide/xy/images'))).length, checkpoints.length)
+  assert.deepEqual(xy.registrationDisplayNames, [second.example.registrationDisplayName])
+  assert.ok(!JSON.stringify(xy).includes('unit-test-only-secret'))
+  assert.ok((await readFile(path.join(root, 'docs/user-guide/xy/schueler.md'), 'utf8')).includes(second.guides.schueler.title))
+  assert.ok(!(await readFile(path.join(root, 'docs/user-guide/de/schueler.md'), 'utf8')).includes(second.guides.schueler.title))
 })
 
 test('D2 invalid/missing/incomplete locale and missing password/browser fail before service startup', async (t) => {
@@ -142,6 +163,9 @@ test('D2 invalid/missing/incomplete locale and missing password/browser fail bef
   const incomplete = structuredClone(await loadLocale('de'))
   delete incomplete.example.feedback
   await assert.rejects(generate('de', { ...options, load: async () => validateLocale(incomplete, 'de') }), /Incomplete/)
+  const withoutRegistrationName = structuredClone(await loadLocale('de'))
+  delete withoutRegistrationName.example.registrationDisplayName
+  await assert.rejects(generate('de', { ...options, load: async () => validateLocale(withoutRegistrationName, 'de') }), /example.registrationDisplayName/)
   await assert.rejects(generate('de', { ...options, env: {} }), /PREVIEW_PASSWORD/)
   await assert.rejects(generate('de', { ...options, preflight: async () => { throw new Error('Missing Chrome binary') } }), /Chrome/)
   assert.equal(starts, 0)
@@ -292,7 +316,15 @@ test('D5 anonymous allowlist and private sentinels guard metadata, DOM, links an
   assert.throws(() => assertPublicBoundary(leakedField), /allowlist/)
   const leakedId = structuredClone(fixture)
   leakedId.catalogue.content[0].id = fixture.privateArtifactId
-  assert.throws(() => assertPublicBoundary(leakedId), /Private sentinel/)
+  assert.throws(() => assertPublicBoundary(leakedId), /Private/)
+  assert.throws(() => assertPublicBoundary({
+    ...fixture, dom: `<a href="/api/public/archive/${fixture.privateArtifactId}">download</a>`,
+  }), /Private sentinel or artifact ID/)
+  for (let index = 0; index < fixture.downloads.length; index++) {
+    const downloads = [...fixture.downloads]
+    downloads[index] += `\n${fixture.privateArtifactId}`
+    assert.throws(() => assertPublicBoundary({ ...fixture, downloads }), /Private sentinel or artifact ID/)
+  }
 })
 
 test('D6 real HTTP failure/missing record and persisted wrong state produce exact route/status diagnostics', async (t) => {

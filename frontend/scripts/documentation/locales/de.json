@@ -3,6 +3,7 @@
   "title": "SubmIT – Wegweiser durch das Projektjahr",
   "overview": "Diese lokal erzeugten Anleitungen zeigen ein zusammenhängendes synthetisches Projekt: den Schulgarten-Sensor. Beginnen Sie bei der passenden Rolle und folgen Sie den Querverweisen. Alle Bilder stammen aus der echten Testanwendung (Desktop 1440 × 1000). Namen und Inhalte sind ausschließlich Beispieldaten. Zugangsdaten werden nicht veröffentlicht. Die englischen Bedienelemente werden jeweils erklärt. Die Vorbereitung erzeugt zwei unterstützende, bereits angenommene Projekte sowie eine gültige Bewertungsrubrik über autorisierte APIs. Initiale gültige Ranglisten und vorläufige Abschlussnoten werden ausdrücklich als technische Lesevoraussetzungen vorbereitet, nicht als durchgeführte UI-Schritte. Die Hauptidee, ihre Überarbeitung und die weiteren Entscheidungen werden durch die tatsächlichen Oberflächen geführt.",
   "example": {
+    "registrationDisplayName": "Dokumentation Modellkonto",
     "className": "Dokumentation Modellklasse",
     "subjectName": "Umweltsensorik",
     "title": "Schulgarten-Sensor",
