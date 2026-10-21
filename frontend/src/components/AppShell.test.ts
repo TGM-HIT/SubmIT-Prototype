@@ -63,6 +63,31 @@ describe('authenticated shell profile and settings navigation', () => {
   })
 
   it.each(['STUDENT', 'TEACHER', 'ADMIN'] as const)(
+    'preserves preference navigation and formal-proposal visibility for %s',
+    async (role) => {
+      setActivePinia(createPinia())
+      useAuthStore().updateUser(account(role))
+      const wrapper = await mountAt('/applications')
+      const navigation = wrapper.get('nav[aria-label="Main navigation"]')
+      const preferences = navigation.get('a[href="/applications"]')
+      expect(preferences.text().slice(1)).toBe('Applications')
+      expect(wrapper.get('h1').text()).toBe('Applications')
+      const proposals = navigation.findAll('a').filter((link) => link.text().slice(1) === 'Formal proposal')
+      expect(proposals).toHaveLength(role === 'ADMIN' ? 0 : 1)
+      expect(navigation.findAll('a[href="/formal-application"]')).toHaveLength(role === 'ADMIN' ? 0 : 1)
+      if (role !== 'ADMIN') {
+        expect(proposals[0].attributes('href')).toBe('/formal-application')
+        await proposals[0].trigger('click')
+        await flushPromises()
+        expect(wrapper.get('h1').text()).toBe('Formal proposal')
+        expect(navigation.get('a[href="/formal-application"]').classes()).toContain('router-link-exact-active')
+        expect(preferences.classes()).not.toContain('router-link-active')
+      }
+      wrapper.unmount()
+    },
+  )
+
+  it.each(['STUDENT', 'TEACHER', 'ADMIN'] as const)(
     'highlights Overview only on the dashboard and retains the current page state for %s',
     async (role) => {
       setActivePinia(createPinia())

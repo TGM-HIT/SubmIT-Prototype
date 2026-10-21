@@ -1,16 +1,16 @@
 <template>
   <section class="page">
-    <p class="page-intro">This is the group's official project application—not the student preference ranking. Work begins only after the teacher approves this application.</p>
+    <p class="page-intro">This is the allocated group's official formal proposal—not the student preference rankings. Project work begins only after the teacher approves this formal proposal.</p>
     <div class="panel">
       <form class="toolbar" @submit.prevent="loadApplication">
         <div class="field"><label class="label" for="project-id">Allocated project ID</label><input id="project-id" v-model.trim="projectId" class="input" required aria-describedby="project-hint" /><small id="project-hint" class="muted">Enter the project identifier from your authorized allocation result.</small></div>
-        <button class="button button-secondary" :disabled="task.loading.value">Load group application</button>
+        <button class="button button-secondary" :disabled="task.loading.value">Load formal proposal</button>
       </form>
-      <p v-if="!current" class="notice">If an allocated group does not yet have an application, enter the project ID and choose “Start a group application”. Group-member IDs are included only in this authenticated request and checked by the backend.</p>
-      <button v-if="!current && projectId" class="button" @click="newApplication">Start a group application</button>
+      <p v-if="!current" class="notice">If an allocated group does not yet have a formal proposal, enter the project ID and choose “Start a formal proposal”. Group-member IDs are included only in this authenticated request and checked by the backend.</p>
+      <button v-if="!current && projectId" class="button" @click="newApplication">Start a formal proposal</button>
     </div>
     <form v-if="editing && current" class="panel stack" @submit.prevent="save">
-      <div class="page-heading"><h2 class="section-title">Formal project application</h2><span class="status-badge" :class="`status-${current.status?.toLowerCase()}`">{{ readable(current.status) }}</span></div>
+      <div class="page-heading"><h2 class="section-title">Formal proposal</h2><span class="status-badge" :class="`status-${current.status?.toLowerCase()}`">{{ readable(current.status) }}</span></div>
       <div class="grid grid-2">
         <div class="field"><label class="label" for="topic">Project topic · max 200 characters</label><input id="topic" v-model="form.topic" class="input" maxlength="200" required /><span class="metric">{{ form.topic.length }}/200</span></div>
         <div class="field"><label class="label" for="partner">Cooperation partner · optional</label><input id="partner" v-model="form.cooperationPartner" class="input" maxlength="1000" /></div>
@@ -40,8 +40,8 @@
       <div class="page-heading"><div><h2 class="section-title">{{ current.topic }}</h2><p class="muted">Project {{ current.projectId }} · {{ current.status }}</p></div><span class="status-badge">{{ readable(current.status) }}</span></div>
       <p><strong>Initial situation</strong><br />{{ current.initialSituation }}</p>
       <p><strong>Objective</strong><br />{{ current.objective }}</p>
-      <div class="notice">{{ current.status === 'APPROVED' ? 'Teacher approved this application. The group may begin project work.' : 'Project work is not yet approved to begin. Wait for the teacher’s decision.' }}</div>
-      <div v-if="editableStatus" class="actions"><button class="button" @click="editing = true">Edit application</button></div>
+      <div class="notice">{{ current.status === 'APPROVED' ? 'Teacher approved this formal proposal. The group may begin project work.' : 'Project work is not yet approved to begin. Wait for the teacher’s decision on this formal proposal.' }}</div>
+      <div v-if="editableStatus" class="actions"><button class="button" @click="editing = true">Edit formal proposal</button></div>
       <h3 class="form-section-title">Teacher review history</h3>
       <article v-for="review in current.reviewHistory?.content ?? []" :key="review.id" class="data-row"><div class="row-main"><h3>{{ readable(review.decision) }}</h3><p>{{ review.feedback }}</p></div></article>
       <p v-if="!current.reviewHistory?.content?.length" class="muted">No teacher review has been recorded yet.</p>
@@ -141,13 +141,13 @@ function payload(): components['schemas']['FormalApplicationRequest'] {
 async function save(): Promise<void> {
   const input = payload()
   const result = current.value?.id
-    ? await task.run(() => formalApi.update(current.value!.id!, input), 'Formal application draft saved.')
-    : await task.run(() => formalApi.create(projectId.value, input), 'Formal application draft created.')
+    ? await task.run(() => formalApi.update(current.value!.id!, input), 'Formal proposal draft saved.')
+    : await task.run(() => formalApi.create(projectId.value, input), 'Formal proposal draft created.')
   if (result) { current.value = result; hydrate(result); editing.value = false }
 }
 async function submitApplication(): Promise<void> {
-  if (!current.value?.id || !confirm('Submit the group application for teacher review?')) return
-  const result = await task.run(() => formalApi.submit(current.value!.id!), 'Formal application submitted.')
+  if (!current.value?.id || !confirm('Submit the formal proposal for teacher review?')) return
+  const result = await task.run(() => formalApi.submit(current.value!.id!), 'Formal proposal submitted.')
   if (result) { current.value = result; hydrate(result); editing.value = false }
 }
 async function reviewApplication(): Promise<void> {
