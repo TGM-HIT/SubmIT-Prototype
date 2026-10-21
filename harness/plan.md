@@ -42,7 +42,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Bug-20](tickets/done/Bug-20.md) | done | Return 201 when creating catalogue entries |
 | [Bug-21](tickets/done/Bug-21.md) | done | Remove legacy project identities from runtime and tooling |
 | [Bug-22](tickets/done/Bug-22.md) | done | Make staff assignment-privacy verification deterministic |
-| [Bug-23](tickets/Bug-23.md) | in-progress | Label the post-allocation form as Formal proposal |
+| [Bug-23](tickets/done/Bug-23.md) | done | Label the post-allocation form as Formal proposal |
 
 ### Development
 
