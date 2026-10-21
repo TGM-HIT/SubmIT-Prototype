@@ -14,7 +14,7 @@ Source: `Compliance-05-20261016-0850`, report finding 3. `README.md:8,12` instru
 - Preserve existing backend bootstrap semantics: create the administrator only when both configured values are present. Do not change registration, roles, authentication, dependencies, or product requirements.
 - Inspect `backend/README.md` for consistency with the supported startup variable names.
 - All named existing paths resolve. No renamed file target or new replacement path is prescribed.
-- Scope-gate allowances: `README.md`, `compose.yaml`, `backend/README.md`. `.env.example` is already allowed by the inspected gate.
+- Scope-gate allowances: `README.md`, `compose.yaml`, `backend/README.md`, `backend/Dockerfile`, and `frontend/package-lock.json`. `.env.example` is already allowed by the inspected gate. The Dockerfile and lockfile are required to make the documented image build reproducible: the prior Gradle base tag is unavailable and the existing lockfile has an invalid package entry.
 - Use synthetic local values for verification; do not commit `.env`, credentials, generated configuration output containing secrets, or real tokens.
 - Product-owner decision (2026-10-21): "docker build failed. Fix implementation." Treat the reported `docker compose up --build` failure while pulling public base images (`error getting credentials - err: exec: "docker-credential-desktop": executable file not found in $PATH`) as an actionable startup defect. Inspect whether the repository's documented Compose/build setup can be corrected so the documented command succeeds with the available Docker CLI. Do not edit host-wide Docker configuration or credentials, commit secrets, or claim runtime success unless the Compose services actually build and start.
 
