@@ -351,7 +351,7 @@ describe('allocation supervisor display', () => {
     await flushPromises()
     expect(api.savePin).toHaveBeenCalledWith("period-1", "student-1", "project-1", false)
     expect(page.text()).toContain("Student One → Project Two")
-    expect(document.activeElement).toBe(page.get("[tabindex=-1]").element)
+    expect(document.activeElement).toBe(page.get('[tabindex="-1"]').element)
   })
 
   it("lists pins for teachers without showing write controls", async () => {
@@ -395,7 +395,7 @@ describe('allocation supervisor display', () => {
     await flushPromises()
     expect(api.savePin).toHaveBeenCalledWith("period-1", "student-1", "project-1", true)
     expect(page.text()).toContain("Student One → Project One")
-    expect(document.activeElement).toBe(page.get("[tabindex=-1]").element)
+    expect(document.activeElement).toBe(page.get('[tabindex="-1"]').element)
   })
 
   it("cancels pin removal without changing the list and restores focus to its opener", async () => {
