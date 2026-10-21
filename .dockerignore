@@ -2,4 +2,5 @@
 **/build
 **/.gradle
 frontend/dist
+/contracts/openapi.yaml
 .git
