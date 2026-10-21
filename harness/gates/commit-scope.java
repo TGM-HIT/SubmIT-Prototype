@@ -14,8 +14,6 @@ class CommitScope {
         "Makefile",
         "frontend/index.html",
         "frontend/package.json",
-        "frontend/package-lock.json",
-        "frontend/README.md",
         "frontend/DEV-GUIDELINES.md",
         "backend/DEV-GUIDELINES.md",
         "frontend/public/favicon.ico",
