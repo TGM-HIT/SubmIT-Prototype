@@ -46,6 +46,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Bug-24](tickets/Bug-24.md) | to-do | Open application periods and start their initial allocation reliably |
 | [Bug-25](tickets/Bug-25.md) | to-do | Represent the documented ALLOCATING period status |
 | [Bug-26](tickets/Bug-26.md) | to-do | Display all dates and times in the user's locale |
+| [Bug-27](tickets/Bug-27.md) | to-do | Gate project realization on formal-application approval |
 
 ### Development
 
@@ -135,7 +136,7 @@ Recurring documentation and contract checks, run by the [Auditor role](roles/aud
 | Check | Cadence | Last run | Result | Run | Definition |
 | --- | --- | --- | --- | --- | --- |
 | [Compliance-01](checks/Compliance-01.md) | Monthly and after SPEC or guide changes | 2026-10-21T22:25+0200 | findings: 2 ticketed, 1 fixed, 0 duplicate, 0 decision needed | Compliance-01-20261021-2225 | Specification and guideline consistency |
-| [Compliance-02](checks/Compliance-02.md) | After each closed Feature or Bug; at least monthly | 2026-10-21T23:31+0200 | findings: 6 ticketed, 0 fixed, 1 duplicate, 1 decision needed | Compliance-02-20261021-2331 | Documentation and code parity |
+| [Compliance-02](checks/Compliance-02.md) | After each closed Feature or Bug; at least monthly | 2026-10-21T23:31+0200 | findings: 7 ticketed, 0 fixed, 1 duplicate, 1 decision needed | Compliance-02-20261021-2331 | Documentation and code parity |
 | [Compliance-03](checks/Compliance-03.md) | After API changes; at least monthly | 2026-10-18 19:42 +0200 | findings: 1 ticketed, 0 decision needed, 0 fixed, 8 duplicate | Compliance-03-20261018-1941 | OpenAPI contract compliance |
 | [Compliance-04](checks/Compliance-04.md) | Weekly and after file moves or renames | 2026-10-18 19:09 +0200 | findings: 1 fixed | Compliance-04-20261018-1909 | Link and format validation |
 | [Compliance-05](checks/Compliance-05.md) | Quarterly and before planning | 2026-10-18T20:17+0200 | findings: 1 ticketed, 1 decision needed, 1 duplicate, 0 fixed | Compliance-05-20261018-2017 | Documentation health |
