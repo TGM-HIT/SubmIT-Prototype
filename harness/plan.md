@@ -106,6 +106,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Feature-18](tickets/done/Feature-18.md) | done | Let administrators pin students to projects before an allocation runs |
 | [Feature-19](tickets/done/Feature-19.md) | done | Decide the student-grade list student filter |
 | [Feature-20](tickets/done/Feature-20.md) | done | Let students apply together before allocation |
+| [Feature-21](tickets/Feature-21.md) | to-do | Let users choose English or German |
 
 ### Optimizations
 
