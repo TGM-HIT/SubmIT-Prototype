@@ -107,6 +107,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Feature-19](tickets/done/Feature-19.md) | done | Decide the student-grade list student filter |
 | [Feature-20](tickets/done/Feature-20.md) | done | Let students apply together before allocation |
 | [Feature-21](tickets/Feature-21.md) | to-do | Let users choose English or German |
+| [Feature-22](tickets/Feature-22.md) | to-do | Select allocated projects for Formal proposals |
 
 ### Optimizations
 
