@@ -43,7 +43,8 @@ public class AllocationPinController {
     @ApiResponse(responseCode = "404", description = "Period or student not found.",
             content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
     @ApiResponse(responseCode = "409",
-            description = "Unranked project without acknowledgement, more than five project pins, or finalized period.",
+            description = "Unranked project without acknowledgement, more than five project pins, or finalized period. "
+                    + "Submitted applying units also reject conflicting member targets or effective capacity above five.",
             content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
     public AllocationPinResponse put(@AuthenticationPrincipal AuthenticatedUser caller, @PathVariable UUID periodId,
             @PathVariable UUID studentId, @Valid @RequestBody AllocationPinRequest request) {

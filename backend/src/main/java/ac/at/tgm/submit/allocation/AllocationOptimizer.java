@@ -10,11 +10,15 @@ import java.util.Set;
 /**
  * Exact, deterministic optimizer: first maximizes assigned pinned students, then the total number of assigned students,
  * then the ranked preference score (rank r, zero-based, is worth projectCount - r points). Groups have 3 to 5 students,
- * every student gets at most one project, and projects may stay unassigned. Students can only be assigned to projects they ranked.
+ * every student gets at most one project, and projects may stay unassigned. Unpinned students only use ranked projects;
+ * acknowledged administrator pins retain their existing eligibility override.
  *
  * <p>Complexity: every subset of viable projects (ranked by at least three students) is opened in turn and a min-cost flow
- * decides the assignment, giving O(2^P * S * SPFA) with S students and P viable projects. Subsets needing more than S/3
- * projects are skipped. Requests above {@link AllocationLimits#MAX_STUDENTS} students or
+ * decides the all-solo assignment, giving O(2^P * S * SPFA) with S students and P viable projects. For U shared units,
+ * each subset additionally enumerates each whole unit's eligible target or unassigned state, reserving its full size
+ * before solving the residual solo flow. Worst-case branching is (P + 1)^U; memoization prunes dominated states with
+ * identical unit index and reserved capacities. No greedy assignment or unit splitting is used. Subsets needing more
+ * than S/3 projects are skipped. Requests above {@link AllocationLimits#MAX_STUDENTS} students or
  * {@link AllocationLimits#MAX_PROJECTS} projects are rejected with {@link AllocationLimitExceededException}.
  *
  * <p>Determinism: subsets are visited in ascending bitmask order over projects in request order, and a candidate replaces
@@ -67,7 +71,11 @@ public final class AllocationOptimizer {
     }
 
     /** A student's application: ranked project ids, most preferred first. */
-    public record Application(String studentId, List<String> rankedProjectIds) {
+    public record Application(String studentId, List<String> rankedProjectIds, String applyingUnitId) {
+
+        public Application(String studentId, List<String> rankedProjectIds) {
+            this(studentId, rankedProjectIds, null);
+        }
 
         public Application {
             requireId(studentId, "student id");
@@ -79,6 +87,9 @@ public final class AllocationOptimizer {
             rankedProjectIds.forEach(id -> requireId(id, "ranked project id"));
             if (new HashSet<>(rankedProjectIds).size() != rankedProjectIds.size()) {
                 throw new IllegalArgumentException("student " + studentId + " ranks a project more than once");
+            }
+            if (applyingUnitId != null) {
+                requireId(applyingUnitId, "applying unit id");
             }
         }
     }
@@ -192,6 +203,7 @@ public final class AllocationOptimizer {
         private final long pinWeight;
         private final long countWeight;
         private final List<String> projectIds;
+        private final java.util.Map<String, Long> unitStates = new java.util.HashMap<>();
 
         Problem(Request request) {
             this.request = request;
@@ -227,21 +239,105 @@ public final class AllocationOptimizer {
 
         /** Returns the best assignment for the open projects, or null if some open project cannot reach three students. */
         int[] solve(int[] open) {
+            List<int[]> units = sharedUnits();
+            if (!units.isEmpty()) {
+                unitStates.clear();
+                int[] fixed = new int[students];
+                Arrays.fill(fixed, -1);
+                return solveUnits(open, units, 0, fixed, new int[projects]);
+            }
+            return solveRemaining(open, new int[projects], null);
+        }
+
+        private List<int[]> sharedUnits() {
+            var units = new java.util.LinkedHashMap<String, List<Integer>>();
+            for (int s = 0; s < students; s++) {
+                String unit = request.applications().get(s).applyingUnitId();
+                if (unit != null) {
+                    units.computeIfAbsent(unit, ignored -> new ArrayList<>()).add(s);
+                }
+            }
+            return units.values().stream().map(members -> members.stream().mapToInt(Integer::intValue).toArray()).toList();
+        }
+
+        private int[] solveUnits(int[] open, List<int[]> units, int index, int[] fixed, int[] reserved) {
+            if (dominated(index, fixed, reserved)) {
+                return null;
+            }
+            return searchUnits(open, units, index, fixed, reserved);
+        }
+
+        private int[] searchUnits(int[] open, List<int[]> units, int index, int[] fixed, int[] reserved) {
+            if (index == units.size()) {
+                return solveRemaining(open, reserved, fixed);
+            }
+            int[] members = units.get(index);
+            int[] best = solveUnits(open, units, index + 1, fixed, reserved);
+            long bestValue = best == null ? -1 : value(best);
+            for (int p : open) {
+                if (!fits(members, p, reserved)) {
+                    continue;
+                }
+                Arrays.stream(members).forEach(s -> fixed[s] = p);
+                reserved[p] += members.length;
+                int[] candidate = solveUnits(open, units, index + 1, fixed, reserved);
+                long candidateValue = candidate == null ? -1 : value(candidate);
+                if (candidateValue > bestValue) {
+                    bestValue = candidateValue;
+                    best = candidate;
+                }
+                reserved[p] -= members.length;
+                Arrays.stream(members).forEach(s -> fixed[s] = -1);
+            }
+            return best;
+        }
+
+        private boolean dominated(int index, int[] fixed, int[] reserved) {
+            String key = index + "|" + Arrays.toString(reserved);
+            long score = value(fixed);
+            Long previous = unitStates.get(key);
+            if (previous != null && previous >= score) {
+                return true;
+            }
+            unitStates.put(key, score);
+            return false;
+        }
+
+        private boolean fits(int[] members, int project, int[] reserved) {
+            return reserved[project] + members.length <= AllocationLimits.MAX_GROUP_SIZE
+                    && Arrays.stream(members).allMatch(s -> profit[s][project] > 0);
+        }
+
+        private int[] solveRemaining(int[] open, int[] reserved, int[] fixed) {
+            int[][] weighted = weighted(open);
+            int bonus = (int) (students * (countWeight + pinWeight + projects) + 1);
+            int[] assignment = new AllocationFlow(weighted, open, bonus, reserved).solve();
+            mergeFixed(assignment, fixed);
+            int[] sizes = sizes(assignment);
+            return Arrays.stream(open).anyMatch(p -> sizes[p] < AllocationLimits.MIN_GROUP_SIZE) ? null : assignment;
+        }
+
+        private int[][] weighted(int[] open) {
             int[][] weighted = new int[students][projects];
             for (int s = 0; s < students; s++) {
+                if (request.applications().get(s).applyingUnitId() != null) {
+                    continue;
+                }
                 for (int p : open) {
                     weighted[s][p] = profit[s][p] == 0 ? 0 : (int) (countWeight + profit[s][p] + (pinned[s] ? pinWeight : 0));
                 }
             }
-            int bonus = (int) (students * (countWeight + pinWeight + projects) + 1);
-            int[] assignment = new AllocationFlow(weighted, open, bonus).solve();
-            int[] sizes = sizes(assignment);
-            for (int p : open) {
-                if (sizes[p] < AllocationLimits.MIN_GROUP_SIZE) {
-                    return null;
+            return weighted;
+        }
+
+        private void mergeFixed(int[] assignment, int[] fixed) {
+            if (fixed != null) {
+                for (int s = 0; s < students; s++) {
+                    if (request.applications().get(s).applyingUnitId() != null) {
+                        assignment[s] = fixed[s];
+                    }
                 }
             }
-            return assignment;
         }
 
         long value(int[] assignment) {

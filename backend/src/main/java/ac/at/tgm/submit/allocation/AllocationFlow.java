@@ -31,6 +31,10 @@ final class AllocationFlow {
      * @param mandatoryBonus profit bonus of each of the first three seats of a project
      */
     AllocationFlow(int[][] profit, int[] open, int mandatoryBonus) {
+        this(profit, open, mandatoryBonus, new int[profit.length == 0 ? 0 : profit[0].length]);
+    }
+
+    AllocationFlow(int[][] profit, int[] open, int mandatoryBonus, int[] reserved) {
         this.students = profit.length;
         this.profit = profit;
         this.open = open;
@@ -44,7 +48,7 @@ final class AllocationFlow {
         this.studentEdgeProject = new int[maxEdges];
         Arrays.fill(head, NONE);
         Arrays.fill(studentEdgeProject, NONE);
-        build(mandatoryBonus);
+        build(mandatoryBonus, reserved);
     }
 
     /** Returns the assigned global project index per student, or -1 if unassigned. */
@@ -62,7 +66,7 @@ final class AllocationFlow {
         return assignment;
     }
 
-    private void build(int mandatoryBonus) {
+    private void build(int mandatoryBonus, int[] reserved) {
         int sink = students + open.length + 1;
         for (int s = 0; s < students; s++) {
             addEdge(0, 1 + s, 1, 0, NONE);
@@ -73,8 +77,10 @@ final class AllocationFlow {
             }
         }
         for (int k = 0; k < open.length; k++) {
-            addEdge(1 + students + k, sink, AllocationLimits.MIN_GROUP_SIZE, -mandatoryBonus, NONE);
-            addEdge(1 + students + k, sink, AllocationLimits.MAX_GROUP_SIZE - AllocationLimits.MIN_GROUP_SIZE, 0, NONE);
+            int occupied = reserved.length == 0 ? 0 : reserved[open[k]];
+            int mandatory = Math.max(0, AllocationLimits.MIN_GROUP_SIZE - occupied);
+            addEdge(1 + students + k, sink, mandatory, -mandatoryBonus, NONE);
+            addEdge(1 + students + k, sink, AllocationLimits.MAX_GROUP_SIZE - occupied - mandatory, 0, NONE);
         }
     }
 

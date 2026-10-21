@@ -16,10 +16,13 @@ import org.springframework.transaction.annotation.Transactional;
 public class RecordStore {
     private final StoredRecordRepository records;
     private final ObjectMapper objectMapper;
+    private final jakarta.persistence.EntityManager entityManager;
 
-    public RecordStore(StoredRecordRepository records, ObjectMapper objectMapper) {
+    public RecordStore(StoredRecordRepository records, ObjectMapper objectMapper,
+            jakarta.persistence.EntityManager entityManager) {
         this.records = records;
         this.objectMapper = objectMapper;
+        this.entityManager = entityManager;
     }
 
     @Transactional
@@ -95,5 +98,18 @@ public class RecordStore {
 
     public StoredRecordRepository repository() {
         return records;
+    }
+
+    @Transactional
+    public StoredRecord lock(String type, UUID id) {
+        StoredRecord record = get(type, id);
+        entityManager.flush();
+        entityManager.refresh(record, jakarta.persistence.LockModeType.PESSIMISTIC_WRITE);
+        return record;
+    }
+
+    @Transactional
+    public void refresh(StoredRecord record) {
+        entityManager.refresh(record);
     }
 }

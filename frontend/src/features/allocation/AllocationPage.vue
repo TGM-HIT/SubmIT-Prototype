@@ -9,7 +9,7 @@
       <p v-if="selectedPeriod" class="notice">Selected period: {{ selectedPeriod.label || selectedPeriod.schoolYear }} · school year {{ selectedPeriod.schoolYear }}</p>
       <p v-if="selectedPeriod && selectedPeriod.status === 'OPEN' && !deadlinePassed" class="notice">The deadline is {{ date(selectedPeriod.closesAt) }}. An early preliminary run snapshots applications now, does not close the period, and is not shown to students.</p>
       <section v-if="selectedPeriod && [`ADMIN`, `TEACHER`].includes(auth.user?.role ?? ``)" class="panel stack" aria-labelledby="pins-heading">
-        <div><h2 id="pins-heading" class="section-title">Fixed assignments</h2><p class="muted">Administrator pins apply to future allocation runs.</p></div>
+        <div><h2 id="pins-heading" class="section-title">Fixed assignments</h2><p class="muted">Administrator pins apply to future allocation runs. Pinning any member of a submitted applying group constrains the whole group. Same-project member pins count each student once; conflicting targets are rejected. Removing one explicit pin does not remove other member pins.</p></div>
         <p v-if="pinError" class="error-box" role="alert">{{ pinError }} <button class="button button-secondary button-small" type="button" @click="loadPins">Retry</button></p>
         <p v-else-if="pinLoading" class="notice" role="status">Loading fixed assignments…</p>
         <template v-else>
@@ -45,7 +45,7 @@
       <p v-if="selectedRun.error" class="error-box">Run did not complete: {{ selectedRun.error }}</p>
       <div v-for="assignment in assignments(selectedRun)" :key="assignment.projectId" class="data-row">
         <div class="row-main"><h3 class="staff-display-label">{{ assignment.projectTitle }}</h3><p>{{ assignment.students.length }} students assigned</p><p>Supervisor: {{ supervisors[assignment.projectId] || 'No supervisor assigned' }}</p><p class="muted">Members are shown only to authorized project staff. Group sizes remain within the required 3–5 range.</p></div>
-        <div class="choice-list"><span v-for="(student, index) in assignment.students" :key="student.id || index" class="status-badge staff-member-label">{{ student.name }}<strong v-if="student.pinned"> · Fixed by administrator</strong> · Class: {{ student.className || 'Not assigned' }} · Elective subjects: {{ student.electiveSubjectNames.join(', ') || 'None' }}</span></div>
+        <div class="choice-list"><span v-for="(student, index) in assignment.students" :key="student.id || index" class="status-badge staff-member-label">{{ student.name }}<strong v-if="student.pinned"> · Fixed by administrator</strong> · Class: {{ student.className || 'Not assigned' }} · Elective subjects: {{ student.electiveSubjectNames.join(', ') || 'None' }} · {{ applyingOrigin(selectedRun, student.id) }}</span></div>
       </div>
       <h3 class="form-section-title">Unassigned outcomes</h3>
       <div v-if="unassigned(selectedRun).length" class="choice-list"><p v-for="(entry, index) in unassigned(selectedRun)" :key="unassignedKey(entry, index)" class="notice staff-display-label">{{ unassignedLabel(entry) }}<template v-if="typeof entry.studentId === 'string'"> · Class: {{ entry.className || 'Not assigned' }} · Elective subjects: {{ Array.isArray(entry.electiveSubjectNames) ? entry.electiveSubjectNames.join(', ') || 'None' : 'None' }}</template> · {{ entry.explanation ?? entry.reason ?? 'No reason supplied by the run.' }}</p></div>
@@ -59,7 +59,7 @@
 import { computed, nextTick, onMounted, ref } from 'vue'
 import type { components } from '../../api/schema'
 import type { Page } from '../../api/client'
-import { allocationApi, ideasApi, periodsApi } from '../../api/services'
+import { allocationApi, applyingGroupsApi, ideasApi, periodsApi } from '../../api/services'
 import { useAuthStore } from '../../stores/auth'
 import { useTask } from '../../composables/useTask'
 import AsyncPanel from '../../components/AsyncPanel.vue'
@@ -85,6 +85,7 @@ const studentQuery = ref("")
 const studentOptions = ref<Data[]>([])
 const catalogueProjects = ref<Data[]>([])
 const submittedApplications = ref<Data[]>([])
+const submittedApplyingGroups = ref<components['schemas']['GroupResponse'][]>([])
 const addPinControl = ref<HTMLButtonElement | null>(null)
 const pinControls = new Map<string, HTMLElement>()
 const selectedPeriod = computed(() => periods.value.find((period) => period.id === periodId.value))
@@ -98,6 +99,11 @@ function runKind(run: Data): string {
   return run.initial === true ? "Automatic deadline run" : "Replacement run"
 }
 function date(value?: string): string { return value ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : 'unknown' }
+function applyingOrigin(run: Data, studentId: string): string {
+  if (!Array.isArray(run.applyingUnits)) return 'Origin unavailable'
+  const index = (run.applyingUnits as Data[]).findIndex(unit => Array.isArray(unit.studentIds) && unit.studentIds.includes(studentId))
+  return index < 0 ? 'Applied individually · added by allocation' : `Applying cohort ${index + 1}`
+}
 function assignments(run: Data): { projectId: string; projectTitle: string; students: { id: string; name: string; className?: string; electiveSubjectNames: string[]; pinned: boolean }[] }[] {
   const result = run.result
   if (!result || typeof result !== "object" || !Array.isArray((result as Data).assignments)) return []
@@ -160,6 +166,9 @@ async function allPages<T>(fetchPage: (page: number) => Promise<{ content: T[]; 
   return pages.flatMap((page) => page.content)
 }
 function isRanked(studentId: string, projectId: string): boolean {
+  const shared = submittedApplyingGroups.value.find((group) => group.status === 'SUBMITTED'
+    && group.members.some((member) => member.studentId === studentId))
+  if (shared) return shared.preferences.some((preference) => preference.projectId === projectId)
   const application = submittedApplications.value.find((entry) => String(entry.studentId ?? ``) === studentId)
   const preferences = Array.isArray(application?.preferences) ? application.preferences : []
   return preferences.some((preference) => typeof preference === `object` && preference !== null && String((preference as Data).projectId ?? ``) === projectId)
@@ -173,15 +182,17 @@ async function loadPins(): Promise<void> {
   pinLoading.value = true
   pinError.value = ``
   try {
-    const [allPins, ideaPage, allApplications] = await Promise.all([
+    const [allPins, ideaPage, allApplications, allGroups] = await Promise.all([
       allPages((page) => periodsApi.pins(periodId.value, page)),
       ideasApi.list(0, `ACCEPTED_FOR_APPLICATIONS`, 100),
       allPages((page) => periodsApi.applications(periodId.value, page)),
+      allPages((page) => applyingGroupsApi.list(periodId.value, page)),
     ])
     pins.value = allPins as unknown as Data[]
     const ids = Array.isArray(selectedPeriod.value.projectIds) ? selectedPeriod.value.projectIds.map(String) : []
     catalogueProjects.value = ideaPage.content.filter((idea) => ids.includes(String(idea.id ?? ``))).map((idea) => ({ id: String(idea.id ?? ``), title: idea.title }))
     submittedApplications.value = allApplications as unknown as Data[]
+    submittedApplyingGroups.value = allGroups.filter((group) => group.status === 'SUBMITTED')
   } catch (error) {
     pinError.value = error instanceof Error ? error.message : `Could not load fixed assignments.`
   } finally {

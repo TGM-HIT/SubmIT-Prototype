@@ -45,6 +45,8 @@ From `backend/`, run `./gradlew compileJava compileTestJava --rerun-tasks`, `./g
 
 ### Local workflow accounts
 
+For the opt-in applying-group walkthrough only, start the existing testing-profile preview with `DADB_TESTING_APPLYING_GROUP_PREVIEW=true` (property `dadb.testing.applying-group-preview`). `TestingApplyingGroupPreviewConfiguration` creates three accepted synthetic projects, an open **Apply together walkthrough** period closing 420 seconds after startup, and a separate **Apply together departure** period closing after one day. Both have initial solo records for student01/02/03, avoiding absent-own-application requests. The main period has no group; create/invite/accept/approve/submit through the UI. The departure period contains an approved submitted student01/student02 pair, a pending student04 invitation and an immutable early result with student03 added. Ordinary fixture/account counts and global seed behavior remain unchanged when the property is absent.
+
 To seed local workflow accounts, explicitly activate the `testing` Spring profile when starting the backend, for example from `backend/`:
 
 ```sh

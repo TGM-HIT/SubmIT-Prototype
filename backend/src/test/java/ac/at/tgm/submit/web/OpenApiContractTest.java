@@ -93,6 +93,11 @@ class OpenApiContractTest {
             new SpecifiedErrorOperation("put", "/api/application-periods/{id}", "200", "ApplicationPeriodResponse",
                     "409", "The proposed catalogue removes a project that has an allocation pin."));
     private static final Map<String, ExpectedContract> CHANGED_RESPONSE_CONTRACTS = Map.ofEntries(
+            Map.entry("GroupResponse", contract("id,periodId,status,revision,locked,invited,manager,members,preferences", "", "")),
+            Map.entry("MemberResponse", contract("studentId,displayName,creator,self,approved", "", "")),
+            Map.entry("ChangeRequest", contract("revision", "studentId,projectIds,confirm", "studentId,projectIds,confirm")),
+            Map.entry("PageResponseGroupResponse", contract("content,page,size,totalElements,totalPages", "", "")),
+            Map.entry("PageResponseMemberResponse", contract("content,page,size,totalElements,totalPages", "", "")),
             Map.entry("TokenResponse", contract("token,tokenType,expiresIn,user", "", "")),
             Map.entry("UserResponse", contract("id,username,displayName,role", "className,electiveSubjectNames", "")),
             Map.entry("CatalogueEntryResponse", contract("id,name", "", "")),
@@ -114,7 +119,7 @@ class OpenApiContractTest {
                     "assignments,unassignedStudents,unassignedProjects,assignedStudents,preferenceScore", "", "")),
             Map.entry("AllocationRunResponse", contract(
                     "id,status,periodId,createdAt,initial,early,projectIds,applications,pins",
-                    "result,error,inputSnapshotComplete,finalizedAt", "")),
+                    "result,error,inputSnapshotComplete,finalizedAt,applyingUnits", "")),
             Map.entry("AllocationRunPageResponse", contract(
                     "content,page,size,totalElements,totalPages", "", "")),
             Map.entry("AllocationPinResponse", contract(
@@ -150,7 +155,8 @@ class OpenApiContractTest {
             Map.entry("PreferenceResponse", contract("projectId,rank,projectTitle", "", "")),
             Map.entry("StudentAssignmentResponse", contract(
                     "state,projectTitle,preferenceRank,groupMembers", "", "projectTitle,preferenceRank")),
-            Map.entry("StudentGroupMemberResponse", contract("displayName,self", "", "")),
+            Map.entry("StudentGroupMemberResponse", contract("displayName,self", "originLabel,ownCohort", "")),
+            Map.entry("ApplyingUnitSnapshot", contract("groupId,revision,studentIds,projectIds", "", "")),
             Map.entry("StudentApplicationResponse", contract(
                     "id,studentId,studentDisplayName,periodId,status,preferences",
                     "className,electiveSubjectNames", "")),
@@ -228,7 +234,7 @@ class OpenApiContractTest {
 
         List<String> failures = new ArrayList<>();
         int operations = checkOperations(document.path("paths"), failures);
-        assertEquals(77, operations, "The generated API operation count should be reviewed when endpoints change.");
+        assertEquals(82, operations, "The generated API operation count should be reviewed when endpoints change.");
         JsonNode schemas = document.path("components").path("schemas");
         checkComponentSchemas(schemas, failures);
         checkResponseRequiredness(schemas, failures);
@@ -380,7 +386,7 @@ class OpenApiContractTest {
             }
         });
 
-        assertEquals(19, sizeParameters[0], "All collection size parameters should be covered.");
+        assertEquals(21, sizeParameters[0], "All collection size parameters should be covered.");
         assertTrue(failures.isEmpty(), () -> String.join(System.lineSeparator(), failures));
     }
 
@@ -626,8 +632,8 @@ class OpenApiContractTest {
                 }
             }
         }
-        assertEquals(77, operationCount);
-        assertEquals(73, protectedCount);
+        assertEquals(82, operationCount);
+        assertEquals(78, protectedCount);
         assertTrue(failures.isEmpty(), () -> String.join(System.lineSeparator(), failures));
     }
 
@@ -645,6 +651,12 @@ class OpenApiContractTest {
         Set<String> expectedOperations = new java.util.TreeSet<>(TICKET_ERROR_CODES.keySet());
         expectedOperations.addAll(BASELINE_SUCCESS_RESPONSES.stream()
                 .map(operation -> operation.method() + " " + operation.path()).toList());
+        expectedOperations.addAll(Set.of(
+                "get /api/application-periods/{periodId}/applying-groups",
+                "post /api/application-periods/{periodId}/applying-groups",
+                "get /api/application-periods/{periodId}/applying-groups/{id}",
+                "get /api/application-periods/{periodId}/applying-groups/{id}/invitations",
+                "post /api/application-periods/{periodId}/applying-groups/{id}/actions/{action}"));
         assertEquals(expectedOperations, actualOperations, "The complete set of routes must match the baseline.");
 
         Set<String> expectedConditionKeys = new TreeSet<>();
@@ -767,7 +779,8 @@ class OpenApiContractTest {
         assertCondition(paths, "get", "/api/artifacts/{artifactId}/content", "404",
                 List.of("artifact", "project", "empty body"), List.of("stored content does not exist"));
         assertResponseDescription(paths, "put", "/api/application-periods/{periodId}/allocation-pins/{studentId}",
-                "409", "Unranked project without acknowledgement, more than five project pins, or finalized period.");
+                "409", "Unranked project without acknowledgement, more than five project pins, or finalized period. "
+                        + "Submitted applying units also reject conflicting member targets or effective capacity above five.");
         assertResponseDescription(paths, "put", "/api/application-periods/{periodId}/allocation-pins/{studentId}",
                 "403", "Administrator role required.");
         assertResponseDescription(paths, "put", "/api/application-periods/{periodId}/allocation-pins/{studentId}",
@@ -829,7 +842,11 @@ class OpenApiContractTest {
             String location = expected.method().toUpperCase() + " " + expected.path() + " " + expected.status();
             JsonNode response = paths.path(expected.path()).path(expected.method()).path("responses")
                     .path(expected.status());
-            if (!expected.description().equals(response.path("description").asText())) {
+            String expectedDescription = expected.description();
+            if (expected.method().equals("put") && expected.path().endsWith("/allocation-pins/{studentId}") && expected.status().equals("409")) {
+                expectedDescription += " Submitted applying units also reject conflicting member targets or effective capacity above five.";
+            }
+            if (!expectedDescription.equals(response.path("description").asText())) {
                 failures.add(location + " baseline description changed; expected '" + expected.description()
                         + "' but found '" + response.path("description").asText() + "'");
             }

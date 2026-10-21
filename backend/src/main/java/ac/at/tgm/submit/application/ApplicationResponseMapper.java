@@ -1,12 +1,11 @@
 package ac.at.tgm.submit.application;
 
+import static java.util.HashMap.newHashMap;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import ac.at.tgm.submit.data.RecordStore;
 import ac.at.tgm.submit.data.StoredRecord;
-import ac.at.tgm.submit.user.UserAccount;
-import ac.at.tgm.submit.user.UserAccountRepository;
-import ac.at.tgm.submit.user.StudentDetailsService;
 import ac.at.tgm.submit.web.ApiDtos.ApplicationPeriodResponse;
 import ac.at.tgm.submit.web.ApiDtos.CatalogueProjectResponse;
 import ac.at.tgm.submit.web.ApiDtos.CatalogueSpecificationResponse;
@@ -18,7 +17,6 @@ import ac.at.tgm.submit.web.ApiDtos.StudentAssignmentResponse;
 import ac.at.tgm.submit.web.ApiDtos.StudentGroupMemberResponse;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -39,13 +37,14 @@ class ApplicationResponseMapper {
     private static final String UNKNOWN_PROJECT = "Unknown project";
 
     private final RecordStore store;
-    private final UserAccountRepository users;
-    private final StudentDetailsService studentDetails;
+    private final ApplicationPeopleMapper people;
+    private final ApplyingGroupRecords groups;
 
-    ApplicationResponseMapper(RecordStore store, UserAccountRepository users, StudentDetailsService studentDetails) {
+    ApplicationResponseMapper(RecordStore store, ApplicationPeopleMapper people,
+            ApplyingGroupRecords groups) {
         this.store = store;
-        this.users = users;
-        this.studentDetails = studentDetails;
+        this.people = people;
+        this.groups = groups;
     }
 
     ApplicationPeriodResponse period(StoredRecord record) {
@@ -63,6 +62,10 @@ class ApplicationResponseMapper {
         StoredRecord ownApplication = studentId == null ? null : store.repository()
                 .findByTypeAndParentIdAndOwnerId(APPLICATION, record.getId().toString(), studentId.toString())
                 .orElse(null);
+        StoredRecord shared = studentId == null ? null : groups.accepted(record.getId(), studentId.toString());
+        if (shared != null && "SUBMITTED".equals(shared.getStatus())) {
+            ownApplication = shared;
+        }
         String schoolYear = data.path("schoolYear").asText();
         String label = data.path("label").asText(schoolYear);
         if (label.isBlank()) {
@@ -72,8 +75,27 @@ class ApplicationResponseMapper {
         return new ApplicationPeriodResponse(record.getId(), label, schoolYear,
                 Instant.parse(data.path(OPENS_AT).asText()), Instant.parse(data.path(CLOSES_AT).asText()),
                 record.getStatus(), List.copyOf(projects), studentView ? projectTitles(record) : null,
-                studentId == null ? null : ownApplication == null ? "NOT_SUBMITTED" : ownApplication.getStatus(),
+                applicationStatus(studentId, ownApplication),
                 studentAssignment);
+    }
+
+    private String applicationStatus(UUID studentId, StoredRecord application) {
+        if (studentId == null) {
+            return null;
+        }
+        if (application == null || "REPLACED".equals(application.getStatus())) {
+            return "NOT_SUBMITTED";
+        }
+        return ApplyingGroupRecords.TYPE.equals(application.getType()) ? "SHARED_SUBMITTED" : application.getStatus();
+    }
+
+    StudentApplicationResponse sharedApplication(StoredRecord group, UUID caller) {
+        List<PreferenceResponse> preferences = new ArrayList<>();
+        for (String id : groups.ids(store.parse(group).path(PROJECT_IDS))) {
+            preferences.add(new PreferenceResponse(UUID.fromString(id), preferences.size() + 1, projectTitle(id)));
+        }
+        return new StudentApplicationResponse(group.getId(), caller, displayName(caller.toString()),
+                UUID.fromString(group.getParentId()), "SHARED_SUBMITTED", List.copyOf(preferences), null, null);
     }
 
     StudentApplicationResponse studentApplication(StoredRecord record, Map<UUID, String> projectTitles) {
@@ -114,7 +136,7 @@ class ApplicationResponseMapper {
 
     Map<UUID, String> studentProjectTitles(StoredRecord period) {
         ApplicationPeriodResponse response = period(period, true);
-        Map<UUID, String> titles = new HashMap<>();
+        Map<UUID, String> titles = newHashMap(0);
         if (response.projectTitles() != null) {
             response.projectTitles().forEach(project -> titles.put(project.projectId(), project.title()));
         }
@@ -144,13 +166,13 @@ class ApplicationResponseMapper {
     }
 
     PageResponse<StudentApplicationResponse> applications(Page<StoredRecord> records) {
-        Map<UUID, String> names = new HashMap<>();
+        Map<UUID, String> names = newHashMap(0);
         records.getContent().stream().map(StoredRecord::getOwnerId).map(UUID::fromString).distinct()
-                .forEach(id -> users.findById(id).ifPresent(user -> names.put(id, user.getDisplayName())));
+                .forEach(id -> names.put(id, people.name(id)));
         List<UUID> projectIds = records.getContent().stream()
                 .flatMap(record -> store.parse(record).path("preferences").findValuesAsText(PROJECT_ID).stream())
                 .map(UUID::fromString).distinct().toList();
-        Map<UUID, String> titles = new HashMap<>();
+        Map<UUID, String> titles = newHashMap(0);
         store.repository().findAllById(projectIds).stream().filter(record -> "idea".equals(record.getType()))
                 .forEach(record -> titles.put(record.getId(), store.parse(record).path(TITLE).asText()));
         List<StudentApplicationResponse> content = records.getContent().stream()
@@ -163,15 +185,7 @@ class ApplicationResponseMapper {
 
     private StudentApplicationResponse staffApplication(StoredRecord record, String displayName,
             Map<UUID, String> projectTitles) {
-        StudentApplicationResponse response = application(record, displayName, projectTitles);
-        var details = users.findById(response.studentId())
-                .filter(user -> user.getRole() == ac.at.tgm.submit.security.Role.STUDENT)
-                .map(studentDetails::response)
-                .orElse(null);
-        return new StudentApplicationResponse(response.id(), response.studentId(), response.studentDisplayName(),
-                response.periodId(), response.status(), response.preferences(),
-                details == null ? null : details.className(),
-                details == null ? null : details.electiveSubjectNames());
+        return people.staffDetails(application(record, displayName, projectTitles));
     }
 
     private StudentAssignmentResponse studentAssignment(StoredRecord period, UUID studentId,
@@ -208,7 +222,8 @@ class ApplicationResponseMapper {
         }
         String state = finalized ? "FINAL" : "PRELIMINARY";
         return new StudentAssignmentResponse(state, projectTitle(group.projectId()),
-                preferenceRank(application, group.projectId()), groupMembers(group.memberIds(), studentId));
+                preferenceRank(application, group.projectId()),
+                groupMembers(group.memberIds(), studentId, store.parse(run).get("applyingUnits")));
     }
 
     private StoredRecord latestRelevantRun(StoredRecord period, boolean finalized) {
@@ -269,18 +284,33 @@ class ApplicationResponseMapper {
                 .filter(value -> !value.isBlank()).orElse(UNKNOWN_PROJECT);
     }
 
-    private List<StudentGroupMemberResponse> groupMembers(List<String> ids, String studentId) {
+    private List<StudentGroupMemberResponse> groupMembers(List<String> ids, String studentId, JsonNode units) {
         List<StudentGroupMemberResponse> members = new ArrayList<>();
         for (String id : ids) {
             UUID userId = parseUuid(id);
-            String name = userId == null ? null : users.findById(userId)
-                    .map(UserAccount::getDisplayName).orElse(null);
+            String name = userId == null ? null : people.name(userId);
+            String origin = originLabel(id, units);
+            boolean own = origin.startsWith("Applying cohort") && origin.equals(originLabel(studentId, units));
             members.add(new StudentGroupMemberResponse(name == null || name.isBlank() ? "Unknown student" : name,
-                    studentId.equals(id)));
+                    studentId.equals(id), origin, own));
         }
         members.sort(java.util.Comparator.comparing(StudentGroupMemberResponse::displayName,
                 String.CASE_INSENSITIVE_ORDER).thenComparing(member -> !member.self()));
         return List.copyOf(members);
+    }
+
+    private String originLabel(String student, JsonNode units) {
+        if (units == null || !units.isArray()) {
+            return "Origin unavailable";
+        }
+        int cohort = 0;
+        for (JsonNode unit : units) {
+            cohort++;
+            if (groups.ids(unit.path("studentIds")).contains(student)) {
+                return "Applying cohort " + cohort;
+            }
+        }
+        return "Applied individually · added by allocation";
     }
 
     private boolean hasPin(StoredRecord period, String studentId) {
@@ -290,6 +320,10 @@ class ApplicationResponseMapper {
     private Integer preferenceRank(StoredRecord application, String projectId) {
         if (application == null || projectId == null) {
             return null;
+        }
+        if (ApplyingGroupRecords.TYPE.equals(application.getType())) {
+            int index = groups.ids(store.parse(application).path(PROJECT_IDS)).indexOf(projectId);
+            return index < 0 ? null : index + 1;
         }
         for (JsonNode preference : store.parse(application).path("preferences")) {
             if (projectId.equals(preference.path(PROJECT_ID).asText())) {
@@ -325,7 +359,7 @@ class ApplicationResponseMapper {
     }
 
     private String displayName(String ownerId) {
-        return users.findById(UUID.fromString(ownerId)).map(UserAccount::getDisplayName).orElse("Unknown student");
+        return people.name(UUID.fromString(ownerId));
     }
 
 }

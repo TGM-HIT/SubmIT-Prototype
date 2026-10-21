@@ -18,6 +18,26 @@ const defaults = {
   sessionFile: path.join(frontendDir, '.preview', 'session.json'),
 }
 
+function assignmentSeparator(value) {
+  let brackets = 0
+  let quote
+  let escaped = false
+  for (let index = 0; index < value.length; index++) {
+    const character = value[index]
+    if (escaped) { escaped = false; continue }
+    if (character === '\\') { escaped = true; continue }
+    if (quote) {
+      if (character === quote) quote = undefined
+      continue
+    }
+    if (character === '"' || character === "'") { quote = character; continue }
+    if (character === '[') brackets++
+    else if (character === ']') brackets--
+    else if (character === '=' && brackets === 0) return index
+  }
+  return -1
+}
+
 export function parseArgs(args) {
   const options = {
     ...defaults,
@@ -77,6 +97,8 @@ export function parseArgs(args) {
       options.start = false
     } else if (flag === '--headed') {
       options.headed = true
+    } else if (flag === '--network-report') {
+      options.networkReport = true
     } else if (flag === '--auth') {
       options.auth = true
     } else if (flag === '--seed-allocation-pin-preview') {
@@ -91,13 +113,13 @@ export function parseArgs(args) {
       if (!value || value.startsWith('--')) throw new Error(`${flag} requires a value.`)
       const name = valueOptions.get(flag)
       if (name === 'fill') {
-        const separator = value.indexOf('=')
+        const separator = assignmentSeparator(value)
         if (separator < 1) throw new Error('--fill must use SELECTOR=VALUE.')
         options.fill.push({ selector: value.slice(0, separator), value: value.slice(separator + 1) })
       } else if (name === 'click' || name === 'waitFor' || name === 'openSelect' || name === 'tabTo' || name === 'expandSelect') {
         options[name].push(value)
       } else if (name === 'selectByKey' || name === 'nativeSelectByKey') {
-        const separator = value.indexOf('=')
+        const separator = assignmentSeparator(value)
         if (separator < 1) throw new Error(`${flag} must use SELECTOR=VALUE.`)
         const interaction = { selector: value.slice(0, separator), value: value.slice(separator + 1) }
         options.selectByKey.push(interaction)
@@ -107,7 +129,7 @@ export function parseArgs(args) {
         const action = separator < 0 ? value : value.slice(0, separator)
         const argument = separator < 0 ? '' : value.slice(separator + 1)
         if (action === 'fill') {
-          const assignment = argument.indexOf('=')
+          const assignment = assignmentSeparator(argument)
           if (assignment < 1) throw new Error('--step fill must use fill:SELECTOR=VALUE.')
           options.steps.push({ action, selector: argument.slice(0, assignment), value: argument.slice(assignment + 1) })
         } else if (action === 'click-record-action' && argument) {
@@ -764,12 +786,33 @@ export function collectBrowserErrors(client) {
       if (request) request.loadingFinished = true
     } else if (method === 'Network.loadingFailed') {
       const request = requests.get(params.requestId)
+      if (request) {
+        request.loadingFailed = true
+        request.canceled = Boolean(params.canceled)
+      }
       const initiator = request?.initiatorFrameUrl || request?.initiatorUrl || request?.initiatorFunction
         || request?.initiatorType || 'unknown'
       errors.push(`request failed: ${params.errorText}; url=${request?.url ?? 'unknown'}; method=${request?.method ?? 'unknown'}; type=${request?.resourceType ?? 'unknown'}; initiator=${initiator}; responseStatus=${request?.responseStatus ?? 'none'}; responseUrl=${request?.responseUrl ?? 'none'}; loadingFinished=${Boolean(request?.loadingFinished)}; canceled=${Boolean(params.canceled)}; blockedReason=${params.blockedReason ?? 'none'}; requestId=${params.requestId}`)
     }
   })
   return errors
+}
+
+export function networkReport(errors) {
+  return [...(errors.requests?.values() ?? [])]
+    .filter((request) => {
+      const pathname = new URL(request.url).pathname
+      return pathname.startsWith('/api/') && !pathname.startsWith('/api/auth/')
+    })
+    .map((request) => JSON.stringify({
+      method: request.method,
+      url: request.url,
+      initiator: request.initiatorFrameUrl || request.initiatorUrl || request.initiatorType || 'unavailable',
+      status: request.responseStatus ?? 'unavailable',
+      loadingFinished: request.loadingFinished === true,
+      loadingFailed: request.loadingFailed === true,
+      canceled: request.canceled ?? 'unavailable (no failure event)',
+    }))
 }
 
 export async function evaluatePage(client, expression, description) {
@@ -1264,8 +1307,10 @@ export async function launchBrowser(options, url, {
       returnByValue: true,
     })
     if (evaluation.exceptionDetails) throw new Error(`Could not inspect rendered page: ${evaluation.exceptionDetails.text}`)
+    if (options.networkReport) for (const line of networkReport(browserErrors)) console.log(`Browser request: ${line}`)
     return { browser, profile, client, errors: browserErrors, page: evaluation.result?.value }
   } catch (error) {
+    if (options.networkReport) for (const line of networkReport(browserErrors)) console.error(`Browser request: ${line}`)
     for (const browserError of browserErrors) console.error(`Browser error: ${browserError}`)
     for (const request of browserErrors.requests?.values() ?? []) {
       if (!request.loadingFinished) {
@@ -1346,6 +1391,7 @@ Use --fill, --click, --wait-for, and --expand-select to perform reusable preview
 or repeat --step ACTION:VALUE to sequence conditional flows. Steps support fill:SELECTOR=VALUE, click:SELECTOR,
 click-row-action:USERNAME|SELECTOR,
 wait:SELECTOR, read:SELECTOR, focus:SELECTOR, scroll:SELECTOR, key:Tab|Shift+Tab|Escape, select-index:SELECTOR=INDEX, screenshot:FILE, and accept-confirms or reject-confirms (local preview only).
+--network-report prints local API method/URL/initiator/status/completion evidence, excluding authentication requests, headers and payloads.
 for example to load a form that requires a project ID before its details are shown. Use --tab-to and
 --select-by-key for browser keyboard navigation. On macOS, use --headed and --native-select-by-key for GUI
 keyboard input to a collapsed popup (Terminal may require Accessibility permission).

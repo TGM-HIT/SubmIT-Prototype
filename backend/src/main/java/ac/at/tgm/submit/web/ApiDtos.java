@@ -453,7 +453,19 @@ public final class ApiDtos {
             AllocationResultResponse result, String error,
             Boolean inputSnapshotComplete,
             @Schema(description = "Instant when an administrator successfully finalized the allocation run.")
-            Instant finalizedAt) {
+            Instant finalizedAt,
+            @Schema(description = "Immutable submitted applying units. Omitted on historical runs; never inferred.")
+            @JsonInclude(JsonInclude.Include.NON_NULL) List<ApplyingUnitSnapshot> applyingUnits) {
+    }
+
+    @Schema(requiredProperties = {"groupId", "revision", "studentIds", "projectIds"})
+    public record ApplyingUnitSnapshot(
+            @Schema(description = "Original applying-group ID.") UUID groupId,
+            @Schema(description = "Unanimously approved roster/ranking revision.") long revision,
+            @Size(min = 2, max = 5) @Schema(description = "Exact accepted roster, allocated indivisibly.")
+            List<UUID> studentIds,
+            @Size(min = 3) @Schema(description = "Shared ordered distinct project preferences.")
+            List<UUID> projectIds) {
     }
 
     @Schema(requiredProperties = {"content", "page", "size", "totalElements", "totalPages"})
@@ -687,7 +699,8 @@ public final class ApiDtos {
             @Schema(description = "Project IDs available in the period catalogue.") List<UUID> projectIds,
             @JsonInclude(JsonInclude.Include.NON_NULL) List<ProjectTitleResponse> projectTitles,
             @JsonInclude(JsonInclude.Include.NON_NULL)
-            @Schema(description = "Present only to the authenticated student; status of that student's application, or NOT_SUBMITTED.")
+            @Schema(description = "Present only to the authenticated student: individual status, SHARED_SUBMITTED for "
+                    + "an effective shared submission, or NOT_SUBMITTED when absent or a solo submission was replaced.")
             String studentApplicationStatus,
             @JsonInclude(JsonInclude.Include.NON_NULL)
             @Schema(description = "Present only for the authenticated student's own submitted application.")
@@ -751,12 +764,21 @@ public final class ApiDtos {
     @Schema(requiredProperties = {"displayName", "self"})
     public record StudentGroupMemberResponse(
             @Schema(description = "Current account display name, or Unknown student.") String displayName,
-            @Schema(description = "True only for the authenticated caller.") boolean self) {
+            @Schema(description = "True only for the authenticated caller.") boolean self,
+            @Schema(description = "Display-only cohort label, individual addition, or Origin unavailable; no member IDs.")
+            @JsonInclude(JsonInclude.Include.NON_NULL) String originLabel,
+            @Schema(description = "True when this member belongs to the caller's original applying cohort.")
+            @JsonInclude(JsonInclude.Include.NON_NULL) Boolean ownCohort) {
+
+        public StudentGroupMemberResponse(String displayName, boolean self) {
+            this(displayName, self, null, null);
+        }
     }
 
     @Schema(requiredProperties = {"id", "studentId", "studentDisplayName", "periodId", "status", "preferences"})
     public record StudentApplicationResponse(
-            @Schema(description = "Student application record ID.") UUID id,
+            @Schema(description = "Effective solo application record ID, or the submitted applying-group ID "
+                    + "when a shared ranking represents the caller.") UUID id,
             @Schema(description = "Applicant account ID.") UUID studentId,
             @Schema(description = "Current applicant display name.") String studentDisplayName,
             @Schema(description = "Application-period ID.") UUID periodId,

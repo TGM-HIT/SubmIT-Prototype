@@ -587,6 +587,47 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/application-periods/{periodId}/applying-groups": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List your accepted groups and invitations, or authorized staff summaries.
+         * @description Unrelated students cannot read rosters or rankings. Page defaults to 20, maximum 100.
+         */
+        get: operations["listApplyingGroups"];
+        put?: never;
+        /** Create a creator-only applying-group draft without replacing individual applications. */
+        post: operations["createApplyingGroup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/application-periods/{periodId}/applying-groups/{id}/actions/{action}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Change a shared application with version-bound consent.
+         * @description Students only, open period before deadline. Creator manages invitations/ranking/submission/withdrawal/transfer/dissolution; invitees accept/decline; accepted members approve themselves or leave. Every request supplies the current revision; stale requests conflict. Actual roster/ranking changes invalidate all approvals and reopen submissions, never restoring solo applications. SUBMIT and DISSOLVE require confirm=true. Submission requires 2–5 accepted students, three distinct catalogue preferences and unanimous approval of that revision; solo replacement is atomic.
+         */
+        post: operations["changeApplyingGroup"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/application-periods/{periodId}/applications": {
         parameters: {
             query?: never;
@@ -925,6 +966,43 @@ export interface paths {
         };
         /** Get a project's period-specific catalogue details. */
         get: operations["getCatalogueProject"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/application-periods/{periodId}/applying-groups/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read a roster and shared ranking for informed consent; members, invitees and staff only. */
+        get: operations["getApplyingGroup"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/application-periods/{periodId}/applying-groups/{id}/invitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List pending invitations for the current creator or authorized staff.
+         * @description Other members and invitees cannot read other pending invitations. Default size 20, maximum 100.
+         */
+        get: operations["listApplyingGroupInvitations"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1710,7 +1788,7 @@ export interface components {
         StudentApplicationResponse: {
             /**
              * Format: uuid
-             * @description Student application record ID.
+             * @description Effective solo application record ID, or the submitted applying-group ID when a shared ranking represents the caller.
              */
             id: string;
             /**
@@ -1812,7 +1890,7 @@ export interface components {
             /** @description Project IDs available in the period catalogue. */
             projectIds: string[];
             projectTitles?: components["schemas"]["ProjectTitleResponse"][];
-            /** @description Present only to the authenticated student; status of that student's application, or NOT_SUBMITTED. */
+            /** @description Present only to the authenticated student: individual status, SHARED_SUBMITTED for an effective shared submission, or NOT_SUBMITTED when absent or a solo submission was replaced. */
             studentApplicationStatus?: string;
             /** @description Present only for the authenticated student's own submitted application. */
             studentAssignment?: components["schemas"]["StudentAssignmentResponse"];
@@ -1847,6 +1925,10 @@ export interface components {
             displayName: string;
             /** @description True only for the authenticated caller. */
             self: boolean;
+            /** @description Display-only cohort label, individual addition, or Origin unavailable; no member IDs. */
+            originLabel?: string;
+            /** @description True when this member belongs to the caller's original applying cohort. */
+            ownCohort?: boolean;
         };
         CatalogueEntryRequest: {
             /** @description Unique case-insensitively shared class or elective-subject name; trimmed before storage; 1 to 100 characters. */
@@ -2427,6 +2509,69 @@ export interface components {
             /** @description Optional review note; at most 2,000 characters. */
             note?: string;
         };
+        GroupResponse: {
+            /**
+             * Format: uuid
+             * @description Applying group identifier.
+             */
+            id: string;
+            /**
+             * Format: uuid
+             * @description Owning application period identifier.
+             */
+            periodId: string;
+            /**
+             * @description Effective shared submission state.
+             * @enum {string}
+             */
+            status: "DRAFT" | "SUBMITTED" | "DISSOLVED";
+            /**
+             * Format: int64
+             * @description Current roster/ranking revision.
+             */
+            revision: number;
+            /** @description Deadline or period lifecycle prevents mutation. */
+            locked: boolean;
+            /** @description Caller has a pending invitation. */
+            invited: boolean;
+            /** @description Caller is the current creator. */
+            manager: boolean;
+            /** @description Accepted roster; submission requires 2–5, all approving this revision. */
+            members: components["schemas"]["MemberResponse"][];
+            /** @description Shared ordered project preferences. */
+            preferences: components["schemas"]["PreferenceResponse"][];
+        };
+        MemberResponse: {
+            /**
+             * Format: uuid
+             * @description Student lookup identifier.
+             */
+            studentId: string;
+            /** @description Display name, not private account information. */
+            displayName: string;
+            /** @description Whether this member is the current creator. */
+            creator: boolean;
+            /** @description Whether this member is the caller. */
+            self: boolean;
+            /** @description Whether this member approved the current revision. */
+            approved: boolean;
+        };
+        ChangeRequest: {
+            /**
+             * Format: int64
+             * @description Current roster/ranking revision; stale writes return 409.
+             */
+            revision: number;
+            /**
+             * Format: uuid
+             * @description Invitation or transfer target; required for INVITE, REVOKE and TRANSFER.
+             */
+            studentId?: string | null;
+            /** @description RANK only: ordered distinct accepted catalogue projects. */
+            projectIds?: string[] | null;
+            /** @description Must be true for SUBMIT (replaces solo submissions) and DISSOLVE. */
+            confirm?: boolean | null;
+        };
         AllocationApplicationSnapshot: {
             /**
              * Format: uuid
@@ -2552,6 +2697,8 @@ export interface components {
              * @description Instant when an administrator successfully finalized the allocation run.
              */
             finalizedAt?: string;
+            /** @description Immutable submitted applying units. Omitted on historical runs; never inferred. */
+            applyingUnits?: components["schemas"]["ApplyingUnitSnapshot"][];
         };
         AllocationUnassignedProjectResponse: {
             /**
@@ -2584,6 +2731,22 @@ export interface components {
             studentDisplayName: string;
             className?: string;
             electiveSubjectNames?: string[];
+        };
+        ApplyingUnitSnapshot: {
+            /**
+             * Format: uuid
+             * @description Original applying-group ID.
+             */
+            groupId: string;
+            /**
+             * Format: int64
+             * @description Unanimously approved roster/ranking revision.
+             */
+            revision: number;
+            /** @description Exact accepted roster, allocated indivisibly. */
+            studentIds: string[];
+            /** @description Shared ordered distinct project preferences. */
+            projectIds: string[];
         };
         DisplayNameRequest: {
             /** @description Required account name; leading and trailing whitespace is trimmed. The trimmed name must contain 1 to 120 characters. */
@@ -2971,6 +3134,54 @@ export interface components {
                 /** @description Project dependencies. */
                 dependencies: string[];
             } | null;
+        };
+        PageResponseGroupResponse: {
+            /** @description Items returned in this page. */
+            content: components["schemas"]["GroupResponse"][];
+            /**
+             * Format: int32
+             * @description Zero-based index of this page.
+             */
+            page: number;
+            /**
+             * Format: int32
+             * @description Maximum number of items requested per page.
+             */
+            size: number;
+            /**
+             * Format: int64
+             * @description Total number of matching items across all pages.
+             */
+            totalElements: number;
+            /**
+             * Format: int32
+             * @description Number of pages containing all matching items.
+             */
+            totalPages: number;
+        };
+        PageResponseMemberResponse: {
+            /** @description Items returned in this page. */
+            content: components["schemas"]["MemberResponse"][];
+            /**
+             * Format: int32
+             * @description Zero-based index of this page.
+             */
+            page: number;
+            /**
+             * Format: int32
+             * @description Maximum number of items requested per page.
+             */
+            size: number;
+            /**
+             * Format: int64
+             * @description Total number of matching items across all pages.
+             */
+            totalElements: number;
+            /**
+             * Format: int32
+             * @description Number of pages containing all matching items.
+             */
+            totalPages: number;
         };
         PageResponseStudentApplicationResponse: {
             /** @description Items returned in this page. */
@@ -3777,7 +3988,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description The application period or application state does not permit this update. */
+            /** @description The application period or application state does not permit this update. A submitted shared application represents the caller. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -3842,7 +4053,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description The application period or application state does not permit deletion. */
+            /** @description The application period or application state does not permit deletion. A submitted shared application represents the caller. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -3914,7 +4125,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description Unranked project without acknowledgement, more than five project pins, or finalized period. */
+            /** @description Unranked project without acknowledgement, more than five project pins, or finalized period. Submitted applying units also reject conflicting member targets or effective capacity above five. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -6152,6 +6363,199 @@ export interface operations {
             };
         };
     };
+    listApplyingGroups: {
+        parameters: {
+            query?: {
+                page?: number;
+                /** @description Page size; values are normalized to the inclusive range 1–100. */
+                size?: number;
+            };
+            header?: never;
+            path: {
+                periodId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated authorized groups and invitations. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageResponseGroupResponse"];
+                };
+            };
+            /** @description Invalid period UUID or pagination query parameter. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Missing or invalid bearer authentication credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Application period was not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    createApplyingGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                periodId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Creator-only draft; individual submissions remain eligible. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupResponse"];
+                };
+            };
+            /** @description Invalid period UUID or caller account is no longer a student. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Missing or invalid bearer authentication credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Caller is not a student. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Application period was not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Period is not open before its deadline, or caller already has accepted membership. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    changeApplyingGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                periodId: string;
+                id: string;
+                action: "INVITE" | "REVOKE" | "ACCEPT" | "DECLINE" | "APPROVE" | "RANK" | "SUBMIT" | "WITHDRAW" | "LEAVE" | "TRANSFER" | "DISSOLVE";
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangeRequest"];
+            };
+        };
+        responses: {
+            /** @description Updated shared application and current revision. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupResponse"];
+                };
+            };
+            /** @description Invalid period/group UUID, action enum, JSON body, revision, member/project UUID, minimum ranking length, current student role, distinctness or catalogue membership; a self-only action specifies another student. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Missing or invalid bearer authentication credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Caller is not a student, the current creator for a management action, the invited student for acceptance/decline, or an accepted member for approval/departure. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Period or applying group in this period was not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Period is locked; revision is stale or group dissolved; target, confirmation or ranking is missing; duplicate invitation, membership uniqueness/size, catalogue acceptance, unanimous consent, creator departure, conflicting effective pins or effective capacity prevents the transition. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
     list_3: {
         parameters: {
             query?: {
@@ -6274,7 +6678,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description The application period is closed or its state does not permit an application. */
+            /** @description The application period is closed or its state does not permit an application. A submitted shared application represents the caller. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -7473,6 +7877,128 @@ export interface operations {
                 };
             };
             /** @description The period, project, or period catalogue entry does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    getApplyingGroup: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                periodId: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Authorized roster and ranking. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["GroupResponse"];
+                };
+            };
+            /** @description Invalid period or group UUID. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Missing or invalid bearer authentication credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Student caller is neither an accepted member nor a pending invitee. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Applying group was not found in this period, or its owning period is missing. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    listApplyingGroupInvitations: {
+        parameters: {
+            query?: {
+                page?: number;
+                /** @description Page size; values are normalized to the inclusive range 1–100. */
+                size?: number;
+            };
+            header?: never;
+            path: {
+                periodId: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paginated pending invitations. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PageResponseMemberResponse"];
+                };
+            };
+            /** @description Invalid period/group UUID or pagination query parameter. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Missing or invalid bearer authentication credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Student caller is not the current creator. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Applying group was not found in this period. */
             404: {
                 headers: {
                     [name: string]: unknown;

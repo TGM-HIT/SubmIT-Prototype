@@ -26,11 +26,14 @@ public class ApplicationPeriodService {
     private final RecordStore store;
     private final AuditService audit;
     private final ApplicationResponseMapper mapper;
+    private final ApplyingGroupRecords groups;
 
-    public ApplicationPeriodService(RecordStore store, AuditService audit, ApplicationResponseMapper mapper) {
+    public ApplicationPeriodService(RecordStore store, AuditService audit, ApplicationResponseMapper mapper,
+            ApplyingGroupRecords groups) {
         this.store = store;
         this.audit = audit;
         this.mapper = mapper;
+        this.groups = groups;
     }
 
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
@@ -127,7 +130,7 @@ public class ApplicationPeriodService {
                     "An application period must include at least three accepted projects.");
         }
         ensureEligibleProjects(projectIds, payload.path(SCHOOL_YEAR).asText());
-        var proposed = new java.util.HashSet<>(projectIds);
+        var proposed = projectIds;
         boolean removesPinnedProject = store.repository().findByTypeAndParentId("allocation_pin", id.toString()).stream()
                 .map(pin -> store.parse(pin).path("projectId").asText()).anyMatch(project -> !proposed.contains(project));
         if (removesPinnedProject) {
@@ -142,8 +145,9 @@ public class ApplicationPeriodService {
     public ApiDtos.StudentApplicationResponse createApplication(
             AuthenticatedUser caller, java.util.UUID periodId, JsonNode request) {
         requireRole(caller, STUDENT);
-        var period = findPeriod(periodId);
+        var period = findPeriodForUpdate(periodId);
         requireOpen(period);
+        groups.rejectSubmittedSoloWrite(periodId, caller.id().toString());
         if (store.repository().findByTypeAndParentIdAndOwnerId(APPLICATION,
                 periodId.toString(), caller.id().toString()).isPresent()) {
             throw conflict("A student may submit only one application per period.");
@@ -159,6 +163,10 @@ public class ApplicationPeriodService {
     public ApiDtos.StudentApplicationResponse myApplication(
             AuthenticatedUser caller, java.util.UUID periodId) {
         requireRole(caller, STUDENT);
+        var shared = groups.accepted(periodId, caller.id().toString());
+        if (shared != null && "SUBMITTED".equals(shared.getStatus())) {
+            return mapper.sharedApplication(shared, caller.id());
+        }
         var application = store.repository().findByTypeAndParentIdAndOwnerId(APPLICATION,
                 periodId.toString(), caller.id().toString())
                 .orElseThrow(() -> new EntityNotFoundException("Application was not found."));
@@ -183,8 +191,10 @@ public class ApplicationPeriodService {
             AuthenticatedUser caller, java.util.UUID id, JsonNode request) {
         var application = findApplication(id);
         requireOwner(caller, application);
-        var period = findPeriod(java.util.UUID.fromString(application.getParentId()));
+        var period = findPeriodForUpdate(java.util.UUID.fromString(application.getParentId()));
+        store.refresh(application);
         requireOpen(period);
+        groups.rejectSubmittedSoloWrite(period.getId(), caller.id().toString());
         var payload = validateApplication(request, period);
         store.create(APPLICATION_REVISION, caller.id().toString(), id.toString(),
                 application.getStatus(), store.parse(application));
@@ -197,8 +207,10 @@ public class ApplicationPeriodService {
     public void withdrawApplication(AuthenticatedUser caller, java.util.UUID id) {
         var application = findApplication(id);
         requireOwner(caller, application);
-        var period = findPeriod(java.util.UUID.fromString(application.getParentId()));
+        var period = findPeriodForUpdate(java.util.UUID.fromString(application.getParentId()));
+        store.refresh(application);
         requireOpen(period);
+        groups.rejectSubmittedSoloWrite(period.getId(), caller.id().toString());
         store.create(APPLICATION_REVISION, caller.id().toString(), id.toString(),
                 application.getStatus(), store.parse(application));
         store.update(application, "WITHDRAWN", store.parse(application));
@@ -247,8 +259,7 @@ public class ApplicationPeriodService {
                     org.springframework.http.HttpStatus.BAD_REQUEST,
                     "At least three distinct project preferences are required.");
         }
-        var catalogue = new java.util.HashSet<String>();
-        periodPayload(period).path(PROJECT_IDS).forEach(project -> catalogue.add(project.asText()));
+        var catalogue = projectIds(periodPayload(period).path(PROJECT_IDS));
         if (!catalogue.containsAll(projectIds)) {
             throw new ApiException(
                     org.springframework.http.HttpStatus.BAD_REQUEST,
@@ -300,7 +311,7 @@ public class ApplicationPeriodService {
         var now = java.time.Instant.now();
         var closing = java.time.Instant.parse(payload.path(CLOSES_AT).asText());
         var opening = java.time.Instant.parse(payload.path(OPENS_AT).asText());
-        if (!"OPEN".equals(period.getStatus()) || now.isBefore(opening) || now.isAfter(closing)) {
+        if (!"OPEN".equals(period.getStatus()) || now.isBefore(opening) || !now.isBefore(closing)) {
             throw conflict("Applications are not open for this period.");
         }
     }
@@ -378,8 +389,7 @@ public class ApplicationPeriodService {
     }
 
     private StoredRecord findPeriodForUpdate(java.util.UUID id) {
-        return store.repository().findByIdForUpdate(id).filter(record -> PERIOD.equals(record.getType()))
-                .orElseThrow(() -> new EntityNotFoundException("Application period was not found."));
+        return store.lock(PERIOD, id);
     }
 
     private StoredRecord findApplication(java.util.UUID id) {

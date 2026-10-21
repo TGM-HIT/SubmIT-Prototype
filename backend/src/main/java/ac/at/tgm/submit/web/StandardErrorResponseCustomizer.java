@@ -330,12 +330,14 @@ public class StandardErrorResponseCustomizer implements OpenApiCustomizer {
                 BAD_REQUEST, "The application ID or ranked project preferences are invalid.",
                 FORBIDDEN, "The caller is not authorized to update this application.",
                 NOT_FOUND, "The application does not exist.",
-                CONFLICT, "The application period or application state does not permit this update.");
+                CONFLICT, "The application period or application state does not permit this update. "
+                        + "A submitted shared application represents the caller.");
         add(result, DELETE, "/api/applications/{id}",
                 BAD_REQUEST, "The application ID is not a valid UUID.",
                 FORBIDDEN, "The caller is not authorized to delete this application.",
                 NOT_FOUND, "The application does not exist.",
-                CONFLICT, "The application period or application state does not permit deletion.");
+                CONFLICT, "The application period or application state does not permit deletion. "
+                        + "A submitted shared application represents the caller.");
         add(result, PUT, ALLOCATION_PIN_ROUTE,
                 BAD_REQUEST, "The path UUIDs, target student, or selected project are invalid.",
                 FORBIDDEN, "Only an administrator may change allocation pins.",
@@ -450,7 +452,8 @@ public class StandardErrorResponseCustomizer implements OpenApiCustomizer {
                 BAD_REQUEST, "The period UUID or submitted project preferences are invalid.",
                 FORBIDDEN, "The caller lacks the role required to create a period application.",
                 NOT_FOUND, PERIOD_NOT_FOUND,
-                CONFLICT, "The application period is closed or its state does not permit an application.");
+                CONFLICT, "The application period is closed or its state does not permit an application. "
+                        + "A submitted shared application represents the caller.");
         add(result, GET, "/api/application-periods/{periodId}/allocation-runs",
                 BAD_REQUEST, "The period UUID or pagination query parameter is invalid.",
                 FORBIDDEN, "The caller lacks the role required to list allocation runs.",

@@ -10,6 +10,7 @@ import {
   applyPageInteractions,
   applyPageSteps,
   collectBrowserErrors,
+  networkReport,
   formatNativeInputFailure,
   parseArgs,
   readSession,
@@ -27,6 +28,31 @@ import {
   viewportFor,
   waitForReady,
 } from './preview.mjs'
+
+test('G8 optional network evidence includes completion and initiator without authentication or payload data', () => {
+  assert.equal(parseArgs(['--network-report']).networkReport, true)
+  const errors = []
+  errors.requests = new Map([
+    ['auth', { url: 'http://localhost/api/auth/login', method: 'POST', responseStatus: 200 }],
+    ['group', { url: 'http://localhost/api/application-periods/example/applying-groups', method: 'GET',
+      responseStatus: 200, initiatorFrameUrl: 'http://localhost/src/api/client.ts', loadingFinished: true,
+      headers: { Authorization: 'secret sentinel' }, body: 'private sentinel' }],
+  ])
+  assert.deepEqual(networkReport(errors).map(JSON.parse), [{
+    method: 'GET', url: 'http://localhost/api/application-periods/example/applying-groups',
+    initiator: 'http://localhost/src/api/client.ts', status: 200, loadingFinished: true,
+    loadingFailed: false, canceled: 'unavailable (no failure event)',
+  }])
+})
+
+test('G8 parses scoped attribute selectors without consuming assignment characters in CSS or input values', () => {
+  const selector = '[data-period-label="Apply together walkthrough"] [id^="lookup-"]'
+  const parsed = parseArgs(['--step', `fill:${selector}=Noah=a`, '--fill', `${selector}=Noah=b`,
+    '--select-by-key', '[data-kind="shared"] select=Project=c'])
+  assert.deepEqual(parsed.steps[0], { action: 'fill', selector, value: 'Noah=a' })
+  assert.deepEqual(parsed.fill[0], { selector, value: 'Noah=b' })
+  assert.deepEqual(parsed.selectByKey[0], { selector: '[data-kind="shared"] select', value: 'Project=c' })
+})
 
 test('parses preview options and rejects incomplete or invalid invocations', () => {
   assert.equal(parseArgs([]).start, true)

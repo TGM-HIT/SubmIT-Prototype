@@ -66,6 +66,10 @@ public class StoredRecord {
         return ownerId;
     }
 
+    public void setOwnerId(String ownerId) {
+        this.ownerId = ownerId;
+    }
+
     public String getParentId() {
         return parentId;
     }

@@ -63,8 +63,9 @@ public class AllocationService {
         Page<StoredRecord> periods = store.page(PERIOD, null, null, PageRequest.of(0, 100));
         int started = 0;
         for (StoredRecord period : periods.getContent()) {
-            if (isDue(period) && !hasInitialRun(period.getId())) {
-                createRun(null, period, true, false);
+            StoredRecord current = store.lock(PERIOD, period.getId());
+            if (isDue(current) && !hasInitialRun(current.getId())) {
+                createRun(null, current, true, false);
                 started++;
             }
         }
@@ -74,7 +75,7 @@ public class AllocationService {
     @Transactional
     @PreAuthorize("hasRole('ADMIN')")
     public ObjectNode startReplacement(AuthenticatedUser caller, UUID periodId) {
-        StoredRecord period = findPeriod(periodId);
+        StoredRecord period = store.lock(PERIOD, periodId);
         if (FINALIZED.equals(period.getStatus())) {
             throw conflict("A finalized allocation cannot be replaced.");
         }
@@ -112,7 +113,7 @@ public class AllocationService {
         if (!"COMPLETED".equals(run.getStatus())) {
             throw conflict("Only a completed allocation can be finalized.");
         }
-        StoredRecord period = findPeriod(UUID.fromString(run.getParentId()));
+        StoredRecord period = store.lock(PERIOD, UUID.fromString(run.getParentId()));
         if (FINALIZED.equals(period.getStatus())) {
             throw conflict("This application period is already finalized.");
         }
@@ -128,6 +129,7 @@ public class AllocationService {
                     .put("periodId", period.getId().toString()).put("allocationRunId", id.toString());
             ArrayNode students = groupPayload.putArray("studentIds");
             group.getValue().forEach(students::add);
+            engine.persistOrigin(groupPayload, payload);
             store.create(PROJECT_GROUP, caller.id().toString(), group.getKey(), "ALLOCATED", groupPayload);
         }
         payload.put("finalizedAt", Instant.now().toString());
@@ -150,6 +152,10 @@ public class AllocationService {
         try {
             List<StoredRecord> applications = readApplications(period.getId());
             snapshot.set("applications", serializeApplications(applications));
+            List<StoredRecord> shared = engine.submittedGroups(period.getId());
+            snapshot.set("applyingUnits", engine.serializeUnits(shared));
+            applications = new ArrayList<>(applications);
+            applications.addAll(shared);
             Object result = engine.optimize(projectIds, applications, pins);
             snapshot.set(RESULT_FIELD, store.value(result));
             store.update(run, "COMPLETED", snapshot);

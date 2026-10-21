@@ -3,6 +3,7 @@ package ac.at.tgm.submit.allocation;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import ac.at.tgm.submit.audit.AuditService;
+import ac.at.tgm.submit.application.ApplyingGroupRecords;
 import ac.at.tgm.submit.data.RecordStore;
 import ac.at.tgm.submit.data.StoredRecord;
 import ac.at.tgm.submit.security.AuthenticatedUser;
@@ -31,11 +32,14 @@ public class AllocationPinService {
     private final RecordStore store;
     private final UserAccountRepository users;
     private final AuditService audit;
+    private final ApplyingGroupRecords groups;
 
-    public AllocationPinService(RecordStore store, UserAccountRepository users, AuditService audit) {
+    public AllocationPinService(RecordStore store, UserAccountRepository users, AuditService audit,
+            ApplyingGroupRecords groups) {
         this.store = store;
         this.users = users;
         this.audit = audit;
+        this.groups = groups;
     }
 
     @Transactional
@@ -48,9 +52,9 @@ public class AllocationPinService {
         StoredRecord existing = findExistingPin(periodId, studentId);
         boolean ranked = isRanked(periodId, studentId, projectId);
         requireAcknowledgement(ranked, request);
-        checkCapacity(periodId, projectId, existing);
         removeExisting(existing);
         StoredRecord pin = createPin(periodId, studentId, projectId);
+        groups.validatePins(periodId);
         audit.record(caller, existing == null ? "ALLOCATION_PIN_CREATED" : "ALLOCATION_PIN_REPLACED", PIN,
                 pin.getId());
         return response(pin, student, project, ranked);
@@ -96,9 +100,7 @@ public class AllocationPinService {
     }
 
     private StoredRecord findMutablePeriod(UUID periodId) {
-        StoredRecord period = store.repository().findByIdForUpdate(periodId)
-                .filter(record -> PERIOD.equals(record.getType()))
-                .orElseThrow(() -> new EntityNotFoundException("Application period was not found."));
+        StoredRecord period = store.lock(PERIOD, periodId);
         if ("FINALIZED".equals(period.getStatus())) {
             throw conflict("A finalized period cannot be changed.");
         }
@@ -129,6 +131,10 @@ public class AllocationPinService {
     }
 
     private boolean isRanked(UUID periodId, UUID studentId, UUID projectId) {
+        StoredRecord group = groups.accepted(periodId, studentId.toString());
+        if (group != null && "SUBMITTED".equals(group.getStatus())) {
+            return groups.ids(store.parse(group).path("projectIds")).contains(projectId.toString());
+        }
         return store.repository().findByTypeAndParentIdAndOwnerId(APPLICATION, periodId.toString(),
                         studentId.toString())
                 .filter(application -> "SUBMITTED".equals(application.getStatus()))
@@ -147,15 +153,6 @@ public class AllocationPinService {
     private void requireAcknowledgement(boolean ranked, AllocationPinRequest request) {
         if (!ranked && !Boolean.TRUE.equals(request.acknowledgeUnranked())) {
             throw conflict("The student did not rank this project; explicit acknowledgement is required.");
-        }
-    }
-
-    private void checkCapacity(UUID periodId, UUID projectId, StoredRecord existing) {
-        long count = store.repository().findByTypeAndParentId(PIN, periodId.toString()).stream()
-                .filter(pin -> projectId.toString().equals(store.parse(pin).path(PROJECT_ID).asText()))
-                .filter(pin -> existing == null || !pin.getId().equals(existing.getId())).count();
-        if (count >= AllocationLimits.MAX_GROUP_SIZE) {
-            throw conflict("A project can have at most five pinned students.");
         }
     }
 

@@ -12,6 +12,7 @@ const api = vi.hoisted(() => ({
   listPins: vi.fn(),
   listIdeas: vi.fn(),
   listApplications: vi.fn(),
+  listGroups: vi.fn(),
   lookupStudents: vi.fn(),
   savePin: vi.fn(),
   removePin: vi.fn(),
@@ -22,6 +23,7 @@ const state = vi.hoisted(() => ({ role: 'TEACHER' }))
 vi.mock('../../api/services', () => ({
   allocationApi: { getRun: api.getRun, finalize: vi.fn() },
   ideasApi: { get: api.getIdea, list: api.listIdeas, lookupStudents: api.lookupStudents },
+  applyingGroupsApi: { list: api.listGroups },
   periodsApi: {
     list: api.listPeriods,
     runs: api.listRuns,
@@ -72,6 +74,7 @@ describe('allocation supervisor display', () => {
     api.listPins.mockResolvedValue({ content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 })
     api.listIdeas.mockResolvedValue({ content: [{ id: 'project-1', title: 'Project One' }] })
     api.listApplications.mockResolvedValue({ content: [] })
+    api.listGroups.mockResolvedValue({ content: [], totalPages: 0 })
     api.lookupStudents.mockResolvedValue({ content: [{ id: 'student-1', displayName: 'Student One' }] })
     api.savePin.mockResolvedValue({})
   })
@@ -310,6 +313,27 @@ describe('allocation supervisor display', () => {
     await page.find("form").trigger("submit")
     await flushPromises()
     expect(api.savePin).toHaveBeenCalledWith("period-1", "student-2", "project-1", false)
+  })
+
+  it("uses the submitted shared ranking from later pages instead of a replaced solo ranking", async () => {
+    state.role = "ADMIN"
+    api.listApplications.mockResolvedValue({ content: [{ studentId: "student-1", status: "REPLACED",
+      preferences: [{ projectId: "project-2" }] }] })
+    api.listGroups.mockResolvedValueOnce({ content: [], totalPages: 2 }).mockResolvedValueOnce({
+      content: [{ status: "SUBMITTED", members: [{ studentId: "student-1" }],
+        preferences: [{ projectId: "project-1" }] }], totalPages: 2,
+    })
+    const page = mountPage()
+    await flushPromises()
+    expect(api.listGroups).toHaveBeenCalledWith("period-1", 1)
+    await page.get("#pin-student").setValue("Student One")
+    await flushPromises()
+    await page.get("#pin-student-select").setValue("student-1")
+    await page.get("#pin-project").setValue("project-1")
+    expect(page.text()).not.toContain("did not rank the selected project")
+    await page.find("form").trigger("submit")
+    await flushPromises()
+    expect(api.savePin).toHaveBeenCalledWith("period-1", "student-1", "project-1", false)
   })
 
   it("lists and changes an existing administrator pin", async () => {

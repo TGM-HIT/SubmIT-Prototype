@@ -27,7 +27,7 @@
     </div>
     <AsyncPanel :loading="task.loading.value" :error="task.error.value" @retry="load">
       <div v-if="periods.content.length" class="data-list">
-        <article v-for="period in periods.content" :key="period.id" class="data-row">
+        <article v-for="period in periods.content" :key="period.id" class="data-row" :data-period-label="period.label">
           <div class="row-main">
             <h3>{{ period.label || period.schoolYear }} <span class="status-badge" :class="`status-${period.status?.toLowerCase()}`">{{ readable(period.status) }}</span></h3>
             <p>School year {{ period.schoolYear }}</p>
@@ -40,7 +40,7 @@
                 <p v-if="period.studentAssignment.state === 'PRELIMINARY'" class="muted">This is preliminary and may change when the administrator finalizes the allocation or starts a replacement run.</p>
                 <p v-if="period.studentAssignment.preferenceRank">Your preference rank: {{ period.studentAssignment.preferenceRank }}</p>
                 <ul v-if="period.studentAssignment.groupMembers?.length" class="group-member-list" aria-label="Students assigned to this project">
-                  <li v-for="(member, index) in period.studentAssignment.groupMembers" :key="`${member.displayName}-${index}`">{{ member.displayName }}<strong v-if="member.self"> (you)</strong></li>
+                  <li v-for="(member, index) in period.studentAssignment.groupMembers" :key="`${member.displayName}-${index}`">{{ member.displayName }}<strong v-if="member.self"> (you)</strong> · {{ member.originLabel || 'Origin unavailable' }}<strong v-if="member.ownCohort"> · Your applying cohort</strong></li>
                 </ul>
               </template>
             </section>
@@ -88,7 +88,8 @@
                 <RouterLink class="button button-secondary button-small" :to="`/archive/${projectId}`">Browse approved archive</RouterLink>
               </details>
             </div>
-            <template v-if="isStudent && periodEditable(period)">
+            <template v-if="isStudent && periodEditable(period) && period.studentApplicationStatus !== 'SHARED_SUBMITTED'">
+              <h3>Apply individually</h3>
               <div class="choice-list application-ranking">
                 <p class="muted">Select at least three distinct projects. Rank changes use accessible move buttons. The system starts allocation automatically at the deadline.</p>
                 <div v-for="id in rankedIds[period.id ?? ''] ?? []" :key="id" class="choice-item">
@@ -100,11 +101,12 @@
                 <div class="field"><label class="label" :for="`add-project-${period.id}`">Add accepted project</label><select :id="`add-project-${period.id}`" v-model="projectToAdd" class="select"><option value="">Choose a project…</option><option v-for="id in period.projectIds ?? []" :key="id" :value="id" :disabled="(rankedIds[period.id ?? ''] ?? []).includes(id)">{{ projectTitle(period, id) }}</option></select></div>
                 <button class="button button-secondary" type="button" @click="addChoice(period.id ?? '')">Add choice</button>
               </div>
-              <div class="actions"><button class="button" type="button" :disabled="(rankedIds[period.id ?? '']?.length ?? 0) < 3 || task.loading.value" @click="saveApplication(period)">{{ applicationFor(period.id ?? '') ? 'Save ranking changes' : 'Submit ranked application' }}</button><button v-if="applicationFor(period.id ?? '')" class="button button-danger" type="button" @click="withdrawApplication(period)">Withdraw</button></div>
+              <div class="actions"><button class="button" type="button" :disabled="(rankedIds[period.id ?? '']?.length ?? 0) < 3 || task.loading.value" @click="saveApplication(period)">{{ applicationFor(period.id ?? '') && applicationFor(period.id ?? '')?.status !== 'REPLACED' ? 'Save ranking changes' : 'Submit ranked application' }}</button><button v-if="applicationFor(period.id ?? '') && applicationFor(period.id ?? '')?.status !== 'REPLACED'" class="button button-danger" type="button" @click="withdrawApplication(period)">Withdraw</button></div>
             </template>
             <template v-else-if="isStudent && period.status !== 'OPEN'">
               <p class="notice">This period is {{ readable(period.status).toLowerCase() }}. Preference changes are locked. Your application and assignment status are shown above.</p>
             </template>
+            <ApplyingGroupsWorkspace :period="period" @changed="refreshApplicationState" />
           </div>
           <div class="actions" v-if="isTeacher || isAdmin"><button class="button button-secondary button-small" @click="loadApplications(period)">View application summary</button><RouterLink v-if="isAdmin" class="button button-secondary button-small" to="/allocation">Allocation runs</RouterLink></div>
         </article>
@@ -133,6 +135,7 @@ import { ideasApi, periodsApi } from '../../api/services'
 import { useAuthStore } from '../../stores/auth'
 import { useTask } from '../../composables/useTask'
 import AsyncPanel from '../../components/AsyncPanel.vue'
+import ApplyingGroupsWorkspace from './ApplyingGroupsWorkspace.vue'
 
 type Period = components['schemas']['ApplicationPeriodResponse']
 type Idea = components['schemas']['IdeaResponse']
@@ -276,6 +279,13 @@ async function load(page = 0): Promise<void> {
     }
   })
 }
+async function refreshApplicationState(): Promise<void> {
+  try {
+    periods.value = await periodsApi.list(periods.value.page)
+  } catch (cause) {
+    task.error.value = cause instanceof Error ? cause.message : 'Application status could not refresh. Retry.'
+  }
+}
 async function createPeriod(): Promise<void> {
   if (periodValidationMessages.value.length) return
   const payload: components['schemas']['ApplicationPeriodRequest'] = {
@@ -291,7 +301,7 @@ async function createPeriod(): Promise<void> {
 async function saveApplication(period: Period): Promise<void> {
   const id = period.id ?? ''
   const existing = currentApplications.value[id]
-  const label = existing ? 'Replace your ranked choices before the deadline?' : 'Submit your ranked application?'
+  const label = existing && existing.status !== 'REPLACED' ? 'Replace your ranked choices before the deadline?' : 'Submit your ranked application?'
   if (!confirm(label)) return
   const input = { projectIds: rankedIds.value[id] ?? [] }
   const result = await task.run(() => existing

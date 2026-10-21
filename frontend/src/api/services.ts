@@ -27,6 +27,23 @@ function json<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
   return request<T>(path, { method, ...(body === undefined ? {} : { body }) })
 }
 
+export const applyingGroupsApi = {
+  list(periodId: string, page = 0): Promise<Page<components['schemas']['PageResponseGroupResponse']>> {
+    return json(`/api/application-periods/${encodeURIComponent(periodId)}/applying-groups?${pageQuery(page)}`)
+  },
+  create(periodId: string): Promise<components['schemas']['GroupResponse']> {
+    return json(`/api/application-periods/${encodeURIComponent(periodId)}/applying-groups`, 'POST')
+  },
+  change(periodId: string, id: string, action: NonNullable<operations['changeApplyingGroup']['parameters']['path']>['action'],
+    input: components['schemas']['ChangeRequest']): Promise<components['schemas']['GroupResponse']> {
+    return json(`/api/application-periods/${encodeURIComponent(periodId)}/applying-groups/${encodeURIComponent(id)}/actions/${action}`,
+      'POST', input)
+  },
+  invitations(periodId: string, id: string, page = 0): Promise<Page<components['schemas']['PageResponseMemberResponse']>> {
+    return json(`/api/application-periods/${encodeURIComponent(periodId)}/applying-groups/${encodeURIComponent(id)}/invitations?${pageQuery(page)}`)
+  },
+}
+
 export const ideasApi = {
   list(
     page: number,

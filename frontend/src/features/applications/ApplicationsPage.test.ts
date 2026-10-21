@@ -46,6 +46,7 @@ function mountPage() {
       stubs: {
         AsyncPanel: { template: '<div><slot /></div>' },
         RouterLink: true,
+        ApplyingGroupsWorkspace: true,
       },
     },
   })
@@ -328,6 +329,35 @@ describe("student catalogue project titles", () => {
   ]
   const titles = ["Solar design", "Water quality", "CommunityGarden".repeat(8)]
 
+  it("G7 accessibly distinguishes two applying cohorts, the caller, allocation additions and unavailable legacy origin", async () => {
+    api.role = "STUDENT"
+    api.listPeriods.mockResolvedValue({ content: [{
+      id: "final-period", label: "Final shared result", status: "FINALIZED", projectIds: [],
+      studentApplicationStatus: "SHARED_SUBMITTED",
+      studentAssignment: { state: "FINAL", projectTitle: "Solar design", preferenceRank: 1,
+        groupMembers: [
+          { displayName: "Caller Long Display Name", self: true, originLabel: "Applying cohort 1", ownCohort: true },
+          { displayName: "Caller’s partner", self: false, originLabel: "Applying cohort 1", ownCohort: true },
+          { displayName: "Another cohort", self: false, originLabel: "Applying cohort 2", ownCohort: false },
+          { displayName: "Added student", self: false, originLabel: "Applied individually · added by allocation", ownCohort: false },
+          { displayName: "Legacy student", self: false, ownCohort: false },
+        ] },
+    }], page: 0, size: 20, totalElements: 1, totalPages: 1 })
+    const page = mountPage(); await flushPromises()
+    const result = page.get('[aria-label="Your application result"]')
+    expect(result.text()).toContain("Your application: Shared submitted")
+    const members = result.get('[aria-label="Students assigned to this project"]').findAll('li')
+    expect(members.map(member => member.text())).toEqual([
+      "Caller Long Display Name (you) · Applying cohort 1 · Your applying cohort",
+      "Caller’s partner · Applying cohort 1 · Your applying cohort",
+      "Another cohort · Applying cohort 2",
+      "Added student · Applied individually · added by allocation",
+      "Legacy student · Origin unavailable",
+    ])
+    expect(result.text()).not.toContain("Formal proposal")
+    page.unmount()
+  })
+
   it("loads project details for each open catalogue item and keeps the rest of the page usable", async () => {
     api.role = "STUDENT"
     api.listIdeas.mockResolvedValue({ content: [] })
@@ -457,6 +487,21 @@ describe("student catalogue project titles", () => {
       row.element.firstElementChild?.textContent?.trim())).toEqual(titles.map((title, index) => `${index + 1}. ${title}`))
     expect(page.text()).not.toContain("Stale UUID fallback")
     expect(page.text()).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i)
+  })
+
+  it("requires explicit reapplication rather than presenting a replaced solo as eligible after group exit", async () => {
+    api.role = "STUDENT"
+    api.listPeriods.mockResolvedValue({ content: [{ id: "period-1", schoolYear: "2026/2027", status: "OPEN",
+      opensAt: "2020-01-01T00:00:00Z", closesAt: "2099-01-01T00:00:00Z", projectIds,
+      studentApplicationStatus: "NOT_SUBMITTED", projectTitles: projectIds.map((id, index) => ({ projectId: id, title: `Project ${index}` })) }],
+    page: 0, size: 20, totalElements: 1, totalPages: 1 })
+    api.myApplication.mockResolvedValue({ id: "old-solo", status: "REPLACED",
+      preferences: projectIds.map((projectId, index) => ({ projectId, rank: index + 1 })) })
+    const page = mountPage(); await flushPromises()
+    expect(page.text()).toContain("Your application: No application submitted")
+    expect(page.text()).toContain("Submit ranked application")
+    expect(page.findAll("button").some(button => button.text() === "Withdraw")).toBe(false)
+    expect(api.updateApplication).not.toHaveBeenCalled()
   })
 
   it("shows private preliminary, final, unassigned and no-result states without identifiers", async () => {

@@ -7,6 +7,7 @@ import ac.at.tgm.submit.allocation.AllocationOptimizer.Project;
 import ac.at.tgm.submit.allocation.AllocationOptimizer.Request;
 import ac.at.tgm.submit.data.RecordStore;
 import ac.at.tgm.submit.data.StoredRecord;
+import ac.at.tgm.submit.application.ApplyingGroupRecords;
 import ac.at.tgm.submit.security.Role;
 import ac.at.tgm.submit.user.UserAccountRepository;
 import java.util.ArrayList;
@@ -26,15 +27,30 @@ class AllocationEngine {
     private final RecordStore store;
     private final UserAccountRepository users;
     private final AllocationOptimizer optimizer = new AllocationOptimizer();
+    private final ApplyingUnitSnapshots units;
 
-    AllocationEngine(RecordStore store, UserAccountRepository users) {
+    AllocationEngine(RecordStore store, UserAccountRepository users, ApplyingUnitSnapshots units) {
         this.store = store;
         this.users = users;
+        this.units = units;
+    }
+
+    List<StoredRecord> submittedGroups(UUID periodId) {
+        return units.submitted(periodId);
+    }
+
+    com.fasterxml.jackson.databind.node.ArrayNode serializeUnits(List<StoredRecord> groups) {
+        return units.serialize(groups);
+    }
+
+    void persistOrigin(ObjectNode group, JsonNode run) {
+        units.persistOrigin(group, run);
     }
 
     Object optimize(List<String> projectIds, List<StoredRecord> records, List<StoredRecord> pinRecords) {
         List<Project> projects = projectIds.stream().map(Project::new).toList();
         Map<String, String> pinnedProjects = readPins(projectIds, pinRecords);
+        units.expandPins(records, pinnedProjects);
         Map<String, Integer> originalRanks = new HashMap<>();
         List<Application> applications = buildApplications(records, pinnedProjects, originalRanks);
         Request request = new Request(projects, applications, pinnedProjects.keySet());
@@ -73,6 +89,11 @@ class AllocationEngine {
         List<Application> applications = new ArrayList<>();
         Set<String> included = new HashSet<>();
         for (StoredRecord record : records) {
+            if (ApplyingGroupRecords.TYPE.equals(record.getType())) {
+                addShared(record, pins, originalRanks, applications);
+                store.parse(record).path("members").forEach(member -> included.add(member.asText()));
+                continue;
+            }
             String studentId = record.getOwnerId();
             List<String> sourceRanking = rankedProjects(record);
             rememberRanks(studentId, record, originalRanks);
@@ -88,6 +109,20 @@ class AllocationEngine {
             }
         }
         return applications;
+    }
+
+    private void addShared(StoredRecord group, Map<String, String> pins, Map<String, Integer> ranks,
+            List<Application> applications) {
+        List<String> ranking = new ArrayList<>();
+        store.parse(group).path("projectIds").forEach(project -> ranking.add(project.asText()));
+        for (JsonNode member : store.parse(group).path("members")) {
+            String student = member.asText();
+            for (int i = 0; i < ranking.size(); i++) {
+                ranks.put(student + "|" + ranking.get(i), i + 1);
+            }
+            List<String> effective = pins.containsKey(student) ? List.of(pins.get(student)) : ranking;
+            applications.add(new Application(student, effective, group.getId().toString()));
+        }
     }
 
     private List<String> rankedProjects(StoredRecord record) {
