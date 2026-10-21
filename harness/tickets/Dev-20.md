@@ -16,6 +16,7 @@ Source: `Compliance-05-20261016-0850`, report finding 3. `README.md:8,12` instru
 - All named existing paths resolve. No renamed file target or new replacement path is prescribed.
 - Scope-gate allowances: `README.md`, `compose.yaml`, `backend/README.md`. `.env.example` is already allowed by the inspected gate.
 - Use synthetic local values for verification; do not commit `.env`, credentials, generated configuration output containing secrets, or real tokens.
+- Product-owner decision (2026-10-21): "docker build failed. Fix implementation." Treat the reported `docker compose up --build` failure while pulling public base images (`error getting credentials - err: exec: "docker-credential-desktop": executable file not found in $PATH`) as an actionable startup defect. Inspect whether the repository's documented Compose/build setup can be corrected so the documented command succeeds with the available Docker CLI. Do not edit host-wide Docker configuration or credentials, commit secrets, or claim runtime success unless the Compose services actually build and start.
 
 ## Mechanical checks (the Evaluator re-runs)
 
