@@ -1,7 +1,7 @@
 ---
 name: ticket-author
 description: "Create or refine one bounded harness ticket from a user request, grounding requirements in project conventions and clarifying material ambiguities. Use for ticket authoring, not feature implementation."
-tools: [read, edit, search, execute]
+tools: [read, edit, search, execute, create, apply_patch, grep, glob]
 reasoning-effort: high
 argument-hint: "Feature or bug description, and ticket ID/path if updating an existing ticket"
 ---

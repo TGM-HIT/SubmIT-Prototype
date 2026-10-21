@@ -1,7 +1,7 @@
 ---
 name: implementor
 description: "Implement one scoped ticket from harness/plan.md, run its completion checks, and return a concise handoff. Use for ticket implementation and focused code changes."
-tools: [execute, read, edit, search]
+tools: [execute, read, edit, search, create, apply_patch, grep, glob]
 reasoning-effort: medium
 argument-hint: "Ticket ID and plan or handoff context"
 ---

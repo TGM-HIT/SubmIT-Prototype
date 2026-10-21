@@ -1,7 +1,7 @@
 ---
 name: archiver
 description: "Archive harness lessons with no proposals or fully applied proposals, and completed, learned harness runs while preserving unresolved and resumable history. Use for lesson cleanup, run archival, or harness history maintenance."
-tools: [execute, read, edit, search]
+tools: [execute, read, edit, search, create, apply_patch, grep, glob]
 reasoning-effort: high
 argument-hint: "Optional lesson/run IDs or archive eligible harness history"
 ---

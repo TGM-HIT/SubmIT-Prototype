@@ -1,7 +1,7 @@
 ---
 name: orchestrator
 description: "Run one planned ticket or compliance check from preflight through implementation or audit, independent evaluation, and committed closeout. Use for ticket and audit orchestration, dispatching the implementor or auditor and evaluator, and recording a terminal outcome."
-tools: [agent, execute, read, edit, search, todo]
+tools: [agent, execute, read, edit, search, todo, create, apply_patch, grep, glob]
 agents: [implementor, evaluator, auditor]
 reasoning-effort: high
 argument-hint: "Ticket ID or check ID and expected branch"

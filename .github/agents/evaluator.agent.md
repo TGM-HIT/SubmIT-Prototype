@@ -1,7 +1,7 @@
 ---
 name: evaluator
 description: "Independently evaluate a ticket diff against its acceptance criteria and handoff, rerun applicable checks, and return pass, revise, or awaiting-human. Use for code evaluation and completion review."
-tools: [execute, read, edit, search]
+tools: [execute, read, edit, search, create, apply_patch, grep, glob]
 reasoning-effort: high
 argument-hint: "Ticket, diff, and Implementor handoff note"
 ---
