@@ -1,13 +1,15 @@
 # Build context: repository root (checkstyle.xml lives there).
-FROM gradle:8.14.3-jdk23 AS build
+# No gradle:*-jdk23 image exists; use a JDK 23 base and the pinned Gradle wrapper.
+FROM eclipse-temurin:23-jdk AS build
 WORKDIR /workspace
 COPY checkstyle.xml ./
-COPY backend/build.gradle backend/settings.gradle backend/
+COPY backend/build.gradle backend/settings.gradle backend/gradlew backend/
+COPY backend/gradle backend/gradle
 WORKDIR /workspace/backend
-RUN gradle --no-daemon dependencies > /dev/null
+RUN ./gradlew --no-daemon dependencies > /dev/null
 COPY backend/src src
 # Tests and style checks gate the image build.
-RUN gradle --no-daemon test checkstyleMain bootJar
+RUN ./gradlew --no-daemon test checkstyleMain bootJar
 
 FROM eclipse-temurin:23-jre
 RUN useradd --system --uid 1001 submit
