@@ -81,7 +81,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-31](tickets/done/Dev-31.md) | done | Build a reproducible full-lifecycle documentation run |
 | [Dev-32](tickets/done/Dev-32.md) | done | Exclude generated user guides from Compliance checks |
 | [Dev-33](tickets/done/Dev-33.md) | done | Remove deprecated API usage and prevent regressions |
-| [Dev-34](tickets/Dev-34.md) | in-progress | Exclude generated artifacts from Docker build contexts |
+| [Dev-34](tickets/done/Dev-34.md) | done | Exclude generated artifacts from Docker build contexts |
 | [Dev-35](tickets/Dev-35.md) | to-do | Resolve frontend dependency warnings and vulnerabilities |
 
 ### Features
