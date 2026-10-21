@@ -15,7 +15,7 @@ java {
 
 tasks.withType(JavaCompile).configureEach {
     options.compilerArgs.add('-parameters')
-    options.compilerArgs.addAll(['-Xlint:deprecation', '-Xlint:removal', '-Werror'])
+    options.compilerArgs.addAll(['-Xlint:deprecation', '-Xlint:removal'])
 }
 
 repositories {
@@ -105,17 +105,47 @@ final class TestFixtureUse {
             [succeeded: succeeded, diagnostics: diagnostics.diagnostics, sourceSet: sourceSet]
         }
 
-        def assertRejectedDeprecatedUses = { result, String sourceName ->
+        def deprecatedDiagnostics = { result ->
+            result.diagnostics.findAll {
+                (it.kind == javax.tools.Diagnostic.Kind.WARNING
+                        || it.kind == javax.tools.Diagnostic.Kind.MANDATORY_WARNING)
+                        && (it.code.toLowerCase().contains('deprecated')
+                        || it.code.toLowerCase().contains('removal'))
+            }
+        }
+        def enforceNoDeprecatedUsage = { result ->
+            def findings = deprecatedDiagnostics(result)
+            if (!findings.isEmpty()) {
+                def details = findings.collect {
+                    "${it.source?.name}:${it.lineNumber}: ${it.getMessage(java.util.Locale.ROOT)}"
+                }.join(System.lineSeparator())
+                throw new GradleException("${result.sourceSet} uses deprecated APIs:${System.lineSeparator()}${details}")
+            }
+        }
+        def assertDeprecatedUsesRejected = { result, String sourceName ->
             def inFixture = result.diagnostics.findAll {
                 it.source != null && it.source.name.endsWith(sourceName)
             }
             def messages = inFixture.collect { it.getMessage(java.util.Locale.ROOT) }
-            if (result.succeeded
+            def deprecated = deprecatedDiagnostics(result).findAll {
+                it.source != null && it.source.name.endsWith(sourceName)
+            }
+            if (!result.succeeded
                     || !messages.any { it.contains('deprecatedCall') }
                     || !messages.any { it.contains('removeMe') && it.toLowerCase().contains('removal') }
-                    || messages.any { it.contains('supported()') }) {
+                    || messages.any { it.contains('supported()') }
+                    || deprecated.size() < 2) {
                 throw new GradleException(
-                        "${result.sourceSet} deprecation fixture did not fail only on deprecated APIs: ${messages}")
+                        "${result.sourceSet} deprecation fixture did not produce expected detailed warnings: ${messages}")
+            }
+            try {
+                enforceNoDeprecatedUsage(result)
+                throw new GradleException("${result.sourceSet} deprecation fixture was not rejected by policy.")
+            } catch (GradleException expected) {
+                if (!expected.message.contains('deprecatedCall')
+                        || !expected.message.contains('removeMe')) {
+                    throw expected
+                }
             }
             logger.lifecycle("Verified ${result.sourceSet} rejects deprecatedCall and removal-marked removeMe at ${sourceName}.")
         }
@@ -125,7 +155,7 @@ final class TestFixtureUse {
         File productionOutput = new File(fixtureRoot, 'production-classes')
         def productionResult = runCompilation('compileJava', [apiSource, productionSource],
                 productionArgs, productionOutput, null)
-        assertRejectedDeprecatedUses(productionResult, 'ProductionFixtureUse.java')
+        assertDeprecatedUsesRejected(productionResult, 'ProductionFixtureUse.java')
 
         File apiOutput = new File(fixtureRoot, 'api-classes')
         def apiResult = runCompilation('compileJava supported fixture', [apiSource], productionArgs, apiOutput, null)
@@ -134,7 +164,48 @@ final class TestFixtureUse {
         }
         File testOutput = new File(fixtureRoot, 'test-classes')
         def testResult = runCompilation('compileTestJava', [testSource], testArgs, testOutput, apiOutput.absolutePath)
-        assertRejectedDeprecatedUses(testResult, 'TestFixtureUse.java')
+        assertDeprecatedUsesRejected(testResult, 'TestFixtureUse.java')
+
+        File unrelatedWarningSource = new File(fixtureRoot, 'unrelated/UnrelatedWarningUse.java')
+        unrelatedWarningSource.parentFile.mkdirs()
+        unrelatedWarningSource.text = '''import java.util.List;
+final class UnrelatedWarningUse {
+    List<String> values = (List) List.of("value");
+}
+'''
+        File unrelatedOutput = new File(fixtureRoot, 'unrelated-classes')
+        def unrelatedResult = runCompilation('unrelated warning fixture', [unrelatedWarningSource],
+                productionArgs + ['-Xlint:unchecked'], unrelatedOutput, null)
+        def unrelatedWarnings = unrelatedResult.diagnostics.findAll {
+            it.kind == javax.tools.Diagnostic.Kind.WARNING
+                    || it.kind == javax.tools.Diagnostic.Kind.MANDATORY_WARNING
+        }
+        if (!unrelatedResult.succeeded || unrelatedWarnings.isEmpty()
+                || !deprecatedDiagnostics(unrelatedResult).isEmpty()) {
+            throw new GradleException(
+                    "Unrelated unchecked-warning fixture became fatal or was not diagnosed: " +
+                            "success=${unrelatedResult.succeeded}, diagnostics=${unrelatedResult.diagnostics}")
+        }
+        logger.lifecycle('Verified an unrelated unchecked warning is not fatal.')
+
+        def verifySourceSet = { String sourceSetName, Set<File> sources, List<String> compilerArgs,
+                                String classpath ->
+            if (sources.isEmpty()) {
+                throw new GradleException("${sourceSetName} has no Java sources to verify.")
+            }
+            File output = new File(fixtureRoot, "${sourceSetName}-verification-classes")
+            def result = runCompilation(sourceSetName, sources.toList(), compilerArgs, output, classpath)
+            if (!result.succeeded) {
+                throw new GradleException("${sourceSetName} verification compilation failed: ${result.diagnostics}")
+            }
+            enforceNoDeprecatedUsage(result)
+            logger.lifecycle("Verified ${sourceSetName} source set has no deprecated/removal diagnostics (${sources.size()} Java files).")
+        }
+
+        verifySourceSet('main', sourceSets.main.allJava.files,
+                productionArgs, sourceSets.main.compileClasspath.asPath)
+        verifySourceSet('test', sourceSets.test.allJava.files,
+                testArgs, sourceSets.test.compileClasspath.asPath)
     }
 }
 
@@ -260,4 +331,12 @@ tasks.named('check') {
 
 tasks.named('test') {
     dependsOn tasks.named('verifyDeprecationEnforcement')
+}
+
+tasks.named('compileJava') {
+    finalizedBy tasks.named('verifyDeprecationEnforcement')
+}
+
+tasks.named('compileTestJava') {
+    finalizedBy tasks.named('verifyDeprecationEnforcement')
 }
