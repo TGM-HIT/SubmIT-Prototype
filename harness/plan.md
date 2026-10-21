@@ -83,6 +83,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-33](tickets/done/Dev-33.md) | done | Remove deprecated API usage and prevent regressions |
 | [Dev-34](tickets/done/Dev-34.md) | done | Exclude generated artifacts from Docker build contexts |
 | [Dev-35](tickets/done/Dev-35.md) | done | Resolve frontend dependency warnings and vulnerabilities |
+| [Dev-36](tickets/Dev-36.md) | to-do | Remove the remaining glob deprecation and use the Node LTS image |
 
 ### Features
 
