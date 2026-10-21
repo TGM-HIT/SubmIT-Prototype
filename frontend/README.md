@@ -1,6 +1,6 @@
 # SubmIT Frontend
 
-Requires Node.js `^20.19.0 || >=22.12.0` (matching Vite's supported engine range; Node 21.x and Node 22.0–22.11 are unsupported). Install dependencies with `npm install`.
+Requires Node.js `^20.19.0 || ^22.12.0 || >=24.0.0` (matching the supported dependency engines; Node 21.x, Node 23, and Node 22.0–22.11 are unsupported). Node 23 is excluded because the patched test dependencies (Vitest 4.1.12+ and jsdom 28) do not support it. Install dependencies with `npm install`.
 
 The development server proxies `/api` to `http://localhost:8080`. Override the target with `VITE_BACKEND_URL` in the shell or a local `.env.local` file.
 

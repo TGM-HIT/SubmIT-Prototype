@@ -1331,7 +1331,9 @@ function buildUrl(options) {
 }
 
 function helpText() {
-  return `  Local browser preview (Node.js ^20.19.0 || >=22.12.0 and Chrome/Chromium required; no browser automation package).
+  return `  Local browser preview (Node.js ^20.19.0 || ^22.12.0 || >=24.0.0 and Chrome/Chromium required; no browser automation package).
+
+  Node 23 is excluded because the patched test dependencies (Vitest 4.1.12+ and jsdom 28) do not support it.
 
   npm run preview -- [options]
 
