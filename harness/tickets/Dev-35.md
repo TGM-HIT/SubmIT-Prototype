@@ -8,9 +8,11 @@ Frontend dependency installation currently emits `EBADENGINE` warnings for `nopt
 
 - Update the frontend dependency manifests and lockfile as necessary so a clean install on the reported Node.js 24.13.1 / npm 11.8.0 runtime completes without `EBADENGINE` or deprecation warnings for `whatwg-encoding`.
 - Resolve all actionable advisories reported by `npm audit` for the complete frontend dependency tree, including development dependencies. Do not use `npm audit fix --force` or suppress audit output; assess required direct-dependency upgrades and preserve supported frontend behavior.
-- Preserve the frontend's documented Node.js support range (`^20.19.0 || >=22.12.0`) and compatibility with the Node 22 Docker build stage. Do not solve engine warnings by silently narrowing the documented support range or by changing the Docker base image.
+- Change the frontend's documented Node.js support range from `^20.19.0 || >=22.12.0` to exactly `^20.19.0 || ^22.12.0 || >=24.0.0`, as authorized by the product-owner decision below, everywhere it is documented: `frontend/README.md`, `frontend/DEV-GUIDELINES.md`, and the preview help text in `frontend/scripts/preview.mjs`. State that Node 23 is excluded because the patched test dependencies (Vitest 4.1.12+ and jsdom 28) do not support it. Do not narrow the range further. Preserve compatibility with the Node 22 Docker build stage and do not change the Docker base image.
 - Keep dependency changes limited to the frontend dependency tree and associated documentation if needed to clarify verified compatibility. Do not change application behavior, add a new dependency solely to silence warnings, edit product specifications, or make unrelated upgrades.
-- Temporary scope-gate allowance for this ticket: `frontend/package-lock.json`.
+- Temporary scope-gate allowances for this ticket: `frontend/package-lock.json`, `frontend/README.md`.
+
+- Product-owner decision (2026-10-21): In run `Dev-35-20261021-1708`, Part B row 1 of `human-acceptance.md` asked which requirement gives way, because no audit-clean Vitest release supports Node 23. The owner (Markus Schabel, `20261021-1723 Europe/Vienna`) chose "A" with the rationale "Use Node 24 since it is the latest LTS release" and the disposition "Decisions given, continue"; the owner confirmed "A" in chat at 2026-10-21T17:26+0200. Option A reads: "Explicitly exclude Node 23 from the documented range (`^20.19.0 \|\| ^22.12.0 \|\| >=24.0.0`, matching jsdom 28 and Vitest 4.1.12), and amend the ticket so this is an authorized change rather than a silent narrowing."
 
 ## Mechanical checks (the Evaluator re-runs)
 
@@ -25,6 +27,6 @@ Durable automated checks:
 
 - A clean strict install on Node.js 24.13.1 / npm 11.8.0 succeeds without `EBADENGINE` warnings or the `whatwg-encoding` deprecation warning.
 - The locked frontend dependency tree has zero findings from `npm audit`, including development-only findings; the four findings observed in the 2026-10-21 baseline are resolved rather than hidden.
-- The documented Node.js support range and existing Node 22 Docker build remain compatible with the selected dependency versions.
+- The documented Node.js support range is exactly `^20.19.0 || ^22.12.0 || >=24.0.0` in every location named in Scope, matches the declared engines of the selected dependency versions, and the existing Node 22 Docker build remains compatible.
 - Frontend typecheck, tests, production build, and Docker image build pass; existing frontend behavior is preserved.
 - Dependency changes are limited to those needed for warning/advisory remediation, no audit/engine warning is suppressed, and no check is claimed unless performed.
