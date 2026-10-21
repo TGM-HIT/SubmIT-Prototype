@@ -10,8 +10,12 @@ class CommitScope {
     };
     static final String[] ALLOWED_FILES = {
         ".gitignore",
+        ".dockerignore",
         ".env.example",
+        "README.md",
+        "scripts/check-docker-build-contexts.sh",
         "Makefile",
+        "frontend/.dockerignore",
         "frontend/index.html",
         "frontend/package.json",
         "frontend/DEV-GUIDELINES.md",
