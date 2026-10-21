@@ -173,20 +173,24 @@ final class UnrelatedWarningUse {
     List<String> values = (List) List.of("value");
 }
 '''
-        File unrelatedOutput = new File(fixtureRoot, 'unrelated-classes')
-        def unrelatedResult = runCompilation('unrelated warning fixture', [unrelatedWarningSource],
-                productionArgs + ['-Xlint:unchecked'], unrelatedOutput, null)
-        def unrelatedWarnings = unrelatedResult.diagnostics.findAll {
-            it.kind == javax.tools.Diagnostic.Kind.WARNING
-                    || it.kind == javax.tools.Diagnostic.Kind.MANDATORY_WARNING
+        [compileJava: productionArgs, compileTestJava: testArgs].each { sourceSet, compilerArgs ->
+            File unrelatedOutput = new File(fixtureRoot, "${sourceSet}-unrelated-classes")
+            def unrelatedResult = runCompilation("${sourceSet} unrelated warning fixture", [unrelatedWarningSource],
+                    compilerArgs + ['-Xlint:unchecked'], unrelatedOutput, null)
+            def unrelatedWarnings = unrelatedResult.diagnostics.findAll {
+                (it.kind == javax.tools.Diagnostic.Kind.WARNING
+                        || it.kind == javax.tools.Diagnostic.Kind.MANDATORY_WARNING)
+                        && it.getMessage(java.util.Locale.ROOT).contains('unchecked')
+            }
+            if (!unrelatedResult.succeeded || unrelatedWarnings.isEmpty()
+                    || !deprecatedDiagnostics(unrelatedResult).isEmpty()) {
+                throw new GradleException(
+                        "${sourceSet} unrelated unchecked-warning fixture became fatal or was not diagnosed: " +
+                                "success=${unrelatedResult.succeeded}, diagnostics=${unrelatedResult.diagnostics}")
+            }
+            enforceNoDeprecatedUsage(unrelatedResult)
+            logger.lifecycle("Verified ${sourceSet} reports an unrelated unchecked warning without failing compilation or deprecation policy.")
         }
-        if (!unrelatedResult.succeeded || unrelatedWarnings.isEmpty()
-                || !deprecatedDiagnostics(unrelatedResult).isEmpty()) {
-            throw new GradleException(
-                    "Unrelated unchecked-warning fixture became fatal or was not diagnosed: " +
-                            "success=${unrelatedResult.succeeded}, diagnostics=${unrelatedResult.diagnostics}")
-        }
-        logger.lifecycle('Verified an unrelated unchecked warning is not fatal.')
 
         def verifySourceSet = { String sourceSetName, Set<File> sources, List<String> compilerArgs,
                                 String classpath ->
