@@ -54,12 +54,14 @@ class ApplyingGroupContractTest {
                         "404", List.of("in this period")),
                 "post " + ROOT + "/{id}/actions/{action}", Map.of(
                         "200", List.of("current revision"),
-                        "400", List.of("action enum", "JSON body", "revision", "student role", "self-only", "distinctness", "catalogue"),
+                        "400", List.of("action enum", "JSON body", "revision", "member/project UUID", "student role",
+                                "self-only", "distinctness", "catalogue"),
                         "401", List.of("Missing or invalid bearer"),
                         "403", List.of("current creator", "invited student", "accepted member"),
                         "404", List.of("Period", "in this period"),
-                        "409", List.of("locked", "stale", "dissolved", "confirmation", "duplicate invitation", "uniqueness/size",
-                                "catalogue acceptance", "unanimous consent", "creator departure", "effective pins", "capacity")));
+                        "409", List.of("locked", "stale", "dissolved", "target, confirmation or ranking is missing",
+                                "duplicate invitation", "uniqueness/size", "catalogue acceptance", "unanimous consent",
+                                "creator departure", "effective pins", "capacity")));
         for (var route : expected.entrySet()) {
             String[] parts = route.getKey().split(" ", 2);
             JsonNode operation = api.path("paths").path(parts[1]).path(parts[0]);
