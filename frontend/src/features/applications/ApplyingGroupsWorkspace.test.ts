@@ -38,13 +38,24 @@ afterEach(() => { wrappers.splice(0).forEach(wrapper => wrapper.unmount()); docu
 
 describe('G7 shared application consent and interaction', () => {
   it('shows informed consent, creator/member controls and sends only the caller’s current revision approval', async () => {
-    api.list.mockResolvedValue(page([group({ manager: false, invited: true, members: [group().members[1]!] })]))
+    const accepted = group({ manager: false, revision: 5,
+      members: group().members.map(member => ({ ...member, self: member.studentId === 'other' })) })
+    api.list.mockResolvedValueOnce(page([group({ manager: false, invited: true,
+      members: [accepted.members[0]!] })])).mockResolvedValue(page([accepted]))
     const wrapper = open(); await flushPromises()
     expect(wrapper.text()).toContain('Acceptance is not approval')
     expect(wrapper.text()).toContain('separate from the post-allocation Formal proposal')
     expect(wrapper.text()).not.toContain('Save shared ranking')
     await button(wrapper, 'Accept invitation').trigger('click'); await flushPromises()
     expect(api.change).toHaveBeenCalledWith('period', 'group', 'ACCEPT', { revision: 4 })
+    expect(wrapper.get('[aria-label="Accepted roster and revision approvals"]').text()).toContain('Approval required')
+    api.list.mockResolvedValue(page([{ ...accepted,
+      members: accepted.members.map(member => ({ ...member, approved: member.self })) }]))
+    await button(wrapper, 'Approve revision 5').trigger('click'); await flushPromises()
+    expect(api.change).toHaveBeenLastCalledWith('period', 'group', 'APPROVE', { revision: 5 })
+    expect(button(wrapper, 'Approve revision 5').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[aria-label="Accepted roster and revision approvals"]').text()).toContain('Approved this revision')
+    expect(wrapper.emitted('changed')).toHaveLength(2)
   })
 
   it('cancels destructive confirmation without mutation, restores focus, then submits with explicit replacement confirmation', async () => {

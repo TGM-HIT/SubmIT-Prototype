@@ -91,6 +91,13 @@ class ApplyingGroupApiTest {
                 Map.of("projectIds", projects), 409);
         JsonNode own = perform(get("/api/application-periods/" + period), tokens.get(2), null, 200);
         assertEquals("SHARED_SUBMITTED", text(own, "studentApplicationStatus"));
+        JsonNode effective = perform(get("/api/application-periods/" + period + "/applications/me"), tokens.get(2), null, 200);
+        assertEquals(id, text(effective, "id"));
+        assertEquals(student(2), text(effective, "studentId"));
+        assertEquals("SHARED_SUBMITTED", text(effective, "status"));
+        assertEquals(projects.stream().map(UUID::toString).toList(), java.util.stream.StreamSupport
+                .stream(array(effective, "preferences").spliterator(), false)
+                .map(preference -> text(preference, "projectId")).toList());
         perform(get(path() + "/" + id), tokens.get(3), null, 403);
         perform(get(path() + "/" + id), teacher, null, 200);
         perform(get(path() + "/" + id), admin, null, 200);
