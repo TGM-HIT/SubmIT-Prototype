@@ -85,6 +85,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-35](tickets/done/Dev-35.md) | done | Resolve frontend dependency warnings and vulnerabilities |
 | [Dev-36](tickets/Dev-36.md) | to-do | Remove the remaining glob deprecation and use the Node LTS image |
 | [Dev-37](tickets/Dev-37.md) | to-do | Align the Users & roles default-class rule with the shared role-change rule |
+| [Dev-38](tickets/Dev-38.md) | to-do | Align the frontend README public-archive description with the snapshot-browser requirement |
 
 ### Features
 
@@ -126,7 +127,7 @@ Recurring documentation and contract checks, run by the [Auditor role](roles/aud
 
 | Check | Cadence | Last run | Result | Run | Definition |
 | --- | --- | --- | --- | --- | --- |
-| [Compliance-01](checks/Compliance-01.md) | Monthly and after SPEC or guide changes | 2026-10-21T22:25+0200 | findings: 1 ticketed, 1 fixed, 1 duplicate, 0 decision needed | Compliance-01-20261021-2225 | Specification and guideline consistency |
+| [Compliance-01](checks/Compliance-01.md) | Monthly and after SPEC or guide changes | 2026-10-21T22:25+0200 | findings: 2 ticketed, 1 fixed, 0 duplicate, 0 decision needed | Compliance-01-20261021-2225 | Specification and guideline consistency |
 | [Compliance-02](checks/Compliance-02.md) | After each closed Feature or Bug; at least monthly | 2026-10-18 09:45 +0200 | findings: 3 ticketed, 0 fixed, 0 duplicate | Compliance-02-20261018-0945 | Documentation and code parity |
 | [Compliance-03](checks/Compliance-03.md) | After API changes; at least monthly | 2026-10-18 19:42 +0200 | findings: 1 ticketed, 0 decision needed, 0 fixed, 8 duplicate | Compliance-03-20261018-1941 | OpenAPI contract compliance |
 | [Compliance-04](checks/Compliance-04.md) | Weekly and after file moves or renames | 2026-10-18 19:09 +0200 | findings: 1 fixed | Compliance-04-20261018-1909 | Link and format validation |
