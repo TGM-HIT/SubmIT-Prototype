@@ -67,7 +67,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-17](tickets/done/Dev-17.md) | done | Cover formal-application validation with API tests |
 | [Dev-18](tickets/done/Dev-18.md) | done | Use generated pagination response types in API services |
 | [Dev-19](tickets/done/Dev-19.md) | done | Document OpenAPI operations and constrained fields |
-| [Dev-20](tickets/Dev-20.md) | in-progress | Align Docker startup configuration and documentation |
+| [Dev-20](tickets/done/Dev-20.md) | done | Align Docker startup configuration and documentation |
 | [Dev-21](tickets/done/Dev-21.md) | done | Assert documented pagination size defaults and maximum |
 | [Dev-22](tickets/done/Dev-22.md) | done | Align generated-artifact ticket guidance with tracking conventions |
 | [Dev-23](tickets/done/Dev-23.md) | done | Include decision pauses in the awaiting-human status definition |
