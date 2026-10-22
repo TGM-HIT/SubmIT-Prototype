@@ -107,6 +107,12 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-51](tickets/Dev-51.md) | to-do | Add automated checks for controller-to-service boundaries |
 | [Dev-52](tickets/Dev-52.md) | to-do | Anchor line-numbered ticket sources to a Git revision |
 
+### Agents
+
+| Ticket | Status | Specification |
+| --- | --- | --- |
+| [Agent-01](tickets/Agent-01.md) | to-do | Add a dedicated Agent ticket category |
+
 ### Features
 
 | Ticket | Status | Specification |
