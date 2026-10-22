@@ -138,10 +138,16 @@ class TestingEligibleFormalProjectsFixtureTest {
         assertEquals(title, requireText(project, "projectTitle"));
         assertEquals(periodLabel, requireText(project, "periodLabel"));
         assertEquals(schoolYear, requireText(project, "schoolYear"));
-        assertEquals(proposalId, project.path("formalProposalId").isNull()
-                ? null : project.path("formalProposalId").textValue());
-        assertEquals(proposalStatus, project.path("formalProposalStatus").isNull()
-                ? null : project.path("formalProposalStatus").textValue());
+        UUID.fromString(requireText(project, "periodId"));
+        JsonNode id = required(project, "formalProposalId");
+        JsonNode status = required(project, "formalProposalStatus");
+        if (proposalId == null) {
+            assertTrue(id.isNull(), "absent proposal ID must be explicit JSON null");
+            assertTrue(status.isNull(), "absent proposal status must be explicit JSON null");
+        } else {
+            assertEquals(UUID.fromString(proposalId), UUID.fromString(requireText(project, "formalProposalId")));
+            assertEquals(proposalStatus, requireText(project, "formalProposalStatus"));
+        }
     }
 
     private String requireText(JsonNode object, String name) {

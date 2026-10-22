@@ -216,6 +216,45 @@ class FormalApplicationEligibleProjectsApiTest {
     }
 
     @Test
+    void finalizedLegacyPeriodsAndMissingOrBlankProjectTitlesUseSafeDisplayFallbacks() throws Exception {
+        // Keep the finalized period/run/group references valid; only legacy display data differs.
+        for (int index : List.of(6, 7)) {
+            EligibleProject fixture = eligibleProjects.get(index);
+            StoredRecord period = store.get("application_period", fixture.periodId());
+            var periodData = store.parse(period);
+            if (index == 6) {
+                periodData.remove("label");
+                records.deleteById(fixture.projectId());
+            } else {
+                periodData.put("label", "   ");
+                StoredRecord project = store.get("idea", fixture.projectId());
+                store.update(project, project.getStatus(), store.parse(project).put("title", "   "));
+            }
+            store.update(period, period.getStatus(), periodData);
+        }
+        List<JsonNode> all = new ArrayList<>();
+        for (int page = 0; page < 2; page++) {
+            all.addAll(content(response(request("/api/formal-applications/eligible-projects", studentToken, page, 100)
+                    .andExpect(status().isOk()).andReturn())));
+        }
+        assertEquals(ELIGIBLE_COUNT, all.size());
+        for (int index : List.of(6, 7)) {
+            EligibleProject fixture = eligibleProjects.get(index);
+            JsonNode item = all.stream().filter(project ->
+                    fixture.projectId().toString().equals(requireText(project, "projectId")))
+                    .findFirst().orElseThrow();
+            assertEquals(RESPONSE_FIELDS, names(item));
+            assertEquals(fixture.projectId(), UUID.fromString(requireText(item, "projectId")));
+            assertEquals(fixture.periodId(), UUID.fromString(requireText(item, "periodId")));
+            assertEquals("Unknown project", requireText(item, "projectTitle"));
+            assertEquals(fixture.schoolYear(), requireText(item, "schoolYear"));
+            assertEquals(requireText(item, "schoolYear"), requireText(item, "periodLabel"));
+            assertTrue(required(item, "formalProposalId").isNull());
+            assertTrue(required(item, "formalProposalStatus").isNull());
+        }
+    }
+
+    @Test
     void studentsWithoutFinalizedProjectsReceiveAnHonestEmptyPage() throws Exception {
         JsonNode empty = response(request("/api/formal-applications/eligible-projects", emptyStudentToken, 0, 20)
                 .andExpect(status().isOk()).andReturn());

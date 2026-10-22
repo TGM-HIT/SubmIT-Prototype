@@ -43,6 +43,13 @@ const eligiblePage = (content: EligibleProject[], page = 0, totalPages = content
   content, page, size: 100, totalElements, totalPages,
 })
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason: Error) => void
+  const promise = new Promise<T>((success, failure) => { resolve = success; reject = failure })
+  return { promise, resolve, reject }
+}
+
 function button(page: VueWrapper, label: string) {
   const match = page.findAll('button').find((entry) => entry.text() === label)
   expect(match, `button "${label}"`).toBeDefined()
@@ -178,6 +185,7 @@ describe('Formal proposal presentation and unchanged lifecycle', () => {
     expect(api.create).not.toHaveBeenCalled()
     expect(page.find('#topic').exists()).toBe(false)
     expect(page.get('section.panel .status-badge').text()).toBe('Submitted')
+    expect(page.get('#eligible-project option:checked').text()).toContain('Submitted')
     expect(page.get('[role="status"]').text()).toBe('Formal proposal submitted.')
     expect(page.get('section.panel h2').text()).toBe(input.topic)
     expectProposalCopy(page)
@@ -275,6 +283,118 @@ describe('Formal proposal presentation and unchanged lifecycle', () => {
     expect((page.get('#eligible-project').element as HTMLSelectElement).value).toBe(otherProjectId)
     expect(page.get('[role="alert"]').text()).toContain('Something went wrong. Please retry.')
     expect(page.get('#eligible-project').findAll('option').at(2)?.text()).toContain('Needs revision')
+    expect(api.create).not.toHaveBeenCalled()
+    page.unmount()
+  })
+
+  it.each(['resolve', 'reject'] as const)('blocks selection during a pending fetch that will %s, then loads only the next project', async (outcome) => {
+    api.eligibleProjects.mockResolvedValue(eligiblePage([
+      eligible(), eligible('NEEDS_REVISION', otherProjectId, 'Second project'),
+    ]))
+    const first = deferred<FormalApplication>()
+    const second = deferred<FormalApplication>()
+    api.get.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise)
+    const page = mount(FormalApplicationPage)
+    await flushPromises()
+    await page.get('#eligible-project').setValue(projectId)
+    expect(page.get('#eligible-project').attributes('disabled')).toBeDefined()
+    // Even a synthetic change on the disabled control must not start a competing request.
+    const select = page.get('#eligible-project').element as HTMLSelectElement
+    select.value = otherProjectId
+    select.dispatchEvent(new Event('change'))
+    await flushPromises()
+    expect((page.get('#eligible-project').element as HTMLSelectElement).value).toBe(projectId)
+    expect(api.get).toHaveBeenCalledExactlyOnceWith(projectId)
+    if (outcome === 'resolve') first.resolve(record())
+    else first.reject(new Error('offline'))
+    await flushPromises()
+    expect(page.get('#eligible-project').attributes('disabled')).toBeUndefined()
+    await page.get('#eligible-project').setValue(otherProjectId)
+    expect(page.find('section.panel').exists()).toBe(false)
+    second.resolve({ ...record('NEEDS_REVISION'), projectId: otherProjectId, topic: 'Second topic' })
+    await flushPromises()
+    expect(page.get('section.panel h2').text()).toBe('Second topic')
+    expect(page.find('[role="alert"]').exists()).toBe(false)
+    await button(page, 'Edit formal proposal').trigger('click')
+    expect((page.get('#topic').element as HTMLInputElement).value).toBe('Second topic')
+    expect(api.get).toHaveBeenNthCalledWith(2, otherProjectId)
+    page.unmount()
+  })
+
+  it.each(['create', 'update', 'submit'] as const)('blocks changing projects during pending %s and synchronizes the option before reopening', async (operation) => {
+    api.eligibleProjects.mockResolvedValue(eligiblePage([
+      eligible(operation === 'create' ? null : 'NEEDS_REVISION'),
+      eligible(null, otherProjectId, 'Second project'),
+    ]))
+    api.get.mockResolvedValue(record('NEEDS_REVISION'))
+    const pending = deferred<FormalApplication>()
+    api[operation].mockReturnValueOnce(pending.promise)
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const page = mount(FormalApplicationPage)
+    await flushPromises()
+    await page.get('#eligible-project').setValue(projectId)
+    await flushPromises()
+    await button(page, operation === 'create' ? 'Start a formal proposal' : 'Edit formal proposal').trigger('click')
+    await page.get('#topic').setValue('Saved topic')
+    if (operation === 'submit') await button(page, 'Submit for teacher review').trigger('click')
+    else await page.get('form.panel').trigger('submit')
+    expect(page.get('#eligible-project').attributes('disabled')).toBeDefined()
+    const select = page.get('#eligible-project').element as HTMLSelectElement
+    select.value = otherProjectId
+    select.dispatchEvent(new Event('change'))
+    await flushPromises()
+    expect((page.get('#eligible-project').element as HTMLSelectElement).value).toBe(projectId)
+    expect((page.get('#topic').element as HTMLInputElement).value).toBe('Saved topic')
+    // Repeated pending submissions must not create a second request.
+    if (operation === 'submit') await button(page, 'Submit for teacher review').trigger('click')
+    else await page.get('form.panel').trigger('submit')
+    expect(api[operation]).toHaveBeenCalledTimes(1)
+    const status = operation === 'submit' ? 'SUBMITTED' : 'DRAFT'
+    const saved = { ...record(status), topic: 'Saved topic' }
+    pending.resolve(saved)
+    await flushPromises()
+    expect(page.get('#eligible-project').attributes('disabled')).toBeUndefined()
+    expect(page.get('#eligible-project option:checked').text()).toContain(operation === 'submit' ? 'Submitted' : 'Draft')
+    expect(page.get('#eligible-project option:checked').text()).not.toContain('No proposal')
+    await page.get('#eligible-project').setValue(otherProjectId)
+    expect(page.find('section.panel').exists()).toBe(false)
+    button(page, 'Start a formal proposal')
+    api.get.mockResolvedValueOnce(saved)
+    await page.get('#eligible-project').setValue(projectId)
+    await flushPromises()
+    expect(api.get).toHaveBeenLastCalledWith(projectId)
+    expect(page.get('section.panel h2').text()).toBe('Saved topic')
+    expect(page.text()).not.toContain('Start a formal proposal')
+    expect(api.create).toHaveBeenCalledTimes(operation === 'create' ? 1 : 0)
+    if (operation !== 'submit') {
+      await button(page, 'Edit formal proposal').trigger('click')
+      expect((page.get('#topic').element as HTMLInputElement).value).toBe('Saved topic')
+      api.update.mockResolvedValueOnce(saved)
+      await page.get('form.panel').trigger('submit')
+      await flushPromises()
+      expect(api.update).toHaveBeenLastCalledWith(applicationId, { ...input, topic: 'Saved topic' })
+      expect(api.create).toHaveBeenCalledTimes(operation === 'create' ? 1 : 0)
+    }
+    page.unmount()
+  })
+
+  it('loads authoritative status and nonempty teacher review history on selection without creating', async () => {
+    const page = await mountStudent('SUBMITTED')
+    api.get.mockResolvedValue({
+      ...record('NEEDS_REVISION'),
+      reviewHistory: {
+        content: [{ id: 'review-id', teacherId: 'teacher-id', decision: 'REQUEST_REVISION', feedback: 'Clarify the investigation method.' }],
+        page: 0, size: 20, totalElements: 1, totalPages: 1,
+      },
+    })
+    await page.get('#eligible-project').setValue(projectId)
+    await flushPromises()
+    expect(page.get('article.data-row h3').text()).toBe('Request revision')
+    expect(page.get('article.data-row p').text()).toBe('Clarify the investigation method.')
+    expect(page.text()).not.toContain('No teacher review has been recorded yet.')
+    expect(page.get('#eligible-project option:checked').text()).toContain('Needs revision')
+    button(page, 'Edit formal proposal')
+    expect(api.get).toHaveBeenCalledExactlyOnceWith(projectId)
     expect(api.create).not.toHaveBeenCalled()
     page.unmount()
   })

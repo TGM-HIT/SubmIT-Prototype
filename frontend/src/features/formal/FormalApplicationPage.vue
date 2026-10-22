@@ -5,7 +5,7 @@
       <div v-if="isStudent" class="stack">
         <div class="field">
           <label class="label" for="eligible-project">Allocated project for Formal proposal</label>
-          <select id="eligible-project" v-model="selectedProjectId" class="select" :disabled="eligibleProjectsLoading || !!eligibleProjectsError" @change="selectEligibleProject">
+          <select id="eligible-project" :value="selectedProjectId" class="select" :disabled="eligibleProjectsLoading || !!eligibleProjectsError || task.loading.value" @change="changeEligibleProject">
             <option value="">Choose an allocated project</option>
             <option v-for="project in eligibleProjects" :key="`${project.periodId}-${project.projectId}`" :value="project.projectId">{{ projectOptionLabel(project) }}</option>
           </select>
@@ -144,6 +144,23 @@ function hydrate(record: FormalApplication): void {
     milestones: record.milestones?.length ? record.milestones.map((item) => ({ text: item.text ?? '', date: item.date ?? '' })) : [{ text: '', date: '' }],
   })
 }
+function acceptProposal(record: FormalApplication): void {
+  const option = eligibleProjects.value.find((project) => project.projectId === record.projectId)
+  if (option) {
+    option.formalProposalId = record.id
+    switch (record.status) {
+      case 'DRAFT':
+      case 'NEEDS_REVISION':
+      case 'SUBMITTED':
+      case 'APPROVED':
+      case 'DECLINED':
+        option.formalProposalStatus = record.status
+    }
+  }
+  current.value = record
+  hydrate(record)
+  editing.value = false
+}
 async function loadApplication(): Promise<void> {
   current.value = null
   const result = await task.run(() => formalApi.get(projectId.value))
@@ -172,18 +189,29 @@ async function loadEligibleProjects(): Promise<void> {
     eligibleProjectsLoading.value = false
   }
 }
+function changeEligibleProject(event: Event): void {
+  const select = event.target as HTMLSelectElement
+  if (task.loading.value) {
+    select.value = selectedProjectId.value
+    return
+  }
+  selectedProjectId.value = select.value
+  void selectEligibleProject()
+}
 async function selectEligibleProject(): Promise<void> {
+  // Keep the initiating project selected until its fetch/save/submit has settled.
+  if (task.loading.value) return
   current.value = null
   editing.value = false
   task.error.value = ''
   task.success.value = ''
   clearForm()
   const project = selectedProject.value
+  projectId.value = project?.projectId ?? ''
   if (!project) return
-  projectId.value = project.projectId
   if (!project.formalProposalId) return
   const result = await task.run(() => formalApi.get(project.projectId))
-  if (result) { current.value = result; hydrate(result); editing.value = false }
+  if (result) acceptProposal(result)
 }
 function newApplication(): void {
   if (isStudent.value && (!selectedProject.value || selectedProject.value.formalProposalId)) return
@@ -226,12 +254,12 @@ async function save(): Promise<void> {
   const result = current.value?.id
     ? await task.run(() => formalApi.update(current.value!.id!, input), 'Formal proposal draft saved.')
     : await task.run(() => formalApi.create(projectId.value, input), 'Formal proposal draft created.')
-  if (result) { current.value = result; hydrate(result); editing.value = false }
+  if (result) acceptProposal(result)
 }
 async function submitApplication(): Promise<void> {
-  if (!current.value?.id || !confirm('Submit the formal proposal for teacher review?')) return
+  if (task.loading.value || !current.value?.id || !confirm('Submit the formal proposal for teacher review?')) return
   const result = await task.run(() => formalApi.submit(current.value!.id!), 'Formal proposal submitted.')
-  if (result) { current.value = result; hydrate(result); editing.value = false }
+  if (result) acceptProposal(result)
 }
 async function reviewApplication(): Promise<void> {
   if (!current.value?.id || !confirm(`Record the ${decision.value.replaceAll('_', ' ').toLowerCase()} decision?`)) return
