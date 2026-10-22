@@ -21,6 +21,7 @@ import java.util.Set;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
@@ -61,7 +62,8 @@ public class AllocationService {
         int pageNumber = 0;
         Page<StoredRecord> periods;
         do {
-            periods = store.page(PERIOD, null, null, PageRequest.of(pageNumber++, 100));
+            periods = store.page(PERIOD, null, null,
+                    PageRequest.of(pageNumber++, 100, Sort.by(Sort.Direction.ASC, "id")));
             for (StoredRecord period : periods.getContent()) {
                 StoredRecord current = store.lock(PERIOD, period.getId());
                 if (ensureInitialRunIfDue(current)) {
