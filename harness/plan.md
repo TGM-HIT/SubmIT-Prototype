@@ -43,7 +43,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Bug-21](tickets/done/Bug-21.md) | done | Remove legacy project identities from runtime and tooling |
 | [Bug-22](tickets/done/Bug-22.md) | done | Make staff assignment-privacy verification deterministic |
 | [Bug-23](tickets/done/Bug-23.md) | done | Label the post-allocation form as Formal proposal |
-| [Bug-24](tickets/Bug-24.md) | to-do | Open application periods and start their initial allocation reliably |
+| [Bug-24](tickets/done/Bug-24.md) | done | Open application periods and start their initial allocation reliably |
 | [Bug-25](tickets/done/Bug-25.md) | done | Represent the documented ALLOCATING period status |
 | [Bug-26](tickets/Bug-26.md) | to-do | Display all dates and times in the user's locale |
 | [Bug-27](tickets/Bug-27.md) | to-do | Gate project realization on formal-application approval |
