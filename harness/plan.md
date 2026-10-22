@@ -99,6 +99,8 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-43](tickets/Dev-43.md) | to-do | Describe page and student-lookup query parameters in OpenAPI |
 | [Dev-44](tickets/Dev-44.md) | to-do | Use generated API types in frontend services and pagination |
 | [Dev-45](tickets/Dev-45.md) | to-do | Use the ticket template's exact section headings in ticket files |
+| [Dev-46](tickets/Dev-46.md) | to-do | Align the Compliance ledger introduction with the Auditor follow-up prefixes |
+| [Dev-47](tickets/Dev-47.md) | to-do | Retire the spent Dev-23 ledger-edit exception from the Implementor role |
 
 ### Features
 
@@ -145,6 +147,6 @@ Recurring documentation and contract checks, run by the [Auditor role](roles/aud
 | [Compliance-02](checks/Compliance-02.md) | After each closed Feature or Bug; at least monthly | 2026-10-21T23:31+0200 | findings: 7 ticketed, 0 fixed, 1 duplicate, 1 decision needed | Compliance-02-20261021-2331 | Documentation and code parity |
 | [Compliance-03](checks/Compliance-03.md) | After API changes; at least monthly | 2026-10-22T07:44+0200 | findings: 5 ticketed, 0 fixed, 0 duplicate, 0 decision needed | Compliance-03-20261022-0744 | OpenAPI contract compliance |
 | [Compliance-04](checks/Compliance-04.md) | Weekly and after file moves or renames | 2026-10-22T08:47+0200 | findings: 1 ticketed, 3 fixed, 0 duplicate, 0 decision needed | Compliance-04-20261022-0847 | Link and format validation |
-| [Compliance-05](checks/Compliance-05.md) | Quarterly and before planning | 2026-10-18T20:17+0200 | findings: 1 ticketed, 1 decision needed, 1 duplicate, 0 fixed | Compliance-05-20261018-2017 | Documentation health |
+| [Compliance-05](checks/Compliance-05.md) | Quarterly and before planning | 2026-10-22T09:58+0200 | findings: 2 ticketed, 0 fixed, 0 duplicate, 0 decision needed | Compliance-05-20261022-0958 | Documentation health |
 | [Compliance-06](checks/Compliance-06.md) | After each role-contract change or lesson application; at least monthly | 2026-10-18T20:48+0200 | findings: 0 ticketed, 1 decision needed, 0 duplicate, 1 fixed | Compliance-06-20261018-2048 | Agent role consistency and role-file validation |
 | [Compliance-07](checks/Compliance-07.md) | After user-facing lifecycle, role, UI or guide-generation changes; at least monthly | — | — | — | User documentation completeness and correctness |
