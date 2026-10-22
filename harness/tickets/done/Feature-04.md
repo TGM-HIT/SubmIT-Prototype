@@ -6,9 +6,9 @@ The `testing` profile seeds students and teachers but no administrator, so admin
 
 ## Scope and contract
 
-- Extend the existing testing-profile seeding ([TestingAccountsConfiguration](../../../backend/src/main/java/com/flightlog/user/TestingAccountsConfiguration.java)) with two `ADMIN` accounts: `admin01` (display name `Admin 01`) and `admin02` (display name `Admin 02`). Two are seeded so one administrator can be edited, demoted, or deactivated in tests without tripping the last-administrator protection.
+- Extend the existing testing-profile seeding ([TestingAccountsConfiguration](../../../backend/src/main/java/ac/at/tgm/submit/user/TestingAccountsConfiguration.java)) with two `ADMIN` accounts: `admin01` (display name `Admin 01`) and `admin02` (display name `Admin 02`). Two are seeded so one administrator can be edited, demoted, or deactivated in tests without tripping the last-administrator protection.
 - Use the same shared testing-only password and encoder as the other seeded accounts. Seeding stays idempotent (existing usernames are not duplicated or modified) and runs only when the `testing` profile is active.
-- Do not change bootstrap-admin behavior ([BootstrapAdminConfiguration](../../../backend/src/main/java/com/flightlog/user/BootstrapAdminConfiguration.java)), authentication, authorization, endpoints, models, or any other fixture. No new dependencies; Checkstyle config unchanged.
+- Do not change bootstrap-admin behavior ([BootstrapAdminConfiguration](../../../backend/src/main/java/ac/at/tgm/submit/user/BootstrapAdminConfiguration.java)), authentication, authorization, endpoints, models, or any other fixture. No new dependencies; Checkstyle config unchanged.
 - Update the "Local workflow accounts" table in `backend/DEV-GUIDELINES.md` with an `ADMIN` row listing `admin01`, `admin02`, and note they are local/testing only and absent unless the `testing` profile is active.
 - Update `frontend/DEV-GUIDELINES.md` only if its preview section lists the testing accounts by role; add the admin accounts there (no hard-coded password beyond what is already documented). Change `frontend/scripts/` only if the preview tool cannot sign in as an administrator via its existing `--username` option and `PREVIEW_PASSWORD`; in that case make the minimal reusable fix with smoke coverage.
 - No SPEC.md change is required.

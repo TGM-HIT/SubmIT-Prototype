@@ -6,7 +6,7 @@ Recent backend logs still identify the application as `project-ideas-backend`; f
 
 Source: user-reported backend log identity and Vite reload path containing `.preview/documentation-2oIkUo/flightlog-preview-8bYGU2/WasmTtsEngine/20261005.1/offscreen.html`, plus confirmed legacy names in frontend package metadata and preview scripts. The Chromium-owned suffix in that example is not application branding and must not be renamed.
 
-[Dev-29](done/Dev-29.md) renamed the Java entry point to `ac.at.tgm.submit.SubmITlication` but explicitly preserved several build/deployment identifiers. This ticket now authorizes the remaining active identity changes listed below; it does not amend Dev-29.
+[Dev-29](Dev-29.md) renamed the Java entry point to `ac.at.tgm.submit.SubmITlication` but explicitly preserved several build/deployment identifiers. This ticket now authorizes the remaining active identity changes listed below; it does not amend Dev-29.
 
 ## Scope and contract
 

@@ -4,7 +4,7 @@
 
 The student-grade list already accepts an optional `studentId` filter for staff callers, but the approved API specification does not describe that behavior or clearly state the student's restriction. API consumers therefore cannot tell whether the filter is supported or whether it changes what a student may read.
 
-Source: Compliance-03-20261018-1757, report finding 7. The human decision record at [`human-acceptance.md`](../../runs/Compliance-03-20261018-1757/human-acceptance.md) selects option A: preserve the teacher filter and document its behavior and student restrictions. `GradingController` exposes the optional query parameter and `GradeService.listStudentGrades` applies it for staff callers while restricting students to their own grades.
+Source: Compliance-03-20261018-1757, report finding 7. The human decision record at [`human-acceptance.md`](../../runs/archive/Compliance-03-20261018-1757/human-acceptance.md) selects option A: preserve the teacher filter and document its behavior and student restrictions. `GradingController` exposes the optional query parameter and `GradeService.listStudentGrades` applies it for staff callers while restricting students to their own grades.
 
 ## Product-owner decision
 
