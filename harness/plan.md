@@ -111,7 +111,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 
 | Ticket | Status | Specification |
 | --- | --- | --- |
-| [Agent-01](tickets/Agent-01.md) | in-progress | Add a dedicated Agent ticket category |
+| [Agent-01](tickets/done/Agent-01.md) | done | Add a dedicated Agent ticket category |
 
 ### Features
 
