@@ -104,6 +104,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-48](tickets/Dev-48.md) | to-do | Remove role summaries from agent wrappers |
 | [Dev-49](tickets/Dev-49.md) | to-do | Add model guidance for the Harness Archiver |
 | [Dev-50](tickets/Dev-50.md) | to-do | Resolve preflight against scoped audit exclusions |
+| [Dev-51](tickets/Dev-51.md) | to-do | Add automated checks for controller-to-service boundaries |
 
 ### Features
 
