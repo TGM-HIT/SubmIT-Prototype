@@ -37,6 +37,7 @@ Broken links, malformed Markdown, and inconsistent formatting make documentation
 ## Report requirements
 
 - A table of every file checked with columns `File`, `Links`, `Structure`, `Format`, each `ok` or the finding number.
+- Report link-validation totals in separate categories: targets resolved to tracked files, ignored or untracked local targets, skipped targets, and broken targets. A skipped target was not checked and must not be counted as resolved; an ignored or untracked local target must not be described as tracked. Keep the existing exclusions for `bugs-and-ideas.md` and `docs/user-guide/` unchanged.
 
 ## Cadence
 

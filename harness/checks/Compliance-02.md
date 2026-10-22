@@ -24,7 +24,7 @@ The specifications and guides describe behavior, endpoints, validation, and tool
 6. Documented frontend routes, role-specific views, and states exist and are reachable by the documented roles.
 7. Documented profiles, fixture accounts, and seed contents match the fixture code.
 8. Documented commands, scripts, and prerequisites exist and match their definitions.
-9. Every `SPEC` rule that states "must", "never", or an explicit limit has at least one test that asserts it. Enumerate each such rule in the report with its source file and line, and name the asserting test class and method or state explicitly that no asserting test was found. List every uncovered rule as a finding or link it to the finding that covers it; do not rely on broad topic summaries.
+9. Every normative `SPEC` constraint has at least one test that asserts it, regardless of its wording. Include explicit requirements and limits as well as equivalent prohibitions and preconditions ("cannot", "only", "must not"), defaults, uniqueness, cardinality, and ranges. Enumerate each constraint in the report with its source file and line, and name the asserting test class and method or state explicitly that no asserting test was found. List every uncovered constraint as a finding or link it to the finding that covers it, and reconcile the complete inventory against the topic-9 summary; do not rely on broad topic summaries.
 
 ## Finding and fix rules
 

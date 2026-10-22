@@ -6,11 +6,13 @@ Documents rot quietly: sections describe removed features, TODO markers outlive 
 
 ## Inspect
 
-- The five specification and guide documents, `README.md`, and `CLAUDE.md`. Exclude the exact root path `bugs-and-ideas.md` from content inspection and all health, orphan, staleness, TODO, and removed-name scans; incidental path enumeration is not content inspection.
+- The five specification and guide documents, `README.md`, and `CLAUDE.md`. Exclude the exact root path `bugs-and-ideas.md` from content inspection and all health, orphan, staleness, TODO, and removed-name scans.
 - `harness/plan.md`, `harness/tickets/`, `harness/tickets/done/`, `harness/checks/`, `harness/roles/`, `harness/templates/`.
 - `git log` dates per file, and the source tree for any feature or name a document mentions.
 
 **Generated-guide boundary:** Before reading, searching, discovering, or traversing link targets, recursively exclude only the exact repository-root subtree `docs/user-guide/`, regardless of ignore or tracking state. Do not inspect its contents, age, links, images, chapters, orphan status, or presence or absence, and do not derive findings from them. For incoming links, inspect the authored source but skip generated-target existence, content, image, and anchor validation; do not open the target or follow its links. Keep this check's authored-input scope above, including relevant authored documentation and harness records, unchanged; similarly named paths such as `docs/user-guide-notes/` remain in scope. Do not run `make doc`. Compliance-07 alone may generate and inspect this output for its dedicated audit, but must not hand-edit, stage, or commit it. Under `## Scope inspected`, report this subtree as excluded, not inspected, and note incoming generated-target checks skipped.
+
+**Command boundary:** Apply both exclusions to every Git command and filesystem check, including status, diff, whitespace, and path-inventory commands. Use explicit in-scope path lists or pathspecs that exclude the exact root `bugs-and-ideas.md` path and recursively exclude `docs/user-guide/`; do not use an unbounded whole-worktree command. Record each exact command or script and its result under `## Scope inspected`. If an unbounded command has already run, later bounded reruns do not establish that the earlier command honored the exclusions: report the affected scope as unverified and do not claim that excluded paths were not checked.
 
 ## Topics to check
 
@@ -32,7 +34,7 @@ Documents rot quietly: sections describe removed features, TODO markers outlive 
 
 ## Commands and verification
 
-- Read-only: `git log -1 --format=%cs -- <path>`, `git ls-files`, `grep` for markers and removed names.
+- Read-only: `git log -1 --format=%cs -- <path>`, `git ls-files`, `grep` for markers and removed names. Apply the command boundary above to each invocation.
 - State the cutoff you used for "long period" and the reason; report it so runs stay comparable.
 
 ## Report requirements

@@ -41,6 +41,8 @@ Product behavior and developer workflow are documented across three SPEC files a
 ## Report requirements
 
 - Under `## Checked with no discrepancy`, include a matrix with one row per topic above and one column per document, marking each cell `consistent`, `finding <n>`, or `not covered`.
+- Define `consistent` as the document explicitly addressing the topic without contradicting the approved source of truth; mere compatibility or a related rule does not count as coverage. Define `not covered` as no relevant statement found in the inspected scope of that document.
+- For each topic, add a note identifying the inspected scope in each document. Support every `consistent` or `finding <n>` cell with exact cited lines in that note; for every `not covered` cell, state the inspected sections or scope that support the absence. A `finding <n>` cell must point to the finding that quotes the conflicting statements.
 
 ## Cadence
 
