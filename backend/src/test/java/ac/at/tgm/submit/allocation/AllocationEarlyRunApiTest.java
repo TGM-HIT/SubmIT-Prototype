@@ -207,6 +207,47 @@ class AllocationEarlyRunApiTest {
     }
 
     @Test
+    void schedulerDoesNotBackfillOrChangePreExistingFinalizedHistory() {
+        UUID finalizedPeriodId = createPeriod("FINALIZED", Instant.now().minusSeconds(1));
+        StoredRecord finalizedPeriod = store.repository().findById(finalizedPeriodId).orElseThrow();
+        UUID studentId = students.getFirst();
+        UUID projectId = projects.getFirst();
+        ObjectNode runPayload = store.object().put("initial", false).put("early", false)
+                .put("finalizedAt", Instant.now().minusSeconds(30).toString());
+        runPayload.putObject("result").putArray("assignments").addObject()
+                .put("projectId", projectId.toString()).put("studentId", studentId.toString()).put("rank", 1);
+        StoredRecord finalizedRun = store.create("allocation_run", null, finalizedPeriodId.toString(),
+                "FINALIZED", runPayload);
+        ObjectNode groupPayload = store.object().put("projectId", projectId.toString())
+                .put("periodId", finalizedPeriodId.toString()).put("allocationRunId", finalizedRun.getId().toString());
+        groupPayload.putArray("studentIds").add(studentId.toString());
+        groupPayload.putArray("applyingUnits");
+        StoredRecord finalizedGroup = store.create("project_group",
+                users.findByUsername("admin01").orElseThrow().getId().toString(),
+                projectId.toString(), "ALLOCATED", groupPayload);
+
+        StoredRecord.Details periodBefore = details(finalizedPeriod);
+        StoredRecord.Details runBefore = details(finalizedRun);
+        StoredRecord.Details groupBefore = details(finalizedGroup);
+        assertEquals("FINALIZED", periodBefore.status());
+        assertEquals("FINALIZED", runBefore.status());
+        JsonNode seededRun = store.parse(finalizedRun);
+        assertTrue(seededRun.path("initial").isBoolean());
+        assertFalse(seededRun.path("initial").booleanValue());
+
+        allocationService.startDuePeriods();
+
+        List<StoredRecord> runsAfterScheduler = store.repository()
+                .findByTypeAndParentId("allocation_run", finalizedPeriodId.toString());
+        assertEquals(0, runsAfterScheduler.stream().map(store::parse)
+                .filter(run -> run.path("initial").isBoolean() && run.path("initial").booleanValue()).count());
+        assertEquals(1, runsAfterScheduler.size());
+        assertEquals(periodBefore, details(store.repository().findById(finalizedPeriodId).orElseThrow()));
+        assertEquals(runBefore, details(store.repository().findById(finalizedRun.getId()).orElseThrow()));
+        assertEquals(groupBefore, details(store.repository().findById(finalizedGroup.getId()).orElseThrow()));
+    }
+
+    @Test
     void deadlineSchedulerFindsDuePeriodsBeyondFirstHundred() {
         List<UUID> duePeriods = new ArrayList<>();
         for (int index = 0; index < 101; index++) {
@@ -300,6 +341,11 @@ class AllocationEarlyRunApiTest {
                         .header("Authorization", bearer(adminToken)))
                 .andExpect(status().isCreated()).andReturn();
         return mapper.readTree(result.getResponse().getContentAsString());
+    }
+
+    private StoredRecord.Details details(StoredRecord record) {
+        return new StoredRecord.Details(record.getType(), record.getOwnerId(), record.getParentId(), record.getStatus(),
+                record.getReferenceType(), record.getPayload(), record.getCreatedAt());
     }
 
     private UUID createPeriod(String status, Instant closesAt) {

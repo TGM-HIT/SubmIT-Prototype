@@ -99,6 +99,11 @@ class ApplicationPeriodLifecycleApiTest {
         JsonNode atOpen = getJson("/api/application-periods/" + periodId, student01);
         assertEquals("OPEN", atOpen.path("status").asText());
         assertEquals(3, atOpen.path("projectTitles").size());
+        assertEquals(mapper.valueToTree(List.of(
+                        Map.of("projectId", projectIds.get(0).toString(), "title", "Lifecycle One"),
+                        Map.of("projectId", projectIds.get(1).toString(), "title", "Lifecycle Two"),
+                        Map.of("projectId", projectIds.get(2).toString(), "title", "Lifecycle Three"))),
+                findPeriod(getJson("/api/application-periods?size=100", student01)).path("projectTitles"));
         MvcResult created = mockMvc.perform(post(applicationPath()).header("Authorization", bearer(student01))
                         .contentType(MediaType.APPLICATION_JSON).content(applicationRequest()))
                 .andExpect(status().isCreated()).andReturn();
@@ -132,8 +137,19 @@ class ApplicationPeriodLifecycleApiTest {
 
         clock.set(CLOSES_AT);
         StoredRecord period = store.repository().findById(periodId).orElseThrow();
-        store.update(period, "CLOSED", store.parse(period));
+        assertEquals("DRAFT", period.getStatus());
         assertEquals(1, allocations.startDuePeriods());
+        List<StoredRecord> runsAfterFirstScheduler = store.repository()
+                .findByTypeAndParentId("allocation_run", periodId.toString());
+        List<? extends JsonNode> initialRuns = runsAfterFirstScheduler.stream().map(store::parse)
+                .filter(run -> run.path("initial").isBoolean() && run.path("initial").booleanValue())
+                .toList();
+        assertEquals(1, initialRuns.size());
+        assertTrue(initialRuns.getFirst().path("early").isBoolean());
+        assertFalse(initialRuns.getFirst().path("early").booleanValue());
+        assertEquals(0, allocations.startDuePeriods());
+        assertEquals(runsAfterFirstScheduler.size(), store.repository()
+                .findByTypeAndParentId("allocation_run", periodId.toString()).size());
         JsonNode atClose = getJson("/api/application-periods/" + periodId, student01);
         assertEquals("ALLOCATED", atClose.path("status").asText());
         assertEquals(3, atClose.path("projectTitles").size());
