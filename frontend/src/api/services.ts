@@ -162,6 +162,9 @@ export const allocationApi = {
 }
 
 export const formalApi = {
+  eligibleProjects(page = 0, size = 100): Promise<Page<components['schemas']['PageResponseEligibleFormalProjectResponse']>> {
+    return json(`/api/formal-applications/eligible-projects?${pageQuery(page, size)}`)
+  },
   get(projectId: string): Promise<FormalApplicationResponse> {
     return json(`/api/projects/${encodeURIComponent(projectId)}/formal-applications`)
   },

@@ -888,6 +888,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/formal-applications/eligible-projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List finalized projects eligible for the authenticated student's Formal proposal.
+         * @description Returns only projects in persisted finalized allocation groups containing the caller. The response excludes group members and other allocation data. Pagination uses zero-based page (default 0) and size (default 20, normalized to 1–100).
+         */
+        get: operations["list_6"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/audit": {
         parameters: {
             query?: never;
@@ -896,7 +916,7 @@ export interface paths {
             cookie?: never;
         };
         /** List audit events visible to the authenticated user. */
-        get: operations["list_6"];
+        get: operations["list_7"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1036,7 +1056,7 @@ export interface paths {
             cookie?: never;
         };
         /** List project pins for an application period. */
-        get: operations["list_7"];
+        get: operations["list_8"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3052,6 +3072,58 @@ export interface components {
             effectiveTo: string | null;
             /** @description Instant when the rubric was published. */
             publishedAt: string;
+        };
+        EligibleFormalProjectResponse: {
+            /**
+             * Format: uuid
+             * @description Project UUID retained for authenticated API calls; not a display label.
+             */
+            projectId: string;
+            /** @description Current project title, or Unknown project if the project no longer resolves. */
+            projectTitle: string;
+            /**
+             * Format: uuid
+             * @description UUID of the finalized allocation period; not a display label.
+             */
+            periodId: string;
+            /** @description Current period label, falling back to the school year for legacy periods. */
+            periodLabel: string;
+            /** @description School year of the finalized allocation period. */
+            schoolYear: string;
+            /**
+             * Format: uuid
+             * @description Current Formal proposal UUID, or null when no proposal exists.
+             */
+            formalProposalId: string | null;
+            /**
+             * @description Current Formal proposal status, or null when no proposal exists.
+             * @enum {string|null}
+             */
+            formalProposalStatus: "DRAFT" | "NEEDS_REVISION" | "SUBMITTED" | "APPROVED" | "DECLINED" | null;
+        };
+        PageResponseEligibleFormalProjectResponse: {
+            /** @description Items returned in this page. */
+            content: components["schemas"]["EligibleFormalProjectResponse"][];
+            /**
+             * Format: int32
+             * @description Zero-based index of this page.
+             */
+            page: number;
+            /**
+             * Format: int32
+             * @description Maximum number of items requested per page.
+             */
+            size: number;
+            /**
+             * Format: int64
+             * @description Total number of matching items across all pages.
+             */
+            totalElements: number;
+            /**
+             * Format: int32
+             * @description Number of pages containing all matching items.
+             */
+            totalPages: number;
         };
         PageResponseObjectNode: {
             /** @description Items returned in this page. */
@@ -7545,6 +7617,49 @@ export interface operations {
     list_6: {
         parameters: {
             query?: {
+                /** @description Zero-based page index; defaults to 0. */
+                page?: number;
+                /** @description Page size; defaults to 20 and is normalized to the inclusive range 1–100. */
+                size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Eligible projects listed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PageResponseEligibleFormalProjectResponse"];
+                };
+            };
+            /** @description Authentication is required. Missing or invalid bearer authentication credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Student role required. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    list_7: {
+        parameters: {
+            query?: {
                 page?: number;
                 /** @description Page size; values are normalized to the inclusive range 1–100. */
                 size?: number;
@@ -8067,7 +8182,7 @@ export interface operations {
             };
         };
     };
-    list_7: {
+    list_8: {
         parameters: {
             query?: {
                 page?: number;

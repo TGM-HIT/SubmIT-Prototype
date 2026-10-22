@@ -817,4 +817,23 @@ public final class ApiDtos {
                     types = {"string", "null"}) String cooperationPartner,
             @Schema(description = "Paginated formal-review history.") PageResponse<FormalReviewResponse> reviewHistory) {
     }
+
+    @Schema(requiredProperties = {"projectId", "projectTitle", "periodId", "periodLabel", "schoolYear",
+            "formalProposalId", "formalProposalStatus"})
+    public record EligibleFormalProjectResponse(
+            @Schema(description = "Project UUID retained for authenticated API calls; not a display label.",
+                    format = "uuid") UUID projectId,
+            @Schema(description = "Current project title, or Unknown project if the project no longer resolves.")
+            String projectTitle,
+            @Schema(description = "UUID of the finalized allocation period; not a display label.",
+                    format = "uuid") UUID periodId,
+            @Schema(description = "Current period label, falling back to the school year for legacy periods.")
+            String periodLabel,
+            @Schema(description = "School year of the finalized allocation period.") String schoolYear,
+            @Schema(description = "Current Formal proposal UUID, or null when no proposal exists.",
+                    format = "uuid", types = {"string", "null"}) UUID formalProposalId,
+            @Schema(description = "Current Formal proposal status, or null when no proposal exists.",
+                    allowableValues = {"DRAFT", "NEEDS_REVISION", "SUBMITTED", "APPROVED", "DECLINED"},
+                    types = {"string", "null"}) String formalProposalStatus) {
+    }
 }

@@ -2,12 +2,39 @@
   <section class="page">
     <p class="page-intro">This is the allocated group's official formal proposal—not the student preference rankings. Project work begins only after the teacher approves this formal proposal.</p>
     <div class="panel">
-      <form class="toolbar" @submit.prevent="loadApplication">
-        <div class="field"><label class="label" for="project-id">Allocated project ID</label><input id="project-id" v-model.trim="projectId" class="input" required aria-describedby="project-hint" /><small id="project-hint" class="muted">Enter the project identifier from your authorized allocation result.</small></div>
-        <button class="button button-secondary" :disabled="task.loading.value">Load formal proposal</button>
-      </form>
-      <p v-if="!current" class="notice">If an allocated group does not yet have a formal proposal, enter the project ID and choose “Start a formal proposal”. Group-member IDs are included only in this authenticated request and checked by the backend.</p>
-      <button v-if="!current && projectId" class="button" @click="newApplication">Start a formal proposal</button>
+      <div v-if="isStudent" class="stack">
+        <div class="field">
+          <label class="label" for="eligible-project">Allocated project for Formal proposal</label>
+          <select id="eligible-project" v-model="selectedProjectId" class="select" :disabled="eligibleProjectsLoading || !!eligibleProjectsError" @change="selectEligibleProject">
+            <option value="">Choose an allocated project</option>
+            <option v-for="project in eligibleProjects" :key="`${project.periodId}-${project.projectId}`" :value="project.projectId">{{ projectOptionLabel(project) }}</option>
+          </select>
+        </div>
+        <p v-if="eligibleProjectsLoading" class="notice" role="status">Loading your finalized allocated projects…</p>
+        <div v-else-if="eligibleProjectsError" class="error-box" role="alert">
+          <p>{{ eligibleProjectsError }}</p>
+          <button class="button button-secondary" type="button" @click="loadEligibleProjects">Retry loading projects</button>
+        </div>
+        <p v-else-if="eligibleProjects.length === 0" class="notice" role="status">No finalized allocated projects are available for a Formal proposal yet.</p>
+        <p v-else-if="!selectedProject" class="muted">Choose a project to open its current Formal proposal or start a draft.</p>
+        <p v-if="task.loading.value && selectedProject?.formalProposalId" class="notice" role="status">Loading the selected Formal proposal and review history…</p>
+        <div v-if="task.error.value && selectedProject?.formalProposalId && !current" class="error-box" role="alert">
+          <p>{{ task.error.value }}</p>
+          <button class="button button-secondary" type="button" @click="selectEligibleProject">Retry loading this proposal</button>
+        </div>
+        <div v-if="selectedProject && !selectedProject.formalProposalId && !current">
+          <p class="notice">No Formal proposal exists for this allocated project yet.</p>
+          <button class="button" type="button" @click="newApplication">Start a formal proposal</button>
+        </div>
+      </div>
+      <template v-else>
+        <form class="toolbar" @submit.prevent="loadApplication">
+          <div class="field"><label class="label" for="project-id">Allocated project ID</label><input id="project-id" v-model.trim="projectId" class="input" required aria-describedby="project-hint" /><small id="project-hint" class="muted">Enter the project identifier from your authorized allocation result.</small></div>
+          <button class="button button-secondary" :disabled="task.loading.value">Load formal proposal</button>
+        </form>
+        <p v-if="!current" class="notice">If an allocated group does not yet have a formal proposal, enter the project ID and choose “Start a formal proposal”. Group-member IDs are included only in this authenticated request and checked by the backend.</p>
+        <button v-if="!current && projectId" class="button" @click="newApplication">Start a formal proposal</button>
+      </template>
     </div>
     <form v-if="editing && current" class="panel stack" @submit.prevent="save">
       <div class="page-heading"><h2 class="section-title">Formal proposal</h2><span class="status-badge" :class="`status-${current.status?.toLowerCase()}`">{{ readable(current.status) }}</span></div>
@@ -37,7 +64,7 @@
       <div class="actions"><button class="button" :disabled="task.loading.value || concernsUsed > 2400 || resultsUsed > 2400">Save draft</button><button v-if="current.status === 'DRAFT' || current.status === 'NEEDS_REVISION'" class="button button-secondary" type="button" :disabled="task.loading.value" @click="submitApplication">Submit for teacher review</button><button class="button button-secondary" type="button" @click="editing = false">Close editor</button></div>
     </form>
     <section v-if="current && !editing" class="panel stack">
-      <div class="page-heading"><div><h2 class="section-title">{{ current.topic }}</h2><p class="muted">Project {{ current.projectId }} · {{ current.status }}</p></div><span class="status-badge">{{ readable(current.status) }}</span></div>
+      <div class="page-heading"><div><h2 class="section-title">{{ current.topic }}</h2><p v-if="isStudent && selectedProject" class="muted">{{ selectedProject.projectTitle }} · {{ selectedProject.periodLabel }} ({{ selectedProject.schoolYear }}) · {{ readable(current.status) }}</p><p v-else class="muted">Project {{ current.projectId }} · {{ current.status }}</p></div><span class="status-badge">{{ readable(current.status) }}</span></div>
       <p><strong>Initial situation</strong><br />{{ current.initialSituation }}</p>
       <p><strong>Objective</strong><br />{{ current.objective }}</p>
       <div class="notice">{{ current.status === 'APPROVED' ? 'Teacher approved this formal proposal. The group may begin project work.' : 'Project work is not yet approved to begin. Wait for the teacher’s decision on this formal proposal.' }}</div>
@@ -57,17 +84,23 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import type { components } from '../../api/schema'
+import { ApiError } from '../../api/client'
 import { formalApi } from '../../api/services'
 import { useAuthStore } from '../../stores/auth'
 import { useTask } from '../../composables/useTask'
 
 type FormalApplication = components['schemas']['FormalApplicationResponse']
+type EligibleProject = components['schemas']['EligibleFormalProjectResponse']
 type MemberDraft = { studentId: string; topic: string; investigationConcern: string; plannedResult: string }
 const auth = useAuthStore()
 const task = useTask()
 const projectId = ref('')
+const selectedProjectId = ref('')
+const eligibleProjects = ref<EligibleProject[]>([])
+const eligibleProjectsLoading = ref(true)
+const eligibleProjectsError = ref('')
 const current = ref<FormalApplication | null>(null)
 const editing = ref(false)
 const decision = ref('APPROVE')
@@ -80,9 +113,21 @@ const form = reactive({
 const concernsUsed = computed(() => form.members.reduce((total, member) => total + member.investigationConcern.length, 0))
 const resultsUsed = computed(() => form.members.reduce((total, member) => total + member.plannedResult.length, 0))
 const editableStatus = computed(() => ['DRAFT', 'NEEDS_REVISION'].includes(current.value?.status ?? ''))
+const isStudent = computed(() => auth.user?.role === 'STUDENT')
+const selectedProject = computed(() =>
+  eligibleProjects.value.find((project) => project.projectId === selectedProjectId.value) ?? null)
 
 function readable(value?: string): string {
   return (value ?? 'Unknown').replaceAll('_', ' ').toLowerCase().replace(/^./, (char) => char.toUpperCase())
+}
+function projectOptionLabel(project: EligibleProject): string {
+  const proposalStatus = project.formalProposalStatus
+    ? readable(project.formalProposalStatus)
+    : 'No proposal'
+  const periodContext = project.periodLabel === project.schoolYear
+    ? project.periodLabel
+    : `${project.periodLabel} · ${project.schoolYear}`
+  return `${project.projectTitle} — ${periodContext} — ${proposalStatus}`
 }
 function clearForm(): void {
   Object.assign(form, { topic: '', initialSituation: '', objective: '', cooperationPartner: '', members: [], milestones: [{ text: '', date: '' }] })
@@ -105,7 +150,44 @@ async function loadApplication(): Promise<void> {
   if (result) { current.value = result; hydrate(result); editing.value = false }
   else if (task.error.value.includes('404') || task.error.value.toLowerCase().includes('not found')) { task.error.value = ''; clearForm() }
 }
+async function loadEligibleProjects(): Promise<void> {
+  eligibleProjectsLoading.value = true
+  eligibleProjectsError.value = ''
+  try {
+    const results: EligibleProject[] = []
+    let page = 0
+    let totalPages = 1
+    while (page < totalPages) {
+      const response = await formalApi.eligibleProjects(page, 100)
+      results.push(...response.content)
+      totalPages = page === 0 ? Math.max(response.totalPages, 1) : totalPages
+      page += 1
+    }
+    eligibleProjects.value = results
+  } catch (reason) {
+    eligibleProjectsError.value = reason instanceof ApiError
+      ? `Unable to load your allocated projects. ${reason.message}`
+      : 'Unable to load your allocated projects. Please retry.'
+  } finally {
+    eligibleProjectsLoading.value = false
+  }
+}
+async function selectEligibleProject(): Promise<void> {
+  current.value = null
+  editing.value = false
+  task.error.value = ''
+  task.success.value = ''
+  clearForm()
+  const project = selectedProject.value
+  if (!project) return
+  projectId.value = project.projectId
+  if (!project.formalProposalId) return
+  const result = await task.run(() => formalApi.get(project.projectId))
+  if (result) { current.value = result; hydrate(result); editing.value = false }
+}
 function newApplication(): void {
+  if (isStudent.value && (!selectedProject.value || selectedProject.value.formalProposalId)) return
+  if (!projectId.value) return
   clearForm()
   form.members.push({ studentId: auth.user?.id ?? '', topic: '', investigationConcern: '', plannedResult: '' })
   current.value = {
@@ -139,6 +221,7 @@ function payload(): components['schemas']['FormalApplicationRequest'] {
   }
 }
 async function save(): Promise<void> {
+  if (task.loading.value) return
   const input = payload()
   const result = current.value?.id
     ? await task.run(() => formalApi.update(current.value!.id!, input), 'Formal proposal draft saved.')
@@ -158,4 +241,5 @@ async function reviewApplication(): Promise<void> {
   }), 'Teacher decision recorded.')
   if (result) await loadApplication()
 }
+if (isStudent.value) onMounted(loadEligibleProjects)
 </script>

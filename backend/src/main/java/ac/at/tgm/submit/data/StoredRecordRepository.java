@@ -40,6 +40,8 @@ public interface StoredRecordRepository extends JpaRepository<StoredRecord, UUID
 
     Page<StoredRecord> findByTypeAndStatus(String type, String status, Pageable pageable);
 
+    Page<StoredRecord> findByTypeAndStatusAndIdGreaterThan(String type, String status, UUID id, Pageable pageable);
+
     Page<StoredRecord> findByTypeAndOwnerIdAndStatus(String type, String ownerId, String status,
             Pageable pageable);
 

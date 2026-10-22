@@ -98,6 +98,11 @@ class OpenApiContractTest {
             Map.entry("ChangeRequest", contract("revision", "studentId,projectIds,confirm", "studentId,projectIds,confirm")),
             Map.entry("PageResponseGroupResponse", contract("content,page,size,totalElements,totalPages", "", "")),
             Map.entry("PageResponseMemberResponse", contract("content,page,size,totalElements,totalPages", "", "")),
+            Map.entry("EligibleFormalProjectResponse", contract(
+                    "projectId,projectTitle,periodId,periodLabel,schoolYear,formalProposalId,formalProposalStatus",
+                    "", "formalProposalId,formalProposalStatus")),
+            Map.entry("PageResponseEligibleFormalProjectResponse",
+                    contract("content,page,size,totalElements,totalPages", "", "")),
             Map.entry("TokenResponse", contract("token,tokenType,expiresIn,user", "", "")),
             Map.entry("UserResponse", contract("id,username,displayName,role", "className,electiveSubjectNames", "")),
             Map.entry("CatalogueEntryResponse", contract("id,name", "", "")),
@@ -234,7 +239,7 @@ class OpenApiContractTest {
 
         List<String> failures = new ArrayList<>();
         int operations = checkOperations(document.path("paths"), failures);
-        assertEquals(82, operations, "The generated API operation count should be reviewed when endpoints change.");
+        assertEquals(83, operations, "The generated API operation count should be reviewed when endpoints change.");
         JsonNode schemas = document.path("components").path("schemas");
         checkComponentSchemas(schemas, failures);
         checkResponseRequiredness(schemas, failures);
@@ -386,7 +391,7 @@ class OpenApiContractTest {
             }
         });
 
-        assertEquals(21, sizeParameters[0], "All collection size parameters should be covered.");
+        assertEquals(22, sizeParameters[0], "All collection size parameters should be covered.");
         assertTrue(failures.isEmpty(), () -> String.join(System.lineSeparator(), failures));
     }
 
@@ -632,8 +637,8 @@ class OpenApiContractTest {
                 }
             }
         }
-        assertEquals(82, operationCount);
-        assertEquals(78, protectedCount);
+        assertEquals(83, operationCount);
+        assertEquals(79, protectedCount);
         assertTrue(failures.isEmpty(), () -> String.join(System.lineSeparator(), failures));
     }
 
@@ -641,7 +646,7 @@ class OpenApiContractTest {
     void operationsDocumentApplicableStandardErrorResponses() throws Exception {
         JsonNode paths = apiDocument().path("paths");
         List<String> failures = new ArrayList<>();
-        assertEquals(77, TICKET_ERROR_CODES.size(), "The independent ticket oracle must list all operations.");
+        assertEquals(78, TICKET_ERROR_CODES.size(), "The independent ticket oracle must list all operations.");
         Set<String> actualOperations = new java.util.TreeSet<>();
         paths.properties().forEach(path -> path.getValue().properties().forEach(method -> {
             if (HTTP_METHODS.contains(method.getKey())) {
@@ -894,7 +899,7 @@ class OpenApiContractTest {
             }
             baselineCodes.computeIfAbsent(location, unused -> new TreeSet<>()).add(expected.status());
         }
-        assertEquals(77, BASELINE_SUCCESS_RESPONSES.size(), "The checked-in baseline must cover all operations.");
+        assertEquals(78, BASELINE_SUCCESS_RESPONSES.size(), "The checked-in baseline must cover all operations.");
 
         for (Map.Entry<String, Set<String>> route : TICKET_ERROR_CODES.entrySet()) {
             String[] parts = route.getKey().split(" ", 2);
@@ -1004,6 +1009,7 @@ class OpenApiContractTest {
                 post|/api/projects/{projectId}/metrics|400,403,404,409
                 get|/api/projects/{projectId}/group-grades|400,403,404
                 post|/api/projects/{projectId}/group-grades|400,403,404,409
+                get|/api/formal-applications/eligible-projects|403
                 get|/api/projects/{projectId}/formal-applications|400,403,404,409
                 post|/api/projects/{projectId}/formal-applications|400,403,409
                 post|/api/projects/{projectId}/complete|400,403,404,409
@@ -1118,6 +1124,7 @@ class OpenApiContractTest {
                 post|/api/projects/{projectId}/group-grades|403|required role or project access
                 post|/api/projects/{projectId}/group-grades|404|project, group, or requested rubric
                 post|/api/projects/{projectId}/group-grades|409|rubric binding is ineffective;transition;required reason
+                get|/api/formal-applications/eligible-projects|403|student role required
                 get|/api/projects/{projectId}/formal-applications|400|project ID;UUID
                 get|/api/projects/{projectId}/formal-applications|403|role or project access
                 get|/api/projects/{projectId}/formal-applications|404|formal application does not exist;valid allocated project group
@@ -1482,6 +1489,7 @@ class OpenApiContractTest {
                 post|/api/projects/{projectId}/metrics|201|#/components/schemas/MetricResponse
                 get|/api/projects/{projectId}/group-grades|200|#/components/schemas/PageResponseGradeResponse
                 post|/api/projects/{projectId}/group-grades|201|#/components/schemas/GradeResponse
+                get|/api/formal-applications/eligible-projects|200|#/components/schemas/PageResponseEligibleFormalProjectResponse
                 get|/api/projects/{projectId}/formal-applications|200|#/components/schemas/FormalApplicationResponse
                 post|/api/projects/{projectId}/formal-applications|201|#/components/schemas/FormalApplicationResponse
                 post|/api/projects/{projectId}/complete|200|#/components/schemas/CompletionResponse
