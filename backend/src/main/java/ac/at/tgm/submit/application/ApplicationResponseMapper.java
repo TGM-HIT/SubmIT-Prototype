@@ -31,6 +31,7 @@ class ApplicationResponseMapper {
     private static final String RUN = "allocation_run";
     private static final String GROUP = "project_group";
     private static final String APPLICATION = "student_application";
+    private static final String FINALIZED = "FINALIZED";
     private static final String PROJECT_ID = "projectId";
     private static final String STUDENT_ID = "studentId";
     private static final String TITLE = "title";
@@ -40,8 +41,7 @@ class ApplicationResponseMapper {
     private final ApplicationPeopleMapper people;
     private final ApplyingGroupRecords groups;
 
-    ApplicationResponseMapper(RecordStore store, ApplicationPeopleMapper people,
-            ApplyingGroupRecords groups) {
+    ApplicationResponseMapper(RecordStore store, ApplicationPeopleMapper people, ApplyingGroupRecords groups) {
         this.store = store;
         this.people = people;
         this.groups = groups;
@@ -72,9 +72,10 @@ class ApplicationResponseMapper {
             label = schoolYear;
         }
         StudentAssignmentResponse studentAssignment = studentAssignment(record, studentId, ownApplication);
+        String status = effectiveStatus(record, data);
         return new ApplicationPeriodResponse(record.getId(), label, schoolYear,
                 Instant.parse(data.path(OPENS_AT).asText()), Instant.parse(data.path(CLOSES_AT).asText()),
-                record.getStatus(), List.copyOf(projects), studentView ? projectTitles(record) : null,
+                status, List.copyOf(projects), studentView ? projectTitles(record) : null,
                 applicationStatus(studentId, ownApplication),
                 studentAssignment);
     }
@@ -145,10 +146,10 @@ class ApplicationResponseMapper {
 
     private List<ProjectTitleResponse> projectTitles(StoredRecord period) {
         ObjectNode payload = store.parse(period);
-        Instant now = Instant.now();
+        Instant now = groups.now();
         Instant opensAt = Instant.parse(payload.path(OPENS_AT).asText());
         Instant closesAt = Instant.parse(payload.path(CLOSES_AT).asText());
-        if (!"OPEN".equals(period.getStatus()) || now.isBefore(opensAt) || now.isAfter(closesAt)) {
+        if (now.isBefore(opensAt) || now.isAfter(closesAt)) {
             return null;
         }
         List<ProjectTitleResponse> titles = new ArrayList<>();
@@ -163,6 +164,25 @@ class ApplicationResponseMapper {
             titles.add(new ProjectTitleResponse(projectId, title));
         });
         return List.copyOf(titles);
+    }
+
+    private String effectiveStatus(StoredRecord record, ObjectNode data) {
+        if (FINALIZED.equals(record.getStatus())) {
+            return FINALIZED;
+        }
+        Instant now = groups.now();
+        Instant opensAt = Instant.parse(data.path(OPENS_AT).asText());
+        Instant closesAt = Instant.parse(data.path(CLOSES_AT).asText());
+        if (now.isBefore(opensAt)) {
+            return "DRAFT";
+        }
+        if (now.isBefore(closesAt)) {
+            return "OPEN";
+        }
+        if ("ALLOCATED".equals(record.getStatus())) {
+            return "ALLOCATED";
+        }
+        return "CLOSED";
     }
 
     PageResponse<StudentApplicationResponse> applications(Page<StoredRecord> records) {
@@ -209,7 +229,7 @@ class ApplicationResponseMapper {
 
     private StudentAssignmentResponse assignmentFromRun(StoredRecord period, String studentId,
             StoredRecord application) {
-        boolean finalized = "FINALIZED".equals(period.getStatus());
+        boolean finalized = FINALIZED.equals(period.getStatus());
         StoredRecord run = latestRelevantRun(period, finalized);
         if (run == null) {
             return new StudentAssignmentResponse("NO_RESULT", null, null, List.of());
@@ -228,7 +248,7 @@ class ApplicationResponseMapper {
 
     private StoredRecord latestRelevantRun(StoredRecord period, boolean finalized) {
         return store.repository().findByTypeAndParentIdOrderByCreatedAtDesc(RUN, period.getId().toString()).stream()
-                .filter(candidate -> finalized ? "FINALIZED".equals(candidate.getStatus())
+                .filter(candidate -> finalized ? FINALIZED.equals(candidate.getStatus())
                         : "COMPLETED".equals(candidate.getStatus())
                                 && !store.parse(candidate).path("early").asBoolean(false))
                 .findFirst().orElse(null);

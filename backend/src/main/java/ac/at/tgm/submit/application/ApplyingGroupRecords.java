@@ -9,6 +9,7 @@ import ac.at.tgm.submit.user.UserAccountRepository;
 import ac.at.tgm.submit.web.ApiException;
 import jakarta.persistence.EntityNotFoundException;
 import java.time.Instant;
+import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -23,10 +24,12 @@ public class ApplyingGroupRecords {
     public static final int MAX_MEMBERS = 5;
     private final RecordStore store;
     private final UserAccountRepository users;
+    private final Clock clock;
 
-    public ApplyingGroupRecords(RecordStore store, UserAccountRepository users) {
+    public ApplyingGroupRecords(RecordStore store, UserAccountRepository users, Clock clock) {
         this.store = store;
         this.users = users;
+        this.clock = clock;
     }
 
     public List<StoredRecord> groups(UUID periodId) {
@@ -64,9 +67,14 @@ public class ApplyingGroupRecords {
 
     public boolean locked(StoredRecord period) {
         ObjectNode data = store.parse(period);
-        Instant now = Instant.now();
-        return !"OPEN".equals(period.getStatus()) || now.isBefore(Instant.parse(data.path("opensAt").asText()))
+        Instant now = now();
+        return "FINALIZED".equals(period.getStatus())
+                || now.isBefore(Instant.parse(data.path("opensAt").asText()))
                 || !now.isBefore(Instant.parse(data.path("closesAt").asText()));
+    }
+
+    public Instant now() {
+        return Instant.now(clock);
     }
 
     public void requireOpen(StoredRecord period) {

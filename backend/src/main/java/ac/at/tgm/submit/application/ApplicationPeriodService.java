@@ -9,6 +9,7 @@ import ac.at.tgm.submit.security.AuthenticatedUser;
 import ac.at.tgm.submit.web.ApiDtos;
 import ac.at.tgm.submit.web.ApiException;
 import jakarta.persistence.EntityNotFoundException;
+import java.time.Instant;
 
 @org.springframework.stereotype.Service
 public class ApplicationPeriodService {
@@ -26,14 +27,14 @@ public class ApplicationPeriodService {
     private final RecordStore store;
     private final AuditService audit;
     private final ApplicationResponseMapper mapper;
-    private final ApplyingGroupRecords groups;
+    private final ApplicationPeriodLifecycle lifecycle;
 
     public ApplicationPeriodService(RecordStore store, AuditService audit, ApplicationResponseMapper mapper,
-            ApplyingGroupRecords groups) {
+            ApplicationPeriodLifecycle lifecycle) {
         this.store = store;
         this.audit = audit;
         this.mapper = mapper;
-        this.groups = groups;
+        this.lifecycle = lifecycle;
     }
 
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
@@ -136,6 +137,7 @@ public class ApplicationPeriodService {
         if (removesPinnedProject) {
             throw conflict("A project with allocation pins cannot be removed from the catalogue.");
         }
+        lifecycle.ensureInitialRunIfDue(period);
         store.update(period, periodStatus(payload), payload);
         audit.record(caller, "APPLICATION_PERIOD_UPDATED", PERIOD, id);
         return mapper.period(period);
@@ -147,7 +149,7 @@ public class ApplicationPeriodService {
         requireRole(caller, STUDENT);
         var period = findPeriodForUpdate(periodId);
         requireOpen(period);
-        groups.rejectSubmittedSoloWrite(periodId, caller.id().toString());
+        lifecycle.rejectSubmittedSoloWrite(periodId, caller.id().toString());
         if (store.repository().findByTypeAndParentIdAndOwnerId(APPLICATION,
                 periodId.toString(), caller.id().toString()).isPresent()) {
             throw conflict("A student may submit only one application per period.");
@@ -163,7 +165,7 @@ public class ApplicationPeriodService {
     public ApiDtos.StudentApplicationResponse myApplication(
             AuthenticatedUser caller, java.util.UUID periodId) {
         requireRole(caller, STUDENT);
-        var shared = groups.accepted(periodId, caller.id().toString());
+        var shared = lifecycle.acceptedGroup(periodId, caller.id().toString());
         if (shared != null && "SUBMITTED".equals(shared.getStatus())) {
             return mapper.sharedApplication(shared, caller.id());
         }
@@ -194,7 +196,7 @@ public class ApplicationPeriodService {
         var period = findPeriodForUpdate(java.util.UUID.fromString(application.getParentId()));
         store.refresh(application);
         requireOpen(period);
-        groups.rejectSubmittedSoloWrite(period.getId(), caller.id().toString());
+        lifecycle.rejectSubmittedSoloWrite(period.getId(), caller.id().toString());
         var payload = validateApplication(request, period);
         store.create(APPLICATION_REVISION, caller.id().toString(), id.toString(),
                 application.getStatus(), store.parse(application));
@@ -210,7 +212,7 @@ public class ApplicationPeriodService {
         var period = findPeriodForUpdate(java.util.UUID.fromString(application.getParentId()));
         store.refresh(application);
         requireOpen(period);
-        groups.rejectSubmittedSoloWrite(period.getId(), caller.id().toString());
+        lifecycle.rejectSubmittedSoloWrite(period.getId(), caller.id().toString());
         store.create(APPLICATION_REVISION, caller.id().toString(), id.toString(),
                 application.getStatus(), store.parse(application));
         store.update(application, "WITHDRAWN", store.parse(application));
@@ -294,13 +296,13 @@ public class ApplicationPeriodService {
     }
 
     private String periodStatus(ObjectNode payload) {
-        var now = java.time.Instant.now();
-        var opening = java.time.Instant.parse(payload.path(OPENS_AT).asText());
-        var closing = java.time.Instant.parse(payload.path(CLOSES_AT).asText());
+        var now = lifecycle.now();
+        var opening = Instant.parse(payload.path(OPENS_AT).asText());
+        var closing = Instant.parse(payload.path(CLOSES_AT).asText());
         if (now.isBefore(opening)) {
             return "DRAFT";
         }
-        if (!now.isAfter(closing)) {
+        if (now.isBefore(closing)) {
             return "OPEN";
         }
         return "CLOSED";
@@ -308,10 +310,10 @@ public class ApplicationPeriodService {
 
     private void requireOpen(StoredRecord period) {
         var payload = periodPayload(period);
-        var now = java.time.Instant.now();
+        var now = lifecycle.now();
         var closing = java.time.Instant.parse(payload.path(CLOSES_AT).asText());
         var opening = java.time.Instant.parse(payload.path(OPENS_AT).asText());
-        if (!"OPEN".equals(period.getStatus()) || now.isBefore(opening) || !now.isBefore(closing)) {
+        if ("FINALIZED".equals(period.getStatus()) || now.isBefore(opening) || !now.isBefore(closing)) {
             throw conflict("Applications are not open for this period.");
         }
     }
@@ -373,10 +375,10 @@ public class ApplicationPeriodService {
 
     private void requireOpenForStudents(StoredRecord period) {
         var payload = periodPayload(period);
-        var now = java.time.Instant.now();
+        var now = lifecycle.now();
         var closing = java.time.Instant.parse(payload.path(CLOSES_AT).asText());
         var opening = java.time.Instant.parse(payload.path(OPENS_AT).asText());
-        if (!"OPEN".equals(period.getStatus()) || now.isBefore(opening) || now.isAfter(closing)) {
+        if (now.isBefore(opening) || now.isAfter(closing)) {
             throw new ApiException(
                     org.springframework.http.HttpStatus.NOT_FOUND,
                     "This application period is not currently open.");

@@ -339,8 +339,10 @@ public class TestingAllocationPreviewSeeder {
         String schoolYear = completedRun ? "2027/2028" : "2028/2029";
         ObjectNode periodPayload = store.object().put(LABEL_FIELD, completedRun ? "Unassigned student" : "Waiting for result")
                 .put(SCHOOL_YEAR_FIELD, schoolYear)
-                .put(OPENS_AT_FIELD, Instant.now().minusSeconds(ONE_DAY_SECONDS).toString())
-                .put(CLOSES_AT_FIELD, Instant.now().minusSeconds(1).toString());
+                .put(OPENS_AT_FIELD, (completedRun ? Instant.now().minusSeconds(ONE_DAY_SECONDS)
+                        : Instant.now().plusSeconds(ONE_DAY_SECONDS)).toString())
+                .put(CLOSES_AT_FIELD, (completedRun ? Instant.now().minusSeconds(1)
+                        : Instant.now().plusSeconds(2 * ONE_DAY_SECONDS)).toString());
         periodPayload.set(PROJECT_IDS_FIELD, store.value(projectIds));
         StoredRecord period = store.create("application_period", admin.getId().toString(), null, periodStatus,
                 periodPayload);

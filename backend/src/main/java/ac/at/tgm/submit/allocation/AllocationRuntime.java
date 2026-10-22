@@ -1,0 +1,44 @@
+package ac.at.tgm.submit.allocation;
+
+import com.fasterxml.jackson.databind.JsonNode;
+import ac.at.tgm.submit.security.Role;
+import ac.at.tgm.submit.user.UserAccountRepository;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.UUID;
+import org.springframework.stereotype.Component;
+
+/** Shared clock and account lookups used while processing and presenting allocation runs. */
+@Component
+class AllocationRuntime {
+    private final UserAccountRepository users;
+    private final AllocationStudentDetailsMapper studentDetails;
+    private final Clock clock;
+
+    AllocationRuntime(UserAccountRepository users, AllocationStudentDetailsMapper studentDetails, Clock clock) {
+        this.users = users;
+        this.studentDetails = studentDetails;
+        this.clock = clock;
+    }
+
+    Instant now() {
+        return Instant.now(clock);
+    }
+
+    boolean isStudent(UUID id) {
+        return users.findById(id).filter(user -> user.getRole() == Role.STUDENT).isPresent();
+    }
+
+    Map<UUID, String> displayNames(Collection<UUID> studentIds) {
+        Map<UUID, String> names = new HashMap<>();
+        users.findAllById(studentIds).forEach(user -> names.put(user.getId(), user.getDisplayName()));
+        return names;
+    }
+
+    void addStudentDetails(JsonNode entries) {
+        studentDetails.addStudentDetails(entries);
+    }
+}

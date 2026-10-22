@@ -11,11 +11,17 @@ import com.fasterxml.jackson.databind.module.SimpleModule;
 import java.io.IOException;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.Clock;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class JacksonConfiguration {
+    @Bean
+    Clock applicationClock() {
+        return Clock.systemUTC();
+    }
+
     @Bean
     ObjectMapper objectMapper() {
         SimpleModule timeModule = new SimpleModule();

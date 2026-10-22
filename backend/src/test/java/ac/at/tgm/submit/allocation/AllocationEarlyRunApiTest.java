@@ -21,6 +21,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -184,6 +187,9 @@ class AllocationEarlyRunApiTest {
     @Test
     void aDraftOrFinalizedPeriodCannotStartARunAndLegacyRunsDefaultToNotEarly() throws Exception {
         UUID draftPeriod = createPeriod("DRAFT", Instant.now().plusSeconds(3600));
+        StoredRecord unopened = store.repository().findById(draftPeriod).orElseThrow();
+        store.update(unopened, "DRAFT",
+                store.parse(unopened).put("opensAt", Instant.now().plusSeconds(3600).toString()));
         mockMvc.perform(post("/api/application-periods/{id}/allocation-runs", draftPeriod)
                         .header("Authorization", bearer(adminToken)))
                 .andExpect(status().isConflict());
@@ -198,6 +204,102 @@ class AllocationEarlyRunApiTest {
         mockMvc.perform(get("/api/allocation-runs/{id}", legacyRun.getId())
                         .header("Authorization", bearer(adminToken)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.early").value(false));
+    }
+
+    @Test
+    void deadlineSchedulerFindsDuePeriodsBeyondFirstHundred() {
+        List<UUID> duePeriods = new ArrayList<>();
+        for (int index = 0; index < 101; index++) {
+            String status = switch (index % 3) {
+                case 0 -> "DRAFT";
+                case 1 -> "CLOSED";
+                default -> "ALLOCATED";
+            };
+            duePeriods.add(createPeriod(status, Instant.now().minusSeconds(1)));
+        }
+
+        assertEquals(101, allocationService.startDuePeriods());
+        for (UUID duePeriod : duePeriods) {
+            assertEquals(1, store.repository().findByTypeAndParentId("allocation_run", duePeriod.toString()).stream()
+                    .filter(run -> store.parse(run).path("initial").asBoolean(false)).count());
+        }
+    }
+
+    @Test
+    void administratorReplacementAndPeriodEditCannotSuppressDueInitialRun() throws Exception {
+        StoredRecord duePeriod = store.repository().findById(periodId).orElseThrow();
+        ObjectNode duePayload = store.parse(duePeriod).put("closesAt", Instant.now().minusSeconds(1).toString());
+        store.update(duePeriod, "OPEN", duePayload);
+
+        JsonNode replacement = startRunFor(periodId);
+        assertFalse(replacement.path("initial").asBoolean());
+        assertEquals(1, store.repository().findByTypeAndParentId("allocation_run", periodId.toString()).stream()
+                .filter(run -> store.parse(run).path("initial").asBoolean(false)).count());
+        assertEquals(0, allocationService.startDuePeriods());
+
+        UUID editedPeriodId = createPeriod("OPEN", Instant.now().minusSeconds(1));
+        mockMvc.perform(put("/api/application-periods/{id}", editedPeriodId)
+                        .header("Authorization", bearer(adminToken)).contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(Map.of(
+                                "label", "Moved deadline", "schoolYear", "2026/2027",
+                                "opensAt", Instant.now().minusSeconds(3600).toString(),
+                                "closesAt", Instant.now().plusSeconds(3600).toString(),
+                                "projectIds", projects))))
+                .andExpect(status().isOk());
+        assertEquals(1, store.repository().findByTypeAndParentId("allocation_run", editedPeriodId.toString()).stream()
+                .filter(run -> store.parse(run).path("initial").asBoolean(false)).count());
+    }
+
+    @Test
+    void concurrentSchedulerAndAdministratorReplacementCreateOneInitialRun() throws Exception {
+        StoredRecord period = store.repository().findById(periodId).orElseThrow();
+        store.update(period, "CLOSED",
+                store.parse(period).put("closesAt", Instant.now().minusSeconds(1).toString()));
+        CountDownLatch start = new CountDownLatch(1);
+        try (var executor = Executors.newFixedThreadPool(3)) {
+            var firstScheduler = executor.submit(() -> {
+                start.await();
+                return allocationService.startDuePeriods();
+            });
+            var secondScheduler = executor.submit(() -> {
+                start.await();
+                return allocationService.startDuePeriods();
+            });
+            var administrator = executor.submit(() -> {
+                start.await();
+                return startRunFor(periodId);
+            });
+            start.countDown();
+            firstScheduler.get(30, TimeUnit.SECONDS);
+            secondScheduler.get(30, TimeUnit.SECONDS);
+            JsonNode replacement = administrator.get(30, TimeUnit.SECONDS);
+            assertFalse(replacement.path("initial").asBoolean());
+        }
+        assertEquals(1, store.repository().findByTypeAndParentId("allocation_run", periodId.toString()).stream()
+                .filter(run -> store.parse(run).path("initial").asBoolean(false)).count());
+    }
+
+    @Test
+    void finalizingAReplacementEnsuresItsDuePeriodAlreadyHasAnInitialRun() throws Exception {
+        UUID duePeriodId = createPeriod("CLOSED", Instant.now().minusSeconds(1));
+        ObjectNode replacementData = store.object().put("initial", false).put("early", false);
+        replacementData.putObject("result").putArray("assignments");
+        StoredRecord replacement = store.create("allocation_run", null, duePeriodId.toString(),
+                "COMPLETED", replacementData);
+
+        mockMvc.perform(post("/api/allocation-runs/{id}/finalize", replacement.getId())
+                        .header("Authorization", bearer(adminToken)))
+                .andExpect(status().isOk());
+        assertEquals(1, store.repository().findByTypeAndParentId("allocation_run", duePeriodId.toString()).stream()
+                .filter(run -> store.parse(run).path("initial").asBoolean(false)).count());
+        assertEquals("FINALIZED", store.repository().findById(duePeriodId).orElseThrow().getStatus());
+    }
+
+    private JsonNode startRunFor(UUID id) throws Exception {
+        MvcResult result = mockMvc.perform(post("/api/application-periods/{id}/allocation-runs", id)
+                        .header("Authorization", bearer(adminToken)))
+                .andExpect(status().isCreated()).andReturn();
+        return mapper.readTree(result.getResponse().getContentAsString());
     }
 
     private UUID createPeriod(String status, Instant closesAt) {

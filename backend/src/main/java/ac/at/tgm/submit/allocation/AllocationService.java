@@ -7,7 +7,6 @@ import ac.at.tgm.submit.audit.AuditService;
 import ac.at.tgm.submit.data.RecordStore;
 import ac.at.tgm.submit.data.StoredRecord;
 import ac.at.tgm.submit.security.AuthenticatedUser;
-import ac.at.tgm.submit.user.UserAccountRepository;
 import ac.at.tgm.submit.web.ApiDtos.PageResponse;
 import ac.at.tgm.submit.web.ApiException;
 import jakarta.persistence.EntityNotFoundException;
@@ -46,30 +45,40 @@ public class AllocationService {
     private final RecordStore store;
     private final AuditService audit;
     private final AllocationEngine engine;
-    private final UserAccountRepository users;
-    private final AllocationStudentDetailsMapper studentIdentity;
+    private final AllocationRuntime runtime;
 
     public AllocationService(RecordStore store, AuditService audit, AllocationEngine engine,
-            UserAccountRepository users, AllocationStudentDetailsMapper studentIdentity) {
+            AllocationRuntime runtime) {
         this.store = store;
         this.audit = audit;
         this.engine = engine;
-        this.users = users;
-        this.studentIdentity = studentIdentity;
+        this.runtime = runtime;
     }
 
     @Transactional
     public int startDuePeriods() {
-        Page<StoredRecord> periods = store.page(PERIOD, null, null, PageRequest.of(0, 100));
         int started = 0;
-        for (StoredRecord period : periods.getContent()) {
-            StoredRecord current = store.lock(PERIOD, period.getId());
-            if (isDue(current) && !hasInitialRun(current.getId())) {
-                createRun(null, current, true, false);
-                started++;
+        int pageNumber = 0;
+        Page<StoredRecord> periods;
+        do {
+            periods = store.page(PERIOD, null, null, PageRequest.of(pageNumber++, 100));
+            for (StoredRecord period : periods.getContent()) {
+                StoredRecord current = store.lock(PERIOD, period.getId());
+                if (ensureInitialRunIfDue(current)) {
+                    started++;
+                }
             }
-        }
+        } while (periods.hasNext());
         return started;
+    }
+
+    @Transactional
+    public boolean ensureInitialRunIfDue(StoredRecord period) {
+        if (!isDue(period) || FINALIZED.equals(period.getStatus()) || hasInitialRun(period.getId())) {
+            return false;
+        }
+        createRun(null, period, true, false);
+        return true;
     }
 
     @Transactional
@@ -79,11 +88,20 @@ public class AllocationService {
         if (FINALIZED.equals(period.getStatus())) {
             throw conflict("A finalized allocation cannot be replaced.");
         }
-        boolean early = Instant.now().isBefore(Instant.parse(store.parse(period).path("closesAt").asText()));
-        if (early && !"OPEN".equals(period.getStatus())) {
+        ObjectNode periodData = store.parse(period);
+        Instant now = runtime.now();
+        Instant closesAt = Instant.parse(periodData.path("closesAt").asText());
+        boolean beforeDeadline = now.isBefore(closesAt);
+        boolean beforeOpening = now.isBefore(Instant.parse(periodData.path("opensAt").asText()));
+        boolean early = beforeDeadline;
+        if (now.equals(closesAt)) {
+            throw conflict("An allocation run cannot start at the exact deadline.");
+        }
+        if (early && beforeOpening) {
             throw conflict("An allocation run can start early only while the application period is OPEN.");
         }
         if (!early) {
+            ensureInitialRunIfDue(period);
             store.update(period, "CLOSED", store.parse(period));
         }
         StoredRecord run = createRun(caller, period, false, early);
@@ -117,6 +135,7 @@ public class AllocationService {
         if (FINALIZED.equals(period.getStatus())) {
             throw conflict("This application period is already finalized.");
         }
+        ensureInitialRunIfDue(period);
         ObjectNode payload = store.parse(run);
         JsonNode assignments = payload.path(RESULT_FIELD).path(ASSIGNMENTS_FIELD);
         Map<String, List<String>> groups = new LinkedHashMap<>();
@@ -132,7 +151,7 @@ public class AllocationService {
             engine.persistOrigin(groupPayload, payload);
             store.create(PROJECT_GROUP, caller.id().toString(), group.getKey(), "ALLOCATED", groupPayload);
         }
-        payload.put("finalizedAt", Instant.now().toString());
+        payload.put("finalizedAt", runtime.now().toString());
         store.update(run, FINALIZED, payload);
         store.update(period, FINALIZED, store.parse(period));
         audit.record(caller, "ALLOCATION_FINALIZED", RUN, id);
@@ -146,7 +165,7 @@ public class AllocationService {
         ObjectNode snapshot = snapshot(projectIds, List.of(), pins);
         snapshot.put("initial", initial);
         snapshot.put(EARLY_FIELD, early);
-        snapshot.put("createdAt", Instant.now().toString());
+        snapshot.put("createdAt", runtime.now().toString());
         StoredRecord run = store.create(RUN, caller == null ? null : caller.id().toString(),
                 period.getId().toString(), "RUNNING", snapshot);
         try {
@@ -207,8 +226,7 @@ public class AllocationService {
 
     private boolean pinTargetIsStudent(StoredRecord pin) {
         try {
-            return users.findById(UUID.fromString(pin.getOwnerId()))
-                    .filter(user -> user.getRole() == ac.at.tgm.submit.security.Role.STUDENT).isPresent();
+            return runtime.isStudent(UUID.fromString(pin.getOwnerId()));
         } catch (IllegalArgumentException exception) {
             return false;
         }
@@ -226,10 +244,7 @@ public class AllocationService {
     }
 
     private boolean isDue(StoredRecord period) {
-        if (!"OPEN".equals(period.getStatus())) {
-            return false;
-        }
-        return !Instant.now().isBefore(Instant.parse(store.parse(period).path("closesAt").asText()));
+        return !runtime.now().isBefore(Instant.parse(store.parse(period).path("closesAt").asText()));
     }
 
     private boolean hasInitialRun(UUID periodId) {
@@ -295,8 +310,7 @@ public class AllocationService {
         collectIds(result.path(UNASSIGNED_STUDENTS_FIELD), STUDENT_ID_FIELD, studentIds);
         collectIds(result.path(UNASSIGNED_PROJECTS_FIELD), PROJECT_ID_FIELD, projectIds);
 
-        Map<UUID, String> names = new HashMap<>();
-        users.findAllById(studentIds).forEach(user -> names.put(user.getId(), user.getDisplayName()));
+        Map<UUID, String> names = runtime.displayNames(studentIds);
         Map<UUID, String> titles = new HashMap<>();
         store.repository().findAllById(projectIds).stream().filter(project -> "idea".equals(project.getType()))
                 .forEach(project -> titles.put(project.getId(), store.parse(project).path("title").asText()));
@@ -305,8 +319,8 @@ public class AllocationService {
         addLabels(result.path(ASSIGNMENTS_FIELD), PROJECT_ID_FIELD, "projectTitle", titles, "Unknown project");
         addLabels(result.path(UNASSIGNED_STUDENTS_FIELD), STUDENT_ID_FIELD, "studentDisplayName", names, "Unknown student");
         addLabels(result.path(UNASSIGNED_PROJECTS_FIELD), PROJECT_ID_FIELD, "projectTitle", titles, "Unknown project");
-        studentIdentity.addStudentDetails(result.path(ASSIGNMENTS_FIELD));
-        studentIdentity.addStudentDetails(result.path(UNASSIGNED_STUDENTS_FIELD));
+        runtime.addStudentDetails(result.path(ASSIGNMENTS_FIELD));
+        runtime.addStudentDetails(result.path(UNASSIGNED_STUDENTS_FIELD));
     }
 
     private void collectIds(JsonNode entries, String field, Set<UUID> ids) {

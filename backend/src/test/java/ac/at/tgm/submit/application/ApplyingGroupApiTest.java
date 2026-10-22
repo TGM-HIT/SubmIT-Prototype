@@ -306,8 +306,8 @@ class ApplyingGroupApiTest {
         assertEquals(1, occurrences);
         StoredRecord p = store.get("application_period", period);
         for (String state : List.of("CLOSED", "FINALIZED", "OPEN")) {
-            store.update(p, state, store.parse(p).put("closesAt", "OPEN".equals(state)
-                    ? Instant.now().minusSeconds(1).toString() : Instant.now().plusSeconds(3600).toString()));
+            store.update(p, state, store.parse(p).put("closesAt", "FINALIZED".equals(state)
+                    ? Instant.now().plusSeconds(3600).toString() : Instant.now().minusSeconds(1).toString()));
             for (String action : List.of("INVITE", "REVOKE", "ACCEPT", "DECLINE", "APPROVE", "RANK",
                     "SUBMIT", "WITHDRAW", "LEAVE", "TRANSFER", "DISSOLVE")) {
                 rejectedUnchanged(1, one, action, Map.of("studentId", student(7), "projectIds", projects, "confirm", true), 409);

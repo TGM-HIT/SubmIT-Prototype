@@ -288,7 +288,14 @@ class StudentPeriodAssignmentApiTest {
                 .put("schoolYear", "2026/2027")
                 .put("opensAt", Instant.now().minusSeconds(86_400).toString())
                 .put("closesAt", Instant.now().minusSeconds(60).toString());
-        payload.putArray("projectIds").add(projectId.toString());
+        var catalogue = payload.putArray("projectIds");
+        catalogue.add(projectId.toString());
+        for (int index = 1; index < 3; index++) {
+            StoredRecord additional = store.create("idea", student.getId().toString(), null,
+                    "ACCEPTED_FOR_APPLICATIONS", objectMapper.createObjectNode()
+                            .put("title", "Assignment catalogue " + index).put("schoolYear", "2026/2027"));
+            catalogue.add(additional.getId().toString());
+        }
         return store.create("application_period", student.getId().toString(), null, status, payload).getId();
     }
 

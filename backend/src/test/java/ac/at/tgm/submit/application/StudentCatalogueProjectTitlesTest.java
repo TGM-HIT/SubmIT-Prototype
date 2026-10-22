@@ -201,6 +201,20 @@ class StudentCatalogueProjectTitlesTest {
     }
 
     @Test
+    void aPersistedDraftBecomesEffectivelyOpenAtItsConfiguredOpeningTime() throws Exception {
+        ObjectNode payload = store.parse(openPeriod).put("opensAt", Instant.now().minusSeconds(1).toString());
+        store.update(openPeriod, "DRAFT", payload);
+
+        JsonNode period = getJson("/api/application-periods/" + openPeriod.getId(), studentToken);
+        org.junit.jupiter.api.Assertions.assertEquals("OPEN", period.path("status").asText());
+        assertTitles(period, List.of("Solar project", "Water project", "Garden project"));
+        mockMvc.perform(get("/api/application-periods/{periodId}/catalogue/{projectId}",
+                        openPeriod.getId(), ideas.get(0).getId())
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk());
+    }
+
+    @Test
     void unknownAndNonAcceptedProjectsNeverRevealTitlesAndClosedCataloguesHideTitles() throws Exception {
         List<StoredRecord> hiddenIdeas = new ArrayList<>();
         for (String status : List.of("IDEA_DRAFT", "IDEA_SUBMITTED", "DECLINED", "WITHDRAWN")) {
