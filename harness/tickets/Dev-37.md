@@ -1,35 +1,35 @@
 # Dev-37. Align the Users & roles default-class rule with the shared role-change rule
 
-Draft from Compliance-01-20261021-2225: needs Ticket Author refinement before implementation
-
 ## Intent
 
-The frontend specification describes the class outcome of an administrator changing another account to Student differently from the shared product rule and the backend specification. The shared rule keeps an already explicitly assigned class and otherwise assigns `No class / unassigned`; the frontend wording defaults the class to `No class / unassigned` unless the administrator chooses a different class. For an account that already has a class when it is changed to Student, the two readings produce different outcomes, so an implementor or evaluator who follows only the frontend specification would build or judge the wrong behavior. Align the frontend specification with the shared rule.
+The frontend specification describes a different class outcome when an administrator changes another account to `STUDENT` than the shared product and backend specifications. The shared rule preserves an already assigned class and assigns `No class / unassigned` only if no class is assigned. The frontend wording instead reads as though the class defaults to `No class / unassigned` unless the administrator chooses another class. This ambiguity could cause implementors or evaluators to treat a student's existing class as replaced during a role change.
 
-Source: Compliance-01-20261021-2225, report finding 2: `docs/SPEC.md:15` says accounts changed to `STUDENT` by an administrator “receive it unless they already have an explicitly assigned class”, and `docs/SPEC.md:165` says they “receive this class unless a class is already explicitly assigned”; `backend/SPEC.md:21` says “changing an account to `STUDENT` assigns the default `No class / unassigned` class if the account has no class”; `frontend/SPEC.md:34` says “changing another role to Student defaults its class to `No class / unassigned` unless the administrator chooses a different class”.
+Source: Compliance-01-20261021-2225, report finding 2. The rule appears in `docs/SPEC.md` under People and Roles and Shared Invariants, and in `backend/SPEC.md` Authentication and users. `frontend/SPEC.md` also states that newly registered students receive the default class and that administrators can assign/reassign student classes.
 
 ## Scope and contract
 
-- Documentation only: revise the Users & roles role-change sentence in `frontend/SPEC.md:34` so it states the same outcome as `docs/SPEC.md:15`, `docs/SPEC.md:165`, and `backend/SPEC.md:21`: an account changed to Student keeps an already explicitly assigned class and otherwise receives `No class / unassigned`. Keep non-conflicting frontend detail, such as administrators choosing or reassigning a class, every student having exactly one class, and the four-subject limit.
-- `docs/SPEC.md` is the source of truth, supported by `backend/SPEC.md:21`. Do not weaken or reverse the shared rule in `docs/SPEC.md` or `backend/SPEC.md`.
-- Check related statements throughout `frontend/SPEC.md`, including the registration default class and the student assignment controls, for contradictions with the revised sentence.
-- Exclusions: no application code, tests, generated contract, generated types, or developer-guide changes. Whether the current Users & roles implementation matches the shared rule is a documentation and code parity question for Compliance-02, not part of this ticket.
+- Documentation-only change to `frontend/SPEC.md`: revise the Users & roles role-change sentence so it states that when an administrator changes an account to `STUDENT`, the account keeps its already assigned class; if it has no class, it receives the default `No class / unassigned` class.
+- Retain compatible frontend-specific behavior: administrators can reassign a student's class using the student assignment controls; every student has exactly one class; student assignments continue to enforce the four-subject limit.
+- Preserve the separate registration behavior: newly registered students receive the default class. Do not imply that registration and a role change have identical preconditions or overwrite behavior.
+- `docs/SPEC.md` is the shared source of truth and `backend/SPEC.md` states its API-level counterpart. Do not change their meaning or edit either file.
+- Inspect all class/default/role-change statements in `frontend/SPEC.md`, including the Users & roles registration paragraph and the Student class and elective-subject presentation section. Ensure neither contradicts the aligned rule.
+- Exclusions: no application code, tests, generated contract/types, developer guides, or changes to the plan ledger. Whether the current Users & roles implementation matches the shared rule is a separate implementation-parity investigation and is outside this ticket.
 
 ## Mechanical checks (the Evaluator re-runs)
 
-- Documentation-only change: no checks required.
+- Documentation-only change: no automated tests, builds, or lint checks are required. Confirm the revised wording and related frontend class statements by reviewing the named section and all matching class/default/role-change occurrences in `frontend/SPEC.md`.
 
-## One-time manual verification
+## One-time manual verification (in addition to automated tests)
 
-- None required: the change is limited to specification wording.
+- None required; this ticket changes specification wording only.
 
 ## Acceptance criteria (the Evaluator judges)
 
-- `frontend/SPEC.md` states the same role-change class outcome as `docs/SPEC.md:15`, `docs/SPEC.md:165`, and `backend/SPEC.md:21`: when an administrator changes an account to Student, an already explicitly assigned class is kept; otherwise the account receives `No class / unassigned`.
-- No other statement in `frontend/SPEC.md` contradicts that rule; the registration default class, the exactly-one-class guarantee, administrator class reassignment, and the four-subject limit remain stated.
-- The shared rule in `docs/SPEC.md` and `backend/SPEC.md` is unchanged in meaning.
-- Standard (all tickets): existing behavior outside the stated scope is unchanged; no unrelated cleanups; no application code, test, generated-contract, or generated-type change; no check is claimed that was not performed.
+- `frontend/SPEC.md` unambiguously states that an account changed to `STUDENT` keeps an already assigned class and otherwise receives `No class / unassigned`; review the Users & roles paragraph against `docs/SPEC.md` People and Roles / Shared Invariants and `backend/SPEC.md` Authentication and users.
+- Other related statements in `frontend/SPEC.md` remain consistent: newly registered students receive the default class, administrators can reassign classes, every student has exactly one class, and student assignments enforce the four-subject limit; verify all class/default occurrences in the document.
+- The shared rule in `docs/SPEC.md` and `backend/SPEC.md` is unchanged in meaning. No application code, tests, generated API contract/types, or developer-guide files are changed.
+- Standard (all tickets): behavior outside the stated scope is unchanged; no unrelated cleanups; no check is claimed that was not performed.
 
 ## Optional: Specification changes
 
-- `frontend/SPEC.md` is expected to change and must be declared in the handoff. Change `docs/SPEC.md` or `backend/SPEC.md` only for a non-substantive wording alignment that keeps the shared rule.
+- `frontend/SPEC.md` is expected to change; declare it in the handoff. Do not change `docs/SPEC.md` or `backend/SPEC.md`.

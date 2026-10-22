@@ -1,21 +1,17 @@
 # Dev-43. Describe page and student-lookup query parameters in OpenAPI
 
-Draft from Compliance-03-20261022-0744: needs Ticket Author refinement before implementation
+Draft from Compliance-03-20261022-0744: refined for implementation and evaluation
 
 ## Intent
 
-Seventeen paginated operations declare the `page` query parameter without a description. The student-lookup operation's `q` parameter also has none. API readers and generated frontend types therefore cannot tell that `page` is zero-based or what `q` filters. The four grading collections already describe `page`, so the generated contract is inconsistent across collection endpoints.
+Paginated operations expose a `page` query parameter without consistently describing its zero-based meaning. The student lookup's `q` parameter also lacks a description. API readers and generated frontend types therefore do not consistently explain how to page through results or filter students by display name.
 
-Source: Compliance-03-20261022-0744, report finding 4:
-
-- `backend/SPEC.md:9` says "`page` is zero-based, the default size is 20, and the maximum size is 100."
-- `backend/SPEC.md:47` describes `GET /api/users/students` with an "(optional display-name substring `q`)".
-- `contracts/openapi.yaml:3346-3352` declares `/api/users/students` `page` without a description, and `contracts/openapi.yaml:3361-3365` declares `q` without one.
-- In contrast, `contracts/openapi.yaml:1161-1163` documents the metrics `page` as "Zero-based page index."
+Source: Compliance-03-20261022-0744, report finding 4; `backend/SPEC.md` sections 1 and 2; `UserController.lookupStudents`; existing `OpenApiContractTest.everyCollectionSizeParameterDocumentsNormalizationAndDefault`.
 
 ## Scope and contract
 
-- Every query parameter named `page` on a paginated operation must have a non-blank description stating that it is a zero-based page index. All 21 operations are in scope; the 17 currently undescribed are:
+- Add API parameter descriptions through backend annotations or the existing OpenAPI customization mechanism. Do not change runtime behavior.
+- Add or update the `page` parameter description on all 21 paginated operations that expose it, including the 17 operations currently lacking it:
   - `/api/application-periods`
   - `/api/application-periods/{periodId}/allocation-pins`
   - `/api/application-periods/{periodId}/allocation-runs`
@@ -33,32 +29,36 @@ Source: Compliance-03-20261022-0744, report finding 4:
   - `/api/student-classes`
   - `/api/users`
   - `/api/users/students`
-- A description may also state the existing normalization of negative values to `0` (for example `Math.max(page, 0)` in `backend/src/main/java/ac/at/tgm/submit/audit/AuditController.java:31`). It must not contradict runtime behavior.
-- `q` on `GET /api/users/students` must have a description of the optional display-name substring filter. The description must be consistent with `backend/SPEC.md:47` and the implemented matching behavior.
-- `GET /api/users` already documents `role` and `q` in its operation description, so parameter descriptions for them are optional.
-- **Must not change:** parameter names, defaults, schemas, existing `size` descriptions, runtime behavior, and the SPEC files. A shared customizer like the one for `size` in `backend/src/main/java/ac/at/tgm/submit/web/OpenApiConfiguration.java:22-52` is an acceptable approach but is not required.
-- Regenerate `frontend/src/api/schema.d.ts` and commit it. Never hand-edit or commit `contracts/openapi.yaml`.
+- Each `page` description must be nonblank and state that the index is zero-based. It may additionally state that negative values are normalized to zero. Preserve the existing parameter schema: optional integer (`int32`), default `0`. The four operations that already have a zero-based description remain described and must not regress.
+- On `GET /api/users/students`, describe `q` as an optional, case-insensitive display-name substring filter; blank or whitespace-only input is ignored, and `%` and `_` are treated literally. Preserve its optional string schema and runtime behavior.
+- Do not change parameter names, requiredness, defaults, schemas, existing `size` descriptions, other endpoint descriptions, or runtime behavior. The existing operation-level description for `GET /api/users` may remain unchanged; adding descriptions to its `role` or `q` parameters is out of scope.
+- Regenerate the API contract from backend annotations; never hand-edit `contracts/openapi.yaml`. `contracts/openapi.yaml` is ignored and must be reviewed but not committed. `frontend/src/api/schema.d.ts` is tracked and must be regenerated with `npm run api:types` and committed if changed.
+- Exclusions: no specification, business logic, endpoint behavior, or unrelated OpenAPI description changes.
 
 ## Mechanical checks (the Evaluator re-runs)
 
-Durable automated tests (join the build):
+Durable API contract tests:
 
-- Add `OpenApiContractTest.everyCollectionPageParameterDocumentsZeroBasedIndex`, alongside `everyCollectionSizeParameterDocumentsNormalizationAndDefault`. For every operation with a `page` query parameter, assert a non-blank description containing "zero-based" (case-insensitive) and an unchanged default of `0`.
-- In the same class, assert that `GET /api/users/students` `q` has a non-blank description that mentions the display name.
+- Add `OpenApiContractTest.everyCollectionPageParameterDocumentsZeroBasedIndex`. Read `/v3/api-docs`, inspect every operation parameter in `query` named `page`, and assert:
+  - exactly 21 such parameters are present;
+  - every description is nonblank and contains “zero-based” case-insensitively;
+  - every parameter remains optional, has an integer `int32` schema, and has default `0`.
+- Add a test in `OpenApiContractTest` for `GET /api/users/students` `q`. Assert the parameter remains optional with a string schema, and its nonblank description identifies an optional display-name substring filter, case-insensitive matching, blank input being ignored, and literal `%`/`_` handling.
+- Preserve and run `OpenApiContractTest.everyCollectionSizeParameterDocumentsNormalizationAndDefault` to guard the existing size descriptions, defaults, and normalization contract.
 
-Standard project checks (all must pass, and the Evaluator re-runs them):
+Standard checks:
 
-- From `backend/`: `./gradlew test` and `./gradlew checkstyleMain`.
-- From `backend/`: `./gradlew generateOpenApi`, then review the `contracts/openapi.yaml` diff. From `frontend/`: `npm run api:types`.
-- From `frontend/`: `npm run typecheck`, `npm test`, and `npm run build`.
+- From `backend/`: `./gradlew test`, `./gradlew checkstyleMain`, then `./gradlew generateOpenApi` and review the `contracts/openapi.yaml` diff.
+- From `frontend/`: `npm run api:types`, then `npm run typecheck`, `npm test`, and `npm run build`.
 
-## One-time manual verification (in addition to automated tests)
+## One-time manual verification
 
-- **Implementor-performed:** review the regenerated contract diff and confirm that only `page` and `q` descriptions change. Record the summary in the handoff.
+- **Implementor-performed:** inspect the regenerated OpenAPI diff. Compare parsed YAML structures (ignore mapping-key order; preserve sequence order) and confirm that only descriptions for the 21 `page` parameters and `GET /api/users/students` `q` changed. Do not normalize any values. Confirm the regenerated tracked `frontend/src/api/schema.d.ts` contains the updated descriptions and no unrelated generated changes. Record the review in the handoff.
 
 ## Acceptance criteria (the Evaluator judges)
 
-- All 21 `page` query parameters describe a zero-based page index, and none contradicts runtime normalization.
-- `/api/users/students` `q` describes the optional display-name substring filter.
-- Parameter names, defaults, schemas, and API behavior are unchanged.
-- Standard (all tickets): the standard project checks pass; existing behavior outside the stated scope is unchanged; no unrelated cleanups; generated artifacts are never hand-edited and are regenerated and reviewed when applicable; commit generated output only when repository tracking conventions require it (for example, tracked `frontend/src/api/schema.d.ts` may need to be committed, while ignored `contracts/openapi.yaml` must not be committed); no check is claimed that was not performed.
+- Each of the 21 paginated operation `page` parameters has a nonblank description identifying its index as zero-based. All retain optionality, integer `int32` schema, and default `0`.
+- `GET /api/users/students` `q` remains an optional string and describes the implemented case-insensitive display-name substring filter, ignored blank input, and literal `%`/`_` behavior.
+- Parameter names, schemas, defaults, size descriptions, and runtime behavior are unchanged; generated contract changes are limited to the named descriptions.
+- The named OpenAPI contract tests pass, including the existing size-parameter test. Generated output is reviewed and regenerated, not hand-edited; commit `frontend/src/api/schema.d.ts` only if regeneration changes it, and do not commit ignored `contracts/openapi.yaml`.
+- Standard (all tickets): existing behavior outside the stated scope is unchanged; no unrelated cleanups; generated artifacts are never hand-edited and are regenerated and reviewed when applicable; no check is claimed that was not performed.

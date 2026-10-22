@@ -1,47 +1,64 @@
-# Bug-27. Gate project realization on formal-application approval
-
-Draft from Compliance-02-20261021-2331: needs Ticket Author refinement before implementation
+# Bug-27. Gate project work on formal-application approval
 
 ## Intent
 
-The specifications let a group begin its project work only after a teacher approves the group's formal application. The backend records that approval only on the formal-application record and never consults it anywhere else. No backend status or operation marks project realization as started, and the backend's only check for whether project work has started treats a project as active as soon as it is accepted into the application catalogue. Artefact upload, removal, publication review, and project completion therefore succeed for a project whose formal application is a draft, submitted, returned for revision, declined, or missing. Students, teachers, and administrators can act on such a project as if its realization had started before the required approval.
+The specifications require teacher approval of a group's formal project application before project work proceeds, but the backend does not enforce that condition. The artifact lifecycle currently treats an accepted project as active without checking its formal application, and grading writes check group access but not formal approval. An authorized user can therefore upload or change artefacts, record grades or metrics, or complete a project while its formal application is missing or not approved.
 
-Source: Compliance-02-20261021-2331, report finding 9: `backend/SPEC.md:129` “Project realization cannot be marked started until a teacher approves the formal application.”; `docs/SPEC.md:154` the formal application “requires teacher approval before project work proceeds.”; `docs/SPEC.md:67` “The group may begin the approved project work after teacher approval.” Code: `backend/src/main/java/ac/at/tgm/submit/formal/FormalApplicationService.java:108` maps `APPROVE` to `APPROVED`, and `:114` stores the status on the formal application only. `backend/src/main/java/ac/at/tgm/submit/archive/ArtifactService.java:32-33` lists `ACCEPTED_FOR_APPLICATIONS` among `ACTIVE_PROJECT_STATUSES`, and `:271-275` (`requireActiveProject`: “Artefacts cannot be changed after project completion or before project work starts.”) does not consult the formal application. That check guards upload (`:64`), removal (`:99`), publication review (`:117`), and completion (`:181`). Test: `IdeaOwnershipControllerTest#multiOwnerIdeaCompletesAcceptanceSupervisionCatalogueAllocationAndFormalApplication` asserts only that approval stores `APPROVED` (`backend/src/test/java/ac/at/tgm/submit/idea/IdeaOwnershipControllerTest.java:391-400`); no test asserts the start gate.
+Source: Compliance-02-20261021-2331, report finding 9. The rule is established in `docs/SPEC.md` formal-application section and invariant, and `backend/SPEC.md` formal-application rules. `FormalApplicationService` records teacher decisions as `APPROVED`, `NEEDS_REVISION`, or `DECLINED`. `ArtifactService.requireActiveProject` currently checks only project status for upload, removal, publication review, and completion. Grading writes in `GradeService`, `MetricService`, and `FinalGradeService` do not check the formal-application status.
 
 ## Scope and contract
 
-- Backend project lifecycle in `backend/src/main/java/ac/at/tgm/submit/archive/` and `backend/src/main/java/ac/at/tgm/submit/formal/`, plus `backend/src/main/java/ac/at/tgm/submit/grading/` if grading is part of the gate; their tests under `backend/src/test/java/ac/at/tgm/submit/`.
-- Required behavior: the backend must not mark or treat a project's realization as started until a teacher has approved its formal application. This includes the existing project-work-started check at `backend/src/main/java/ac/at/tgm/submit/archive/ArtifactService.java:271-275`. After approval, the operations that check guards keep working as they do today.
-- The Ticket Author establishes from the approved specifications how the started state is represented and which operations count as project realization. Candidates are artefact upload, removal, and publication review; project completion; and grade and metric recording. Grading currently checks only for an allocated group record (`backend/src/main/java/ac/at/tgm/submit/grading/ProjectAccess.java:29-35`). If the specifications do not settle which operations are gated, record the open question and request a user decision before implementing that part. Never weaken the specifications without that decision.
-- Pre-existing data and tests: state how projects that already have artefacts, grades, or a completion record but no approved formal application are handled. Cover tests that rely on the current behavior, for example `ArtifactServiceTest`, whose tests create their projects with `IN_PROGRESS`, a status production code never writes (`backend/src/test/java/ac/at/tgm/submit/archive/ArtifactServiceTest.java:48`, `:60`, `:73`, `:92`; helper `:123`).
-- Exclusions: administrator grading permissions (Feature-24) and formal-application authorization and immutability tests (Dev-40 part (i)). The frontend already says that project work may begin only after approval (`frontend/src/features/formal/FormalApplicationPage.vue:43`, done Bug-23); change it only if the backend representation changes what the view receives.
-- If API responses, statuses, or error documentation change, regenerate and review `contracts/openapi.yaml`, and regenerate `frontend/src/api/schema.d.ts` if the frontend consumes the change.
+- Enforce the rule in backend services for every project-work mutation:
+  - `POST /api/projects/{projectId}/artifacts`
+  - `DELETE /api/artifacts/{artifactId}`
+  - `POST /api/artifacts/{artifactId}/publication-review` for submission, approval, rejection, and unpublication decisions
+  - `POST /api/projects/{projectId}/complete`
+  - `POST /api/projects/{projectId}/student-grades`
+  - `POST /api/projects/{projectId}/student-grades/{gradeId}/revisions`
+  - `POST /api/projects/{projectId}/group-grades`
+  - `POST /api/projects/{projectId}/metrics`
+  - `PUT /api/projects/{projectId}/final-grade`
+- The project's formal application must have status `APPROVED` for these mutations. Treat a missing application and each non-approved state (`DRAFT`, `SUBMITTED`, `NEEDS_REVISION`, or `DECLINED`) as not approved. Approval is the sole start authorization predicate for these writes; do not add a separate started status, flag, or endpoint.
+- For an authenticated caller who otherwise has the required role and project access, reject a gated write without mutation using HTTP `409 Conflict` and the existing API error response shape. Preserve existing authentication, role, ownership, project-lifecycle, validation, and other domain checks; this gate must not grant permissions or replace their existing errors.
+- Apply the same service-layer rule to every route; do not rely on UI visibility or controller-only checks. A write is eligible to proceed after approval only if its other existing preconditions also pass.
+- Keep the formal-application workflow itself available before approval: group members can create, update, and submit the formal application, and an authorized teacher can review it. These operations are not project realization and must remain usable to reach `APPROVED`.
+- Leave reads available under their existing authorization and lifecycle rules regardless of formal-application status. This includes authenticated artifact catalogue/metadata/content, grade and metric histories, final-grade history, and public archive reads for completed projects. Do not delete or rewrite legacy artefacts, grades, metrics, final grades, audit records, or completion records. Do not infer or synthesize approval for pre-existing projects; block their further gated mutations unless their formal application is actually `APPROVED`.
+- Preserve existing role policy, including the current distinction between teacher-only artifact/completion actions and grading actions that also accept `ADMIN`. Administrator grading permission is separately scoped by Feature-24 and is not decided here.
+- Backend API annotations must document the formal-approval 409 condition and `ApiErrorResponse` for all affected mutation routes. These routes already document 409 for other lifecycle or domain conflicts; preserve their existing response codes and successful response shapes/statuses while adding the approval condition to each route's response description. Update `OpenApiContractTest`'s `TICKET_ERROR_CODES`, `TICKET_ERROR_CONDITIONS`, and preserved-error-description baseline as needed. Regenerate `contracts/openapi.yaml` with `./gradlew generateOpenApi` from `backend/` and review its diff; the YAML is ignored by Git and must not be committed. `frontend/src/api/schema.d.ts` is tracked; run `npm run api:types` from `frontend/` only if the frontend type-generation input consumes these response-status annotation changes, and commit that generated file only if the generator changes it.
+- No product `SPEC.md` change is required: the existing specifications already require approval before work proceeds. Do not change frontend behavior or formal-application lifecycle rules in this ticket.
 
 ## Mechanical checks (the Evaluator re-runs)
 
 Durable automated tests (join the build):
 
-- For each gated operation, a test shows that the backend rejects it without side effects for a project whose formal application is missing, `DRAFT`, `SUBMITTED`, `NEEDS_REVISION`, or `DECLINED`, and accepts it after a teacher approves the application.
-- If an explicit started state or transition is introduced, a test asserts that it cannot be set before approval and is set or settable after approval.
-- Existing `ArtifactServiceTest`, `GradingServiceTest`, `IdeaOwnershipControllerTest`, and `FormalApplicationValidationApiTest` scenarios still pass, adjusted only where they relied on starting work without approval.
+- Add public-HTTP regression coverage in `ProjectWorkApprovalApiTest` (or an equivalently named API-level test class):
+  - `rejectsEveryProjectWorkMutationUntilFormalApplicationIsApproved` exercises each of the nine routes above for a missing application and for each of `DRAFT`, `SUBMITTED`, `NEEDS_REVISION`, and `DECLINED`. Use otherwise authorized actors and valid operation-specific inputs. Assert HTTP 409 with the common error response shape and verify no record, rubric binding, audit event, publication state, grade history, or project completion state was created, deleted, or changed.
+  - `allowsEachProjectWorkMutationAfterTeacherApproval` exercises each of the same routes with a formal application approved through the teacher review API. Give each operation otherwise valid role, access, lifecycle state, and required data so the approval gate is the only varied condition; assert each operation reaches its existing success response.
+  - `preservesExistingAuthorizationForUnapprovedProjects` verifies callers without the required role or project access still receive the existing authorization failure rather than learning or bypassing the approval gate; cover a teacher-only artifact/completion operation, a grading write, and an artifact write by a non-member.
+  - `keepsProjectReadsAvailableWithoutFormalApproval` verifies authenticated artefact, grading, metric, and final-grade reads still work for a project with an existing non-approved application, and that public archive reads for a completed legacy project remain available. Use matching fixture data with only the application status varied where applicable.
+  - `formalApplicationWorkflowCanReachApprovalBeforeProjectWork` verifies group creation/update/submission and teacher review remain available and that teacher approval unlocks the gated mutations.
+- In `OpenApiContractTest#operationsDocumentApplicableStandardErrorResponses` and `#allOperationSuccessResponsesMatchBaselineAndNoUnlistedCodesAreAdded`, update the route/error-condition inventories and preserved 409 descriptions so all nine mutation routes document formal-approval conflict with `ApiErrorResponse`, without adding or removing response codes. Retain the existing success-response baseline.
+- Update `ArtifactServiceTest` and `GradingServiceTest` fixtures that exercise existing successful work operations so they contain an approved formal application. Keep separate assertions for non-approval rejection in the API-level coverage above. Preserve `IdeaOwnershipControllerTest` and `FormalApplicationValidationApiTest` lifecycle and authorization coverage.
+- Before implementing the guard, reproduce the existing defect in the API test setup: a valid artifact upload to an allocated project with a `DRAFT` formal application currently succeeds. Record the observed baseline in the implementation handoff; then make the regression test assert the required 409 rejection.
 
 Standard project checks:
 
 - From `backend/`: `./gradlew test` and `./gradlew checkstyleMain`.
-- API changes: from `backend/` run `./gradlew generateOpenApi`, review the `contracts/openapi.yaml` diff, then from `frontend/` run `npm run api:types` if the frontend consumes the change.
-- Frontend changes, from `frontend/`: `npm run typecheck`, `npm test`, and `npm run build`.
+- Backend API annotation changes: from `backend/` run `./gradlew generateOpenApi` and review `contracts/openapi.yaml`; from `frontend/`, run `npm run api:types` only if the frontend consumes the response-status annotation change.
+- Documentation-only or harness-only ticket authoring requires no project tests. Implementation changes in this ticket require the backend checks above.
+
+## One-time manual verification (in addition to automated tests)
+
+- No separate manual check is required. The public-HTTP automated scenarios above cover the affected routes and states; the implementor must report any baseline reproduction result and the automated check results without claiming checks that were not run.
 
 ## Acceptance criteria (the Evaluator judges)
 
-- No backend operation marks or treats a project's realization as started before a teacher approves its formal application; after approval, the gated operations succeed as before.
-- The ticket records the gated operations and the representation of the started state, each traced to the approved specifications or to a recorded user decision.
-- Rejections use the documented error response shape and leave stored records unchanged.
-- Standard (all tickets): the standard project checks pass; existing behavior outside the stated scope is unchanged; no unrelated cleanups; generated artifacts are never hand-edited and are regenerated and reviewed when applicable; commit generated output only when repository tracking conventions require it; no check is claimed that was not performed.
-
-## Optional: Current-state triage
-
-- Before editing, reproduce the current behavior with a test or a documented request: a teacher uploads an artefact to a project whose formal application is not approved. Record the result in the handoff.
-
-## Optional: Specification changes
-
-Only after a recorded user decision may `backend/SPEC.md:129`, `docs/SPEC.md:67`, or `docs/SPEC.md:154` change; declare any such change in the handoff.
+- Every listed project-work mutation is rejected with HTTP 409 and the common error body when the formal application is missing or in `DRAFT`, `SUBMITTED`, `NEEDS_REVISION`, or `DECLINED`; `rejectsEveryProjectWorkMutationUntilFormalApplicationIsApproved` covers every route/state combination.
+- A teacher's `APPROVED` decision permits each listed mutation to proceed subject to its existing authorization, project lifecycle, validation, and domain preconditions; `allowsEachProjectWorkMutationAfterTeacherApproval` covers each route, and `formalApplicationWorkflowCanReachApprovalBeforeProjectWork` verifies approval through the public review workflow.
+- The new gate neither grants permissions nor replaces existing role or project-access failures; `preservesExistingAuthorizationForUnapprovedProjects` covers representative denied callers while the approved-success cases exercise authorized roles.
+- A rejected mutation leaves application, project, artifact, grading, metric, final-grade, and audit state unchanged; the rejected-route assertions in `rejectsEveryProjectWorkMutationUntilFormalApplicationIsApproved` verify this.
+- Reads remain available as before without approval, and existing legacy records—including completed projects and their public archives—are preserved; `keepsProjectReadsAvailableWithoutFormalApproval` verifies representative authenticated and anonymous reads.
+- Formal-application creation, update, submission, and teacher review remain usable before approval; `formalApplicationWorkflowCanReachApprovalBeforeProjectWork` verifies this.
+- Existing role permissions, successful response contracts, and lifecycle rules other than the approval gate remain unchanged; the approved-success and existing artifact/grading/formal-application regression tests verify these boundaries.
+- Generated OpenAPI documents the formal-approval 409 condition for all listed routes using the shared error schema; `OpenApiContractTest#operationsDocumentApplicableStandardErrorResponses` and `#allOperationSuccessResponsesMatchBaselineAndNoUnlistedCodesAreAdded` verify the documented conditions and preserved response-code/success baselines. Regenerate and review the ignored contract rather than editing generated output by hand.
+- Standard (all tickets): standard applicable project checks pass; behavior outside the stated scope is unchanged; no unrelated cleanups; generated artifacts are regenerated and reviewed when applicable; no check is claimed that was not performed.

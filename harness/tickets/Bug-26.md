@@ -1,40 +1,57 @@
-# Bug-26. Display all dates and times in the user's locale
+# Bug-26. Display dates and times in the selected language locale
 
-Draft from Compliance-02-20261021-2331: needs Ticket Author refinement before implementation
+Draft from Compliance-02-20261021-2331, refined to depend on Feature-21
 
 ## Intent
 
-The frontend specification requires dates and times to be displayed consistently with the user's locale. Several staff views render raw ISO-8601 strings from the API instead: allocation run timestamps, audit event times, and grading dates and timestamps. Other views (archive, dashboard, applications, allocation deadline) already format dates with the browser locale, so the same kind of value appears in two different styles. Teachers and administrators are affected.
+The frontend specification requires displayed dates and times to follow the user's locale, but several views render raw API date strings and existing date helpers use the browser locale rather than the account's selected language. Teachers, administrators, and students can therefore see inconsistent formats across the application, or see a date in a language that does not match the selected interface language.
 
-Source: Compliance-02-20261021-2331, report finding 3: `frontend/SPEC.md:90` says “Dates and times must be displayed consistently with the user's locale while retaining the authoritative deadline from the API.” Raw API values are rendered at `frontend/src/features/allocation/AllocationPage.vue:34` (`run.createdAt ?? run.startedAt`), `frontend/src/features/allocation/AllocationPage.vue:43` (`selectedRun.createdAt`), `frontend/src/features/admin/AdminPage.vue:61` (`entry.occurredAt ?? entry.createdAt ?? entry.timestamp`), `frontend/src/features/grading/GradingPage.vue:7` and `:97` (`effectiveFrom`), `frontend/src/features/grading/GradingPage.vue:61` and `:65` (`grade.assessedOn`), and `frontend/src/features/grading/GradingPage.vue:69` (`metric.measuredAt`), while `frontend/src/features/archive/ArchivePage.vue:102`, `frontend/src/features/dashboard/DashboardPage.vue:89`, `frontend/src/features/applications/ApplicationsPage.vue:199`, and `frontend/src/features/allocation/AllocationPage.vue:101` use `Intl.DateTimeFormat(undefined, …)`.
+The relevant current displays include allocation-run timestamps and admin audit timestamps rendered as raw values, plus rubric effective dates and individual/group assessment dates and metric timestamps. Applications, dashboard, allocation-deadline, and private archive views already format some values using the browser locale, but those displays must also follow the selected application language.
 
 ## Scope and contract
 
-- Frontend views under `frontend/src/features/` and any shared formatting helper under `frontend/src/`.
-- Every date or timestamp the frontend displays is formatted for the user's locale consistently across views; date-only values (for example `assessedOn`, `effectiveFrom` if date-only) must not shift by time zone.
-- The authoritative values sent to and received from the API are unchanged; no backend or API change.
-- Coordination: [Feature-21](Feature-21.md) will add a selectable UI language and requires frontend-formatted dates to follow the selected locale “where the frontend formats them”. This ticket makes all displayed dates frontend-formatted; whichever lands second must keep both requirements satisfied.
-- UI scope: `/allocation` (run list and selected run), `/admin` audit list, `/grading` (rubric effective dates, grade and metric dates); desktop and mobile layouts must stay readable.
+- Prerequisite and dependency: complete [Feature-21](Feature-21.md) before implementing this ticket. Use Feature-21's existing selected language/locale state; do not add a second language or locale setting. When the authenticated user's language changes, all frontend-formatted dates and times use the newly selected language immediately. Unauthenticated views use the browser-derived language selected by Feature-21.
+- Use one shared date-formatting policy/helper across frontend date and timestamp displays. Use the currently selected `en` or `de` language as the formatting locale; timestamp timezone conversion continues to use the user's existing runtime/browser timezone. Keep date-only values as calendar dates independent of timezone.
+- Format all displayed API dates and timestamps in the current frontend locale, including:
+  - `/allocation`: period deadline, allocation-run `createdAt`/`startedAt`, and selected-run snapshot time.
+  - `/admin`: audit event `occurredAt`, `createdAt`, or `timestamp`.
+  - `/grading`: active and listed rubric `effectiveFrom`; individual and group assessment `assessedOn`; metric `measuredAt`.
+  - `/applications` and `/`: application-period `opensAt` and `closesAt`.
+  - Authenticated `/archive`: private artifact `uploadedAt`.
+  - Any other existing frontend-rendered API date or timestamp found during implementation.
+- `assessedOn` and rubric `effectiveFrom` are date-only values: display the exact calendar date returned by the API in the selected language, without shifting the day for the viewer's timezone. Timestamp values remain instants and are formatted in the viewer's runtime timezone.
+- Do not change API request/response values, date/time input values, comparison logic, deadline calculations, persistence, or backend behavior. Native `date`/`datetime-local` input controls retain their existing browser-native presentation; this ticket covers frontend-rendered date and timestamp text.
+- Scope is frontend display formatting and directly related frontend tests under `frontend/src/`. No product/API specification change is required because Feature-21 already requires frontend-formatted dates and numbers to use the selected locale.
+- Exclusions: no backend/API changes, no new user preference, no configurable timezone, and no changes to lifecycle/deadline rules.
 
 ## Mechanical checks (the Evaluator re-runs)
 
 Durable automated tests (join the build):
 
-- Component tests for `AllocationPage`, `AdminPage`, and `GradingPage` assert that an ISO timestamp from the mocked API is rendered in locale-formatted form and not as the raw ISO string.
-- A test asserts a date-only value renders as the same calendar date regardless of the test time zone.
+- Add shared formatter unit tests asserting timestamp values format according to both selected locales (`en` and `de`) and the runtime timezone, and that date-only values render the exact stored calendar date in both locales under positive and negative timezone conditions. Verify missing values retain the relevant view's established fallback text.
+- Update `AllocationPage.test.ts` to verify raw `createdAt`/`startedAt` and selected-run timestamps are formatted in the selected language, and that the deadline display is formatted without changing the underlying comparison to the API timestamp.
+- Update `AdminPage.test.ts` to verify audit `occurredAt`, `createdAt`, and `timestamp` fallback values render formatted in the selected language rather than raw ISO strings.
+- Update `GradingPage.test.ts` to verify active/listed rubric `effectiveFrom` and individual/group `assessedOn` preserve their calendar date in both locales, and metric `measuredAt` renders as a localized timestamp.
+- Update `ApplicationsPage.test.ts` and `DashboardPage.test.ts` to verify period `opensAt`/`closesAt` render in the selected language. Verify `ArchivePage.test.ts` covers private artifact `uploadedAt`.
+- Verify changing the selected locale from `en` to `de` and back updates rendered date text across affected components without changing the source API values or local form values.
+- Search frontend-rendered API date and timestamp fields to confirm no displayed raw ISO value or browser-locale-only formatter remains outside the shared formatting policy. Keep the tests above as durable coverage for the listed surfaces.
 
 Standard project checks:
 
-- From `frontend/`: `npm run typecheck`, `npm test`, and `npm run build`.
+- From `frontend/`: `npm run typecheck`, `npm run test`, `npm run preview:test`, and `npm run build`.
 
 ## One-time manual verification (in addition to automated tests)
 
-- **Implementor-performed:** using the local browser preview documented in `frontend/DEV-GUIDELINES.md` and the testing accounts in `backend/DEV-GUIDELINES.md`, open `/allocation` and `/admin` as an administrator and `/grading` as a teacher with fixtures that have runs, audit events, and grades; capture desktop and mobile screenshots under `harness/runs/<run-id>/evidence/` showing locale-formatted dates; report any console or failed-request errors.
+- **Implementor-performed:** After Feature-21 is complete, start the local browser preview using the documented testing profile. As `admin01`, set the account language to English in User Settings and inspect `/allocation` with a run, `/admin` with audit entries, `/applications`, `/`, and authenticated `/archive` with a private uploaded artifact. As `teacher01`, inspect `/grading` with an active rubric, individual/group assessments, and a metric observation. Repeat representative date displays after switching the account language to German; verify that displayed text changes language, the stored calendar day remains the same, and the timestamp reflects the same instant in the browser timezone. Capture desktop and mobile screenshots for affected states under `harness/runs/<run-id>/evidence/`.
+- Use only records already present in the documented testing profile or create them through supported UI/API workflows. If a required route cannot be reached because the testing profile lacks a required record, report the exact unavailable state and failing request; do not bypass lifecycle or authorization rules. Report console and failed-request errors and cite retained evidence paths in the handoff.
 
 ## Acceptance criteria (the Evaluator judges)
 
-- No view displays a raw ISO-8601 date or timestamp string; all displayed dates use one consistent locale-aware presentation.
-- Date-only values show the stored calendar date.
-- The deadline value used for decisions remains the API value.
-- Standard (all tickets): the standard project checks pass; existing behavior outside the stated scope is unchanged; no unrelated cleanups; generated artifacts are never hand-edited and are regenerated and reviewed when applicable; commit generated output only when repository tracking conventions require it; no check is claimed that was not performed.
-- Standard (presentation-only tickets): no backend or API changes.
+- All frontend-rendered API dates and timestamps use the active frontend language locale consistently across the listed routes and any other existing date displays. Component tests verify each listed surface in both `en` and `de`.
+- Date-only rubric and assessment dates display the same calendar date returned by the API regardless of viewer timezone; date-only tests cover both positive and negative offsets.
+- Timestamps display the same instant localized for the viewer's runtime timezone; tests compare the formatted result against the selected locale and timezone.
+- Changing the Feature-21 language selection updates displayed dates without reload or navigation and without changing source API values; component coverage verifies `en` to `de` and back.
+- The authoritative API timestamp remains unchanged for deadline calculations and submitted/received values; the allocation-page test verifies its formatted display does not affect deadline behavior.
+- Native date/time input controls, API contracts, backend behavior, and existing missing-value fallback behavior remain unchanged; tests cover relevant fallbacks and no API or generated-type changes are made.
+- The manual preview demonstrates readable locale-formatted dates on desktop and mobile in both supported languages, with no unexpected console or network errors.
+- All applicable frontend checks pass; no unrelated cleanup is included; generated artifacts are not hand-edited; no check is claimed that was not performed.

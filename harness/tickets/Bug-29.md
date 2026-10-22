@@ -1,67 +1,64 @@
 # Bug-29. Declare always-returned audit and group-member response fields
 
-Draft from Compliance-03-20261022-0744: needs Ticket Author refinement before implementation
-
 ## Intent
 
-The generated contract does not describe two response shapes that the backend always returns:
+The generated API contract does not accurately describe two backend response shapes. Audit endpoints expose audit-entry objects as untyped JSON, so generated clients cannot use the actual fields. Student assignment group members always include `originLabel` and `ownCohort` at runtime, but the OpenAPI schema and generated TypeScript mark both fields optional.
 
-- **Audit entries:** both audit operations declare their entries only as bare objects, so the generated frontend type cannot name any audit field. The administrator audit view therefore guesses at fields that the payload never contains.
-- **Group members:** student assignment members always include `originLabel` and `ownCohort`, but the contract marks both as optional.
+This affects API consumers and the administrator audit-history view, which currently uses fallback field names and an index fallback because the audit payload has no `id`.
 
-Affected readers are API clients, the generated frontend types, and the teachers and administrators who read audit history.
-
-Source: Compliance-03-20261022-0744, report finding 3:
-
-- `backend/SPEC.md:186` says "Request, response, validation, and security annotations fully describe the generated OpenAPI contract."
-- `backend/SPEC.md:106` says "Student assignment members expose display names, display-only `originLabel` and `ownCohort`, not member UUIDs".
-- `backend/src/main/java/ac/at/tgm/submit/audit/AuditService.java:26-29` writes `actorId`, `actorUsername`, `action`, `entityType`, `entityId`, and `occurredAt`. `backend/src/main/java/ac/at/tgm/submit/audit/AuditService.java:35-37` writes the same fields except `actorId` for system entries. However, `contracts/openapi.yaml:7708-7715` declares `PageResponseObjectNode.content.items` only as `type: object`, and both audit operations reference that schema (`contracts/openapi.yaml:3671`, `contracts/openapi.yaml:3729`).
-- `frontend/src/features/admin/AdminPage.vue:61` falls back to `eventType`, `createdAt`, `timestamp`, and `status`, and keys rows by `entry.id`; the audit payload contains none of these fields.
-- `backend/src/main/java/ac/at/tgm/submit/application/ApplicationResponseMapper.java:292-295` always passes a non-null `origin` and `own` to `StudentGroupMemberResponse`. However, `contracts/openapi.yaml:5853-5855` requires only `displayName` and `self`.
+Source: Compliance-03-20261022-0744, report finding 3. `AuditService.record` stores `actorId`, `actorUsername`, `action`, `entityType`, `entityId`, and `occurredAt`; `recordSystem` stores the same fields except `actorId`. `AuditController` currently returns `PageResponse<ObjectNode>` for both audit routes, resulting in `PageResponseObjectNode` entries. `ApplicationResponseMapper.groupMembers` constructs every returned member with non-null origin and cohort values. The generated schema currently requires only `displayName` and `self`.
 
 ## Scope and contract
 
-- **Audit operations:** `GET /api/audit` and `GET /api/audit/{entityType}/{entityId}` must declare a paginated response whose content items reference a named audit-entry schema. Every property has a description.
-  - Required properties: `actorUsername` (string), `action` (string), `entityType` (string), `entityId` (string, `format: uuid`), and `occurredAt` (string, `format: date-time`).
-  - Optional property: `actorId` (string, `format: uuid`), documented as omitted for system-recorded entries.
-- **Group members:** the generated `StudentGroupMemberResponse` must require `originLabel` and `ownCohort`, alongside `displayName` and `self`. Update the baseline expectation at `backend/src/test/java/ac/at/tgm/submit/web/OpenApiContractTest.java:158` accordingly.
-- **Behavior that must not change:**
-  - the runtime JSON of both responses: field names, values, and the omission of `actorId` for system entries;
-  - audit visibility and authorization (`TEACHER` and `ADMIN` only, `STUDENT` forbidden);
-  - pagination, statuses, and error responses.
-- **Exclusions:** do not add audit fields, change what is audited, or change any SPEC file.
-- **Regeneration:** regenerate `frontend/src/api/schema.d.ts` and commit it. Update `frontend/src/api/services.ts:267` and `frontend/src/features/admin/AdminPage.vue` only as far as needed to use the generated audit-entry type. The visible audit-row output for real payloads must stay unchanged.
-- **Coordination with Dev-44:** this ticket owns the audit service and audit view typing. If Dev-44 lands first, build on its shared page type.
+- Replace the audit response's untyped entry shape with an `AuditEntryResponse` schema and use it as the content-item type for:
+  - `GET /api/audit`
+  - `GET /api/audit/{entityType}/{entityId}`
+- The generated `AuditEntryResponse` schema must contain exactly these properties:
+  - Required, non-null `actorUsername` (string), `action` (string), `entityType` (string), `entityId` (string, `format: uuid`), and `occurredAt` (string, `format: date-time`).
+  - Optional, non-null `actorId` (string, `format: uuid`). Document that it is omitted for system-recorded entries.
+  - Each property must have a useful description. The audit page response content items must reference `AuditEntryResponse`; the expected generated page schema is `PageResponseAuditEntryResponse`.
+- Preserve the current audit JSON exactly: do not add an audit record ID or other fields; keep `actorUsername` equal to `SYSTEM` on system events; keep `actorId` present for user-recorded events and omitted, not null, for system events. The typed response must serialize the existing values without changing field names or timestamp/UUID representations.
+- Change `StudentGroupMemberResponse` so the generated schema requires all four runtime fields: `displayName`, `self`, `originLabel`, and `ownCohort`. None is nullable. The response must continue to omit member UUIDs. The application response mapper must keep returning the existing values, including `Origin unavailable` and `false` for legacy groups whose origin provenance is missing.
+- Update the administrator audit service and view to use the generated audit-entry type rather than `Record<string, unknown>` or guessed field names. Preserve displayed action, occurrence time, entity type and ID, actor ID (or the existing “not supplied” fallback), and the “Recorded” badge for actual audit payloads. Do not add `id`, `eventType`, `createdAt`, `timestamp`, or `status` to the API response to support current frontend fallbacks; key rows using available data without inventing response fields.
+- Keep audit access and authorization unchanged: teachers and administrators can use both audit routes; students receive `403`. Keep pagination, success/error statuses, and response field values unchanged.
+- Do not change audit recording policy, what events are recorded, any `SPEC.md`, or unrelated frontend service types.
+- Regenerate `contracts/openapi.yaml` from backend annotations with `./gradlew generateOpenApi` from `backend/`, then review the diff. This file is ignored and must not be committed. Regenerate the tracked `frontend/src/api/schema.d.ts` with `npm run api:types` from `frontend/`, review its diff, and commit it if changed.
+- Coordinate with Dev-44, which also touches `frontend/src/api/services.ts` and replaces the generic page type. This ticket owns the audit-entry response typing and audit-row typing; either implementation order is supported. If Dev-44 lands first, use its generated-schema-derived page type and preserve its changes rather than reintroducing a hand-written page model. Do not expand this ticket into the other service typing work.
 
 ## Mechanical checks (the Evaluator re-runs)
 
 Durable automated tests (join the build):
 
-- Add `OpenApiContractTest.auditOperationsDocumentTypedEntries`. For both audit operations, assert that the `200` content items reference the audit-entry schema with exactly the property set, required set, formats, and descriptions above.
-- Update the `StudentGroupMemberResponse` expectation in `OpenApiContractTest` so that `displayName`, `self`, `originLabel`, and `ownCohort` are all required and none is nullable.
-- Add a backend API test, for example `AuditApiTest.auditEntriesExposeDocumentedFields`:
-  1. Perform an audited user action. Also trigger a system-recorded entry: an allocation run started without a caller, such as the deadline initial run, records one via `backend/src/main/java/ac/at/tgm/submit/allocation/AllocationService.java:173-177`.
-  2. As `TEACHER` and as `ADMIN`, read both audit endpoints. Assert that every entry contains the required fields with valid UUID and timestamp values, and that system entries omit `actorId`.
-  3. Assert that a `STUDENT` receives `403` on both endpoints.
-- Keep `ApplyingGroupApiTest` member assertions passing, including the existing property-set assertion at `backend/src/test/java/ac/at/tgm/submit/application/ApplyingGroupApiTest.java:205` and the `Origin unavailable` legacy case at line 514.
-- Extend `frontend/src/features/admin/AdminPage.test.ts` with a typed audit entry. Assert that the row shows the action, the occurrence time, the entity type and ID, and the actor ID, and that a system entry without `actorId` still renders.
+- Add `OpenApiContractTest.auditOperationsDocumentTypedEntries`. For both audit operations, assert the `200` response references `PageResponseAuditEntryResponse`, whose `content.items` references `AuditEntryResponse`. Assert the audit-entry schema's exact property set, exact required set, non-nullability, UUID/date-time formats, optional `actorId`, and non-empty descriptions.
+- Extend `OpenApiContractTest`'s response-schema expectations for `PageResponseAuditEntryResponse` and update the two audit success-response baselines from `PageResponseObjectNode` to the typed page schema. Retain `PageResponseObjectNode` for allocation-run history; it remains in use by `AllocationService.listRuns`.
+- Update `OpenApiContractTest`'s `StudentGroupMemberResponse` expectation to require exactly `displayName`, `self`, `originLabel`, and `ownCohort`, with no nullable properties.
+- Add `AuditApiTest.auditEndpointsReturnUserAndSystemEntriesToStaff`:
+  - Create a user-recorded audit event through an audited HTTP action and create a system-recorded event through the real deadline-allocation path in isolated test data. Invoke `AllocationDeadlineScheduler.startDueAllocations()` after arranging a valid due period so the production allocation flow records the system event; do not seed a fabricated audit JSON payload.
+  - As both a teacher and an administrator, call each audit route. Check page metadata and assert that user entries contain exactly the documented fields with a valid actor UUID, entity UUID, and ISO date-time; assert that system entries have exactly the required fields, `actorUsername` is `SYSTEM`, and `actorId` is absent.
+  - For each event, exercise the entity-specific route with its actual `entityType` and `entityId`, and verify the corresponding entry is returned.
+- Add `AuditApiTest.studentsAreForbiddenFromBothAuditRoutes` and assert `403` with the common API error body for `GET /api/audit` and `GET /api/audit/{entityType}/{entityId}`.
+- Keep `CollectionPaginationBoundaryTest.remainingCollectionEndpointsDefaultToTwentyAndClampOversizedRequests` passing for both audit routes.
+- Keep `ApplyingGroupApiTest.G3_G4_G5_pairPlusSoloPinsImmutableRunsAndPrivateFinalOrigin` passing, including its exact runtime member-property assertion, and `ApplyingGroupApiTest.G5_legacySoloRunAndFinalGroupHaveUnavailableNotInventedOrigin` passing with `Origin unavailable`.
+- Extend `frontend/src/api/services.typecheck.test.ts` to assert that `adminApi.audit` content items use `components['schemas']['AuditEntryResponse']`.
+- Extend `AdminPage.test.ts` with generated-schema-typed user and system audit entries. Assert that the audit tab renders action, occurrence time, entity type and ID, actor ID for user events, and the existing “not supplied” fallback for a system event without `actorId`; retain the “Recorded” badge.
 
-Standard project checks (all must pass, and the Evaluator re-runs them):
+Standard project checks:
 
-- From `backend/`: `./gradlew test` and `./gradlew checkstyleMain`.
-- From `backend/`: `./gradlew generateOpenApi`, then review the `contracts/openapi.yaml` diff. From `frontend/`: `npm run api:types`.
-- From `frontend/`: `npm run typecheck`, `npm test`, and `npm run build`.
+- Backend changes, from `backend/`: `./gradlew compileJava compileTestJava --rerun-tasks`, `./gradlew test`, and `./gradlew checkstyleMain`.
+- Backend API response-model changes: from `backend/`, run `./gradlew generateOpenApi` and review the ignored `contracts/openapi.yaml` diff; from `frontend/`, run `npm run api:types`.
+- Frontend changes, from `frontend/`: `npm run typecheck`, `npm test`, and `npm run build`.
+- Do not run tests or checks claiming that this ticket changes product specifications; it does not.
 
 ## One-time manual verification (in addition to automated tests)
 
-- **Implementor-performed:** with the testing profile and documented testing accounts, sign in as an administrator, perform an audited action, and open the audit history tab. Capture desktop and mobile screenshots under `harness/runs/<run-id>/evidence/`.
-  - Confirm that rows render as before and that the console and network show no errors.
-  - If no audit entry exists after the action, report the failing request instead of working around it.
+- **Implementor-performed:** using the documented testing profile and `admin01` account, open `/admin`, select **Classes & subjects**, create a uniquely named test elective subject, then select **Audit history** and refresh. The initial route loads `/api/users`, `/api/student-classes`, and `/api/elective-subjects`; creating the subject submits `POST /api/elective-subjects` and reloads the catalogues; opening or refreshing Audit history requests `/api/audit`. Verify the new `ELECTIVE_SUBJECT_CREATED` row shows its timestamp, `elective_subject` entity ID, and actor ID, with no console or failed-request errors. Use the local browser preview documented in `frontend/DEV-GUIDELINES.md`, keep the created subject in the isolated testing profile, and capture desktop and mobile screenshots under `harness/runs/<run-id>/evidence/`.
+- If the expected audit row is missing after the successful create request and audit refresh, report the failing request and observed response; do not fabricate an entry or bypass the UI/API flow. No manual system-entry creation is required; the API regression test covers the system event.
 
 ## Acceptance criteria (the Evaluator judges)
 
-- Both audit operations declare typed, described audit entries with the required and optional properties above. The generated TypeScript type names these fields.
-- `StudentGroupMemberResponse` requires `originLabel` and `ownCohort`.
-- Runtime payloads, authorization, pagination, and statuses are unchanged. Students remain forbidden from audit endpoints, and legacy members still show `Origin unavailable`.
-- The administrator audit view compiles against the generated type and shows the same output for real payloads.
-- Standard (all tickets): the standard project checks pass; existing behavior outside the stated scope is unchanged; no unrelated cleanups; generated artifacts are never hand-edited and are regenerated and reviewed when applicable; commit generated output only when repository tracking conventions require it (for example, tracked `frontend/src/api/schema.d.ts` may need to be committed, while ignored `contracts/openapi.yaml` must not be committed); no check is claimed that was not performed.
+- Both audit endpoints reference the typed paginated audit response. `AuditEntryResponse` has exactly the required fields and optional `actorId`, correct formats and descriptions, and no nullable properties; `OpenApiContractTest.auditOperationsDocumentTypedEntries` verifies the contract and frontend typecheck coverage verifies generated typing.
+- Student assignment members require exactly `displayName`, `self`, `originLabel`, and `ownCohort` with no nullable fields; the OpenAPI response contract test verifies requiredness and nullability, while `ApplyingGroupApiTest.G3_G4_G5_pairPlusSoloPinsImmutableRunsAndPrivateFinalOrigin` and `ApplyingGroupApiTest.G5_legacySoloRunAndFinalGroupHaveUnavailableNotInventedOrigin` verify actual and legacy payloads.
+- User and system audit JSON retain the existing fields and values; in particular, `actorId` is present for user entries and omitted for system entries. `AuditApiTest.auditEndpointsReturnUserAndSystemEntriesToStaff` verifies both public response routes for both staff roles.
+- Audit authorization and pagination remain unchanged: `AuditApiTest.studentsAreForbiddenFromBothAuditRoutes` verifies both student denials, and `CollectionPaginationBoundaryTest.remainingCollectionEndpointsDefaultToTwentyAndClampOversizedRequests` verifies both collection boundaries.
+- The administrator audit view uses the generated type and preserves its displayed output for real user and system entries; `AdminPage.test.ts` verifies both cases and the one-time preview verifies the rendered view at desktop and mobile sizes.
+- Standard (all tickets): standard applicable project checks pass; existing behavior outside the stated scope is unchanged; no unrelated cleanups; generated artifacts are regenerated and reviewed when applicable; commit generated output only when repository tracking conventions require it; no check is claimed that was not performed.

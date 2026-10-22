@@ -1,39 +1,40 @@
 # Dev-42. Align backend learning-topic validation wording with the shared idea rule
 
-Draft from Compliance-03-20261022-0744: needs Ticket Author refinement before implementation
+Draft from Compliance-03-20261022-0744: refined for implementation and evaluation
 
 ## Intent
 
-The backend specification lists learning topics among the required idea-request fields. The shared product rule, which takes precedence, includes learning topics only "if known". The implementation and the generated contract follow the shared rule and treat them as optional. A reader of the backend specification therefore gets a requirement that contradicts both the shared rule and the API.
+The backend specification currently lists learning topics as required in an idea request, while the shared product specification says they are included only “if known.” The API already treats `learningTopics` as optional. This contradiction can mislead backend implementors and reviewers about the request contract.
 
-Source: Compliance-03-20261022-0744, report finding 2:
-
-- `backend/SPEC.md:49` says "Idea requests validate the required title, description, intended outcome, initial scope points, learning topics, and school year."
-- `docs/SPEC.md:45` says "The expected learning topics or skills involved, if known."
-- `contracts/openapi.yaml:4866-4874` documents `IdeaRequest.learningTopics` as "Optional learning topics; at most 50 entries." with `minItems: 0`, and the `IdeaRequest` required list at `contracts/openapi.yaml:4892-4897` omits it. This matches `backend/src/main/java/ac/at/tgm/submit/web/ApiDtos.java:144-147`.
+Source: Compliance-03-20261022-0744, report finding 2; `docs/SPEC.md` section 4; `backend/SPEC.md` idea-request description; `IdeaRequest.learningTopics` in `backend/src/main/java/ac/at/tgm/submit/web/ApiDtos.java`.
 
 ## Scope and contract
 
-- Edit `backend/SPEC.md:49` so that learning topics are optional for idea requests, consistent with `docs/SPEC.md:45`. Title, description, intended outcome, initial scope points, and school year stay required. The full-specification sentence on the same line stays unchanged.
-- Review `frontend/SPEC.md:55`, which says an idea submission contains learning topics. Change it only if it states or implies that learning topics are mandatory.
-- Check related statements in `backend/SPEC.md` and `frontend/SPEC.md` for contradictions about learning topics.
-- Do not change `docs/SPEC.md`, code, annotations, tests, generated contracts, or types. Do not add limits that the specifications do not already state.
+- Documentation-only: revise the idea-request sentence in `backend/SPEC.md` to state that title, description, intended outcome, initial scope points, and school year are required, while learning topics are optional.
+- Keep `docs/SPEC.md` unchanged. Its phrase “if known” already expresses optional learning topics.
+- Keep `frontend/SPEC.md` unchanged. Its statement that an idea submission contains learning topics does not state that they are mandatory; the frontend form labels them optional and includes them in requests when supplied.
+- Do not add validation limits or other API rules to the specification in this ticket. The current generated API contract already documents the optional field and its existing constraints.
+- Check all learning-topic references in `backend/SPEC.md` and `frontend/SPEC.md` for contradictions. The response/catalogue references to learning topics describe returned data, not required request fields, and should remain unchanged.
+- Exclusions: no changes to code, tests, `docs/SPEC.md`, `frontend/SPEC.md`, API annotations, generated contracts/types, or developer/user guides. Nothing needs regeneration.
 
 ## Mechanical checks (the Evaluator re-runs)
 
-This is a documentation-only change, so no automated tests apply and no checks are required.
+- Documentation-only change: no automated test applies, because this ticket changes only backend specification wording and does not change API behavior.
+- Search `backend/SPEC.md` and `frontend/SPEC.md` for “learning topic” and confirm the request wording describes optional input, the frontend wording does not make it mandatory, and response/catalogue references remain accurate.
+- Compare the revised backend request wording with `docs/SPEC.md` section 4 and the existing `IdeaRequest.learningTopics` API description; confirm the requiredness matches and no unrelated validation limits are introduced.
+- No project build or test checks are required.
 
-## One-time manual verification (in addition to automated tests)
+## One-time manual verification
 
-- **Implementor-performed:** search `backend/SPEC.md` and `frontend/SPEC.md` for "learning topic". Record each remaining occurrence in the handoff and confirm that none makes learning topics mandatory.
+- None required; the documentation consistency review is specified under Mechanical checks.
 
 ## Acceptance criteria (the Evaluator judges)
 
-- `backend/SPEC.md` no longer lists learning topics as required for idea requests. The other required idea fields remain required.
-- `frontend/SPEC.md` is consistent with optional learning topics.
-- No other requirement text changes, and the specification change is declared in the handoff.
-- Standard (all tickets): the standard project checks pass; existing behavior outside the stated scope is unchanged; no unrelated cleanups; generated artifacts are never hand-edited and are regenerated and reviewed when applicable; commit generated output only when repository tracking conventions require it (for example, tracked `frontend/src/api/schema.d.ts` may need to be committed, while ignored `contracts/openapi.yaml` must not be committed); no check is claimed that was not performed.
+- `backend/SPEC.md` clearly distinguishes required idea-request fields from optional learning topics.
+- `docs/SPEC.md` and `frontend/SPEC.md` remain unchanged; the final wording is consistent with both and with the existing `IdeaRequest` API contract.
+- No unrelated requirement text or other file changes.
+- Standard (all tickets): existing behavior outside the stated scope is unchanged; no unrelated cleanups; generated artifacts are never hand-edited and are regenerated and reviewed when applicable; commit generated output only when repository conventions require it; no check is claimed that was not performed.
 
-## Optional: Specification changes
+## Specification changes
 
-`backend/SPEC.md` may change, and `frontend/SPEC.md` may change if its wording implies a mandatory field. Nothing needs regenerating. Declare the specification change in the handoff.
+Only `backend/SPEC.md` may change. Declare that change in the handoff. No API or generated-contract regeneration is needed.

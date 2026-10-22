@@ -1,34 +1,55 @@
 # Dev-39. Specify application-period labels and last-administrator protection
 
-Draft from Compliance-02-20261021-2331: needs Ticket Author refinement before implementation
+Draft from Compliance-02-20261021-2331: refined for implementation and evaluation
 
 ## Intent
 
-Two implemented, tested, user-visible behaviors are absent from every specification, so the specifications no longer describe the product completely. Application periods have a required administrator-entered label (trimmed, 1 to 100 characters, shown in student and staff period selectors, with legacy periods falling back to their school year). The role-change endpoint refuses to demote the only remaining administrator with `409`. Readers of the specifications (product owners, Ticket Authors, Implementors, and the user guide generator) cannot learn either rule.
+Two implemented, user-visible rules are missing from the specifications. An application period has an administrator-entered label, validated and displayed alongside its school year; legacy periods without a stored label are presented using their school year. Also, an administrator cannot change the role of the only remaining `ADMIN` account to a non-administrator role. Without these rules, product and engineering readers cannot rely on the specifications as a complete account of period identification and administrator role changes.
 
-Source: Compliance-02-20261021-2331, report finding 5: `backend/src/main/java/ac/at/tgm/submit/application/ApplicationPeriodService.java:227-231` rejects a blank or longer-than-100 label with “label must contain 1 to 100 non-blank characters.” and `:241` stores the trimmed label; `backend/src/main/java/ac/at/tgm/submit/application/ApplicationResponseMapper.java:69-73` falls back to `schoolYear`; `backend/src/main/java/ac/at/tgm/submit/user/UserService.java:90-92` throws `409` “At least one administrator account must remain.” Tests: `backend/src/test/java/ac/at/tgm/submit/application/ApplicationPeriodSupervisorTest.java` `labelIsTrimmedAndReturnedByCreateSingleAndListAndDuplicateYearPeriodsRemainDistinct`, `invalidLabelsAreRejectedForCreateAndUpdate`, `legacyStoredPeriodsFallBackToSchoolYearWithoutRewritingTheRecord`; `backend/src/test/java/ac/at/tgm/submit/user/UserRoleControllerTest.java` `rejectsDemotionOfTheOnlyRemainingAdministratorAndPreservesRole`. Specifications: `backend/SPEC.md:32` lists what an application period records without a label; `backend/SPEC.md:21` describes `PATCH /api/users/{id}/role` without the last-administrator rule; `docs/SPEC.md:130` describes the period without a label; no SPEC line mentions either rule (`grep -n -i label` and `grep -n -i 'administrator account must remain'` over the three SPEC files). `harness/tickets/done/Feature-15.md:76` anticipated that the SPECs “may need a sentence each”.
+Source: Compliance-02-20261021-2331, report finding 5; `ApplicationPeriodService.validatePeriod`, `ApplicationResponseMapper.period`, and `UserService.changeRole`.
 
 ## Scope and contract
 
-- Documentation-only: `docs/SPEC.md`, `backend/SPEC.md`, and `frontend/SPEC.md` as needed.
-- Describe the application-period label (required on create and update, trimmed, 1 to 100 characters, displayed to identify the period, legacy fallback to school year) and the last-administrator protection (`409` when a role change would leave no `ADMIN`) as the implementation behaves today.
-- Check related statements throughout each named SPEC for contradictions (period statements at `backend/SPEC.md:28` and `:32`, `docs/SPEC.md:13` and `:130`, `frontend/SPEC.md:28` and `:38`).
-- Exclusions: no code, test, OpenAPI, or user-guide change. If the user prefers different behavior, record that decision and open a separate ticket instead of documenting it here.
+- Documentation only. Update `docs/SPEC.md`, `backend/SPEC.md`, and `frontend/SPEC.md` to describe the existing behavior below; do not change code, tests, OpenAPI annotations or generated artifacts, or user guides.
+- Application-period label:
+  - In `docs/SPEC.md` and `backend/SPEC.md`, specify that an administrator must provide a label when creating or updating a period. The server trims surrounding whitespace and accepts only a nonblank label of 1 to 100 characters after trimming.
+  - Specify that period responses expose the label and the school year separately. Existing periods without a stored label use the school year as the response label without rewriting the stored record.
+  - In `frontend/SPEC.md`, specify that visible period summaries identify a period by its label, retain the school year as context, and use the school year as the displayed label for legacy periods without a usable stored label. This applies to student and staff period views and the administrator period selector.
+- Last-administrator protection:
+  - In `docs/SPEC.md`, document the invariant that the application must retain at least one administrator account.
+  - In `backend/SPEC.md`, document that `PATCH /api/users/{id}/role` returns `409 Conflict` if changing an account that is currently `ADMIN` to a non-`ADMIN` role would leave no administrator. The rejected change does not alter the account role. Role changes that leave another administrator remain permitted.
+  - Do not add frontend behavior requirements for this rule; the frontend specification need not duplicate the backend endpoint contract.
+- Check all related period and role statements throughout each changed specification, including `docs/SPEC.md` sections 2 and 9, `backend/SPEC.md` account-role and application-period sections, and `frontend/SPEC.md` period configuration, student period views, and administrator role-management descriptions. The final specifications must not contradict the new statements.
+- Exclusions: no change to application code, tests, OpenAPI annotations or generated contracts/types, developer guides, or user-facing guides.
 
 ## Mechanical checks (the Evaluator re-runs)
 
-Durable automated tests: none; documentation-only change. Existing tests named in the Source line already assert the behavior.
+Durable automated tests already cover the implementation facts being documented; this ticket adds no behavioral code and requires no new tests:
 
-Standard project checks:
+- `ApplicationPeriodSupervisorTest.labelIsTrimmedAndReturnedByCreateSingleAndListAndDuplicateYearPeriodsRemainDistinct` verifies trimming, persistence and responses for create/single/list, and distinct labels for periods in the same year.
+- `ApplicationPeriodSupervisorTest.invalidLabelsAreRejectedForCreateAndUpdate` verifies missing, blank, whitespace-only, and over-100-character labels are rejected on both operations.
+- `ApplicationPeriodSupervisorTest.legacyStoredPeriodsFallBackToSchoolYearWithoutRewritingTheRecord` verifies response fallback and that the stored legacy record is not rewritten.
+- `UserRoleControllerTest.rejectsDemotionOfTheOnlyRemainingAdministratorAndPreservesRole` verifies the `409` response and unchanged role when demotion would leave no administrator.
+- `UserRoleControllerTest.permitsDemotionWhenAnotherAdministratorRemains` verifies that the allowed contrasting role change still succeeds.
+- `ApplicationsPage.test.ts` scenarios `shows the label and school year in period rows, falling back for legacy responses` and `shows period labels and school-year secondary text for a student`, plus `AllocationPage.test.ts` scenario `identifies periods by label with the school year in the selector and selected view`, cover period labels in student/staff views and the administrator selector.
 
-- Documentation-only changes: no checks required; say so explicitly. Run `make format-markdown FILES="<changed .md paths>"` before committing.
+Documentation verification: review the changes against the cited implementation and tests, then search all three changed SPEC files for related period-label and administrator-role statements and resolve any contradictions.
+
+Standard checks: documentation-only changes require no project build or test run. Run `make format-markdown FILES="docs/SPEC.md backend/SPEC.md frontend/SPEC.md"` before committing these changes.
+
+## One-time manual verification
+
+- None required; no application behavior or UI changes.
 
 ## Acceptance criteria (the Evaluator judges)
 
-- Each documented statement matches the cited implementation and tests.
-- No SPEC statement contradicts the added text.
-- Standard (all tickets): the standard project checks pass; existing behavior outside the stated scope is unchanged; no unrelated cleanups; generated artifacts are never hand-edited and are regenerated and reviewed when applicable; commit generated output only when repository tracking conventions require it; no check is claimed that was not performed.
+- `docs/SPEC.md` describes periods as having an administrator-provided label alongside the school year. `backend/SPEC.md` specifies that the label is required on create and update, trimmed, nonblank, and 1 to 100 characters after trimming, and that responses expose the label and school year separately. `frontend/SPEC.md` states that visible student and staff period views and the administrator period selector identify periods by label while retaining school year as context.
+- The specifications accurately state that a legacy stored period without a label falls back to the school year in responses and visible labels without rewriting the stored record.
+- The specifications state that a role change that would demote the only remaining `ADMIN` to a non-`ADMIN` role returns `409 Conflict` and leaves the role unchanged, while demotion is permitted when another administrator remains.
+- The label statements are supported by the named `ApplicationPeriodSupervisorTest` and frontend test scenarios; the administrator-protection statements are supported by the named `UserRoleControllerTest` scenarios.
+- No contradictory statement about these rules remains in the three changed specifications, and no other files are changed.
+- Standard (all tickets): existing behavior outside the stated scope is unchanged; no unrelated cleanups; generated artifacts are never hand-edited and are regenerated and reviewed when applicable; commit generated output only when repository conventions require it; no check is claimed that was not performed.
 
-## Optional: Specification changes
+## Specification changes
 
-`docs/SPEC.md`, `backend/SPEC.md`, and `frontend/SPEC.md` may change; declare every change in the handoff.
+Only `docs/SPEC.md`, `backend/SPEC.md`, and `frontend/SPEC.md` may change. Declare the exact specification updates in the handoff. No developer-guide change is needed.
