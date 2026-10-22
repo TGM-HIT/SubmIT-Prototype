@@ -101,6 +101,9 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-45](tickets/Dev-45.md) | to-do | Use the ticket template's exact section headings in ticket files |
 | [Dev-46](tickets/Dev-46.md) | to-do | Align the Compliance ledger introduction with the Auditor follow-up prefixes |
 | [Dev-47](tickets/Dev-47.md) | to-do | Retire the spent Dev-23 ledger-edit exception from the Implementor role |
+| [Dev-48](tickets/Dev-48.md) | to-do | Remove role summaries from agent wrappers |
+| [Dev-49](tickets/Dev-49.md) | to-do | Add model guidance for the Harness Archiver |
+| [Dev-50](tickets/Dev-50.md) | to-do | Resolve preflight against scoped audit exclusions |
 
 ### Features
 
@@ -148,5 +151,5 @@ Recurring documentation and contract checks, run by the [Auditor role](roles/aud
 | [Compliance-03](checks/Compliance-03.md) | After API changes; at least monthly | 2026-10-22T07:44+0200 | findings: 5 ticketed, 0 fixed, 0 duplicate, 0 decision needed | Compliance-03-20261022-0744 | OpenAPI contract compliance |
 | [Compliance-04](checks/Compliance-04.md) | Weekly and after file moves or renames | 2026-10-22T08:47+0200 | findings: 1 ticketed, 3 fixed, 0 duplicate, 0 decision needed | Compliance-04-20261022-0847 | Link and format validation |
 | [Compliance-05](checks/Compliance-05.md) | Quarterly and before planning | 2026-10-22T09:58+0200 | findings: 2 ticketed, 0 fixed, 0 duplicate, 0 decision needed | Compliance-05-20261022-0958 | Documentation health |
-| [Compliance-06](checks/Compliance-06.md) | After each role-contract change or lesson application; at least monthly | 2026-10-18T20:48+0200 | findings: 0 ticketed, 1 decision needed, 0 duplicate, 1 fixed | Compliance-06-20261018-2048 | Agent role consistency and role-file validation |
+| [Compliance-06](checks/Compliance-06.md) | After each role-contract change or lesson application; at least monthly | 2026-10-22T12:54+0200 | findings: 2 ticketed, 0 fixed, 1 duplicate, 1 decision needed | Compliance-06-20261022-1254 | Agent role consistency and role-file validation |
 | [Compliance-07](checks/Compliance-07.md) | After user-facing lifecycle, role, UI or guide-generation changes; at least monthly | — | — | — | User documentation completeness and correctness |
