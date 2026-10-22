@@ -105,6 +105,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-49](tickets/Dev-49.md) | to-do | Add model guidance for the Harness Archiver |
 | [Dev-50](tickets/Dev-50.md) | to-do | Resolve preflight against scoped audit exclusions |
 | [Dev-51](tickets/Dev-51.md) | to-do | Add automated checks for controller-to-service boundaries |
+| [Dev-52](tickets/Dev-52.md) | to-do | Anchor line-numbered ticket sources to a Git revision |
 
 ### Features
 
