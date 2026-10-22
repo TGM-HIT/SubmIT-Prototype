@@ -6,7 +6,7 @@ Draft from Compliance-06-20261022-1254: needs Ticket Author refinement before im
 
 The agent wrapper bodies repeat role duties even though Compliance-06 requires agent files only to identify the agent and point to its role contract. Readers can treat duplicated wrapper prose as a second contract that may drift from the role file.
 
-Source: Compliance-06-20261022-1254, report finding 1: `.github/agents/auditor.agent.md:8` says “You are the Auditor. You run exactly one recurring compliance check and report what you find.” `harness/roles/auditor.md:1` begins “You are the Auditor. You run one recurring compliance check from start to finish.” Compliance-06 requires agent text not to restate the contract at line 25.
+Source: Compliance-06-20261022-1254, report finding 1: `.github/agents/auditor.agent.md:8` says “You are the Auditor. You run exactly one recurring compliance check and report what you find.” `harness/roles/auditor.md:1` begins “You are the Auditor. You run one recurring compliance check from start to finish.” `harness/checks/Compliance-06.md:25` requires agent text not to restate the contract.
 
 ## Scope and contract
 

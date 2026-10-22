@@ -6,7 +6,7 @@ Draft from Compliance-06-20261022-1254: needs Ticket Author refinement before im
 
 The Auditor contract requires every Git command to honor check-specific exclusions, but its standalone preflight instruction invokes a gate that runs an unbounded `git status --porcelain`. The harness also requires preflight to preserve clean-tree protection, including not ignoring uncommitted human changes. The documents do not settle how both requirements should be met.
 
-Source: Compliance-06-20261022-1254, report finding 3: `harness/roles/auditor.md:7` says “apply those exclusions to every Git command ... including whole-worktree status,” while line 17 requires `java harness/gates/preflight.java <expected-branch>`. `harness/gates/preflight.java:14` runs `git status --porcelain`; completed `harness/tickets/done/Dev-28.md:18` says to preserve preflight behavior and not ignore an uncommitted human change.
+Source: Compliance-06-20261022-1254, report finding 3: `harness/roles/auditor.md:7` says “apply those exclusions to every Git command ... including whole-worktree status,” while `harness/roles/auditor.md:17` requires `java harness/gates/preflight.java <expected-branch>`. `harness/gates/preflight.java:14` runs `git status --porcelain`; completed `harness/tickets/done/Dev-28.md:18` says to preserve preflight behavior and not ignore an uncommitted human change.
 
 ## Scope and contract
 

@@ -6,7 +6,7 @@ Draft from Compliance-06-20261022-1254: needs Ticket Author refinement before im
 
 The Harness Archiver role makes eligibility judgments and performs archival work, but its role contract has no model-tier or thinking-level guidance. The agent front matter sets `reasoning-effort: high`, while the shared guidance distinguishes judgment work from mechanical execution.
 
-Source: Compliance-06-20261022-1254, report finding 2: Compliance-06 line 24 requires model-tier and thinking-level advice per role; `harness/roles/archiver.md:20` requires eligibility judgments but the role has no seat-guidance statement. `CLAUDE.md:71-73` assigns Opus to planning and judgment, Sonnet to mechanical execution.
+Source: Compliance-06-20261022-1254, report finding 2: `harness/checks/Compliance-06.md:24` requires model-tier and thinking-level advice per role; `harness/roles/archiver.md:20` requires eligibility judgments but the role has no seat-guidance statement. `CLAUDE.md:71-73` assigns Opus to planning and judgment, Sonnet to mechanical execution.
 
 ## Scope and contract
 
