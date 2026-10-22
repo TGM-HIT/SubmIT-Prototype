@@ -44,7 +44,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Bug-22](tickets/done/Bug-22.md) | done | Make staff assignment-privacy verification deterministic |
 | [Bug-23](tickets/done/Bug-23.md) | done | Label the post-allocation form as Formal proposal |
 | [Bug-24](tickets/Bug-24.md) | to-do | Open application periods and start their initial allocation reliably |
-| [Bug-25](tickets/Bug-25.md) | to-do | Represent the documented ALLOCATING period status |
+| [Bug-25](tickets/done/Bug-25.md) | done | Represent the documented ALLOCATING period status |
 | [Bug-26](tickets/Bug-26.md) | to-do | Display all dates and times in the user's locale |
 | [Bug-27](tickets/Bug-27.md) | to-do | Gate project realization on formal-application approval |
 | [Bug-28](tickets/Bug-28.md) | to-do | Make generated request string constraints match runtime validation |

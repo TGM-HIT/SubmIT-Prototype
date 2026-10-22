@@ -10,7 +10,7 @@ The owner confirmed that allocation remains synchronous and selected the documen
 
 ## Scope and contract
 
-- Specification-only change to [`docs/SPEC.md`](../../docs/SPEC.md) and [`backend/SPEC.md`](../../backend/SPEC.md). Review allocation lifecycle statements in [`frontend/SPEC.md`](../../frontend/SPEC.md) and change it only if any statement implies that clients observe an in-progress period status.
+- Specification-only change to [`docs/SPEC.md`](../../../docs/SPEC.md) and [`backend/SPEC.md`](../../../backend/SPEC.md). Review allocation lifecycle statements in [`frontend/SPEC.md`](../../../frontend/SPEC.md) and change it only if any statement implies that clients observe an in-progress period status.
 - In `backend/SPEC.md`, remove `ALLOCATING` from the application-period status set. Document the period statuses as `DRAFT`, `OPEN`, `CLOSED`, `ALLOCATED`, and `FINALIZED`, with the existing lifecycle meanings preserved.
 - In `docs/SPEC.md`, replace the “Applications closed / allocation running” lifecycle stage with a stage describing that applications close and the initial allocation is processed synchronously. Make clear that the externally visible period state transitions to `ALLOCATED` after a successful run or remains/becomes `CLOSED` after a failed run; the period does not expose an intermediate `ALLOCATING` state.
 - Preserve the distinct allocation-run status lifecycle. The run may be stored internally as `RUNNING` while the synchronous transaction executes, then becomes `COMPLETED` or `FAILED`; this ticket does not remove or rename `RUNNING` for allocation-run records.
@@ -38,5 +38,5 @@ The owner confirmed that allocation remains synchronous and selected the documen
 
 ## Specification changes
 
-- Review all occurrences concerning application-period states, deadline-triggered initial runs, allocation-run states, and allocation completion in [`docs/SPEC.md`](../../docs/SPEC.md), [`backend/SPEC.md`](../../backend/SPEC.md), and [`frontend/SPEC.md`](../../frontend/SPEC.md), not only the named lifecycle paragraph. Update the two contradictory requirements above and ensure the three specifications contain no conflicting lifecycle description.
+- Review all occurrences concerning application-period states, deadline-triggered initial runs, allocation-run states, and allocation completion in [`docs/SPEC.md`](../../../docs/SPEC.md), [`backend/SPEC.md`](../../../backend/SPEC.md), and [`frontend/SPEC.md`](../../../frontend/SPEC.md), not only the named lifecycle paragraph. Update the two contradictory requirements above and ensure the three specifications contain no conflicting lifecycle description.
 - No OpenAPI regeneration is required because API annotations, request/response models, and validation are unchanged.
