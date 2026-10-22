@@ -132,8 +132,8 @@ class ApplicationPeriodLifecycleApiTest {
                 .andExpect(status().isOk());
         JsonNode early = mapper.readTree(mockMvc.perform(post(allocationPath()).header("Authorization", bearer(admin)))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString());
-        assertTrue(early.path("early").asBoolean());
-        assertFalse(early.path("initial").asBoolean());
+        assertBooleanProperty(early, "early", true);
+        assertBooleanProperty(early, "initial", false);
 
         clock.set(CLOSES_AT);
         StoredRecord period = store.repository().findById(periodId).orElseThrow();
@@ -142,11 +142,11 @@ class ApplicationPeriodLifecycleApiTest {
         List<StoredRecord> runsAfterFirstScheduler = store.repository()
                 .findByTypeAndParentId("allocation_run", periodId.toString());
         List<? extends JsonNode> initialRuns = runsAfterFirstScheduler.stream().map(store::parse)
-                .filter(run -> run.path("initial").isBoolean() && run.path("initial").booleanValue())
+                .filter(run -> booleanProperty(run, "initial"))
                 .toList();
         assertEquals(1, initialRuns.size());
-        assertTrue(initialRuns.getFirst().path("early").isBoolean());
-        assertFalse(initialRuns.getFirst().path("early").booleanValue());
+        assertBooleanProperty(initialRuns.getFirst(), "initial", true);
+        assertBooleanProperty(initialRuns.getFirst(), "early", false);
         assertEquals(0, allocations.startDuePeriods());
         assertEquals(runsAfterFirstScheduler.size(), store.repository()
                 .findByTypeAndParentId("allocation_run", periodId.toString()).size());
@@ -176,7 +176,25 @@ class ApplicationPeriodLifecycleApiTest {
         JsonNode replacement = mapper.readTree(mockMvc.perform(post(allocationPath())
                         .header("Authorization", bearer(admin)))
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString());
-        assertFalse(replacement.path("early").asBoolean());
+        assertBooleanProperty(replacement, "early", false);
+        assertBooleanProperty(replacement, "initial", false);
+
+        List<StoredRecord> persistedRuns = store.repository()
+                .findByTypeAndParentId("allocation_run", periodId.toString());
+        assertEquals(3, persistedRuns.size());
+        UUID earlyRunId = UUID.fromString(early.path("id").asText());
+        for (StoredRecord persistedRun : persistedRuns) {
+            JsonNode run = store.parse(persistedRun);
+            boolean initial = booleanProperty(run, "initial");
+            boolean earlyRun = booleanProperty(run, "early");
+            if (initial) {
+                assertFalse(earlyRun);
+            } else if (persistedRun.getId().equals(earlyRunId)) {
+                assertTrue(earlyRun);
+            } else {
+                assertFalse(earlyRun);
+            }
+        }
 
         clock.set(CLOSES_AT.plusNanos(2));
         JsonNode afterClose = getJson("/api/application-periods/" + periodId, student01);
@@ -193,6 +211,18 @@ class ApplicationPeriodLifecycleApiTest {
             }
         }
         throw new AssertionError("The application period was not listed.");
+    }
+
+    private void assertBooleanProperty(JsonNode node, String property, boolean expected) {
+        assertEquals(expected, booleanProperty(node, property),
+                () -> "Expected Boolean property '" + property + "' to be " + expected + " in " + node);
+    }
+
+    private boolean booleanProperty(JsonNode node, String property) {
+        assertTrue(node.has(property), () -> "Expected property '" + property + "' in " + node);
+        JsonNode value = node.get(property);
+        assertTrue(value.isBoolean(), () -> "Expected Boolean property '" + property + "' in " + node);
+        return value.booleanValue();
     }
 
     private String applicationPath() {

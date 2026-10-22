@@ -7,7 +7,6 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -78,8 +77,8 @@ class AllocationEarlyRunApiTest {
                 .andExpect(status().isOk());
 
         JsonNode firstEarlyRun = startRun(adminToken);
-        assertTrue(firstEarlyRun.path("early").asBoolean());
-        assertFalse(firstEarlyRun.path("initial").asBoolean());
+        assertBooleanProperty(firstEarlyRun, "early", true);
+        assertBooleanProperty(firstEarlyRun, "initial", false);
         assertEquals("COMPLETED", firstEarlyRun.path("status").asText());
         assertEquals("OPEN", getPeriod(adminToken).path("status").asText());
         assertEarlyRunAudit(firstEarlyRun.path("id").asText());
@@ -90,12 +89,15 @@ class AllocationEarlyRunApiTest {
         assertEquals("NO_RESULT", getPeriod(studentTokens.get(0)).path("studentAssignment").path("state").asText());
         assertTrue(getPeriod(studentTokens.get(0)).path("studentAssignment").path("projectTitle").isNull());
 
-        mockMvc.perform(get("/api/application-periods/{id}/allocation-runs", periodId)
+        MvcResult listedRuns = mockMvc.perform(get("/api/application-periods/{id}/allocation-runs", periodId)
                         .header("Authorization", bearer(teacherToken)))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.content[0].early").value(true));
-        mockMvc.perform(get("/api/allocation-runs/{id}", firstEarlyRun.path("id").asText())
+                .andExpect(status().isOk()).andReturn();
+        assertBooleanProperty(mapper.readTree(listedRuns.getResponse().getContentAsString())
+                .path("content").get(0), "early", true);
+        MvcResult runDetails = mockMvc.perform(get("/api/allocation-runs/{id}", firstEarlyRun.path("id").asText())
                         .header("Authorization", bearer(teacherToken)))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.early").value(true));
+                .andExpect(status().isOk()).andReturn();
+        assertBooleanProperty(mapper.readTree(runDetails.getResponse().getContentAsString()), "early", true);
         mockMvc.perform(get("/api/application-periods/{id}/allocation-runs", periodId)
                         .header("Authorization", bearer(studentTokens.get(0))))
                 .andExpect(status().isForbidden());
@@ -130,7 +132,8 @@ class AllocationEarlyRunApiTest {
         UUID createdAfterFirstRun = createApplication(studentTokens.get(4), projects);
 
         JsonNode secondEarlyRun = startRun(adminToken);
-        assertTrue(secondEarlyRun.path("early").asBoolean());
+        assertBooleanProperty(secondEarlyRun, "early", true);
+        assertBooleanProperty(secondEarlyRun, "initial", false);
         assertEquals(4, secondEarlyRun.path("applications").size());
         JsonNode persistedSecondRun = store.parse(store.repository()
                 .findById(UUID.fromString(secondEarlyRun.path("id").asText())).orElseThrow());
@@ -150,18 +153,30 @@ class AllocationEarlyRunApiTest {
 
         List<StoredRecord> runs = store.repository().findByTypeAndParentId("allocation_run", periodId.toString());
         assertEquals(3, runs.size());
-        assertEquals(1, runs.stream().filter(run -> store.parse(run).path("initial").asBoolean(false)).count());
-        JsonNode automaticRun = runs.stream().map(store::parse)
-                .filter(run -> run.path("initial").asBoolean(false)).findFirst().orElseThrow();
-        assertFalse(automaticRun.path("early").asBoolean());
+        List<ObjectNode> persistedRuns = runs.stream().map(store::parse).toList();
+        persistedRuns.forEach(run -> {
+            booleanProperty(run, "initial");
+            booleanProperty(run, "early");
+        });
+        List<ObjectNode> automaticRuns = persistedRuns.stream()
+                .filter(run -> booleanProperty(run, "initial")).toList();
+        assertEquals(1, automaticRuns.size());
+        ObjectNode automaticRun = automaticRuns.getFirst();
+        for (JsonNode run : persistedRuns) {
+            boolean initial = booleanProperty(run, "initial");
+            assertBooleanProperty(run, "initial", initial);
+            assertBooleanProperty(run, "early", !initial);
+        }
+        assertBooleanProperty(automaticRun, "initial", true);
+        assertBooleanProperty(automaticRun, "early", false);
         assertEquals(projects.get(1).toString(), assignment(automaticRun, students.get(0)).path("projectId").asText());
         assertEquals("Early Project Two", getPeriod(studentTokens.get(0)).path("studentAssignment")
                 .path("projectTitle").asText());
         assertEquals("ALLOCATED", getPeriod(adminToken).path("status").asText());
 
         JsonNode replacementRun = startRun(adminToken);
-        assertFalse(replacementRun.path("early").asBoolean());
-        assertFalse(replacementRun.path("initial").asBoolean());
+        assertBooleanProperty(replacementRun, "early", false);
+        assertBooleanProperty(replacementRun, "initial", false);
         mockMvc.perform(post("/api/allocation-runs/{id}/finalize", replacementRun.path("id").asText())
                         .header("Authorization", bearer(adminToken)))
                 .andExpect(status().isOk());
@@ -178,7 +193,8 @@ class AllocationEarlyRunApiTest {
         }
 
         JsonNode failedRun = startRun(adminToken);
-        assertTrue(failedRun.path("early").asBoolean());
+        assertBooleanProperty(failedRun, "early", true);
+        assertBooleanProperty(failedRun, "initial", false);
         assertEquals("FAILED", failedRun.path("status").asText());
         assertTrue(failedRun.path("error").asText().contains("at most"));
         assertEquals("OPEN", getPeriod(adminToken).path("status").asText());
@@ -201,9 +217,11 @@ class AllocationEarlyRunApiTest {
 
         StoredRecord legacyRun = store.create("allocation_run", null, periodId.toString(), "COMPLETED",
                 store.object().put("initial", false));
-        mockMvc.perform(get("/api/allocation-runs/{id}", legacyRun.getId())
+        MvcResult legacyResponse = mockMvc.perform(get("/api/allocation-runs/{id}", legacyRun.getId())
                         .header("Authorization", bearer(adminToken)))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.early").value(false));
+                .andExpect(status().isOk()).andReturn();
+        // The stored legacy record intentionally omits "early"; only the API's default is asserted here.
+        assertBooleanProperty(mapper.readTree(legacyResponse.getResponse().getContentAsString()), "early", false);
     }
 
     @Test
@@ -232,15 +250,14 @@ class AllocationEarlyRunApiTest {
         assertEquals("FINALIZED", periodBefore.status());
         assertEquals("FINALIZED", runBefore.status());
         JsonNode seededRun = store.parse(finalizedRun);
-        assertTrue(seededRun.path("initial").isBoolean());
-        assertFalse(seededRun.path("initial").booleanValue());
+        assertBooleanProperty(seededRun, "initial", false);
 
         allocationService.startDuePeriods();
 
         List<StoredRecord> runsAfterScheduler = store.repository()
                 .findByTypeAndParentId("allocation_run", finalizedPeriodId.toString());
         assertEquals(0, runsAfterScheduler.stream().map(store::parse)
-                .filter(run -> run.path("initial").isBoolean() && run.path("initial").booleanValue()).count());
+                .filter(run -> booleanProperty(run, "initial")).count());
         assertEquals(1, runsAfterScheduler.size());
         assertEquals(periodBefore, details(store.repository().findById(finalizedPeriodId).orElseThrow()));
         assertEquals(runBefore, details(store.repository().findById(finalizedRun.getId()).orElseThrow()));
@@ -261,8 +278,14 @@ class AllocationEarlyRunApiTest {
 
         assertEquals(101, allocationService.startDuePeriods());
         for (UUID duePeriod : duePeriods) {
-            assertEquals(1, store.repository().findByTypeAndParentId("allocation_run", duePeriod.toString()).stream()
-                    .filter(run -> store.parse(run).path("initial").asBoolean(false)).count());
+            List<ObjectNode> dueRuns = store.repository()
+                    .findByTypeAndParentId("allocation_run", duePeriod.toString()).stream()
+                    .map(store::parse).toList();
+            dueRuns.forEach(run -> {
+                assertBooleanProperty(run, "initial", true);
+                assertBooleanProperty(run, "early", false);
+            });
+            assertEquals(1, dueRuns.size(), "Each due period must have exactly one automatic initial run.");
         }
     }
 
@@ -273,9 +296,12 @@ class AllocationEarlyRunApiTest {
         store.update(duePeriod, "OPEN", duePayload);
 
         JsonNode replacement = startRunFor(periodId);
-        assertFalse(replacement.path("initial").asBoolean());
-        assertEquals(1, store.repository().findByTypeAndParentId("allocation_run", periodId.toString()).stream()
-                .filter(run -> store.parse(run).path("initial").asBoolean(false)).count());
+        assertBooleanProperty(replacement, "initial", false);
+        assertBooleanProperty(replacement, "early", false);
+        List<ObjectNode> replacementScenarioRuns = persistedRunsFor(periodId);
+        assertEquals(1, replacementScenarioRuns.stream()
+                .filter(run -> booleanProperty(run, "initial")).count());
+        replacementScenarioRuns.forEach(run -> assertBooleanProperty(run, "early", false));
         assertEquals(0, allocationService.startDuePeriods());
 
         UUID editedPeriodId = createPeriod("OPEN", Instant.now().minusSeconds(1));
@@ -287,8 +313,12 @@ class AllocationEarlyRunApiTest {
                                 "closesAt", Instant.now().plusSeconds(3600).toString(),
                                 "projectIds", projects))))
                 .andExpect(status().isOk());
-        assertEquals(1, store.repository().findByTypeAndParentId("allocation_run", editedPeriodId.toString()).stream()
-                .filter(run -> store.parse(run).path("initial").asBoolean(false)).count());
+        List<ObjectNode> editedPeriodRuns = persistedRunsFor(editedPeriodId);
+        assertEquals(1, editedPeriodRuns.stream().filter(run -> booleanProperty(run, "initial")).count());
+        editedPeriodRuns.forEach(run -> {
+            assertBooleanProperty(run, "initial", true);
+            assertBooleanProperty(run, "early", false);
+        });
     }
 
     @Test
@@ -314,10 +344,12 @@ class AllocationEarlyRunApiTest {
             firstScheduler.get(30, TimeUnit.SECONDS);
             secondScheduler.get(30, TimeUnit.SECONDS);
             JsonNode replacement = administrator.get(30, TimeUnit.SECONDS);
-            assertFalse(replacement.path("initial").asBoolean());
+            assertBooleanProperty(replacement, "initial", false);
+            assertBooleanProperty(replacement, "early", false);
         }
-        assertEquals(1, store.repository().findByTypeAndParentId("allocation_run", periodId.toString()).stream()
-                .filter(run -> store.parse(run).path("initial").asBoolean(false)).count());
+        List<ObjectNode> concurrentRuns = persistedRunsFor(periodId);
+        assertEquals(1, concurrentRuns.stream().filter(run -> booleanProperty(run, "initial")).count());
+        concurrentRuns.forEach(run -> assertBooleanProperty(run, "early", false));
     }
 
     @Test
@@ -331,8 +363,17 @@ class AllocationEarlyRunApiTest {
         mockMvc.perform(post("/api/allocation-runs/{id}/finalize", replacement.getId())
                         .header("Authorization", bearer(adminToken)))
                 .andExpect(status().isOk());
-        assertEquals(1, store.repository().findByTypeAndParentId("allocation_run", duePeriodId.toString()).stream()
-                .filter(run -> store.parse(run).path("initial").asBoolean(false)).count());
+        List<ObjectNode> finalizedRuns = persistedRunsFor(duePeriodId);
+        assertEquals(1, finalizedRuns.stream().filter(run -> booleanProperty(run, "initial")).count());
+        for (JsonNode run : finalizedRuns) {
+            boolean initial = booleanProperty(run, "initial");
+            assertBooleanProperty(run, "early", false);
+            if (initial) {
+                assertBooleanProperty(run, "initial", true);
+            } else {
+                assertBooleanProperty(run, "initial", false);
+            }
+        }
         assertEquals("FINALIZED", store.repository().findById(duePeriodId).orElseThrow().getStatus());
     }
 
@@ -341,6 +382,23 @@ class AllocationEarlyRunApiTest {
                         .header("Authorization", bearer(adminToken)))
                 .andExpect(status().isCreated()).andReturn();
         return mapper.readTree(result.getResponse().getContentAsString());
+    }
+
+    private List<ObjectNode> persistedRunsFor(UUID id) {
+        return store.repository().findByTypeAndParentId("allocation_run", id.toString()).stream()
+                .map(store::parse).toList();
+    }
+
+    private void assertBooleanProperty(JsonNode node, String property, boolean expected) {
+        assertEquals(expected, booleanProperty(node, property),
+                () -> "Expected Boolean property '" + property + "' to be " + expected + " in " + node);
+    }
+
+    private boolean booleanProperty(JsonNode node, String property) {
+        assertTrue(node.has(property), () -> "Expected property '" + property + "' in " + node);
+        JsonNode value = node.get(property);
+        assertTrue(value.isBoolean(), () -> "Expected Boolean property '" + property + "' in " + node);
+        return value.booleanValue();
     }
 
     private StoredRecord.Details details(StoredRecord record) {
