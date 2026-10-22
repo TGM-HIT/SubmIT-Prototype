@@ -138,7 +138,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Feature-19](tickets/done/Feature-19.md) | done | Decide the student-grade list student filter |
 | [Feature-20](tickets/done/Feature-20.md) | done | Let students apply together before allocation |
 | [Feature-21](tickets/Feature-21.md) | to-do | Let users choose English or German |
-| [Feature-22](tickets/Feature-22.md) | to-do | Select allocated projects for Formal proposals |
+| [Feature-22](tickets/done/Feature-22.md) | done | Select allocated projects for Formal proposals |
 | [Feature-23](tickets/Feature-23.md) | to-do | Select eligible students for application periods |
 | [Feature-24](tickets/Feature-24.md) | to-do | Decide whether administrators may record grades, metrics, and final grades |
 | [Feature-25](tickets/Feature-25.md) | to-do | Allow teacher and administrator roles on one account |
