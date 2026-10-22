@@ -12,7 +12,8 @@ Tickets that change agent behavior or the harness governing agent execution are 
 - In the Auditor's follow-up classification, use `Agent-` for findings about agent-harness behavior or contracts; preserve the existing `Bug-`, `Dev-`, `Feature-`, and `Optimization-` classifications for their existing scopes.
 - Preserve current ID and plan locations for every existing ticket. Do not migrate, rename, or reclassify tickets that already exist when this category is introduced.
 - Preserve ticket lifecycle, status meanings, role permissions, and all other category classifications.
-- Scope-gate allowances: `harness/plan.md`.
+- Scope-gate allowances: `harness/plan.md`, `harness/roles/ticket-author.md`, and `harness/roles/evaluator.md`.
+- Product-owner authorization (2026-10-22): "Yes, you can amend the ticket" authorizes adding the two required role paths above to the ticket's scope-gate allowances before continuing implementation.
 
 ## Mechanical checks (the Evaluator re-runs)
 
