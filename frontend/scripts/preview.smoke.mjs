@@ -59,6 +59,19 @@ test('only reports intentional offline failures for API requests as expected', (
   assert.deepEqual(expectedOfflineRequestErrors(errors, []), [])
 })
 
+test('measure-overflow reports viewport widths and fails on horizontal document overflow', async () => {
+  const logs = []
+  const client = { send: async () => ({ result: { value: { documentWidth: 390, viewportWidth: 390, bodyWidth: 390 } } }) }
+  await applyPageSteps(client, [{ action: 'measure-overflow' }], { log: (message) => logs.push(message) })
+  assert.match(logs.join(' '), /document width: 390px; viewport: 390px; body: 390px/)
+
+  const overflowing = { send: async () => ({ result: { value: { documentWidth: 420, viewportWidth: 390, bodyWidth: 420 } } }) }
+  await assert.rejects(
+    applyPageSteps(overflowing, [{ action: 'measure-overflow' }], { log: () => undefined }),
+    /Horizontal document overflow: 420px document width exceeds 390px viewport width/,
+  )
+})
+
 test('G8 parses scoped attribute selectors without consuming assignment characters in CSS or input values', () => {
   const selector = '[data-period-label="Apply together walkthrough"] [id^="lookup-"]'
   const parsed = parseArgs(['--step', `fill:${selector}=Noah=a`, '--fill', `${selector}=Noah=b`,
@@ -104,6 +117,7 @@ test('parses preview options and rejects incomplete or invalid invocations', () 
     { action: 'offline' },
     { action: 'online' },
   ])
+  assert.deepEqual(parseArgs(['--step', 'measure-overflow']).steps, [{ action: 'measure-overflow' }])
   assert.throws(() => parseArgs(['--step', 'select-index:#teacher-id=-1']), /NONNEGATIVE_INDEX/)
   assert.throws(
     () => parseArgs(['--step', 'click-row-action:teacher01']),

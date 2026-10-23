@@ -177,10 +177,10 @@ export function parseArgs(args) {
           } else {
             options.steps.push({ action, value: argument })
           }
-        } else if (['accept-confirms', 'reject-confirms', 'offline', 'online'].includes(action) && !argument) {
+        } else if (['accept-confirms', 'reject-confirms', 'offline', 'online', 'measure-overflow'].includes(action) && !argument) {
           options.steps.push({ action })
         } else {
-          throw new Error('--step must be fill:SELECTOR=VALUE, select-index:SELECTOR=INDEX, click-record-action:TITLE_OR_ID|SELECTOR, read-record:TITLE_OR_ID, click:SELECTOR, wait:SELECTOR, read:SELECTOR, focus:SELECTOR, scroll:SELECTOR, screenshot:FILE, key:Tab|Shift+Tab|Escape, accept-confirms, reject-confirms, offline, or online.')
+          throw new Error('--step must be fill:SELECTOR=VALUE, select-index:SELECTOR=INDEX, click-record-action:TITLE_OR_ID|SELECTOR, read-record:TITLE_OR_ID, click:SELECTOR, wait:SELECTOR, read:SELECTOR, focus:SELECTOR, scroll:SELECTOR, screenshot:FILE, key:Tab|Shift+Tab|Escape, accept-confirms, reject-confirms, offline, online, or measure-overflow.')
         }
       } else {
         options[name] = value
@@ -1149,6 +1149,16 @@ export async function applyPageSteps(client, steps, { outputDir, log = console.l
         uploadThroughput: offline ? 0 : -1,
       })
       log(`Browser network is ${offline ? 'offline' : 'online'} for subsequent preview steps.`)
+    } else if (step.action === 'measure-overflow') {
+      const metrics = await evaluatePage(client, `(() => ({
+        documentWidth: document.documentElement.scrollWidth,
+        viewportWidth: document.documentElement.clientWidth,
+        bodyWidth: document.body.scrollWidth,
+      }))()`, 'measure horizontal document overflow')
+      log(`Horizontal document width: ${metrics.documentWidth}px; viewport: ${metrics.viewportWidth}px; body: ${metrics.bodyWidth}px.`)
+      if (metrics.documentWidth > metrics.viewportWidth) {
+        throw new Error(`Horizontal document overflow: ${metrics.documentWidth}px document width exceeds ${metrics.viewportWidth}px viewport width.`)
+      }
     } else if (step.action === 'key') {
       const key = step.value === 'Shift+Tab' ? 'Tab' : step.value
       const code = key === 'Tab' ? 'Tab' : 'Escape'
@@ -1447,7 +1457,7 @@ Use --fill, --click, --wait-for, and --expand-select to perform reusable preview
 or repeat --step ACTION:VALUE to sequence conditional flows. Steps support fill:SELECTOR=VALUE, click:SELECTOR,
 click-row-action:USERNAME|SELECTOR,
 wait:SELECTOR, read:SELECTOR, focus:SELECTOR, scroll:SELECTOR, key:Tab|Shift+Tab|Escape, select-index:SELECTOR=INDEX, screenshot:FILE, accept-confirms, reject-confirms, offline, or online.
-offline/online change the browser's network state only after the page is loaded, for reusable local failure/offline scenarios; intentional API disconnect errors remain in the network report but do not fail the preview.
+offline/online change the browser's network state only after the page is loaded, for reusable local failure/offline scenarios; intentional API disconnect errors remain in the network report but do not fail the preview. measure-overflow reports document/body/viewport widths and fails on horizontal document overflow.
 --network-report prints local API method/URL/initiator/status/completion evidence, excluding authentication requests, headers and payloads.
 for example to load a form that requires a project ID before its details are shown. Use --tab-to and
 --select-by-key for browser keyboard navigation. On macOS, use --headed and --native-select-by-key for GUI
