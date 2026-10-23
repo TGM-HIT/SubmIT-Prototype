@@ -15,6 +15,7 @@ class CommitScope {
         "frontend/index.html",
         "frontend/package.json",
         "frontend/package-lock.json",
+        "frontend/vite.config.ts",
         "frontend/DEV-GUIDELINES.md",
         "backend/DEV-GUIDELINES.md",
         "frontend/public/favicon.ico",
