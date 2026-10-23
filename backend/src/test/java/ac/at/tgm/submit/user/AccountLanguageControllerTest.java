@@ -1,8 +1,8 @@
 package ac.at.tgm.submit.user;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.hamcrest.Matchers.containsString;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -12,6 +12,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import ac.at.tgm.submit.security.AuthenticatedUser;
 import ac.at.tgm.submit.security.JwtService;
 import ac.at.tgm.submit.security.Role;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -31,6 +33,8 @@ class AccountLanguageControllerTest {
     private UserAccountRepository users;
     @Autowired
     private JwtService jwtService;
+    @Autowired
+    private ObjectMapper objectMapper;
 
     private UserAccount admin;
     private UserAccount teacher;
@@ -118,12 +122,33 @@ class AccountLanguageControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.role").value("TEACHER"))
                 .andExpect(jsonPath("$.language").value("de"));
-        mockMvc.perform(get("/api/users?page=0&size=100")
+        String accountListResponse = mockMvc.perform(get("/api/users?page=0&size=100")
                         .header("Authorization", bearer(admin)))
                 .andExpect(status().isOk())
-                .andExpect(content().string(containsString(
-                        "\"username\":\"student\",\"displayName\":\"Renamed student\"")))
-                .andExpect(content().string(containsString("\"role\":\"TEACHER\",\"language\":\"de\"")));
+                .andReturn().getResponse().getContentAsString();
+        JsonNode accountList = objectMapper.readTree(accountListResponse);
+        JsonNode accounts = accountList.path("content");
+        assertTrue(accounts.isArray(), "account-list content must be an array");
+        JsonNode listedStudent = null;
+        int studentMatches = 0;
+        for (JsonNode account : accounts) {
+            JsonNode username = account.path("username");
+            if (username.isTextual() && "student".equals(username.textValue())) {
+                listedStudent = account;
+                studentMatches++;
+            }
+        }
+        assertEquals(1, studentMatches, "account list must contain exactly one student");
+        assertNotNull(listedStudent);
+        JsonNode listedDisplayName = listedStudent.path("displayName");
+        JsonNode listedRole = listedStudent.path("role");
+        JsonNode listedLanguage = listedStudent.path("language");
+        assertTrue(listedDisplayName.isTextual(), "student displayName must be a string");
+        assertEquals("Renamed student", listedDisplayName.textValue());
+        assertTrue(listedRole.isTextual(), "student role must be a string");
+        assertEquals("TEACHER", listedRole.textValue());
+        assertTrue(listedLanguage.isTextual(), "student language must be a string");
+        assertEquals("de", listedLanguage.textValue());
         UserAccount persisted = users.findById(student.getId()).orElseThrow();
         assertEquals("Renamed student", persisted.getDisplayName());
         assertEquals("unused-password-hash", persisted.getPasswordHash());
