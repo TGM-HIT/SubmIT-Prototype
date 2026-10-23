@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import AllocationPage from './AllocationPage.vue'
+import { ApiError } from '../../api/client'
 
 const api = vi.hoisted(() => ({
   listPeriods: vi.fn(),
@@ -429,7 +430,7 @@ describe('allocation supervisor display', () => {
 
   it("shows pin loading errors and retries the list request", async () => {
     state.role = "ADMIN"
-    api.listPins.mockRejectedValueOnce(new Error("Pin list unavailable"))
+    api.listPins.mockRejectedValueOnce(new ApiError("Pin list unavailable", 503))
     const page = mountPage()
     await flushPromises()
     expect(page.text()).toContain("Pin list unavailable")

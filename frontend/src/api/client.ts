@@ -1,4 +1,5 @@
 import type { components } from './schema'
+import { i18n } from '../i18n'
 
 export type Role = components['schemas']['UserResponse']['role']
 export type User = components['schemas']['UserResponse']
@@ -15,6 +16,7 @@ export class ApiError extends Error {
     message: string,
     readonly status: number,
     readonly details?: unknown,
+    readonly source: 'backend' | 'client' = 'backend',
   ) {
     super(message)
     this.name = 'ApiError'
@@ -55,23 +57,27 @@ export async function request<T>(path: string, options: RequestOptions = {}): Pr
       body: body instanceof FormData ? body : body === undefined ? undefined : JSON.stringify(body),
     })
   } catch (error) {
-    throw new ApiError(error instanceof Error ? error.message : 'Unable to reach the server.', 0)
+    throw new ApiError(String(i18n.global.t('errors.network')), 0, undefined, 'client')
   }
   if (response.status === 401 && !isPublic) {
     unauthorizedHandler()
   }
   if (!response.ok) {
-    let message = `Request failed (${response.status}).`
+    let message = String(i18n.global.t('errors.requestFailed', { status: response.status }))
     let details: unknown
     try {
-      details = await response.json()
-      if (typeof details === 'object' && details !== null && 'message' in details) {
-        message = String(details.message)
+      const contentType = response.headers.get('content-type') ?? ''
+      if (contentType.includes('application/json')) {
+        details = await response.json()
       }
     } catch {
-      message = response.statusText || message
+      // A malformed/non-JSON response is a client-facing fallback, not server prose.
     }
-    throw new ApiError(message, response.status, details)
+    if (typeof details === 'object' && details !== null
+      && 'message' in details && typeof details.message === 'string') {
+      throw new ApiError(details.message, response.status, details, 'backend')
+    }
+    throw new ApiError(message, response.status, details, 'client')
   }
   if (response.status === 204) return undefined as T
   const contentType = response.headers.get('content-type') ?? ''

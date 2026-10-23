@@ -1,5 +1,6 @@
 import { ref } from 'vue'
 import { ApiError } from '../api/client'
+import { i18n } from '../i18n'
 
 export function useTask() {
   const loading = ref(false)
@@ -15,7 +16,9 @@ export function useTask() {
       success.value = message
       return result
     } catch (reason) {
-      error.value = reason instanceof ApiError ? reason.message : 'Something went wrong. Please retry.'
+      error.value = reason instanceof ApiError && reason.source === 'backend'
+        ? reason.message
+        : String(i18n.global.t('errors.unexpected'))
       return undefined
     } finally {
       loading.value = false

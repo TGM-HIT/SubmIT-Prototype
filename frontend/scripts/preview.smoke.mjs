@@ -11,6 +11,7 @@ import {
   applyPageSteps,
   collectBrowserErrors,
   networkReport,
+  expectedOfflineRequestErrors,
   formatNativeInputFailure,
   parseArgs,
   readSession,
@@ -44,6 +45,18 @@ test('G8 optional network evidence includes completion and initiator without aut
     initiator: 'http://localhost/src/api/client.ts', status: 200, loadingFinished: true,
     loadingFailed: false, canceled: 'unavailable (no failure event)',
   }])
+})
+
+test('only reports intentional offline failures for API requests as expected', () => {
+  const url = 'http://localhost/api/users/123/language'
+  const failure = `request failed: net::ERR_INTERNET_DISCONNECTED; url=${url}; method=PATCH; type=Fetch`
+  const resourceError = `browser log: Failed to load resource: net::ERR_INTERNET_DISCONNECTED at ${url}:0`
+  const errors = [failure, resourceError, 'console.error: unexpected application failure']
+  errors.requests = new Map([['language', {
+    url, method: 'PATCH', loadingFailed: true, errorText: 'net::ERR_INTERNET_DISCONNECTED',
+  }]])
+  assert.deepEqual(expectedOfflineRequestErrors(errors, [{ action: 'offline' }]), [failure, resourceError])
+  assert.deepEqual(expectedOfflineRequestErrors(errors, []), [])
 })
 
 test('G8 parses scoped attribute selectors without consuming assignment characters in CSS or input values', () => {
@@ -86,6 +99,10 @@ test('parses preview options and rejects incomplete or invalid invocations', () 
   ])
   assert.deepEqual(parseArgs(['--step', 'reject-confirms']).steps, [
     { action: 'reject-confirms' },
+  ])
+  assert.deepEqual(parseArgs(['--step', 'offline', '--step', 'online']).steps, [
+    { action: 'offline' },
+    { action: 'online' },
   ])
   assert.throws(() => parseArgs(['--step', 'select-index:#teacher-id=-1']), /NONNEGATIVE_INDEX/)
   assert.throws(
@@ -398,6 +415,22 @@ test('selects an enabled option by index and dispatches the normal select events
     },
   }, [{ action: 'select-index', selector: '#teacher-id', index: 1 }], {
     log: (message) => logs.push(message),
+  })
+
+  test('offline and online preview steps toggle CDP network emulation after page load', async () => {
+    const calls = []
+    const logs = []
+    await applyPageSteps({
+      async send(method, params) { calls.push([method, params]); return {} },
+    }, [{ action: 'offline' }, { action: 'online' }], {
+      log: (message) => logs.push(message),
+    })
+    assert.deepEqual(calls, [
+      ['Network.emulateNetworkConditions', { offline: true, latency: 0, downloadThroughput: 0, uploadThroughput: 0 }],
+      ['Network.emulateNetworkConditions', { offline: false, latency: 0, downloadThroughput: -1, uploadThroughput: -1 }],
+    ])
+    assert.match(logs.join(' '), /network is offline/)
+    assert.match(logs.join(' '), /network is online/)
   })
   assert.match(expressions[0], /selectedIndex = index/)
   assert.match(expressions[0], /new Event\('change'/)

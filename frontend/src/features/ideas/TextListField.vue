@@ -1,6 +1,6 @@
 <template>
   <div class="field">
-    <label class="label">{{ label }} · one entry per line</label>
+    <label class="label">{{ label }} · {{ $t('common.oneEntryPerLine') }}</label>
     <textarea :value="modelValue.join('\n')" class="textarea" required @input="update" />
   </div>
 </template>

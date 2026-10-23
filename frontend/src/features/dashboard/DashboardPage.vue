@@ -10,12 +10,12 @@
         </article>
         <article class="panel stat-card">
           <p class="eyebrow">{{ $t('dashboard.periods') }}</p>
-          <p class="stat-value">{{ periods.totalElements ?? '—' }}</p>
+          <p class="stat-value">{{ periods.totalElements === undefined ? '—' : number(periods.totalElements) }}</p>
           <p class="muted">{{ openPeriod ? $t('dashboard.openUntil', { date: date(openPeriod.closesAt) }) : $t('dashboard.noOpenPeriod') }}</p>
         </article>
         <article class="panel stat-card">
           <p class="eyebrow">{{ $t('dashboard.ideas') }}</p>
-          <p class="stat-value">{{ ideas.totalElements ?? '—' }}</p>
+          <p class="stat-value">{{ ideas.totalElements === undefined ? '—' : number(ideas.totalElements) }}</p>
           <p class="muted">{{ roleHint }}</p>
         </article>
       </div>
@@ -64,12 +64,13 @@ import type { Page } from '../../api/client'
 import { useAuthStore } from '../../stores/auth'
 import { useTask } from '../../composables/useTask'
 import AsyncPanel from '../../components/AsyncPanel.vue'
-import { i18n } from '../../i18n'
+import { formatNumber, i18n } from '../../i18n'
 
 type Period = components['schemas']['ApplicationPeriodResponse']
 type Idea = components['schemas']['IdeaResponse']
 const auth = useAuthStore()
 const task = useTask()
+const number = formatNumber
 const years = ref<string[]>([])
 const periods = ref<Page<Period>>({ content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 })
 const ideas = ref<Page<Idea>>({ content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 })
@@ -96,7 +97,12 @@ function assignmentSummary(state?: string): string {
   return String(i18n.global.t('dashboard.noAssignment'))
 }
 function readable(value?: string): string {
-  return (value ?? 'Unknown').replaceAll('_', ' ').toLowerCase().replace(/^./, (s) => s.toUpperCase())
+  if (!value) return String(i18n.global.t('common.unknown'))
+  const key = `applications.states.${value.toLowerCase()}`
+  if (i18n.global.te(key)) return String(i18n.global.t(key))
+  const ideaKey = `ideas.states.${value.toLowerCase()}`
+  if (i18n.global.te(ideaKey)) return String(i18n.global.t(ideaKey))
+  return value
 }
 async function load(): Promise<void> {
   await task.run(async () => {

@@ -250,27 +250,67 @@ class OpenApiContractTest {
     @Test
     void accountLanguageOperationAndSchemaAreExact() throws Exception {
         JsonNode document = apiDocument();
-        JsonNode operation = document.path("paths").path("/api/users/{id}/language").path("patch");
-        for (String status : List.of("200", "400", "401", "403", "404")) {
-            assertTrue(operation.path("responses").has(status), "Missing language endpoint status " + status);
-        }
-        assertTrue(operation.path("requestBody").path("required").asBoolean());
+        JsonNode path = document.path("paths").path("/api/users/{id}/language");
+        assertTrue(path.isObject(), "The exact language endpoint must be documented.");
+        assertEquals(Set.of("patch"), fieldNames(path), "The language path exposes only PATCH.");
+        JsonNode operation = path.path("patch");
+        assertEquals(Set.of("200", "400", "401", "403", "404"), fieldNames(operation.path("responses")));
+        JsonNode body = operation.path("requestBody");
+        assertTrue(body.path("required").isBoolean());
+        assertTrue(body.path("required").booleanValue());
         assertEquals("#/components/schemas/LanguageRequest",
-                operation.path("requestBody").path("content").path("application/json").path("schema")
-                        .path("$ref").asText());
+                body.path("content").path("application/json").path("schema").path("$ref").asText());
 
         JsonNode schemas = document.path("components").path("schemas");
         JsonNode languageRequest = schemas.path("LanguageRequest");
-        Set<String> required = new TreeSet<>();
-        languageRequest.path("required").forEach(value -> required.add(value.asText()));
-        Set<String> languages = new TreeSet<>();
-        languageRequest.path("properties").path("language").path("enum")
-                .forEach(value -> languages.add(value.asText()));
-        Set<String> userRequired = new TreeSet<>();
-        schemas.path("UserResponse").path("required").forEach(value -> userRequired.add(value.asText()));
-        assertEquals(Set.of("language"), required);
-        assertEquals(Set.of("de", "en"), languages);
+        assertTrue(languageRequest.isObject());
+        assertEquals("object", languageRequest.path("type").asText());
+        assertTrue(languageRequest.path("required").isArray());
+        assertEquals(Set.of("language"), textualMembers(languageRequest.path("required")));
+        JsonNode languageProperty = languageRequest.path("properties").path("language");
+        assertEquals("string", languageProperty.path("type").asText());
+        assertTrue(languageProperty.path("enum").isArray());
+        assertEquals(Set.of("de", "en"), textualMembers(languageProperty.path("enum")));
+        JsonNode userResponse = schemas.path("UserResponse");
+        assertEquals("object", userResponse.path("type").asText());
+        assertTrue(userResponse.path("required").isArray());
+        Set<String> userRequired = textualMembers(userResponse.path("required"));
         assertTrue(userRequired.contains("language"));
+        assertEquals("string", userResponse.path("properties").path("language").path("type").asText());
+        assertTrue(userResponse.path("properties").path("language").path("enum").isArray());
+        assertEquals(Set.of("de", "en"),
+                textualMembers(userResponse.path("properties").path("language").path("enum")));
+        for (String responseStatus : List.of("200", "400", "401", "403", "404")) {
+            JsonNode responseContent = operation.path("responses").path(responseStatus).path("content");
+            assertTrue(responseContent.isObject(), "Response content is required for status " + responseStatus);
+            Set<String> mediaSchemas = new TreeSet<>();
+            responseContent.elements().forEachRemaining(mediaType -> {
+                JsonNode responseSchema = mediaType.path("schema");
+                assertTrue(responseSchema.isObject());
+                mediaSchemas.add(responseSchema.path("$ref").asText());
+            });
+            assertEquals(Set.of(responseStatus.equals("200") ? "#/components/schemas/UserResponse"
+                    : "#/components/schemas/ApiErrorResponse"), mediaSchemas, responseStatus);
+        }
+        JsonNode userRequiredArray = userResponse.path("required");
+        assertTrue(textualMembers(userRequiredArray).contains("language"));
+    }
+
+    private static Set<String> fieldNames(JsonNode node) {
+        assertTrue(node.isObject(), "Expected a JSON object node.");
+        Set<String> result = new TreeSet<>();
+        node.fieldNames().forEachRemaining(result::add);
+        return result;
+    }
+
+    private static Set<String> textualMembers(JsonNode node) {
+        assertTrue(node.isArray(), "Expected a JSON array node.");
+        Set<String> result = new TreeSet<>();
+        node.forEach(value -> {
+            assertTrue(value.isTextual(), "Expected a string array member.");
+            result.add(value.textValue());
+        });
+        return result;
     }
 
     @Test

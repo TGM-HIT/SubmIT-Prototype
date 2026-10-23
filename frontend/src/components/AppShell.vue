@@ -11,7 +11,7 @@
           :active-class="item.to === '/' ? 'overview-ancestor-route' : 'router-link-active'"
           class="nav-link"
         >
-          <span aria-hidden="true">{{ item.icon }}</span>{{ item.label }}
+          <span aria-hidden="true">{{ item.icon }}</span><span class="nav-label">{{ item.label }}</span>
         </RouterLink>
       </nav>
       <div class="sidebar-bottom">

@@ -2,6 +2,7 @@ import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../api/client'
 import AdminPage from './AdminPage.vue'
+import { formatDate, setLanguage } from '../../i18n'
 
 const api = vi.hoisted(() => ({
   users: vi.fn(),
@@ -88,6 +89,7 @@ describe('administrator account management', () => {
     vi.clearAllMocks()
     vi.unstubAllGlobals()
     vi.useRealTimers()
+    setLanguage('en')
   })
 
   it('applies role and debounced search server-side from the first page, and clear restores the full list', async () => {
@@ -133,6 +135,23 @@ describe('administrator account management', () => {
 
     expect(page.text()).toContain('No accounts match the selected filters.')
     expect(page.text()).not.toContain('No accounts are visible.')
+  })
+
+  it('formats audit timestamps with the selected account locale', async () => {
+    const instant = '2024-02-03T15:04:00Z'
+    setLanguage('de')
+    api.audit.mockResolvedValue(pageResult([{
+      id: 'audit-1', action: 'LOGIN', occurredAt: instant, entityType: 'USER',
+      entityId: 'user-1', actorId: 'actor-1', status: 'RECORDED',
+    }]))
+    const page = pageWith()
+    await flushPromises()
+    const auditTab = page.findAll('[role="tab"]').find((tab) => tab.text() === 'Audit-Verlauf')
+    if (!auditTab) throw new Error('Audit tab is not rendered.')
+    await auditTab.trigger('click')
+    await page.get('.page-heading button').trigger('click')
+    await flushPromises()
+    expect(page.text()).toContain(formatDate(instant, { dateStyle: 'medium', timeStyle: 'short' }))
   })
 
   it('uses one Edit button per row and opens an accessible prefilled modal with unchanged Save disabled', async () => {

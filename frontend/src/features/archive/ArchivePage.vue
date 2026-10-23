@@ -11,7 +11,7 @@
           </article>
         </div>
         <p v-else class="empty">{{ $t('archive.noPublicFiles') }}</p>
-        <div class="pagination"><span>{{ $t('archive.page', { current: publicEntries.page + 1, total: Math.max(publicEntries.totalPages, 1) }) }}</span><div class="actions"><button class="button button-secondary button-small" :disabled="publicEntries.page === 0" @click="loadPublic(publicEntries.page - 1)">{{ $t('archive.previous') }}</button><button class="button button-secondary button-small" :disabled="publicEntries.page + 1 >= publicEntries.totalPages" @click="loadPublic(publicEntries.page + 1)">{{ $t('archive.next') }}</button></div></div>
+        <div class="pagination"><span>{{ $t('archive.page', { current: number(publicEntries.page + 1), total: number(Math.max(publicEntries.totalPages, 1)) }) }}</span><div class="actions"><button class="button button-secondary button-small" :disabled="publicEntries.page === 0" @click="loadPublic(publicEntries.page - 1)">{{ $t('archive.previous') }}</button><button class="button button-secondary button-small" :disabled="publicEntries.page + 1 >= publicEntries.totalPages" @click="loadPublic(publicEntries.page + 1)">{{ $t('archive.next') }}</button></div></div>
       </AsyncPanel>
       <div class="notice">{{ $t('archive.websiteSafety') }}</div>
     </template>
@@ -89,6 +89,8 @@ const requiredTypes = ['WEBSITE_ARCHIVE', 'POSTER', 'SOURCE_DATA']
 function emptyPage<T>(): Page<T> { return { content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 } }
 function readable(value?: string): string {
   if (!value) return String(i18n.global.t('common.unknown'))
+  const typeKey = `archive.types.${value.toLowerCase()}`
+  if (i18n.global.te(typeKey)) return String(i18n.global.t(typeKey))
   const key = `archive.states.${value.toLowerCase()}`
   return i18n.global.te(key) ? String(i18n.global.t(key)) : value
 }

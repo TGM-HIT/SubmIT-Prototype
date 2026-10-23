@@ -1,4 +1,5 @@
 import { createI18n } from 'vue-i18n'
+import { watch } from 'vue'
 import en from './locales/en'
 import de from './locales/de'
 
@@ -24,10 +25,25 @@ export const i18n = createI18n({
   fallbackWarn: true,
 })
 
+function syncDocumentLanguage(language: Language): void {
+  if (typeof document !== 'undefined') document.documentElement.lang = language
+}
+
+watch(i18n.global.locale, (language) => syncDocumentLanguage(language), { immediate: true })
+
 export function setLanguage(language: Language): void {
   i18n.global.locale.value = language
+  syncDocumentLanguage(language)
 }
 
 export function setBrowserLanguage(): void {
   setLanguage(browserLanguage())
+}
+
+export function formatNumber(value: number, options?: Intl.NumberFormatOptions): string {
+  return new Intl.NumberFormat(i18n.global.locale.value, options).format(value)
+}
+
+export function formatDate(value: string | number | Date, options?: Intl.DateTimeFormatOptions): string {
+  return new Intl.DateTimeFormat(i18n.global.locale.value, options).format(new Date(value))
 }

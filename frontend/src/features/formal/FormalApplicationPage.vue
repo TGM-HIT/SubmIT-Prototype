@@ -39,24 +39,24 @@
     <form v-if="editing && current" class="panel stack" @submit.prevent="save">
       <div class="page-heading"><h2 class="section-title">{{ $t('formal.proposal') }}</h2><span class="status-badge" :class="`status-${current.status?.toLowerCase()}`">{{ readable(current.status) }}</span></div>
       <div class="grid grid-2">
-        <div class="field"><label class="label" for="topic">{{ $t('formal.topic') }}</label><input id="topic" v-model="form.topic" class="input" maxlength="200" required /><span class="metric">{{ form.topic.length }}/200</span></div>
+        <div class="field"><label class="label" for="topic">{{ $t('formal.topic') }}</label><input id="topic" v-model="form.topic" class="input" maxlength="200" required /><span class="metric">{{ number(form.topic.length) }}/200</span></div>
         <div class="field"><label class="label" for="partner">{{ $t('formal.partner') }}</label><input id="partner" v-model="form.cooperationPartner" class="input" maxlength="1000" /></div>
       </div>
-      <div class="field"><label class="label" for="situation">{{ $t('formal.situation') }}</label><textarea id="situation" v-model="form.initialSituation" class="textarea" maxlength="400" required /><span class="metric">{{ form.initialSituation.length }}/400</span></div>
-      <div class="field"><label class="label" for="objective">{{ $t('formal.objective') }}</label><textarea id="objective" v-model="form.objective" class="textarea" maxlength="400" required /><span class="metric">{{ form.objective.length }}/400</span></div>
+      <div class="field"><label class="label" for="situation">{{ $t('formal.situation') }}</label><textarea id="situation" v-model="form.initialSituation" class="textarea" maxlength="400" required /><span class="metric">{{ number(form.initialSituation.length) }}/400</span></div>
+      <div class="field"><label class="label" for="objective">{{ $t('formal.objective') }}</label><textarea id="objective" v-model="form.objective" class="textarea" maxlength="400" required /><span class="metric">{{ number(form.objective.length) }}/400</span></div>
       <div class="form-section-title">{{ $t('formal.contributions') }}</div>
       <p class="notice">{{ $t('formal.contributionHelp') }}</p>
       <div v-for="(member, index) in form.members" :key="index" class="panel stack">
-        <div class="page-heading"><h3 class="section-title">{{ $t('formal.groupMember', { number: index + 1 }) }}</h3><button class="button button-secondary button-small" type="button" @click="removeMember(index)">{{ $t('formal.remove') }}</button></div>
+        <div class="page-heading"><h3 class="section-title">{{ $t('formal.groupMember', { number: number(index + 1) }) }}</h3><button class="button button-secondary button-small" type="button" @click="removeMember(index)">{{ $t('formal.remove') }}</button></div>
         <div class="field"><label class="label" :for="`member-id-${index}`">{{ $t('formal.studentId') }}</label><input :id="`member-id-${index}`" v-model.trim="member.studentId" class="input" required /></div>
-        <div class="field"><label class="label" :for="`member-topic-${index}`">{{ $t('formal.individualTopic') }}</label><input :id="`member-topic-${index}`" v-model="member.topic" class="input" maxlength="200" required /><span class="metric">{{ member.topic.length }}/200</span></div>
-        <div class="field"><label class="label" :for="`member-concern-${index}`">{{ $t('formal.concerns') }}</label><textarea :id="`member-concern-${index}`" v-model="member.investigationConcern" class="textarea" maxlength="2400" required /><span class="metric">{{ $t('formal.sharedCharacters', { count: concernsUsed }) }}</span></div>
-        <div class="field"><label class="label" :for="`member-result-${index}`">{{ $t('formal.plannedResult') }}</label><textarea :id="`member-result-${index}`" v-model="member.plannedResult" class="textarea" maxlength="2400" required /><span class="metric">{{ $t('formal.sharedCharacters', { count: resultsUsed }) }}</span></div>
+        <div class="field"><label class="label" :for="`member-topic-${index}`">{{ $t('formal.individualTopic') }}</label><input :id="`member-topic-${index}`" v-model="member.topic" class="input" maxlength="200" required /><span class="metric">{{ number(member.topic.length) }}/200</span></div>
+        <div class="field"><label class="label" :for="`member-concern-${index}`">{{ $t('formal.concerns') }}</label><textarea :id="`member-concern-${index}`" v-model="member.investigationConcern" class="textarea" maxlength="2400" required /><span class="metric">{{ $t('formal.sharedCharacters', { count: number(concernsUsed) }) }}</span></div>
+        <div class="field"><label class="label" :for="`member-result-${index}`">{{ $t('formal.plannedResult') }}</label><textarea :id="`member-result-${index}`" v-model="member.plannedResult" class="textarea" maxlength="2400" required /><span class="metric">{{ $t('formal.sharedCharacters', { count: number(resultsUsed) }) }}</span></div>
       </div>
       <button class="button button-secondary" type="button" @click="addMember">＋ {{ $t('formal.addMember') }}</button>
       <div class="form-section-title">{{ $t('formal.milestones') }}</div>
       <div v-for="(milestone, index) in form.milestones" :key="index" class="grid grid-2">
-        <div class="field"><label class="label" :for="`milestone-${index}`">{{ $t('formal.milestone', { number: index + 1 }) }}</label><input :id="`milestone-${index}`" v-model="milestone.text" class="input" maxlength="1000" required /></div>
+        <div class="field"><label class="label" :for="`milestone-${index}`">{{ $t('formal.milestone', { number: number(index + 1) }) }}</label><input :id="`milestone-${index}`" v-model="milestone.text" class="input" maxlength="1000" required /></div>
         <div class="field"><label class="label" :for="`milestone-date-${index}`">{{ $t('formal.targetDate') }}</label><div class="toolbar"><input :id="`milestone-date-${index}`" v-model="milestone.date" class="input" type="date" required /><button class="button button-secondary button-small" type="button" @click="removeMilestone(index)">{{ $t('formal.remove') }}</button></div></div>
       </div>
       <button class="button button-secondary" type="button" @click="addMilestone">＋ {{ $t('formal.addMilestone') }}</button>
@@ -66,7 +66,7 @@
     <section v-if="current && !editing" class="panel stack">
       <div class="page-heading"><div><h2 class="section-title">{{ current.topic }}</h2><p v-if="isStudent && selectedProject" class="muted">{{ selectedProject.projectTitle }} · {{ selectedProject.periodLabel }} ({{ selectedProject.schoolYear }}) · {{ readable(current.status) }}</p><p v-else class="muted">{{ $t('formal.project') }} {{ current.projectId }} · {{ readable(current.status) }}</p></div><span class="status-badge">{{ readable(current.status) }}</span></div>
       <p><strong>{{ $t('formal.initialSituation') }}</strong><br />{{ current.initialSituation }}</p>
-      <p><strong>{{ $t('formal.objective') }}</strong><br />{{ current.objective }}</p>
+      <p><strong>{{ $t('formal.objectiveDisplay') }}</strong><br />{{ current.objective }}</p>
       <div class="notice">{{ current.status === 'APPROVED' ? $t('formal.approvedNotice') : $t('formal.notApprovedNotice') }}</div>
       <div v-if="editableStatus" class="actions"><button class="button" @click="editing = true">{{ $t('formal.editProposal') }}</button></div>
       <h3 class="form-section-title">{{ $t('formal.teacherReview') }}</h3>
@@ -90,13 +90,14 @@ import { ApiError } from '../../api/client'
 import { formalApi } from '../../api/services'
 import { useAuthStore } from '../../stores/auth'
 import { useTask } from '../../composables/useTask'
-import { i18n } from '../../i18n'
+import { formatNumber, i18n } from '../../i18n'
 
 type FormalApplication = components['schemas']['FormalApplicationResponse']
 type EligibleProject = components['schemas']['EligibleFormalProjectResponse']
 type MemberDraft = { studentId: string; topic: string; investigationConcern: string; plannedResult: string }
 const auth = useAuthStore()
 const task = useTask()
+const number = formatNumber
 const projectId = ref('')
 const selectedProjectId = ref('')
 const eligibleProjects = ref<EligibleProject[]>([])

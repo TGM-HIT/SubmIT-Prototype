@@ -10,7 +10,7 @@
     </button>
     <p v-if="!loading && !error && !groups.content.length" class="empty">{{ $t('applyingGroups.empty') }}</p>
     <article v-for="group in groups.content" :key="group.id" :data-applying-group="group.id" class="panel stack">
-      <h4 :id="`group-${group.id}`" tabindex="-1">{{ $t('applyingGroups.group') }} · {{ group.status }} · {{ $t('applyingGroups.revision', { revision: group.revision }) }}</h4>
+      <h4 :id="`group-${group.id}`" tabindex="-1">{{ $t('applyingGroups.group') }} · {{ groupStatus(group.status) }} · {{ $t('applyingGroups.revision', { revision: number(group.revision) }) }}</h4>
       <p v-if="group.status === 'DISSOLVED'" class="notice">{{ $t('applyingGroups.dissolved') }}</p>
       <p v-else-if="group.status === 'SUBMITTED'" class="success-note">{{ $t('applyingGroups.submitted') }}</p>
       <p v-else class="notice">{{ $t('applyingGroups.draft') }}</p>
@@ -29,7 +29,7 @@
             <button class="button button-secondary" :disabled="busy" @click="mutate(group, 'DECLINE', {}, $event)">{{ $t('applyingGroups.decline') }}</button></div>
         </div>
         <div v-if="group.members.some(member => member.self)" class="actions">
-          <button data-shared-action="approve" class="button" :disabled="busy || group.members.some(member => member.self && member.approved)" @click="mutate(group, 'APPROVE', {}, $event)">{{ $t('applyingGroups.approve', { revision: group.revision }) }}</button>
+          <button data-shared-action="approve" class="button" :disabled="busy || group.members.some(member => member.self && member.approved)" @click="mutate(group, 'APPROVE', {}, $event)">{{ $t('applyingGroups.approve', { revision: number(group.revision) }) }}</button>
           <button v-if="!group.manager" data-shared-action="leave" class="button button-danger" :disabled="busy" @click="confirm(group, 'LEAVE', $event)">{{ $t('applyingGroups.leave') }}</button>
         </div>
         <template v-if="group.manager">
@@ -48,7 +48,7 @@
                 @click="mutate(group, 'INVITE', { studentId: candidate.id }, $event)">{{ $t('applyingGroups.invite', { name: candidate.displayName }) }}</button>
             </li></ul>
             <div class="actions"><button class="button button-secondary" :disabled="lookups[group.id]!.page === 0" @click="search(group, lookups[group.id]!.page - 1)">{{ $t('applyingGroups.previousStudents') }}</button>
-              <span>{{ $t('applyingGroups.studentPage', { current: lookups[group.id]!.page + 1, total: Math.max(1, lookups[group.id]!.totalPages) }) }}</span>
+              <span>{{ $t('applyingGroups.studentPage', { current: number(lookups[group.id]!.page + 1), total: number(Math.max(1, lookups[group.id]!.totalPages)) }) }}</span>
               <button class="button button-secondary" :disabled="lookups[group.id]!.page + 1 >= lookups[group.id]!.totalPages" @click="search(group, lookups[group.id]!.page + 1)">{{ $t('applyingGroups.nextStudents') }}</button></div>
           </template>
           <div v-if="invitations[group.id]" class="stack">
@@ -57,7 +57,7 @@
             <ul><li v-for="invite in invitations[group.id]?.content" :key="invite.studentId">{{ invite.displayName }}
               <button class="button button-secondary button-small" :disabled="busy" @click="mutate(group, 'REVOKE', { studentId: invite.studentId }, $event)">{{ $t('applyingGroups.revoke', { name: invite.displayName }) }}</button></li></ul>
             <div class="actions"><button class="button button-secondary" :disabled="invitations[group.id]!.page === 0" @click="loadInvitations(group, invitations[group.id]!.page - 1)">{{ $t('applyingGroups.previousInvitations') }}</button>
-              <span>{{ $t('applyingGroups.invitationPage', { current: invitations[group.id]!.page + 1, total: Math.max(1, invitations[group.id]!.totalPages) }) }}</span>
+              <span>{{ $t('applyingGroups.invitationPage', { current: number(invitations[group.id]!.page + 1), total: number(Math.max(1, invitations[group.id]!.totalPages)) }) }}</span>
               <button class="button button-secondary" :disabled="invitations[group.id]!.page + 1 >= invitations[group.id]!.totalPages" @click="loadInvitations(group, invitations[group.id]!.page + 1)">{{ $t('applyingGroups.nextInvitations') }}</button></div>
           </div>
           <form class="stack" @submit.prevent="saveRanking(group, $event)">
@@ -88,7 +88,7 @@
     </article>
     <div class="actions" v-if="groups.totalPages > 1">
       <button class="button button-secondary" :disabled="loading || groups.page === 0" @click="load(groups.page - 1)">{{ $t('applyingGroups.previousGroups') }}</button>
-      <span>{{ $t('applyingGroups.groupPage', { current: groups.page + 1, total: groups.totalPages, count: groups.totalElements }) }}</span>
+      <span>{{ $t('applyingGroups.groupPage', { current: number(groups.page + 1), total: number(groups.totalPages), count: number(groups.totalElements) }) }}</span>
       <button class="button button-secondary" :disabled="loading || groups.page + 1 >= groups.totalPages" @click="load(groups.page + 1)">{{ $t('applyingGroups.nextGroups') }}</button>
     </div>
     <p v-if="success" role="status" class="success-note">{{ success }}</p>
@@ -108,6 +108,8 @@ import type { components, operations } from '../../api/schema'
 import type { Page } from '../../api/client'
 import { applyingGroupsApi, ideasApi } from '../../api/services'
 import { i18n } from '../../i18n'
+import { formatNumber } from '../../i18n'
+import { ApiError } from '../../api/client'
 import { useAuthStore } from '../../stores/auth'
 import ModalDialog from '../../components/ModalDialog.vue'
 
@@ -120,6 +122,11 @@ const props = defineProps<{ period: components['schemas']['ApplicationPeriodResp
 const emit = defineEmits<{ changed: [] }>()
 const auth = useAuthStore()
 const t = i18n.global.t.bind(i18n.global)
+const number = formatNumber
+function groupStatus(status: string): string {
+  const key = `applyingGroups.states.${status.toLowerCase()}`
+  return i18n.global.te(key) ? String(i18n.global.t(key)) : status
+}
 const student = computed(() => auth.user?.role === 'STUDENT')
 const now = ref(Date.now())
 const clock = setInterval(() => { now.value = Date.now() }, 1000)
@@ -138,7 +145,7 @@ const invitations = reactive<Record<string, Page<Member>>>({})
 const primary = ref<HTMLButtonElement>(), heading = ref<HTMLHeadingElement>(), cancelControl = ref<HTMLButtonElement>()
 const confirmation = ref<{ group: Group, action: Action, trigger: HTMLElement | null }>()
 const hasMembership = ref(false)
-const message = (cause: unknown) => cause instanceof Error ? cause.message : t('applyingGroups.requestFailed')
+const message = (cause: unknown) => cause instanceof ApiError ? cause.message : t('applyingGroups.requestFailed')
 const title = (id: string) => props.period.projectTitles?.find(project => project.projectId === id)?.title ?? t('applyingGroups.unknownProject')
 
 async function load(page = groups.value.page): Promise<void> {

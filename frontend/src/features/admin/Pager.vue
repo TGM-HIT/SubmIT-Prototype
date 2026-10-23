@@ -1,6 +1,6 @@
 <template>
   <div class="pagination">
-    <span>{{ $t('common.pageRecords', { current: page.page + 1, total: Math.max(page.totalPages, 1), count: page.totalElements }) }}</span>
+    <span>{{ $t('common.pageRecords', { current: number(page.page + 1), total: number(Math.max(page.totalPages, 1)), count: number(page.totalElements) }) }}</span>
     <div class="actions">
       <button class="button button-secondary button-small" :disabled="page.page === 0" @click="$emit('page', page.page - 1)">{{ $t('common.previous') }}</button>
       <button class="button button-secondary button-small" :disabled="page.page + 1 >= page.totalPages" @click="$emit('page', page.page + 1)">{{ $t('common.next') }}</button>
@@ -10,6 +10,8 @@
 
 <script setup lang="ts">
 import type { Page } from '../../api/client'
+import { formatNumber } from '../../i18n'
 defineProps<{ page: Page<unknown> }>()
 defineEmits<{ page: [number] }>()
+const number = formatNumber
 </script>

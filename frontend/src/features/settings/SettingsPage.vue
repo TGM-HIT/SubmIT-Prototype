@@ -47,9 +47,10 @@
 </template>
 
 <script setup lang="ts">
-import { nextTick, ref, watch } from 'vue'
+import { computed, nextTick, ref, watch } from 'vue'
 import type { components } from '../../api/schema'
 import { userApi } from '../../api/services'
+import { ApiError } from '../../api/client'
 import { useAuthStore } from '../../stores/auth'
 import type { Language } from '../../i18n'
 import { i18n } from '../../i18n'
@@ -58,16 +59,27 @@ const auth = useAuthStore()
 const nameInput = ref<HTMLInputElement | null>(null)
 const languageInput = ref<HTMLSelectElement | null>(null)
 const draft = ref(auth.user?.displayName ?? '')
-const error = ref('')
-const success = ref('')
+const savedName = ref(auth.user?.displayName ?? '')
+const nameErrorState = ref<{ key?: string; backend?: string } | null>(null)
+const nameSuccessState = ref(false)
+const error = computed(() => nameErrorState.value?.backend
+  ?? (nameErrorState.value?.key ? String(i18n.global.t(nameErrorState.value.key)) : ''))
+const success = computed(() => nameSuccessState.value ? String(i18n.global.t('settings.nameSaved')) : '')
 const saving = ref(false)
 const languageDraft = ref<Language>(auth.user?.language ?? 'en')
-const languageError = ref('')
-const languageSuccess = ref('')
+const languageErrorState = ref<{ key?: string; backend?: string } | null>(null)
+const languageSuccessState = ref(false)
+const languageError = computed(() => languageErrorState.value?.backend
+  ?? (languageErrorState.value?.key ? String(i18n.global.t(languageErrorState.value.key)) : ''))
+const languageSuccess = computed(() => languageSuccessState.value
+  ? String(i18n.global.t('settings.languageSaved')) : '')
 const languageSaving = ref(false)
 
 watch(() => auth.user?.displayName, (name) => {
-  if (name !== undefined) draft.value = name
+  if (name !== undefined) {
+    if (draft.value === savedName.value) draft.value = name
+    savedName.value = name
+  }
 })
 watch(() => auth.user?.language, (language) => {
   if (language === 'en' || language === 'de') languageDraft.value = language
@@ -80,30 +92,32 @@ async function focusName(): Promise<void> {
 
 async function cancelName(): Promise<void> {
   draft.value = auth.user?.displayName ?? ''
-  error.value = ''
-  success.value = ''
+  nameErrorState.value = null
+  nameSuccessState.value = false
   await focusName()
 }
 
 async function saveName(): Promise<void> {
   const displayName = draft.value.trim()
   if (!displayName || Array.from(displayName).length > 120) {
-    error.value = String(i18n.global.t('settings.invalidName'))
-    success.value = ''
+    nameErrorState.value = { key: 'settings.invalidName' }
+    nameSuccessState.value = false
     return
   }
 
   saving.value = true
-  error.value = ''
-  success.value = ''
+  nameErrorState.value = null
+  nameSuccessState.value = false
   try {
     const updated: components['schemas']['UserResponse'] = await userApi.changeName(auth.user?.id ?? '', displayName)
     auth.updateUser(updated)
     draft.value = updated.displayName ?? displayName
-    success.value = String(i18n.global.t('settings.nameSaved'))
+    nameSuccessState.value = true
     await focusName()
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : String(i18n.global.t('settings.nameSaveFailed'))
+    nameErrorState.value = cause instanceof ApiError && cause.source === 'backend'
+      ? { backend: cause.message }
+      : { key: 'settings.nameSaveFailed' }
   } finally {
     saving.value = false
   }
@@ -116,31 +130,31 @@ async function focusLanguage(): Promise<void> {
 
 async function cancelLanguage(): Promise<void> {
   languageDraft.value = auth.user?.language ?? 'en'
-  languageError.value = ''
-  languageSuccess.value = ''
+  languageErrorState.value = null
+  languageSuccessState.value = false
   await focusLanguage()
 }
 
 async function saveLanguage(): Promise<void> {
   if (languageDraft.value !== 'en' && languageDraft.value !== 'de') {
-    languageError.value = String(i18n.global.t('settings.languageSaveFailed'))
-    languageSuccess.value = ''
+    languageErrorState.value = { key: 'settings.languageSaveFailed' }
+    languageSuccessState.value = false
     return
   }
   languageSaving.value = true
-  languageError.value = ''
-  languageSuccess.value = ''
+  languageErrorState.value = null
+  languageSuccessState.value = false
   try {
     const updated: components['schemas']['UserResponse'] =
       await userApi.changeLanguage(auth.user?.id ?? '', languageDraft.value)
     auth.updateUser(updated)
     languageDraft.value = updated.language
-    languageSuccess.value = String(i18n.global.t('settings.languageSaved'))
+    languageSuccessState.value = true
     await focusLanguage()
   } catch (cause) {
-    languageError.value = cause instanceof Error
-      ? cause.message
-      : String(i18n.global.t('settings.languageSaveFailed'))
+    languageErrorState.value = cause instanceof ApiError && cause.source === 'backend'
+      ? { backend: cause.message }
+      : { key: 'settings.languageSaveFailed' }
   } finally {
     languageSaving.value = false
   }

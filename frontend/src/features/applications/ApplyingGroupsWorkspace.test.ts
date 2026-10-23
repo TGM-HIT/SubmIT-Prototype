@@ -2,6 +2,7 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { components } from '../../api/schema'
 import Workspace from './ApplyingGroupsWorkspace.vue'
+import { ApiError } from '../../api/client'
 
 const api = vi.hoisted(() => ({ list: vi.fn(), create: vi.fn(), change: vi.fn(), invitations: vi.fn(), lookup: vi.fn() }))
 vi.mock('../../api/services', () => ({ applyingGroupsApi: api, ideasApi: { lookupStudents: api.lookup } }))
@@ -98,7 +99,7 @@ describe('G7 shared application consent and interaction', () => {
     expect(document.activeElement).toBe(wrapper.get('#lookup-group').element)
     await wrapper.get('#shared-choice-group').setValue('D')
     await button(wrapper, 'Add shared choice').trigger('click')
-    api.change.mockRejectedValueOnce(new Error('Stale revision: refresh and approve again'))
+    api.change.mockRejectedValueOnce(new ApiError('Stale revision: refresh and approve again', 409))
     await button(wrapper, 'Save shared ranking').trigger('submit'); await flushPromises()
     expect(wrapper.text()).toContain('Stale revision')
     expect(wrapper.get('[aria-label="Current shared ranking"]').text()).not.toContain('D')
@@ -110,7 +111,7 @@ describe('G7 shared application consent and interaction', () => {
   })
 
   it('does not render failed loading as empty and locks all mutation controls at the deadline', async () => {
-    api.list.mockRejectedValueOnce(new Error('Shared workspace unavailable'))
+    api.list.mockRejectedValueOnce(new ApiError('Shared workspace unavailable', 503))
     const wrapper = open(); await flushPromises()
     expect(wrapper.text()).toContain('Shared workspace unavailable')
     expect(wrapper.text()).not.toContain('No shared applications or invitations.')

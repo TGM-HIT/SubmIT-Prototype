@@ -177,10 +177,10 @@ export function parseArgs(args) {
           } else {
             options.steps.push({ action, value: argument })
           }
-        } else if (['accept-confirms', 'reject-confirms'].includes(action) && !argument) {
+        } else if (['accept-confirms', 'reject-confirms', 'offline', 'online'].includes(action) && !argument) {
           options.steps.push({ action })
         } else {
-          throw new Error('--step must be fill:SELECTOR=VALUE, select-index:SELECTOR=INDEX, click-record-action:TITLE_OR_ID|SELECTOR, read-record:TITLE_OR_ID, click:SELECTOR, wait:SELECTOR, read:SELECTOR, focus:SELECTOR, scroll:SELECTOR, screenshot:FILE, key:Tab|Shift+Tab|Escape, or accept-confirms or reject-confirms.')
+          throw new Error('--step must be fill:SELECTOR=VALUE, select-index:SELECTOR=INDEX, click-record-action:TITLE_OR_ID|SELECTOR, read-record:TITLE_OR_ID, click:SELECTOR, wait:SELECTOR, read:SELECTOR, focus:SELECTOR, scroll:SELECTOR, screenshot:FILE, key:Tab|Shift+Tab|Escape, accept-confirms, reject-confirms, offline, or online.')
         }
       } else {
         options[name] = value
@@ -800,6 +800,7 @@ export function collectBrowserErrors(client) {
       if (request) {
         request.loadingFailed = true
         request.canceled = Boolean(params.canceled)
+        request.errorText = params.errorText
       }
       const initiator = request?.initiatorFrameUrl || request?.initiatorUrl || request?.initiatorFunction
         || request?.initiatorType || 'unknown'
@@ -823,7 +824,20 @@ export function networkReport(errors) {
       loadingFinished: request.loadingFinished === true,
       loadingFailed: request.loadingFailed === true,
       canceled: request.canceled ?? 'unavailable (no failure event)',
+      ...(request.errorText ? { error: request.errorText } : {}),
     }))
+}
+
+export function expectedOfflineRequestErrors(errors, steps) {
+  if (!steps.some((step) => step.action === 'offline')) return []
+  const urls = new Set([...(errors.requests?.values() ?? [])]
+    .filter((request) => request.loadingFailed
+      && request.errorText === 'net::ERR_INTERNET_DISCONNECTED'
+      && new URL(request.url).pathname.startsWith('/api/'))
+    .map((request) => request.url))
+  return errors.filter((error) => [...urls].some((url) =>
+    error.includes(url) && (error.startsWith('request failed: net::ERR_INTERNET_DISCONNECTED;')
+      || error.startsWith('browser log: Failed to load resource: net::ERR_INTERNET_DISCONNECTED'))))
 }
 
 export async function evaluatePage(client, expression, description) {
@@ -1126,6 +1140,15 @@ export async function applyPageSteps(client, steps, { outputDir, log = console.l
       const accepted = step.action === "accept-confirms"
       await evaluatePage(client, `window.confirm = () => ${accepted}`, "configure confirmation dialogs in the local preview")
       log(`Preview confirmation dialogs will be ${accepted ? "accepted" : "dismissed"}.`)
+    } else if (step.action === 'offline' || step.action === 'online') {
+      const offline = step.action === 'offline'
+      await client.send('Network.emulateNetworkConditions', {
+        offline,
+        latency: 0,
+        downloadThroughput: offline ? 0 : -1,
+        uploadThroughput: offline ? 0 : -1,
+      })
+      log(`Browser network is ${offline ? 'offline' : 'online'} for subsequent preview steps.`)
     } else if (step.action === 'key') {
       const key = step.value === 'Shift+Tab' ? 'Tab' : step.value
       const code = key === 'Tab' ? 'Tab' : 'Escape'
@@ -1423,7 +1446,8 @@ backend/DEV-GUIDELINES.md and pass --username student01 (or another documented a
 Use --fill, --click, --wait-for, and --expand-select to perform reusable preview interactions after authentication,
 or repeat --step ACTION:VALUE to sequence conditional flows. Steps support fill:SELECTOR=VALUE, click:SELECTOR,
 click-row-action:USERNAME|SELECTOR,
-wait:SELECTOR, read:SELECTOR, focus:SELECTOR, scroll:SELECTOR, key:Tab|Shift+Tab|Escape, select-index:SELECTOR=INDEX, screenshot:FILE, and accept-confirms or reject-confirms (local preview only).
+wait:SELECTOR, read:SELECTOR, focus:SELECTOR, scroll:SELECTOR, key:Tab|Shift+Tab|Escape, select-index:SELECTOR=INDEX, screenshot:FILE, accept-confirms, reject-confirms, offline, or online.
+offline/online change the browser's network state only after the page is loaded, for reusable local failure/offline scenarios; intentional API disconnect errors remain in the network report but do not fail the preview.
 --network-report prints local API method/URL/initiator/status/completion evidence, excluding authentication requests, headers and payloads.
 for example to load a form that requires a project ID before its details are shown. Use --tab-to and
 --select-by-key for browser keyboard navigation. On macOS, use --headed and --native-select-by-key for GUI
@@ -1570,9 +1594,12 @@ export async function run(options, {
       const outputPath = await saveScreenshot(client, options.outputDir, options.screenshot)
       console.log(`Screenshot saved: ${outputPath}`)
     }
-    if (launched.errors.length) {
-      for (const error of launched.errors) console.error(`Browser error: ${error}`)
-      throw new Error(`${launched.errors.length} browser console or request error(s) detected; see details above.`)
+    const expectedOffline = expectedOfflineRequestErrors(launched.errors, options.steps)
+    for (const error of expectedOffline) console.log(`Expected offline API failure: ${error}`)
+    const unexpectedErrors = launched.errors.filter((error) => !expectedOffline.includes(error))
+    if (unexpectedErrors.length) {
+      for (const error of unexpectedErrors) console.error(`Browser error: ${error}`)
+      throw new Error(`${unexpectedErrors.length} browser console or request error(s) detected; see details above.`)
     }
   } finally {
     client?.close()

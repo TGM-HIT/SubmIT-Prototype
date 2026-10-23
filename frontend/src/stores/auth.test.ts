@@ -47,6 +47,7 @@ describe('registration authentication', () => {
     const auth = useAuthStore()
     await auth.login({ username: 'student', password: 'password' })
     expect(i18n.global.locale.value).toBe('de')
+    expect(document.documentElement.lang).toBe('de')
 
     setActivePinia(createPinia())
     expect(useAuthStore().user?.language).toBe('de')
@@ -54,5 +55,6 @@ describe('registration authentication', () => {
 
     useAuthStore().logout()
     expect(i18n.global.locale.value).toBe(resolveBrowserLanguage(navigator.language))
+    expect(document.documentElement.lang).toBe(resolveBrowserLanguage(navigator.language))
   })
 })

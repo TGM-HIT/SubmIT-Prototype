@@ -289,7 +289,7 @@ async function refreshApplicationState(): Promise<void> {
   try {
     periods.value = await periodsApi.list(periods.value.page)
   } catch (cause) {
-    task.error.value = cause instanceof Error ? cause.message : String(i18n.global.t('applications.refreshFailed'))
+    task.error.value = cause instanceof ApiError ? cause.message : String(i18n.global.t('applications.refreshFailed'))
   }
 }
 async function createPeriod(): Promise<void> {

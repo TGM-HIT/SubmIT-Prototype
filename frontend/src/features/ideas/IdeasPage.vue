@@ -2,150 +2,150 @@
   <section class="page">
     <div class="page-heading">
       <div>
-        <p class="page-intro">Follow each submission from initial idea through teacher review and full specification. Idea approval permits specification work; it is not acceptance into the student catalogue.</p>
+        <p class="page-intro">{{ $t('ideas.intro') }}</p>
       </div>
-      <button v-if="canAuthor" id="new-idea-button" class="button" type="button" @click="startCreate">＋ New idea</button>
+      <button v-if="canAuthor" id="new-idea-button" class="button" type="button" @click="startCreate">{{ $t('ideas.newIdea') }}</button>
     </div>
 
     <form v-if="editorOpen" class="panel stack" @submit.prevent="saveIdea">
-      <div class="page-heading"><h2 class="section-title">{{ editingId ? 'Update idea' : 'Create an idea draft' }}</h2><button class="button button-secondary button-small" type="button" @click="editorOpen = false">Close</button></div>
+      <div class="page-heading"><h2 class="section-title">{{ editingId ? $t('ideas.updateIdea') : $t('ideas.createDraft') }}</h2><button class="button button-secondary button-small" type="button" @click="editorOpen = false">{{ $t('ideas.close') }}</button></div>
       <div class="grid grid-2">
-        <div class="field"><label class="label" for="idea-title">Title · up to 200 characters</label><input id="idea-title" v-model="ideaForm.title" class="input" maxlength="200" required /><span class="metric">{{ ideaForm.title.length }}/200</span></div>
-        <div class="field"><label class="label" for="school-year">School year</label><select id="school-year" v-model="ideaForm.schoolYear" class="select" required><option value="" disabled>Select a school year</option><option v-for="year in schoolYears" :key="year" :value="year">{{ year }}</option><option v-if="ideaForm.schoolYear && !schoolYears.includes(ideaForm.schoolYear)" :value="ideaForm.schoolYear">{{ ideaForm.schoolYear }}</option></select></div>
+        <div class="field"><label class="label" for="idea-title">{{ $t('ideas.titleLimit') }}</label><input id="idea-title" v-model="ideaForm.title" class="input" maxlength="200" required /><span class="metric">{{ number(ideaForm.title.length) }}/200</span></div>
+        <div class="field"><label class="label" for="school-year">{{ $t('ideas.schoolYear') }}</label><select id="school-year" v-model="ideaForm.schoolYear" class="select" required><option value="" disabled>{{ $t('ideas.selectYear') }}</option><option v-for="year in schoolYears" :key="year" :value="year">{{ year }}</option><option v-if="ideaForm.schoolYear && !schoolYears.includes(ideaForm.schoolYear)" :value="ideaForm.schoolYear">{{ ideaForm.schoolYear }}</option></select></div>
       </div>
-      <div class="field"><label class="label" for="idea-description">Description · up to 5,000 characters</label><textarea id="idea-description" v-model="ideaForm.description" class="textarea" maxlength="5000" required /><span class="metric">{{ ideaForm.description.length }}/5000</span></div>
-      <div class="field"><label class="label" for="idea-outcome">Intended outcome · up to 2,000 characters</label><textarea id="idea-outcome" v-model="ideaForm.intendedOutcome" class="textarea" maxlength="2000" required /><span class="metric">{{ ideaForm.intendedOutcome.length }}/2000</span></div>
+      <div class="field"><label class="label" for="idea-description">{{ $t('ideas.descriptionLimit') }}</label><textarea id="idea-description" v-model="ideaForm.description" class="textarea" maxlength="5000" required /><span class="metric">{{ number(ideaForm.description.length) }}/5,000</span></div>
+      <div class="field"><label class="label" for="idea-outcome">{{ $t('ideas.intendedOutcomeLimit') }}</label><textarea id="idea-outcome" v-model="ideaForm.intendedOutcome" class="textarea" maxlength="2000" required /><span class="metric">{{ number(ideaForm.intendedOutcome.length) }}/2,000</span></div>
       <fieldset v-if="!editingId && isStudent" class="panel stack collaborator-picker">
-        <legend class="form-section-title">Collaborators ({{ createOwners.length + 1 }}/5 owners)</legend>
-        <label class="label" for="collaborator-lookup">Find students by display name</label>
-        <input id="collaborator-lookup" v-model="studentQuery" class="input" autocomplete="off" placeholder="Search students" />
-        <p v-if="studentLookupLoading" class="muted" role="status">Searching students…</p>
-        <p v-else-if="studentLookupError" class="field-error" role="alert">{{ studentLookupError }} <button class="button button-secondary button-small" type="button" @click="searchStudents">Retry</button></p>
-        <p v-else-if="studentQuery && !studentLookup.length" class="muted">No students found.</p>
-        <div v-if="studentLookup.length" class="choice-list"><button v-for="student in studentLookup" :key="student.id" :data-student-name="student.displayName" class="button button-secondary button-small" type="button" :disabled="createOwners.length >= 4 || createOwners.some(owner => owner.id === student.id)" @click="addCreateOwner(student)">{{ student.displayName }} · Add</button></div>
-        <p v-if="createOwners.length > 0" class="muted">{{ createOwners.map(owner => owner.displayName).join(', ') }} <button v-for="owner in createOwners" :key="owner.id" type="button" class="text-button" :aria-label="`Remove ${owner.displayName}`" @click="removeCreateOwner(owner.id)">Remove</button></p>
-        <p v-if="createOwners.length >= 4" class="muted">The maximum of five owners has been reached.</p>
+        <legend class="form-section-title">{{ $t('ideas.collaboratorsCount', { current: number(createOwners.length + 1) }) }}</legend>
+        <label class="label" for="collaborator-lookup">{{ $t('ideas.findStudents') }}</label>
+        <input id="collaborator-lookup" v-model="studentQuery" class="input" autocomplete="off" :placeholder="$t('ideas.searchStudents')" />
+        <p v-if="studentLookupLoading" class="muted" role="status">{{ $t('ideas.searching') }}</p>
+        <p v-else-if="studentLookupError" class="field-error" role="alert">{{ studentLookupError }} <button class="button button-secondary button-small" type="button" @click="searchStudents">{{ $t('common.retry') }}</button></p>
+        <p v-else-if="studentQuery && !studentLookup.length" class="muted">{{ $t('ideas.noStudents') }}</p>
+        <div v-if="studentLookup.length" class="choice-list"><button v-for="student in studentLookup" :key="student.id" :data-student-name="student.displayName" class="button button-secondary button-small" type="button" :disabled="createOwners.length >= 4 || createOwners.some(owner => owner.id === student.id)" @click="addCreateOwner(student)">{{ student.displayName }} · {{ $t('ideas.add') }}</button></div>
+        <p v-if="createOwners.length > 0" class="muted">{{ createOwners.map(owner => owner.displayName).join(', ') }} <button v-for="owner in createOwners" :key="owner.id" type="button" class="text-button" :aria-label="`${$t('ideas.remove')} ${owner.displayName}`" @click="removeCreateOwner(owner.id)">{{ $t('ideas.remove') }}</button></p>
+        <p v-if="createOwners.length >= 4" class="muted">{{ $t('ideas.maxOwners') }}</p>
       </fieldset>
       <div class="grid grid-2">
-        <div class="field"><label class="label" for="scope">Initial scope points · one per line</label><textarea id="scope" v-model="scopeText" class="textarea" required /><span class="muted">Describe a few assessable features or scope points.</span></div>
-        <div class="field"><label class="label" for="learning">Learning topics · one per line</label><textarea id="learning" v-model="learningText" class="textarea" /><span class="muted">Optional, up to 50 topics of 200 characters each.</span></div>
+        <div class="field"><label class="label" for="scope">{{ $t('ideas.scopeLabel') }}</label><textarea id="scope" v-model="scopeText" class="textarea" required /><span class="muted">{{ $t('ideas.scopeHelp') }}</span></div>
+        <div class="field"><label class="label" for="learning">{{ $t('ideas.learningLabel') }}</label><textarea id="learning" v-model="learningText" class="textarea" /><span class="muted">{{ $t('ideas.learningHelp') }}</span></div>
       </div>
       <div v-if="task.error.value" class="error-box" role="alert">{{ task.error.value }}</div>
-      <div class="actions"><button class="button" :disabled="task.loading.value">{{ task.loading.value ? 'Saving…' : 'Save draft' }}</button><button class="button button-secondary" type="button" @click="editorOpen = false">Cancel</button></div>
+      <div class="actions"><button class="button" :disabled="task.loading.value">{{ task.loading.value ? $t('ideas.saving') : $t('ideas.saveDraft') }}</button><button class="button button-secondary" type="button" @click="editorOpen = false">{{ $t('ideas.cancel') }}</button></div>
     </form>
 
-    <ModalDialog v-if="reviewOpen && selectedIdea" :title="isSpecReview ? 'Review full specification' : 'Review idea'" :return-focus="reviewReturnFocus" :fallback-focus="reviewFallbackFocus" @close="closeReview">
+    <ModalDialog v-if="reviewOpen && selectedIdea" :title="isSpecReview ? $t('ideas.reviewSpecification') : $t('ideas.reviewIdea')" :return-focus="reviewReturnFocus" :fallback-focus="reviewFallbackFocus" @close="closeReview">
       <form class="stack" @submit.prevent="submitReview">
-        <p class="muted">Ratings inform discussion and do not automatically determine the decision.</p>
+        <p class="muted">{{ $t('ideas.ratingHelp') }}</p>
         <div class="grid grid-2">
-          <div class="field"><label class="label" for="decision">Decision</label><select id="decision" v-model="reviewForm.decision" class="select"><option v-if="isSpecReview" value="ACCEPT_FOR_APPLICATIONS">Accept for student applications</option><option v-else value="APPROVE_FOR_SPECIFICATION">Approve full specification work</option><option value="REQUEST_REVISION">Request revision</option><option value="DECLINE">Decline</option></select></div>
-          <div class="field"><label class="label" for="recommendation">Overall recommendation</label><input id="recommendation" v-model="reviewForm.recommendation" class="input" maxlength="2000" /></div>
+          <div class="field"><label class="label" for="decision">{{ $t('ideas.decision') }}</label><select id="decision" v-model="reviewForm.decision" class="select"><option v-if="isSpecReview" value="ACCEPT_FOR_APPLICATIONS">{{ $t('ideas.acceptForApplications') }}</option><option v-else value="APPROVE_FOR_SPECIFICATION">{{ $t('ideas.approveSpecification') }}</option><option value="REQUEST_REVISION">{{ $t('ideas.requestRevision') }}</option><option value="DECLINE">{{ $t('ideas.decline') }}</option></select></div>
+          <div class="field"><label class="label" for="recommendation">{{ $t('ideas.recommendation') }}</label><input id="recommendation" v-model="reviewForm.recommendation" class="input" maxlength="2000" /></div>
         </div>
-        <div class="field"><label class="label" for="feedback">Written feedback · required</label><textarea id="feedback" v-model="reviewForm.feedback" class="textarea" maxlength="5000" required @input="feedbackError = ''" /><span v-if="feedbackError" class="field-error" role="alert">{{ feedbackError }}</span></div>
+        <div class="field"><label class="label" for="feedback">{{ $t('ideas.feedbackRequired') }}</label><textarea id="feedback" v-model="reviewForm.feedback" class="textarea" maxlength="5000" required @input="feedbackError = ''" /><span v-if="feedbackError" class="field-error" role="alert">{{ feedbackError }}</span></div>
         <div class="grid grid-3">
-          <div v-for="rating in ratings" :key="rating.key" class="field"><label class="label" :for="rating.key">{{ rating.label }} (1–5)</label><select :id="rating.key" v-model="reviewForm[rating.key]" class="select"><option value="">Not rated</option><option v-for="value in 5" :key="value" :value="value">{{ value }}</option></select></div>
+          <div v-for="rating in ratings" :key="rating.key" class="field"><label class="label" :for="rating.key">{{ rating.label }} (1–5)</label><select :id="rating.key" v-model="reviewForm[rating.key]" class="select"><option value="">{{ $t('ideas.notRated') }}</option><option v-for="value in 5" :key="value" :value="value">{{ value }}</option></select></div>
         </div>
         <div v-if="task.error.value" class="error-box" role="alert">{{ task.error.value }}</div>
-        <div class="actions"><button class="button" :disabled="task.loading.value">Record decision</button><button class="button button-secondary" type="button" @click="closeReview">Cancel</button></div>
+        <div class="actions"><button class="button" :disabled="task.loading.value">{{ $t('ideas.recordDecision') }}</button><button class="button button-secondary" type="button" @click="closeReview">{{ $t('ideas.cancel') }}</button></div>
       </form>
     </ModalDialog>
 
     <div class="panel stack">
       <div class="toolbar">
-        <div class="field"><label class="label" for="status-filter">Lifecycle status</label><select id="status-filter" v-model="statusFilter" class="select"><option value="">All visible statuses</option><option v-for="status in statuses" :key="status" :value="status">{{ readable(status) }}</option></select></div>
-        <div class="field"><label class="label" for="year-filter">School year</label><select id="year-filter" v-model="yearFilter" class="select"><option value="">All school years</option><option v-for="year in schoolYears" :key="year" :value="year">{{ year }}</option></select></div>
-        <button id="ideas-refresh-list" class="button button-secondary" type="button" @click="load(0)">Refresh list</button>
+        <div class="field"><label class="label" for="status-filter">{{ $t('ideas.lifecycleStatus') }}</label><select id="status-filter" v-model="statusFilter" class="select"><option value="">{{ $t('ideas.allVisibleStatuses') }}</option><option v-for="status in statuses" :key="status" :value="status">{{ readable(status) }}</option></select></div>
+        <div class="field"><label class="label" for="year-filter">{{ $t('ideas.schoolYear') }}</label><select id="year-filter" v-model="yearFilter" class="select"><option value="">{{ $t('ideas.allSchoolYears') }}</option><option v-for="year in schoolYears" :key="year" :value="year">{{ year }}</option></select></div>
+        <button id="ideas-refresh-list" class="button button-secondary" type="button" @click="load(0)">{{ $t('ideas.refreshList') }}</button>
       </div>
       <AsyncPanel :loading="task.loading.value" :error="task.error.value" @retry="load(page.page)">
         <div v-if="visibleIdeas.length" class="data-list">
           <article v-for="idea in visibleIdeas" :key="idea.id" class="data-row">
             <div class="row-main">
               <h3>{{ idea.title }}</h3>
-              <span v-if="idea.teacherIdea" class="status-badge teacher-idea-label">Teacher idea</span>
+              <span v-if="idea.teacherIdea" class="status-badge teacher-idea-label">{{ $t('ideas.teacherIdea') }}</span>
               <p>{{ idea.description }}</p>
-              <p>School year {{ idea.schoolYear }} <span v-if="canSeeOwner"> · Submitted by {{ idea.ownerDisplayName }} · Owners: {{ (idea.owners ?? []).map(owner => canSeeOwner ? `${owner.displayName} — Class: ${owner.className || 'Not assigned'}; Elective subjects: ${owner.electiveSubjectNames?.join(', ') || 'None'}` : owner.displayName).join(', ') || idea.ownerDisplayName }}</span></p>
+              <p>{{ $t('ideas.schoolYear') }} {{ idea.schoolYear }} <span v-if="canSeeOwner"> · {{ $t('ideas.submittedBy') }} {{ idea.ownerDisplayName }} · {{ $t('ideas.ownersLabel') }} {{ (idea.owners ?? []).map(owner => canSeeOwner ? `${owner.displayName} — ${$t('ideas.ownerClass')} ${owner.className || $t('ideas.notAssigned')}; ${$t('ideas.electiveSubjects')} ${owner.electiveSubjectNames?.join(', ') || $t('ideas.none')}` : owner.displayName).join(', ') || idea.ownerDisplayName }}</span></p>
               <p v-if="isTeacher && idea.ownSupervisionPreference" class="muted supervision-summary">
-                <strong>Your supervision preference:</strong> {{ preferenceLabel(idea.ownSupervisionPreference) }}
+                <strong>{{ $t('ideas.yourSupervisionPreference') }}</strong> {{ preferenceLabel(idea.ownSupervisionPreference) }}
               </p>
               <span class="status-badge" :class="`status-${idea.status?.toLowerCase()}`">{{ readable(idea.status) }}</span>
             </div>
             <div class="actions">
-              <button :id="`details-button-${idea.id}`" data-review-focus-fallback class="button button-secondary button-small" type="button" @click="openDetails(idea, $event)">Details &amp; history</button>
-              <button v-if="isTeacher && canReview(idea) && !isCreator(idea)" :id="`review-button-${idea.id}`" class="button button-small" type="button" @click="startReview(idea, $event)">Review</button>
-              <span v-if="isTeacher && canReview(idea) && isCreator(idea)" class="muted">You cannot review your own idea.</span>
-              <button v-if="isAuthor(idea) && editable(idea) && !hasWithdrawnSpecification(idea)" class="button button-secondary button-small" type="button" @click="editIdea(idea)">Edit</button>
-              <button v-if="isAuthor(idea) && editable(idea) && !hasWithdrawnSpecification(idea)" class="button button-small" type="button" @click="submitIdea(idea, $event)">Submit</button>
-              <button v-if="isAuthor(idea) && canWithdraw(idea)" class="button button-danger button-small" type="button" @click="withdrawIdea(idea)">Withdraw</button>
+              <button :id="`details-button-${idea.id}`" data-review-focus-fallback class="button button-secondary button-small" type="button" @click="openDetails(idea, $event)">{{ $t('ideas.detailsHistory') }}</button>
+              <button v-if="isTeacher && canReview(idea) && !isCreator(idea)" :id="`review-button-${idea.id}`" class="button button-small" type="button" @click="startReview(idea, $event)">{{ $t('ideas.review') }}</button>
+              <span v-if="isTeacher && canReview(idea) && isCreator(idea)" class="muted">{{ $t('ideas.cannotReviewOwn') }}</span>
+              <button v-if="isAuthor(idea) && editable(idea) && !hasWithdrawnSpecification(idea)" class="button button-secondary button-small" type="button" @click="editIdea(idea)">{{ $t('ideas.edit') }}</button>
+              <button v-if="isAuthor(idea) && editable(idea) && !hasWithdrawnSpecification(idea)" class="button button-small" type="button" @click="submitIdea(idea, $event)">{{ $t('ideas.submit') }}</button>
+              <button v-if="isAuthor(idea) && canWithdraw(idea)" class="button button-danger button-small" type="button" @click="withdrawIdea(idea)">{{ $t('ideas.withdraw') }}</button>
             </div>
           </article>
         </div>
-        <p v-else class="empty">No ideas match these filters.</p>
-        <div class="pagination"><span>Page {{ page.page + 1 }} of {{ Math.max(page.totalPages, 1) }} · {{ page.totalElements }} submissions</span><div class="actions"><button class="button button-secondary button-small" :disabled="page.page === 0" @click="load(page.page - 1)">Previous</button><button class="button button-secondary button-small" :disabled="page.page + 1 >= page.totalPages" @click="load(page.page + 1)">Next</button></div></div>
+        <p v-else class="empty">{{ $t('ideas.noMatches') }}</p>
+        <div class="pagination"><span>{{ $t('ideas.pageSubmissions', { current: number(page.page + 1), total: number(Math.max(page.totalPages, 1)), count: number(page.totalElements) }) }}</span><div class="actions"><button class="button button-secondary button-small" :disabled="page.page === 0" @click="load(page.page - 1)">{{ $t('ideas.previous') }}</button><button class="button button-secondary button-small" :disabled="page.page + 1 >= page.totalPages" @click="load(page.page + 1)">{{ $t('ideas.next') }}</button></div></div>
       </AsyncPanel>
     </div>
 
-    <ModalDialog v-if="detailsOpen && selectedIdea" title="Idea details &amp; history" :return-focus="detailsReturnFocus" @close="closeDetails">
+    <ModalDialog v-if="detailsOpen && selectedIdea" :title="$t('ideas.detailsTitle')" :return-focus="detailsReturnFocus" @close="closeDetails">
       <section class="stack">
-      <div class="page-heading"><div><h2 class="section-title">{{ selectedIdea.title }} · history</h2><span v-if="selectedIdea.teacherIdea" class="status-badge teacher-idea-label">Teacher idea</span><p class="muted">Submission and decisions remain visible as the project changes stage.</p></div><button id="close-details-button" class="button button-secondary button-small" @click="closeDetails">Close details</button></div>
-      <section class="owner-section" aria-label="Idea owners">
-        <h3 class="form-section-title">Owners ({{ selectedIdea.owners?.length ?? 1 }}/5)</h3>
-        <ul class="owner-list"><li v-for="owner in selectedIdea.owners ?? fallbackOwners(selectedIdea)" :key="owner.id">{{ owner.displayName }}<span v-if="owner.creator"> · Creator</span><span v-if="canSeeOwner"> · Class: {{ owner.className || 'Not assigned' }} · Elective subjects: {{ owner.electiveSubjectNames?.join(', ') || 'None' }}</span>
-          <button v-if="isCreator(selectedIdea) && !owner.creator" class="button button-danger button-small" type="button" :aria-label="`Remove ${owner.displayName}`" @click="requestOwnerConfirmation('remove', selectedIdea, owner.id, $event)">Remove</button>
+      <div class="page-heading"><div><h2 class="section-title">{{ selectedIdea.title }} · {{ $t('ideas.history') }}</h2><span v-if="selectedIdea.teacherIdea" class="status-badge teacher-idea-label">{{ $t('ideas.teacherIdea') }}</span><p class="muted">{{ $t('ideas.decisionsVisible') }}</p></div><button id="close-details-button" class="button button-secondary button-small" @click="closeDetails">{{ $t('ideas.closeDetails') }}</button></div>
+      <section class="owner-section" :aria-label="$t('ideas.ideaOwners')">
+        <h3 class="form-section-title">{{ $t('ideas.owners', { count: number(selectedIdea.owners?.length ?? 1) }) }}</h3>
+        <ul class="owner-list"><li v-for="owner in selectedIdea.owners ?? fallbackOwners(selectedIdea)" :key="owner.id">{{ owner.displayName }}<span v-if="owner.creator"> · {{ $t('ideas.creator') }}</span><span v-if="canSeeOwner"> · {{ $t('ideas.ownerClass') }} {{ owner.className || $t('ideas.notAssigned') }} · {{ $t('ideas.electiveSubjects') }} {{ owner.electiveSubjectNames?.join(', ') || $t('ideas.none') }}</span>
+          <button v-if="isCreator(selectedIdea) && !owner.creator" class="button button-danger button-small" type="button" :aria-label="`${$t('ideas.remove')} ${owner.displayName}`" @click="requestOwnerConfirmation('remove', selectedIdea, owner.id, $event)">{{ $t('ideas.remove') }}</button>
         </li></ul>
         <template v-if="isCreator(selectedIdea) && isStudent">
-          <label class="label" for="details-collaborator-lookup">Add a student</label>
-          <input id="details-collaborator-lookup" v-model="studentQuery" class="input" autocomplete="off" placeholder="Search by display name" />
-          <p v-if="studentLookupLoading" class="muted" role="status">Searching students…</p>
-          <p v-else-if="studentLookupError" class="field-error" role="alert">{{ studentLookupError }} <button class="button button-secondary button-small" type="button" @click="searchStudents">Retry</button></p>
-          <p v-else-if="studentQuery && !studentLookup.length" class="muted">No students found.</p>
-          <div class="choice-list"><button v-for="student in studentLookup" :key="student.id" :data-student-name="student.displayName" class="button button-secondary button-small" type="button" :disabled="(selectedIdea.owners?.length ?? 1) >= 5 || selectedIdea.owners?.some(owner => owner.id === student.id)" @click="addOwner(selectedIdea, student)">{{ student.displayName }} · Add</button></div>
-          <p v-if="(selectedIdea.owners?.length ?? 1) >= 5" class="muted">The maximum of five owners has been reached.</p>
+          <label class="label" for="details-collaborator-lookup">{{ $t('ideas.addStudent') }}</label>
+          <input id="details-collaborator-lookup" v-model="studentQuery" class="input" autocomplete="off" :placeholder="$t('ideas.searchByDisplayName')" />
+          <p v-if="studentLookupLoading" class="muted" role="status">{{ $t('ideas.searching') }}</p>
+          <p v-else-if="studentLookupError" class="field-error" role="alert">{{ studentLookupError }} <button class="button button-secondary button-small" type="button" @click="searchStudents">{{ $t('common.retry') }}</button></p>
+          <p v-else-if="studentQuery && !studentLookup.length" class="muted">{{ $t('ideas.noStudents') }}</p>
+          <div class="choice-list"><button v-for="student in studentLookup" :key="student.id" :data-student-name="student.displayName" class="button button-secondary button-small" type="button" :disabled="(selectedIdea.owners?.length ?? 1) >= 5 || selectedIdea.owners?.some(owner => owner.id === student.id)" @click="addOwner(selectedIdea, student)">{{ student.displayName }} · {{ $t('ideas.add') }}</button></div>
+          <p v-if="(selectedIdea.owners?.length ?? 1) >= 5" class="muted">{{ $t('ideas.maxOwners') }}</p>
         </template>
-        <button v-else-if="isStudent && isOwner(selectedIdea)" id="leave-idea-button" class="button button-danger button-small" type="button" @click="requestOwnerConfirmation('leave', selectedIdea, undefined, $event)">Leave idea</button>
+        <button v-else-if="isStudent && isOwner(selectedIdea)" id="leave-idea-button" class="button button-danger button-small" type="button" @click="requestOwnerConfirmation('leave', selectedIdea, undefined, $event)">{{ $t('ideas.leaveIdea') }}</button>
       </section>
       <div class="grid grid-2">
-        <div><p class="eyebrow">PROJECT DESCRIPTION</p><p class="muted">{{ selectedIdea.description }}</p><p><strong>Intended outcome</strong><br />{{ selectedIdea.intendedOutcome }}</p><p><strong>Initial scope</strong></p><ul class="muted"><li v-for="point in selectedIdea.scopePoints ?? []" :key="point">{{ point }}</li></ul></div>
-        <div><p class="eyebrow">LIFECYCLE</p><p><span class="status-badge">{{ readable(selectedIdea.status) }}</span></p><p class="notice">{{ lifecycleMessage(selectedIdea.status) }}</p><div v-if="selectedIdea.specification"><strong>Specification</strong><p class="muted">Objectives: {{ selectedIdea.specification.objectives?.join(' · ') }}</p><p class="muted">Scope: {{ selectedIdea.specification.scope }}</p></div></div>
+        <div><p class="eyebrow">{{ $t('ideas.projectDescription') }}</p><p class="muted">{{ selectedIdea.description }}</p><p><strong>{{ $t('ideas.intendedOutcome') }}</strong><br />{{ selectedIdea.intendedOutcome }}</p><p><strong>{{ $t('ideas.initialScope') }}</strong></p><ul class="muted"><li v-for="point in selectedIdea.scopePoints ?? []" :key="point">{{ point }}</li></ul></div>
+        <div><p class="eyebrow">{{ $t('ideas.lifecycleTitle') }}</p><p><span class="status-badge">{{ readable(selectedIdea.status) }}</span></p><p class="notice">{{ lifecycleMessage(selectedIdea.status) }}</p><div v-if="selectedIdea.specification"><strong>{{ $t('ideas.specification') }}</strong><p class="muted">{{ $t('ideas.objectives') }} {{ selectedIdea.specification.objectives?.join(' · ') }}</p><p class="muted">{{ $t('ideas.scopeLabel') }} {{ selectedIdea.specification.scope }}</p></div></div>
       </div>
-      <h3 class="form-section-title">Teacher decision history</h3>
-      <div v-if="selectedIdea.reviews?.length" class="data-list"><article v-for="review in selectedIdea.reviews" :key="review.id" class="data-row"><div class="row-main"><h3>{{ readable(review.decision) }}</h3><p>{{ review.feedback }}</p><p class="muted">Teacher {{ review.teacherDisplayName }}<template v-if="review.reviewType === 'SPECIFICATION'"> · ratings reflect professional judgement</template></p><p v-if="recordedRatings(review).length" class="muted">Ratings: {{ recordedRatings(review).join(' · ') }}</p></div></article></div>
-      <p v-else class="muted">No teacher decisions have been recorded.</p>
-      <h3 v-if="selectedIdea.supervisionPreferences?.length" class="form-section-title">Recorded supervision preferences</h3>
+      <h3 class="form-section-title">{{ $t('ideas.teacherDecisionHistory') }}</h3>
+      <div v-if="selectedIdea.reviews?.length" class="data-list"><article v-for="review in selectedIdea.reviews" :key="review.id" class="data-row"><div class="row-main"><h3>{{ readable(review.decision) }}</h3><p>{{ review.feedback }}</p><p class="muted">{{ $t('ideas.teacher') }} {{ review.teacherDisplayName }}<template v-if="review.reviewType === 'SPECIFICATION'"> · {{ $t('ideas.professionalRatings') }}</template></p><p v-if="recordedRatings(review).length" class="muted">{{ $t('ideas.ratings') }} {{ recordedRatings(review).join(' · ') }}</p></div></article></div>
+      <p v-else class="muted">{{ $t('ideas.noDecisions') }}</p>
+      <h3 v-if="selectedIdea.supervisionPreferences?.length" class="form-section-title">{{ $t('ideas.recordedPreferences') }}</h3>
       <div v-for="entry in selectedIdea.supervisionPreferences ?? []" :key="entry.id" class="choice-item"><span>{{ entry.teacherDisplayName }} · {{ preferenceLabel(entry.preference) }}</span><span class="muted">{{ entry.note }}</span></div>
-      <div v-if="isAuthor(selectedIdea) && canSpecify(selectedIdea)" class="actions"><button id="develop-specification" class="button" @click="startSpecification">{{ selectedIdea.status === 'WITHDRAWN' ? 'Edit full specification' : 'Develop full specification' }}</button><button v-if="selectedIdea.status === 'IDEA_APPROVED_FOR_SPECIFICATION'" id="submit-specification" class="button button-secondary" @click="submitSpecification">Submit specification for acceptance review</button></div>
-      <div v-if="isTeacher && canReview(selectedIdea) && !isCreator(selectedIdea)" class="actions"><button id="review-from-details" class="button" type="button" @click="openReview($event)">Review {{ selectedIdea.status === 'SPECIFICATION_SUBMITTED' ? 'specification' : 'idea' }}</button></div>
-      <p v-if="isTeacher && canReview(selectedIdea) && isCreator(selectedIdea)" class="muted" role="note">You cannot review your own idea or specification.</p>
+      <div v-if="isAuthor(selectedIdea) && canSpecify(selectedIdea)" class="actions"><button id="develop-specification" class="button" @click="startSpecification">{{ selectedIdea.status === 'WITHDRAWN' ? $t('ideas.editSpecification') : $t('ideas.developSpecification') }}</button><button v-if="selectedIdea.status === 'IDEA_APPROVED_FOR_SPECIFICATION'" id="submit-specification" class="button button-secondary" @click="submitSpecification">{{ $t('ideas.submitSpecification') }}</button></div>
+      <div v-if="isTeacher && canReview(selectedIdea) && !isCreator(selectedIdea)" class="actions"><button id="review-from-details" class="button" type="button" @click="openReview($event)">{{ selectedIdea.status === 'SPECIFICATION_SUBMITTED' ? $t('ideas.reviewSpecificationAction') : $t('ideas.reviewIdeaAction') }}</button></div>
+      <p v-if="isTeacher && canReview(selectedIdea) && isCreator(selectedIdea)" class="muted" role="note">{{ $t('ideas.cannotReviewOwn') }}</p>
       <form v-if="isTeacher && !['IDEA_DRAFT','WITHDRAWN','DECLINED'].includes(selectedIdea.status ?? '')" class="panel stack" @submit.prevent="savePreference">
-        <h3 class="form-section-title">Your supervision preference</h3>
-        <div class="grid grid-2"><div class="field"><label class="label" for="preference">Preference</label><select id="preference" v-model="preference" class="select"><option value="WANTS_TO_SUPERVISE">Wants to supervise</option><option value="WILLING_TO_SUPERVISE">Willing to supervise</option><option value="NOT_WILLING_TO_SUPERVISE">Not willing</option><option value="NOT_AVAILABLE">Not available</option></select></div><div class="field"><label class="label" for="preference-note">Optional note</label><input id="preference-note" v-model="preferenceNote" class="input" maxlength="2000" /></div></div><button class="button button-secondary" :disabled="task.loading.value">Save preference</button>
+        <h3 class="form-section-title">{{ $t('ideas.yourPreference') }}</h3>
+        <div class="grid grid-2"><div class="field"><label class="label" for="preference">{{ $t('ideas.preference') }}</label><select id="preference" v-model="preference" class="select"><option value="WANTS_TO_SUPERVISE">{{ $t('ideas.wantsToSupervise') }}</option><option value="WILLING_TO_SUPERVISE">{{ $t('ideas.willingToSupervise') }}</option><option value="NOT_WILLING_TO_SUPERVISE">{{ $t('ideas.notWillingToSupervise') }}</option><option value="NOT_AVAILABLE">{{ $t('ideas.notAvailable') }}</option></select></div><div class="field"><label class="label" for="preference-note">{{ $t('ideas.optionalNote') }}</label><input id="preference-note" v-model="preferenceNote" class="input" maxlength="2000" /></div></div><button class="button button-secondary" :disabled="task.loading.value">{{ $t('ideas.savePreference') }}</button>
       </form>
       <form v-if="isAdmin" class="panel stack" @submit.prevent="assignSupervisor">
-        <h3 class="form-section-title">Confirm supervisor</h3><p class="muted">Any teacher can be assigned. Explicit refusals require your acknowledgment.</p>
-        <p v-if="selectedIdea.confirmedSupervisorDisplayName" class="muted">Current supervisor: {{ selectedIdea.confirmedSupervisorDisplayName }}</p>
-        <div class="field"><label class="label" for="teacher-id">Teacher</label><select id="teacher-id" v-model="teacherId" class="select" required @change="refusalAcknowledged = false"><option value="">Select a teacher…</option><optgroup v-for="group in teacherGroups" :key="group.key" :label="group.label"><option v-for="entry in group.teachers" :key="entry.id" :value="entry.id">{{ entry.displayName }}</option></optgroup></select></div>
+        <h3 class="form-section-title">{{ $t('ideas.confirmSupervisor') }}</h3><p class="muted">{{ $t('ideas.supervisorHelp') }}</p>
+        <p v-if="selectedIdea.confirmedSupervisorDisplayName" class="muted">{{ $t('ideas.currentSupervisor') }} {{ selectedIdea.confirmedSupervisorDisplayName }}</p>
+        <div class="field"><label class="label" for="teacher-id">{{ $t('ideas.teacher') }}</label><select id="teacher-id" v-model="teacherId" class="select" required @change="refusalAcknowledged = false"><option value="">{{ $t('ideas.selectTeacher') }}</option><optgroup v-for="group in teacherGroups" :key="group.key" :label="group.label"><option v-for="entry in group.teachers" :key="entry.id" :value="entry.id">{{ entry.displayName }}</option></optgroup></select></div>
         <div v-if="selectedTeacherRefusal" class="notice refusal-warning" role="alert">
-          <strong>{{ selectedTeacherRefusal.teacher.displayName }} declined to supervise this idea.</strong>
+          <strong>{{ $t('ideas.declinedToSupervise', { teacher: selectedTeacherRefusal.teacher.displayName }) }}</strong>
           <span v-if="selectedTeacherRefusal.note"> {{ selectedTeacherRefusal.note }}</span>
-          <label class="refusal-acknowledgment"><input v-model="refusalAcknowledged" type="checkbox"> <span>I acknowledge this refusal and want to assign this teacher anyway.</span></label>
+          <label class="refusal-acknowledgment"><input v-model="refusalAcknowledged" type="checkbox"> <span>{{ $t('ideas.refusalAcknowledgment') }}</span></label>
         </div>
         <p v-if="task.error.value" class="error-box" role="alert">{{ task.error.value }}</p>
-        <div class="actions"><button class="button button-secondary" :disabled="!teacherId || (selectedTeacherRefusal !== null && !refusalAcknowledged)">Confirm supervisor</button><button v-if="teacherId" class="button button-secondary" type="button" @click="cancelSupervisorSelection">Cancel</button></div>
+        <div class="actions"><button class="button button-secondary" :disabled="!teacherId || (selectedTeacherRefusal !== null && !refusalAcknowledged)">{{ $t('ideas.confirmSupervisor') }}</button><button v-if="teacherId" class="button button-secondary" type="button" @click="cancelSupervisorSelection">{{ $t('ideas.cancel') }}</button></div>
       </form>
       <form v-if="specEditorOpen" class="panel stack" @submit.prevent="saveSpecification">
-        <h2 class="section-title">Full specification — {{ selectedIdea.title }}</h2>
-        <div class="notice">You may develop the full specification after teacher approval of the idea. The submitted specification still needs a separate acceptance decision before students can apply.</div>
-        <div class="grid grid-2"><TextListField v-model="specForm.objectives" label="Objectives" /><TextListField v-model="specForm.intendedUsers" label="Intended users" /><TextListField v-model="specForm.requirements" label="Features / requirements" /><TextListField v-model="specForm.deliverables" label="Deliverables" /></div>
-        <div class="field"><label class="label" for="spec-scope">Proposed scope</label><textarea id="spec-scope" v-model="specForm.scope" class="textarea" maxlength="5000" required /></div>
-        <TextListField v-model="specForm.dependencies" label="Resources / known dependencies" />
+        <h2 class="section-title">{{ $t('ideas.fullSpecification', { title: selectedIdea.title }) }}</h2>
+        <div class="notice">{{ $t('ideas.specificationApprovalHelp') }}</div>
+        <div class="grid grid-2"><TextListField v-model="specForm.objectives" :label="$t('ideas.objectives')" /><TextListField v-model="specForm.intendedUsers" :label="$t('applications.intendedUsers')" /><TextListField v-model="specForm.requirements" :label="$t('applications.projectRequirements')" /><TextListField v-model="specForm.deliverables" :label="$t('applications.deliverables')" /></div>
+        <div class="field"><label class="label" for="spec-scope">{{ $t('ideas.proposedScope') }}</label><textarea id="spec-scope" v-model="specForm.scope" class="textarea" maxlength="5000" required /></div>
+        <TextListField v-model="specForm.dependencies" :label="$t('ideas.resourcesDependencies')" />
         <div v-if="task.error.value" class="error-box" role="alert">{{ task.error.value }}</div>
-        <div class="actions"><button class="button" :disabled="task.loading.value">Save specification</button><button class="button button-secondary" type="button" @click="specEditorOpen = false">Cancel</button></div>
+        <div class="actions"><button class="button" :disabled="task.loading.value">{{ $t('ideas.saveSpecification') }}</button><button class="button button-secondary" type="button" @click="specEditorOpen = false">{{ $t('ideas.cancel') }}</button></div>
       </form>
       </section>
     </ModalDialog>
 
-    <ModalDialog v-if="ownerConfirmation" :title="ownerConfirmation.type === 'leave' ? 'Leave this idea?' : 'Remove collaborator?'" :return-focus="ownerConfirmationReturnFocus" @close="ownerConfirmation = null">
-      <p class="muted">{{ ownerConfirmation.type === 'leave' ? 'You will immediately lose access to this idea and it will disappear from your list.' : 'This student will immediately lose access to the idea and its specification.' }}</p>
-      <div class="actions"><button id="confirm-owner-change" class="button button-danger" type="button" @click="confirmOwnerChange">{{ ownerConfirmation.type === 'leave' ? 'Leave idea' : 'Remove collaborator' }}</button><button class="button button-secondary" type="button" @click="ownerConfirmation = null">Cancel</button></div>
+    <ModalDialog v-if="ownerConfirmation" :title="ownerConfirmation.type === 'leave' ? $t('ideas.leaveIdeaTitle') : $t('ideas.removeCollaboratorTitle')" :return-focus="ownerConfirmationReturnFocus" @close="ownerConfirmation = null">
+      <p class="muted">{{ ownerConfirmation.type === 'leave' ? $t('ideas.leaveIdeaHelp') : $t('ideas.removeCollaboratorHelp') }}</p>
+      <div class="actions"><button id="confirm-owner-change" class="button button-danger" type="button" @click="confirmOwnerChange">{{ ownerConfirmation.type === 'leave' ? $t('ideas.leaveIdea') : $t('ideas.removeCollaborator') }}</button><button class="button button-secondary" type="button" @click="ownerConfirmation = null">{{ $t('ideas.cancel') }}</button></div>
     </ModalDialog>
     <p v-if="task.success.value" class="success-note" role="status">{{ task.success.value }}</p>
   </section>
@@ -159,6 +159,8 @@ import { ApiError } from '../../api/client'
 import type { Page } from '../../api/client'
 import { useAuthStore } from '../../stores/auth'
 import { useTask } from '../../composables/useTask'
+import { i18n } from '../../i18n'
+import { formatNumber } from '../../i18n'
 import ModalDialog from '../../components/ModalDialog.vue'
 import AsyncPanel from '../../components/AsyncPanel.vue'
 import TextListField from './TextListField.vue'
@@ -171,15 +173,14 @@ type IdeaOverview = Idea & { ownSupervisionPreference?: string }
 type IdeaInput = components['schemas']['IdeaRequest']
 type Review = components['schemas']['ReviewResponse']
 type RatingKey = 'workSize' | 'curriculumRelevance' | 'technicalComplexity' | 'feasibility' | 'learningValue' | 'resourceNeeds' | 'riskAndDependencies'
-const ratings: { key: RatingKey; label: string }[] = [
-  { key: 'workSize', label: 'Work size' }, { key: 'curriculumRelevance', label: 'Curriculum relevance' },
-  { key: 'technicalComplexity', label: 'Technical complexity' }, { key: 'feasibility', label: 'Feasibility' },
-  { key: 'learningValue', label: 'Learning value' }, { key: 'resourceNeeds', label: 'Resource needs' },
-  { key: 'riskAndDependencies', label: 'Risk & dependencies' },
-]
+const ratings = computed(() => ([
+  'workSize', 'curriculumRelevance', 'technicalComplexity', 'feasibility',
+  'learningValue', 'resourceNeeds', 'riskAndDependencies',
+] as RatingKey[]).map((key) => ({ key, label: String(i18n.global.t(`ideas.ratingLabels.${key}`)) })))
 const statuses = ['IDEA_DRAFT','IDEA_SUBMITTED','IDEA_NEEDS_REVISION','IDEA_APPROVED_FOR_SPECIFICATION','SPECIFICATION_SUBMITTED','SPECIFICATION_NEEDS_REVISION','ACCEPTED_FOR_APPLICATIONS','DECLINED','WITHDRAWN']
 const auth = useAuthStore()
 const task = useTask()
+const number = formatNumber
 const isStudent = computed(() => auth.user?.role === 'STUDENT')
 const isTeacher = computed(() => auth.user?.role === 'TEACHER')
 const isAdmin = computed(() => auth.user?.role === 'ADMIN')
@@ -229,10 +230,10 @@ const preferenceForTeacher = computed(() => new Map(
 ))
 const teacherGroups = computed(() => {
   const groups = [
-    { key: 'WANTS_TO_SUPERVISE', label: 'Wants to supervise' },
-    { key: 'WILLING_TO_SUPERVISE', label: 'Willing to supervise' },
-    { key: 'NO_PREFERENCE', label: 'No preference' },
-    { key: 'NOT_WILLING', label: 'Not willing' },
+    { key: 'WANTS_TO_SUPERVISE', label: String(i18n.global.t('ideas.preferenceGroups.wants')) },
+    { key: 'WILLING_TO_SUPERVISE', label: String(i18n.global.t('ideas.preferenceGroups.willing')) },
+    { key: 'NO_PREFERENCE', label: String(i18n.global.t('ideas.preferenceGroups.noPreference')) },
+    { key: 'NOT_WILLING', label: String(i18n.global.t('ideas.preferenceGroups.notWilling')) },
   ]
   return groups.map((group) => ({
     ...group,
@@ -280,7 +281,7 @@ async function searchStudents(): Promise<void> {
     studentLookup.value = result.content.filter(student => student.id !== auth.user?.id && !ownedIds.includes(student.id))
   } catch (error) {
     if (requestId !== studentLookupRequest) return
-    studentLookupError.value = error instanceof Error ? error.message : 'Unable to search students.'
+    studentLookupError.value = error instanceof ApiError ? error.message : String(i18n.global.t('ideas.searchFailed'))
   } finally {
     if (requestId === studentLookupRequest) studentLookupLoading.value = false
   }
@@ -291,7 +292,7 @@ function addCreateOwner(student: StudentChoice): void {
 function removeCreateOwner(id?: string): void { createOwners.value = createOwners.value.filter(owner => owner.id !== id) }
 async function addOwner(idea: Idea, student: StudentChoice): Promise<void> {
   if (!idea.id || !isCreator(idea)) return
-  const result = await task.run(() => ideasApi.addOwner(idea.id!, student.id ?? ''), 'Collaborator added.')
+  const result = await task.run(() => ideasApi.addOwner(idea.id!, student.id ?? ''), String(i18n.global.t('ideas.collaboratorAdded')))
   if (result) {
     selectedIdea.value = result
     await load(page.value.page)
@@ -317,12 +318,12 @@ async function confirmOwnerChange(): Promise<void> {
   if (ownerAccessCheck) await ownerAccessCheck
   if (!detailsOpen.value) return
   if (pending.type === 'remove' && pending.studentId) {
-    const result = await task.run(() => ideasApi.removeOwner(pending.idea.id!, pending.studentId!), 'Collaborator removed.')
+    const result = await task.run(() => ideasApi.removeOwner(pending.idea.id!, pending.studentId!), String(i18n.global.t('ideas.collaboratorRemoved')))
     if (result) {
       selectedIdea.value = result
       ownerConfirmation.value = null
       await load(page.value.page)
-      task.success.value = 'Collaborator removed.'
+      task.success.value = String(i18n.global.t('ideas.collaboratorRemoved'))
       await nextTick()
       document.getElementById('details-collaborator-lookup')?.focus()
     }
@@ -335,7 +336,7 @@ async function confirmOwnerChange(): Promise<void> {
       detailsOpen.value = false
       selectedIdea.value = null
       await load(page.value.page)
-      task.success.value = 'You left the idea.'
+      task.success.value = String(i18n.global.t('ideas.leftIdea'))
       await nextTick()
       if (isStudent.value) document.getElementById('new-idea-button')?.focus()
       else document.getElementById('status-filter')?.focus()
@@ -343,15 +344,23 @@ async function confirmOwnerChange(): Promise<void> {
   }
 }
 function readable(value?: string): string {
-  return (value ?? 'Unknown').replaceAll('_', ' ').toLowerCase().replace(/^./, (char) => char.toUpperCase())
+  if (!value) return String(i18n.global.t('common.unknown'))
+  const key = `ideas.states.${value.toLowerCase()}`
+  return i18n.global.te(key)
+    ? String(i18n.global.t(key))
+    : value.replaceAll('_', ' ').toLowerCase().replace(/^./, (char) => char.toUpperCase())
 }
 function preferenceLabel(value?: string): string {
-  if (value === 'NOT_WILLING_TO_SUPERVISE') return 'Not willing'
-  return readable(value)
+  const key = value === 'NOT_WILLING_TO_SUPERVISE' ? 'ideas.preferences.notWilling'
+    : value === 'NOT_AVAILABLE' ? 'ideas.preferences.unavailable'
+      : value === 'WANTS_TO_SUPERVISE' ? 'ideas.preferences.wants'
+        : value === 'WILLING_TO_SUPERVISE' ? 'ideas.preferences.willing'
+          : 'ideas.preferences.noPreference'
+  return String(i18n.global.t(key))
 }
 function recordedRatings(review: Review): string[] {
   if (review.reviewType !== 'IDEA') return []
-  return ratings.flatMap(({ key, label }) => {
+  return ratings.value.flatMap(({ key, label }) => {
     const value = review[key]
     return typeof value === 'number' && Number.isInteger(value) ? [`${label}: ${value}/5`] : []
   })
@@ -379,10 +388,10 @@ function canReview(idea: Idea): boolean {
   return ['IDEA_SUBMITTED', 'SPECIFICATION_SUBMITTED'].includes(idea.status ?? '')
 }
 function lifecycleMessage(status?: string): string {
-  if (status === 'IDEA_APPROVED_FOR_SPECIFICATION') return 'Approval lets you write a full specification. It does not yet make this project available for student applications.'
-  if (status === 'ACCEPTED_FOR_APPLICATIONS') return 'A teacher accepted the submitted specification. The project may be included in an application period; an administrator can assign an eligible supervisor after allocation.'
-  if (status === 'SPECIFICATION_SUBMITTED') return 'The full specification is waiting for a separate teacher acceptance decision.'
-  return 'Actions are available only when this lifecycle stage permits them.'
+  if (status === 'IDEA_APPROVED_FOR_SPECIFICATION') return String(i18n.global.t('ideas.lifecycle.approved'))
+  if (status === 'ACCEPTED_FOR_APPLICATIONS') return String(i18n.global.t('ideas.lifecycle.accepted'))
+  if (status === 'SPECIFICATION_SUBMITTED') return String(i18n.global.t('ideas.lifecycle.submitted'))
+  return String(i18n.global.t('ideas.lifecycle.unavailable'))
 }
 async function load(index = 0): Promise<void> {
   await task.run(async () => {
@@ -503,7 +512,7 @@ function listFrom(text: string): string[] {
 async function saveIdea(): Promise<void> {
   const input: IdeaInput = { ...ideaForm, scopePoints: listFrom(scopeText.value), learningTopics: listFrom(learningText.value), collaboratorIds: editingId.value ? [] : createOwners.value.map(owner => owner.id ?? '') }
   const wasEditing = Boolean(editingId.value)
-  const result = await task.run(() => wasEditing ? ideasApi.update(editingId.value, input) : ideasApi.create(input), 'Idea draft saved.')
+  const result = await task.run(() => wasEditing ? ideasApi.update(editingId.value, input) : ideasApi.create(input), String(i18n.global.t('ideas.ideaSaved')))
   if (!result) return
   editorOpen.value = false
   if (wasEditing) {
@@ -519,8 +528,8 @@ async function saveIdea(): Promise<void> {
 }
 async function submitIdea(idea: Idea, event?: MouseEvent): Promise<void> {
   void event
-  if (!confirm('Submit this idea for teacher review? Editing will be locked until it is returned or approved.')) return
-  const result = await task.run(() => ideasApi.submit(idea.id ?? ''), 'Idea submitted for review.')
+  if (!confirm(String(i18n.global.t('ideas.submitConfirm')))) return
+  const result = await task.run(() => ideasApi.submit(idea.id ?? ''), String(i18n.global.t('ideas.ideaSubmitted')))
   if (result) {
     await load(page.value.page)
     await nextTick()
@@ -528,8 +537,8 @@ async function submitIdea(idea: Idea, event?: MouseEvent): Promise<void> {
   }
 }
 async function withdrawIdea(idea: Idea): Promise<void> {
-  if (!confirm('Withdraw this project idea? This action cannot be undone from this screen.')) return
-  const result = await task.run(() => ideasApi.withdraw(idea.id ?? ''), 'Idea withdrawn.')
+  if (!confirm(String(i18n.global.t('ideas.withdrawConfirm')))) return
+  const result = await task.run(() => ideasApi.withdraw(idea.id ?? ''), String(i18n.global.t('ideas.ideaWithdrawn')))
   if (result) await load(page.value.page)
 }
 function startSpecification(): void {
@@ -544,7 +553,7 @@ function startSpecification(): void {
 async function saveSpecification(): Promise<void> {
   if (!selectedIdea.value?.id) return
   const ideaId = selectedIdea.value.id
-  const result = await task.run(() => ideasApi.specification(selectedIdea.value!.id!, { ...specForm }), 'Specification saved.')
+  const result = await task.run(() => ideasApi.specification(selectedIdea.value!.id!, { ...specForm }), String(i18n.global.t('ideas.specificationSaved')))
   if (result) {
     specEditorOpen.value = false
     detailsOpen.value = false
@@ -555,9 +564,9 @@ async function saveSpecification(): Promise<void> {
   }
 }
 async function submitSpecification(): Promise<void> {
-  if (!selectedIdea.value?.id || !confirm('Submit the full specification for teacher acceptance review?')) return
+  if (!selectedIdea.value?.id || !confirm(String(i18n.global.t('ideas.submitSpecificationConfirm')))) return
   const ideaId = selectedIdea.value.id
-  const result = await task.run(() => ideasApi.submitSpecification(selectedIdea.value!.id!), 'Specification submitted.')
+  const result = await task.run(() => ideasApi.submitSpecification(selectedIdea.value!.id!), String(i18n.global.t('ideas.specificationSubmitted')))
   if (result) {
     detailsOpen.value = false
     await selectIdea({ id: ideaId } as Idea)
@@ -576,7 +585,7 @@ function openReview(event?: MouseEvent): void {
   reviewForm.decision = isSpecReview.value ? 'ACCEPT_FOR_APPLICATIONS' : 'APPROVE_FOR_SPECIFICATION'
   reviewForm.feedback = ''
   reviewForm.recommendation = ''
-  for (const { key } of ratings) reviewForm[key] = ''
+  for (const { key } of ratings.value) reviewForm[key] = ''
   feedbackError.value = ''
   reviewOpen.value = true
 }
@@ -584,7 +593,7 @@ async function submitReview(): Promise<void> {
   if (!selectedIdea.value?.id) return
   const feedback = String(reviewForm.feedback).trim()
   if (!feedback) {
-    feedbackError.value = 'Written feedback is required.'
+    feedbackError.value = String(i18n.global.t('ideas.feedbackError'))
     return
   }
   const body: components['schemas']['ReviewRequest'] = {
@@ -592,11 +601,11 @@ async function submitReview(): Promise<void> {
     feedback,
     recommendation: String(reviewForm.recommendation),
   }
-  for (const { key } of ratings) {
+  for (const { key } of ratings.value) {
     const rating = Number(reviewForm[key])
     if (Number.isInteger(rating) && rating >= 1 && rating <= 5) body[key] = rating
   }
-  const result = await task.run(() => ideasApi.review(selectedIdea.value!.id!, body, isSpecReview.value), 'Teacher decision recorded.')
+  const result = await task.run(() => ideasApi.review(selectedIdea.value!.id!, body, isSpecReview.value), String(i18n.global.t('ideas.reviewDecisionRecorded')))
   if (result) {
     const idea = selectedIdea.value!
     await selectIdea(idea)
@@ -624,7 +633,7 @@ async function submitReview(): Promise<void> {
 async function savePreference(): Promise<void> {
   if (!selectedIdea.value?.id) return
   const idea = selectedIdea.value
-  const result = await task.run(() => ideasApi.supervision(idea.id!, preference.value, preferenceNote.value), 'Supervision preference saved.')
+  const result = await task.run(() => ideasApi.supervision(idea.id!, preference.value, preferenceNote.value), String(i18n.global.t('ideas.preferenceSaved')))
   if (result) {
     await selectIdea(idea)
     await load(page.value.page)
@@ -637,14 +646,14 @@ async function assignSupervisor(): Promise<void> {
   const idea = selectedIdea.value
   const result = await task.run(
     () => ideasApi.assignSupervisor(idea.id!, teacherId.value, refusal && refusalAcknowledged.value),
-    'Supervisor confirmed.',
+    String(i18n.global.t('ideas.supervisorConfirmed')),
   )
   if (!result) return
   teacherId.value = ''
   refusalAcknowledged.value = false
   await selectIdea(idea)
   await load(page.value.page)
-  task.success.value = 'Supervisor confirmed.'
+  task.success.value = String(i18n.global.t('ideas.supervisorConfirmed'))
   await nextTick()
   document.getElementById('teacher-id')?.focus()
 }

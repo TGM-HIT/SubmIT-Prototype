@@ -21,7 +21,7 @@ describe('shared form and responsive layout styles', () => {
     const searchInput = admin.match(/<input id="account-search"[^>]*>/)?.[0]
     expect(roleFilter).toMatch(/\bclass="[^"]*\bfilter-control\b/)
     expect(searchInput).toMatch(/\bclass="[^"]*\bfilter-control\b/)
-    const clearButton = admin.match(/<button\b[^>]*>Clear filters<\/button>/)?.[0]
+    const clearButton = admin.match(/<button\b[^>]*>\{\{ \$t\('admin\.clearFilters'\) \}\}<\/button>/)?.[0]
     expect(clearButton).toMatch(/\bclass="[^"]*\bfilter-control\b/)
   })
 
@@ -57,5 +57,13 @@ describe('shared form and responsive layout styles', () => {
     expect(styles).toMatch(/\.grid-2\s*\{\s*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\);/)
     expect(styles).toMatch(/\.grid-3\s*\{\s*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\);/)
     expect(styles).toMatch(/@media\s*\(max-width:\s*560px\)\s*\{[^}]*\.grid-2,\s*\.grid-3\s*\{\s*grid-template-columns:\s*1fr;/)
+  })
+
+  it('allows long localized navigation labels to wrap within the desktop sidebar', () => {
+    const shell = readFileSync(resolve(process.cwd(), 'src/components/AppShell.vue'), 'utf8')
+    expect(shell).toContain('<span class="nav-label">{{ item.label }}</span>')
+    expect(styles).toMatch(/\.nav-list\s*\{[^}]*min-width:\s*0;/)
+    expect(styles).toMatch(/\.nav-link\s*\{[^}]*min-width:\s*0;/)
+    expect(styles).toMatch(/\.nav-link \.nav-label\s*\{\s*min-width:\s*0;\s*overflow-wrap:\s*anywhere;/)
   })
 })

@@ -1,104 +1,104 @@
 <template>
   <section class="page">
-    <p class="page-intro">Manage user roles and inspect access-controlled audit history. Administrator actions are recorded on the server; role changes take effect only if accepted there.</p>
-    <div class="tab-list" role="tablist" aria-label="Administration panels">
-      <button class="tab-button" role="tab" :aria-selected="activeTab === 'users'" @click="activeTab = 'users'">Users & roles</button>
-      <button class="tab-button" role="tab" :aria-selected="activeTab === 'catalogues'" @click="activeTab = 'catalogues'; void loadCatalogues()">Classes & subjects</button>
-      <button class="tab-button" role="tab" :aria-selected="activeTab === 'audit'" @click="activeTab = 'audit'">Audit history</button>
+    <p class="page-intro">{{ $t('admin.intro') }}</p>
+    <div class="tab-list" role="tablist" :aria-label="$t('admin.tablist')">
+      <button class="tab-button" role="tab" :aria-selected="activeTab === 'users'" @click="activeTab = 'users'">{{ $t('admin.tabs.users') }}</button>
+      <button class="tab-button" role="tab" :aria-selected="activeTab === 'catalogues'" @click="activeTab = 'catalogues'; void loadCatalogues()">{{ $t('admin.tabs.catalogues') }}</button>
+      <button class="tab-button" role="tab" :aria-selected="activeTab === 'audit'" @click="activeTab = 'audit'">{{ $t('admin.tabs.audit') }}</button>
     </div>
     <section v-if="activeTab === 'users'" class="panel">
-      <div class="page-heading"><div><h2 id="accounts-heading" ref="accountsHeading" class="section-title">Accounts</h2><p class="muted">Registration creates a student account with the default class; administrators can reassign its class and subjects.</p></div><button class="button button-secondary" @click="loadUsers(0)">Refresh</button></div>
+      <div class="page-heading"><div><h2 id="accounts-heading" ref="accountsHeading" class="section-title">{{ $t('admin.accounts') }}</h2><p class="muted">{{ $t('admin.registration') }}</p></div><button class="button button-secondary" @click="loadUsers(0)">{{ $t('admin.refresh') }}</button></div>
       <form class="toolbar account-filters" @submit.prevent>
         <div class="field">
-          <label class="label" for="account-role-filter">Role</label>
+          <label class="label" for="account-role-filter">{{ $t('admin.role') }}</label>
           <select id="account-role-filter" :value="roleFilter" class="select filter-control" @change="applyRoleFilter">
-            <option value="">All roles</option>
-            <option value="STUDENT">Student</option>
-            <option value="TEACHER">Teacher</option>
-            <option value="ADMIN">Administrator</option>
+            <option value="">{{ $t('admin.allRoles') }}</option>
+            <option value="STUDENT">{{ $t('admin.userRoles.STUDENT') }}</option>
+            <option value="TEACHER">{{ $t('admin.userRoles.TEACHER') }}</option>
+            <option value="ADMIN">{{ $t('admin.userRoles.ADMIN') }}</option>
           </select>
         </div>
         <div class="field account-search-field">
-          <label class="label" for="account-search">Search username and name</label>
-          <input id="account-search" v-model="searchInput" class="input filter-control" type="search" placeholder="Username or name" @input="scheduleSearch">
+          <label class="label" for="account-search">{{ $t('admin.searchLabel') }}</label>
+          <input id="account-search" v-model="searchInput" class="input filter-control" type="search" :placeholder="$t('admin.searchPlaceholder')" @input="scheduleSearch">
         </div>
-        <button class="button button-secondary button-small filter-control" type="button" @click="clearFilters">Clear filters</button>
+        <button class="button button-secondary button-small filter-control" type="button" @click="clearFilters">{{ $t('admin.clearFilters') }}</button>
       </form>
       <AsyncPanel :loading="task.loading.value" :error="task.error.value" @retry="loadUsers(users.page)">
         <div v-if="users.content.length" class="data-list">
           <article v-for="user in users.content" :key="user.id" class="data-row">
-            <div class="row-main"><h3>{{ user.displayName }}</h3><p>Username {{ user.username }}</p><p>Account {{ user.id }}</p><p v-if="user.role === 'STUDENT'">Class: {{ user.className }} · Elective subjects: {{ user.electiveSubjectNames?.join(', ') || 'None' }}</p><span class="status-badge">{{ user.role }}</span></div>
-            <button :id="`edit-account-${user.id}`" class="button button-secondary button-small" type="button" :aria-label="`Edit ${user.displayName} (${user.username})`" @click="openEditor(user, $event)">Edit</button>
+            <div class="row-main"><h3>{{ user.displayName }}</h3><p>{{ $t('admin.username') }} {{ user.username }}</p><p>{{ $t('admin.account') }} {{ user.id }}</p><p v-if="user.role === 'STUDENT'">{{ $t('admin.class') }} {{ user.className }} · {{ $t('admin.subjects') }} {{ user.electiveSubjectNames?.join(', ') || $t('admin.none') }}</p><span class="status-badge">{{ user.role ? $t(`admin.userRoles.${user.role}`) : '' }}</span></div>
+            <button :id="`edit-account-${user.id}`" class="button button-secondary button-small" type="button" :aria-label="$t('admin.editAccount', { name: user.displayName, username: user.username })" @click="openEditor(user, $event)">{{ $t('admin.edit') }}</button>
           </article>
         </div>
-        <p v-else class="empty">{{ hasActiveFilters ? 'No accounts match the selected filters.' : 'No accounts are visible.' }}</p>
+        <p v-else class="empty">{{ hasActiveFilters ? $t('admin.noMatches') : $t('admin.noneVisible') }}</p>
         <Pager :page="users" @page="loadUsers" />
       </AsyncPanel>
     </section>
     <section v-else-if="activeTab === 'catalogues'" class="panel">
-      <div class="page-heading"><div><h2 class="section-title">Classes and elective subjects</h2><p class="muted">Shared catalogues are used for student assignments. Entries may be renamed but not deleted.</p></div><button class="button button-secondary" type="button" @click="loadCatalogues">Refresh</button></div>
+      <div class="page-heading"><div><h2 class="section-title">{{ $t('admin.classesHeading') }}</h2><p class="muted">{{ $t('admin.catalogueHelp') }}</p></div><button class="button button-secondary" type="button" @click="loadCatalogues">{{ $t('admin.refresh') }}</button></div>
       <AsyncPanel :loading="task.loading.value" :error="task.error.value" @retry="loadCatalogues">
         <div class="grid grid-2">
-          <section class="panel"><h3 class="section-title">Classes</h3>
-            <form class="toolbar" @submit.prevent="createCatalogue('class')"><label class="sr-only" for="new-class">New class name</label><input id="new-class" v-model="newClassName" class="input" maxlength="100" placeholder="New class name" required><button class="button button-small" type="submit" :disabled="catalogueSaving">Add class</button></form>
-            <div v-for="entry in classes" :key="entry.id" class="data-row"><template v-if="editingCatalogue?.kind === 'class' && editingCatalogue.id === entry.id"><input v-model="catalogueDraft" class="input" maxlength="100" :aria-label="`Rename class ${entry.name}`"><button class="button button-small" type="button" @click="saveCatalogue">Save</button><button class="button button-secondary button-small" type="button" @click="editingCatalogue = null">Cancel</button></template><template v-else><span>{{ entry.name }}</span><button class="button button-secondary button-small" type="button" @click="editCatalogue('class', entry.id ?? 'unknown', entry.name ?? '')">Rename</button></template></div>
-            <p v-if="!classes.length" class="empty">No classes have been added.</p>
+          <section class="panel"><h3 class="section-title">{{ $t('admin.classes') }}</h3>
+            <form class="toolbar" @submit.prevent="createCatalogue('class')"><label class="sr-only" for="new-class">{{ $t('admin.newClass') }}</label><input id="new-class" v-model="newClassName" class="input" maxlength="100" :placeholder="$t('admin.newClass')" required><button class="button button-small" type="submit" :disabled="catalogueSaving">{{ $t('admin.addClass') }}</button></form>
+            <div v-for="entry in classes" :key="entry.id" class="data-row"><template v-if="editingCatalogue?.kind === 'class' && editingCatalogue.id === entry.id"><input v-model="catalogueDraft" class="input" maxlength="100" :aria-label="$t('admin.renameClass', { name: entry.name })"><button class="button button-small" type="button" @click="saveCatalogue">{{ $t('admin.save') }}</button><button class="button button-secondary button-small" type="button" @click="editingCatalogue = null">{{ $t('admin.cancel') }}</button></template><template v-else><span>{{ entry.name }}</span><button class="button button-secondary button-small" type="button" @click="editCatalogue('class', entry.id ?? 'unknown', entry.name ?? '')">{{ $t('admin.rename') }}</button></template></div>
+            <p v-if="!classes.length" class="empty">{{ $t('admin.noClasses') }}</p>
           </section>
-          <section class="panel"><h3 class="section-title">Elective subjects</h3>
-            <form class="toolbar" @submit.prevent="createCatalogue('subject')"><label class="sr-only" for="new-subject">New subject name</label><input id="new-subject" v-model="newSubjectName" class="input" maxlength="100" placeholder="New subject name" required><button class="button button-small" type="submit" :disabled="catalogueSaving">Add subject</button></form>
-            <div v-for="entry in subjects" :key="entry.id" class="data-row"><template v-if="editingCatalogue?.kind === 'subject' && editingCatalogue.id === entry.id"><input v-model="catalogueDraft" class="input" maxlength="100" :aria-label="`Rename subject ${entry.name}`"><button class="button button-small" type="button" @click="saveCatalogue">Save</button><button class="button button-secondary button-small" type="button" @click="editingCatalogue = null">Cancel</button></template><template v-else><span>{{ entry.name }}</span><button class="button button-secondary button-small" type="button" @click="editCatalogue('subject', entry.id ?? 'unknown', entry.name ?? '')">Rename</button></template></div>
-            <p v-if="!subjects.length" class="empty">No elective subjects have been added.</p>
+          <section class="panel"><h3 class="section-title">{{ $t('admin.subjectsHeading') }}</h3>
+            <form class="toolbar" @submit.prevent="createCatalogue('subject')"><label class="sr-only" for="new-subject">{{ $t('admin.newSubject') }}</label><input id="new-subject" v-model="newSubjectName" class="input" maxlength="100" :placeholder="$t('admin.newSubject')" required><button class="button button-small" type="submit" :disabled="catalogueSaving">{{ $t('admin.addSubject') }}</button></form>
+            <div v-for="entry in subjects" :key="entry.id" class="data-row"><template v-if="editingCatalogue?.kind === 'subject' && editingCatalogue.id === entry.id"><input v-model="catalogueDraft" class="input" maxlength="100" :aria-label="$t('admin.renameSubject', { name: entry.name })"><button class="button button-small" type="button" @click="saveCatalogue">{{ $t('admin.save') }}</button><button class="button button-secondary button-small" type="button" @click="editingCatalogue = null">{{ $t('admin.cancel') }}</button></template><template v-else><span>{{ entry.name }}</span><button class="button button-secondary button-small" type="button" @click="editCatalogue('subject', entry.id ?? 'unknown', entry.name ?? '')">{{ $t('admin.rename') }}</button></template></div>
+            <p v-if="!subjects.length" class="empty">{{ $t('admin.noSubjects') }}</p>
           </section>
         </div>
         <p v-if="catalogueError" class="error-box" role="alert">{{ catalogueError }}</p>
       </AsyncPanel>
     </section>
     <section v-else class="panel">
-      <div class="page-heading"><div><h2 class="section-title">Audit history</h2><p class="muted">Visible records depend on server-side role and resource permissions.</p></div><button class="button button-secondary" @click="loadAudit(0)">Refresh</button></div>
+      <div class="page-heading"><div><h2 class="section-title">{{ $t('admin.auditHeading') }}</h2><p class="muted">{{ $t('admin.auditHelp') }}</p></div><button class="button button-secondary" @click="loadAudit(0)">{{ $t('admin.refresh') }}</button></div>
       <AsyncPanel :loading="task.loading.value" :error="task.error.value" @retry="loadAudit(audit.page)">
         <div v-if="audit.content.length" class="data-list">
           <article v-for="(entry, index) in audit.content" :key="String(entry.id ?? index)" class="data-row">
-            <div class="row-main"><h3>{{ entry.action ?? entry.eventType ?? 'Recorded event' }}</h3><p>{{ entry.occurredAt ?? entry.createdAt ?? entry.timestamp ?? 'Timestamp unavailable' }}</p><p>{{ entry.entityType ?? 'Resource' }} {{ entry.entityId ?? '' }} · actor {{ entry.actorId ?? 'not supplied' }}</p></div><span class="status-badge">{{ entry.status ?? 'Recorded' }}</span>
+            <div class="row-main"><h3>{{ entry.action ?? entry.eventType ?? $t('admin.auditEvent') }}</h3><p>{{ timestamp(entry.occurredAt ?? entry.createdAt ?? entry.timestamp) }}</p><p>{{ entry.entityType ?? $t('admin.resource') }} {{ entry.entityId ?? '' }} · {{ $t('admin.actor') }} {{ entry.actorId ?? $t('admin.actorNotSupplied') }}</p></div><span class="status-badge">{{ entry.status ?? $t('admin.recorded') }}</span>
           </article>
         </div>
-        <p v-else class="empty">No audit events are available on this page.</p>
+        <p v-else class="empty">{{ $t('admin.noAudit') }}</p>
         <Pager :page="audit" @page="loadAudit" />
       </AsyncPanel>
     </section>
     <p v-if="task.success.value" class="success-note" role="status">{{ task.success.value }}</p>
 
-    <ModalDialog v-if="editingUser" :title="`Edit ${editingUser.displayName} account (${editingUser.username})`" :return-focus="editTrigger" :fallback-focus="accountsHeading" @close="closeEditor">
+    <ModalDialog v-if="editingUser" :title="$t('admin.editAccount', { name: editingUser.displayName, username: editingUser.username })" :return-focus="editTrigger" :fallback-focus="accountsHeading" @close="closeEditor">
       <form class="edit-account-form" novalidate @submit.prevent="saveAccount">
         <div class="field">
-          <label class="label" for="account-name">Account name</label>
+          <label class="label" for="account-name">{{ $t('admin.nameLabel') }}</label>
           <input id="account-name" v-model="nameDraft" class="input" autocomplete="name">
         </div>
-        <p class="muted">1–120 characters after trimming.</p>
+        <p class="muted">{{ $t('admin.nameGuidance') }}</p>
         <div class="field">
-          <label class="label" for="account-role">Role</label>
+          <label class="label" for="account-role">{{ $t('admin.role') }}</label>
           <select id="account-role" v-model="roleDraft" class="select">
-            <option value="STUDENT">Student</option>
-            <option value="TEACHER">Teacher</option>
-            <option value="ADMIN">Administrator</option>
+            <option value="STUDENT">{{ $t('admin.userRoles.STUDENT') }}</option>
+            <option value="TEACHER">{{ $t('admin.userRoles.TEACHER') }}</option>
+            <option value="ADMIN">{{ $t('admin.userRoles.ADMIN') }}</option>
           </select>
         </div>
         <template v-if="roleDraft === 'STUDENT'">
           <div class="field">
-            <label class="label" for="student-class">Class</label>
+            <label class="label" for="student-class">{{ $t('admin.class') }}</label>
             <select id="student-class" v-model="classDraft" class="select" required>
-              <option value="" disabled>Select a class…</option>
+              <option value="" disabled>{{ $t('admin.selectClass') }}</option>
               <option v-for="entry in classes" :key="entry.id" :value="entry.id ?? ''">{{ entry.name }}</option>
             </select>
           </div>
-          <fieldset class="field"><legend class="label">Elective subjects (up to four)</legend>
+          <fieldset class="field"><legend class="label">{{ $t('admin.electiveLimit') }}</legend>
             <label v-for="entry in subjects" :key="entry.id" class="checkbox-row"><input v-model="subjectDraft" type="checkbox" :value="entry.id ?? ''" :disabled="subjectDraft.length >= 4 && !subjectDraft.includes(entry.id ?? '')">{{ entry.name }}</label>
-            <p v-if="subjectDraft.length >= 4" class="muted">The four-subject limit has been reached.</p>
+            <p v-if="subjectDraft.length >= 4" class="muted">{{ $t('admin.limitReached') }}</p>
           </fieldset>
         </template>
         <p v-if="editError" class="error-box" role="alert">{{ editError }}</p>
         <div class="actions">
-          <button class="button button-small" type="submit" :disabled="saving || !hasChanges">Save</button>
-          <button class="button button-secondary button-small" type="button" :disabled="saving" @click="closeEditor">Cancel</button>
+          <button class="button button-small" type="submit" :disabled="saving || !hasChanges">{{ $t('admin.save') }}</button>
+          <button class="button button-secondary button-small" type="button" :disabled="saving" @click="closeEditor">{{ $t('admin.cancel') }}</button>
         </div>
       </form>
     </ModalDialog>
@@ -114,6 +114,9 @@ import { useTask } from '../../composables/useTask'
 import AsyncPanel from '../../components/AsyncPanel.vue'
 import ModalDialog from '../../components/ModalDialog.vue'
 import Pager from './Pager.vue'
+import { i18n } from '../../i18n'
+import { formatDate } from '../../i18n'
+import { ApiError } from '../../api/client'
 
 type Data = Record<string, unknown>
 type User = components['schemas']['UserResponse']
@@ -155,6 +158,13 @@ const hasChanges = computed(() => nameDraft.value.trim() !== originalName.value
       || [...subjectDraft.value].sort().join(',') !== [...originalSubjectIds.value].sort().join(','))))
 
 function emptyPage<T>(): Page<T> { return { content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 } }
+function timestamp(value: unknown): string {
+  if (typeof value !== 'string' || !value) return String(i18n.global.t('admin.timestampUnavailable'))
+  const date = new Date(value)
+  return Number.isNaN(date.getTime())
+    ? value
+    : formatDate(date, { dateStyle: 'medium', timeStyle: 'short' })
+}
 function clearSearchDebounce(): void {
   if (searchDebounce !== undefined) clearTimeout(searchDebounce)
   searchDebounce = undefined
@@ -227,13 +237,14 @@ function updateVisibleAccount(updated: User): void {
   if (index >= 0) users.value.content[index] = updated
 }
 function errorMessage(cause: unknown): string {
-  return cause instanceof Error ? cause.message : 'Unable to save account changes.'
+  return cause instanceof ApiError && cause.source === 'backend'
+    ? cause.message : String(i18n.global.t('admin.accountSaveFailed'))
 }
 async function saveAccount(): Promise<void> {
   if (!editingUser.value || !hasChanges.value) return
   const displayName = nameDraft.value.trim()
   if (!displayName || Array.from(displayName).length > 120) {
-    editError.value = 'Account name must contain 1 to 120 characters after trimming.'
+    editError.value = String(i18n.global.t('admin.invalidName'))
     return
   }
   const account = editingUser.value
@@ -244,10 +255,14 @@ async function saveAccount(): Promise<void> {
     && (roleChanged || classDraft.value !== originalClassId.value
       || [...subjectDraft.value].sort().join(',') !== [...originalSubjectIds.value].sort().join(','))
   if (assignmentChanged && (!classDraft.value || subjectDraft.value.length > 4)) {
-    editError.value = !classDraft.value ? 'Select exactly one class.' : 'Select no more than four elective subjects.'
+    editError.value = String(i18n.global.t(classDraft.value ? 'admin.tooManySubjects' : 'admin.chooseClass'))
     return
   }
-  if (roleChanged && !confirm(`Change this account's role to ${roleDraft.value}?`)) return
+  if (roleChanged && !confirm(String(i18n.global.t('admin.changeRoleConfirm', {
+    role: i18n.global.locale.value === 'en'
+      ? roleDraft.value
+      : i18n.global.t(`admin.userRoles.${roleDraft.value}`),
+  })))) return
 
   saving.value = true
   editError.value = ''
@@ -264,12 +279,12 @@ async function saveAccount(): Promise<void> {
       await studentDetailsApi.assign(id, { classId: classDraft.value, electiveSubjectIds: subjectDraft.value })
     }
     await loadUsers(users.value.page)
-    task.success.value = 'Account updated.'
+    task.success.value = String(i18n.global.t('admin.saved'))
     finishEditing()
   } catch (cause) {
     const message = errorMessage(cause)
     editError.value = nameSaved
-      ? `Account name was saved, but the role change failed: ${message}`
+      ? String(i18n.global.t('admin.nameSavedRoleFailed', { message }))
       : message
   } finally {
     saving.value = false
@@ -290,7 +305,7 @@ function editCatalogue(kind: 'class' | 'subject', id: string, name: string): voi
 async function createCatalogue(kind: 'class' | 'subject'): Promise<void> {
   const name = (kind === 'class' ? newClassName.value : newSubjectName.value).trim()
   if (!name || name.length > 100) {
-    catalogueError.value = 'Names must contain 1 to 100 characters.'
+    catalogueError.value = String(i18n.global.t('admin.invalidCatalogue'))
     return
   }
   catalogueSaving.value = true
@@ -304,7 +319,9 @@ async function createCatalogue(kind: 'class' | 'subject'): Promise<void> {
       newSubjectName.value = ''
     }
     await loadCatalogues()
-    task.success.value = `${kind === 'class' ? 'Class' : 'Subject'} created.`
+    task.success.value = String(i18n.global.t('admin.created', {
+      name: i18n.global.t(`admin.names.${kind}`),
+    }))
   } catch (cause) {
     catalogueError.value = errorMessage(cause)
   } finally {
@@ -316,7 +333,7 @@ async function saveCatalogue(): Promise<void> {
   const { kind, id } = editingCatalogue.value
   const name = catalogueDraft.value.trim()
   if (!name || name.length > 100) {
-    catalogueError.value = 'Names must contain 1 to 100 characters.'
+    catalogueError.value = String(i18n.global.t('admin.invalidCatalogue'))
     return
   }
   try {
