@@ -17,6 +17,26 @@ function keys(value: Record<string, unknown>, prefix = ''): string[] {
   }).sort()
 }
 
+function accessibilityAttributes(source: string): string[] {
+  const nodes = baseParse(source, { onError: () => undefined }).children
+  const found: string[] = []
+  const visibleAttributes = new Set(['aria-label', 'aria-description', 'aria-placeholder', 'placeholder', 'title', 'alt'])
+  const visit = (node: (typeof nodes)[number] | { type: number; name?: string; value?: { content?: string } | null; children?: unknown[] }): void => {
+    if (node.type === NodeTypes.ATTRIBUTE
+      && typeof node.name === 'string'
+      && visibleAttributes.has(node.name)
+      && typeof node.value?.content === 'string'
+      && /[A-Za-z]{2,}/.test(node.value.content)) {
+      found.push(`${node.name}="${node.value.content}"`)
+    }
+    if ('children' in node && Array.isArray(node.children)) {
+      for (const child of node.children) visit(child as typeof node)
+    }
+  }
+  for (const node of nodes) visit(node)
+  return found
+}
+
 const sourceRoot = resolve(dirname(fileURLToPath(import.meta.url)))
 function vueFiles(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
@@ -67,26 +87,44 @@ describe('locale resolution and catalogs', () => {
     expect(i18n.global.missingWarn).toBe(true)
   })
 
-  it('covers route/shared Vue source keys and has no untranslated static template copy', () => {
+  it('covers route/shared Vue source keys, accessible attributes, and script-owned message keys', () => {
     const files = [...vueFiles(join(sourceRoot, 'features')), ...vueFiles(join(sourceRoot, 'components'))]
     const missingKeys: string[] = []
     const untranslated: string[] = []
+    const untranslatedAccessibility: string[] = []
+    const missingScriptMessageKeys: string[] = []
     for (const file of files) {
       const source = readFileSync(file, 'utf8')
       for (const [, key] of source.matchAll(/(?:\$t|i18n\.global\.t)\(\s*['"]([^'"]+)['"]/g)) {
         if (!i18n.global.te(key, 'en') || !i18n.global.te(key, 'de')) missingKeys.push(`${file}: ${key}`)
       }
-      const template = parse(source).descriptor.template?.content ?? ''
+      const descriptor = parse(source).descriptor
+      const template = descriptor.template?.content ?? ''
       try {
         for (const text of templateText(template)) {
+          // The only static-text exceptions are the two rendered pieces of the SubmIT brand.
           if (text !== 'Subm' && text !== 'IT') untranslated.push(`${file}: ${text}`)
+        }
+        for (const attribute of accessibilityAttributes(template)) {
+          untranslatedAccessibility.push(`${file}: ${attribute}`)
         }
       } catch (error) {
         untranslated.push(`${file}: template scan failed: ${String(error)}`)
       }
+      const script = descriptor.scriptSetup?.content ?? descriptor.script?.content ?? ''
+      // Translation-key assignments are used for reactive validation/status/error messages;
+      // dynamic backend/user content, identifiers, lifecycle data, and branding are not scanned
+      // as prose and remain deliberately outside the localization inventory.
+      for (const [, key] of script.matchAll(/\bkey:\s*['"]([a-z][a-zA-Z0-9_]*(?:\.[a-z][a-zA-Z0-9_]*)+)['"]/g)) {
+        if (!i18n.global.te(key, 'en') || !i18n.global.te(key, 'de')) {
+          missingScriptMessageKeys.push(`${file}: ${key}`)
+        }
+      }
     }
     expect(missingKeys).toEqual([])
     expect(untranslated).toEqual([])
+    expect(untranslatedAccessibility).toEqual([])
+    expect(missingScriptMessageKeys).toEqual([])
   })
 
   it('applies persisted authenticated language immediately', () => {

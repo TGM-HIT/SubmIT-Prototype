@@ -587,6 +587,11 @@ const en = {
         rubric: 'Rubric',
         assessed: 'assessed',
         category: 'category',
+        status: {
+          ACTIVE: 'Active',
+          SUPERSEDED: 'Superseded',
+          PUBLISHED: 'Published',
+        },
         electiveSubjects: 'Elective subjects:',
         class: 'Class:',
         none: 'None',

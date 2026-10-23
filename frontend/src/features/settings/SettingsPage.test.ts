@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import SettingsPage from './SettingsPage.vue'
 import { useAuthStore } from '../../stores/auth'
 import { ApiError } from '../../api/client'
+import { i18n } from '../../i18n'
 
 const api = vi.hoisted(() => ({ changeName: vi.fn(), changeLanguage: vi.fn() }))
 vi.mock('../../api/services', () => ({ userApi: { changeName: api.changeName, changeLanguage: api.changeLanguage } }))
@@ -23,6 +24,7 @@ function mountPage() {
 describe('User Settings', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
+    i18n.global.locale.value = 'en'
     api.changeName.mockResolvedValue({ ...account('STUDENT'), displayName: 'Updated name' })
     api.changeLanguage.mockResolvedValue({ ...account('STUDENT'), language: 'de' })
   })
@@ -123,6 +125,78 @@ describe('User Settings', () => {
     expect(document.activeElement).toBe(select.element)
     page.unmount()
   })
+
+  it.each(['STUDENT', 'TEACHER', 'ADMIN'] as const)(
+    'shows each %s saved nondefault language and saves both locale directions without remounting',
+    async (role) => {
+      for (const [saved, chosen] of [['de', 'en'], ['en', 'de']] as const) {
+        const auth = useAuthStore()
+        auth.updateUser({ ...account(role), language: saved })
+        api.changeLanguage.mockResolvedValue({ ...account(role), language: chosen })
+        const page = mountPage()
+        const select = page.get('#settings-language')
+        expect((select.element as HTMLSelectElement).value).toBe(saved)
+        expect(i18n.global.locale.value).toBe(saved)
+        await select.setValue(chosen)
+        await page.findAll('form')[1].trigger('submit')
+        await flushPromises()
+
+        expect(api.changeLanguage).toHaveBeenLastCalledWith(`account-${role.toLowerCase()}`, chosen)
+        expect(auth.user?.language).toBe(chosen)
+        expect(i18n.global.locale.value).toBe(chosen)
+        expect((select.element as HTMLSelectElement).value).toBe(chosen)
+        expect(page.get('[role="status"]').text()).toContain(chosen === 'de'
+          ? 'Sprache erfolgreich gespeichert.'
+          : 'Language saved successfully.')
+        expect(document.activeElement).toBe(select.element)
+        page.unmount()
+      }
+    },
+  )
+
+  it.each(['STUDENT', 'TEACHER', 'ADMIN'] as const)(
+    'cancels either %s locale draft without mutation and restores focus and saved selection',
+    async (role) => {
+      for (const [saved, draft] of [['de', 'en'], ['en', 'de']] as const) {
+        useAuthStore().updateUser({ ...account(role), language: saved })
+        const page = mountPage()
+        const select = page.get('#settings-language')
+        await select.setValue(draft)
+        await page.findAll('button[type="button"]')[1].trigger('click')
+        expect((select.element as HTMLSelectElement).value).toBe(saved)
+        expect(useAuthStore().user?.language).toBe(saved)
+        expect(api.changeLanguage).not.toHaveBeenCalled()
+        expect(document.activeElement).toBe(select.element)
+        page.unmount()
+      }
+    },
+  )
+
+  it.each(['STUDENT', 'TEACHER', 'ADMIN'] as const)(
+    'retains %s saved account language and chosen draft after a translated local save failure in either direction',
+    async (role) => {
+      for (const [saved, chosen, expectedError] of [
+        ['de', 'en', 'Die Spracheinstellung konnte nicht gespeichert werden.'],
+        ['en', 'de', 'Unable to save the language preference.'],
+      ] as const) {
+        const auth = useAuthStore()
+        auth.updateUser({ ...account(role), language: saved })
+        api.changeLanguage.mockRejectedValueOnce(new Error('offline'))
+        const page = mountPage()
+        const select = page.get('#settings-language')
+        await select.setValue(chosen)
+        await page.findAll('form')[1].trigger('submit')
+        await flushPromises()
+
+        expect(page.get('[role="alert"]').text()).toBe(expectedError)
+        expect((select.element as HTMLSelectElement).value).toBe(chosen)
+        expect(auth.user?.language).toBe(saved)
+        expect(i18n.global.locale.value).toBe(saved)
+        expect(api.changeLanguage).toHaveBeenCalledWith(`account-${role.toLowerCase()}`, chosen)
+        page.unmount()
+      }
+    },
+  )
 
   it('cancels a language draft without mutation and restores focus', async () => {
     useAuthStore().updateUser(account('TEACHER'))

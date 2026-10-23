@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 
 const api = vi.hoisted(() => ({ request: vi.fn(), configureApi: vi.fn() }))
@@ -8,11 +8,18 @@ import { useAuthStore } from './auth'
 import { i18n, resolveBrowserLanguage } from '../i18n'
 
 describe('registration authentication', () => {
+  const originalBrowserLanguage = Object.getOwnPropertyDescriptor(navigator, 'language')
+
   beforeEach(() => {
     setActivePinia(createPinia())
+    i18n.global.locale.value = 'en'
     localStorage.clear()
     api.request.mockReset()
     api.configureApi.mockReset()
+  })
+
+  afterEach(() => {
+    if (originalBrowserLanguage) Object.defineProperty(navigator, 'language', originalBrowserLanguage)
   })
 
   it('logs a newly registered student in immediately and stores the returned session', async () => {
@@ -56,5 +63,28 @@ describe('registration authentication', () => {
     useAuthStore().logout()
     expect(i18n.global.locale.value).toBe(resolveBrowserLanguage(navigator.language))
     expect(document.documentElement.lang).toBe(resolveBrowserLanguage(navigator.language))
+  })
+
+  it.each([
+    ['de-DE', 'en', 'de'],
+    ['en-US', 'de', 'en'],
+  ] as const)('uses account %s language over the browser in both disagreement directions and restores browser locale on logout', async (browserLocale, accountLanguage, expectedBrowserLanguage) => {
+    Object.defineProperty(navigator, 'language', { configurable: true, value: browserLocale })
+    const user = {
+      id: 'student-id', username: 'student', displayName: 'Student', role: 'STUDENT', language: accountLanguage,
+    }
+    api.request.mockResolvedValueOnce({
+      token: 'student-token', tokenType: 'Bearer', expiresIn: 28800, user,
+    })
+    const auth = useAuthStore()
+    expect(i18n.global.locale.value).toBe(expectedBrowserLanguage)
+    await auth.login({ username: 'student', password: 'password' })
+
+    expect(i18n.global.locale.value).toBe(accountLanguage)
+    expect(document.documentElement.lang).toBe(accountLanguage)
+    expect(auth.user?.language).toBe(accountLanguage)
+    auth.logout()
+    expect(i18n.global.locale.value).toBe(expectedBrowserLanguage)
+    expect(document.documentElement.lang).toBe(expectedBrowserLanguage)
   })
 })

@@ -58,11 +58,11 @@
         <button v-for="tab in tabs" :key="tab.id" class="tab-button" role="tab" :aria-selected="activeTab === tab.id" @click="activeTab = tab.id">{{ tab.label }}</button>
       </div>
       <div v-if="projectLoaded && activeTab === 'individual'" class="data-list">
-        <article v-for="grade in gradeEntries.content" :key="String(grade.id)" class="data-row"><div class="row-main"><h3>{{ grade.criterionId }} · {{ displayNumber(grade.grade) }} <span class="status-badge">{{ grade.status }}</span></h3><p>{{ $t('grading.rubric') }} {{ grade.rubricVersion }} · {{ $t('grading.assessed') }} {{ date(grade.assessedOn) }} · {{ $t('grading.category') }} {{ grade.categoryId }}</p><p>{{ grade.evidence || grade.comments || $t('grading.noEvidence') }}</p><p v-if="grade.reason" class="muted">{{ $t('grading.revision') }} {{ grade.reason }}</p></div><span v-if="auth.user?.role !== 'STUDENT'">{{ grade.studentDisplayName || $t('grading.unknownStudent') }} · {{ $t('grading.class') }} {{ grade.className || $t('grading.notAssigned') }} · {{ $t('grading.electiveSubjects') }} {{ stringList(grade.electiveSubjectNames).join(', ') || $t('grading.none') }}</span></article>
+        <article v-for="grade in gradeEntries.content" :key="String(grade.id)" class="data-row"><div class="row-main"><h3>{{ grade.criterionId }} · {{ displayNumber(grade.grade) }} <span class="status-badge">{{ statusLabel(grade.status) }}</span></h3><p>{{ $t('grading.rubric') }} {{ grade.rubricVersion }} · {{ $t('grading.assessed') }} {{ date(grade.assessedOn) }} · {{ $t('grading.category') }} {{ grade.categoryId }}</p><p>{{ grade.evidence || grade.comments || $t('grading.noEvidence') }}</p><p v-if="grade.reason" class="muted">{{ $t('grading.revision') }} {{ grade.reason }}</p></div><span v-if="auth.user?.role !== 'STUDENT'">{{ grade.studentDisplayName || $t('grading.unknownStudent') }} · {{ $t('grading.class') }} {{ grade.className || $t('grading.notAssigned') }} · {{ $t('grading.electiveSubjects') }} {{ stringList(grade.electiveSubjectNames).join(', ') || $t('grading.none') }}</span></article>
         <p v-if="!gradeEntries.content.length" class="empty">{{ $t('grading.noIndividual') }}</p>
       </div>
       <div v-if="projectLoaded && activeTab === 'group'" class="data-list">
-        <article v-for="grade in groupEntries.content" :key="String(grade.id)" class="data-row"><div class="row-main"><h3>{{ grade.criterionId }} · {{ displayNumber(grade.grade) }} <span class="status-badge">{{ grade.status }}</span></h3><p>{{ $t('grading.rubric') }} {{ grade.rubricVersion }} · {{ $t('grading.assessed') }} {{ date(grade.assessedOn) }}</p><p>{{ grade.evidence || grade.comments || $t('grading.noEvidence') }}</p></div></article>
+        <article v-for="grade in groupEntries.content" :key="String(grade.id)" class="data-row"><div class="row-main"><h3>{{ grade.criterionId }} · {{ displayNumber(grade.grade) }} <span class="status-badge">{{ statusLabel(grade.status) }}</span></h3><p>{{ $t('grading.rubric') }} {{ grade.rubricVersion }} · {{ $t('grading.assessed') }} {{ date(grade.assessedOn) }}</p><p>{{ grade.evidence || grade.comments || $t('grading.noEvidence') }}</p></div></article>
         <p v-if="!groupEntries.content.length" class="empty">{{ $t('grading.noGroup') }}</p>
       </div>
       <div v-if="projectLoaded && activeTab === 'metrics'" class="data-list">
@@ -94,7 +94,7 @@
     </div>
     <section v-if="rubrics.content.length" class="panel stack">
       <h2 class="section-title">{{ $t('grading.rubricHistory') }}</h2>
-      <div class="data-list"><article v-for="rubric in rubrics.content" :key="String(rubric.id)" class="data-row"><div class="row-main"><h3>{{ rubric.name }} · {{ rubric.version }}</h3><p>{{ rubric.schoolYear ?? $t('grading.allSchoolYears') }} · {{ $t('grading.effectiveFrom') }} {{ rubric.effectiveFrom }}</p></div><span class="status-badge">{{ rubric.status ?? $t('grading.published') }}</span></article></div>
+      <div class="data-list"><article v-for="rubric in rubrics.content" :key="String(rubric.id)" class="data-row"><div class="row-main"><h3>{{ rubric.name }} · {{ rubric.version }}</h3><p>{{ rubric.schoolYear ?? $t('grading.allSchoolYears') }} · {{ $t('grading.effectiveFrom') }} {{ rubric.effectiveFrom }}</p></div><span class="status-badge">{{ statusLabel(rubric.status) }}</span></article></div>
     </section>
   </section>
 </template>
@@ -111,6 +111,13 @@ import GradeFields from './GradeFields.vue'
 
 type Data = Record<string, unknown>
 const auth = useAuthStore()
+const knownStatuses = ['ACTIVE', 'SUPERSEDED', 'PUBLISHED'] as const
+function statusLabel(value: unknown): string {
+  if (typeof value === 'string' && (knownStatuses as readonly string[]).includes(value)) {
+    return String(i18n.global.t(`grading.status.${value}`))
+  }
+  return typeof value === 'string' ? value : String(i18n.global.t('grading.published'))
+}
 const task = useTask()
 const activeRubric = ref<Data>({})
 const rubrics = ref<Page<Data>>({ content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 })

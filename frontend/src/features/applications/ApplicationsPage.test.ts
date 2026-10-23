@@ -4,6 +4,7 @@ import { resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from "../../api/client"
 import ApplicationsPage from './ApplicationsPage.vue'
+import { setLanguage } from '../../i18n'
 
 const api = vi.hoisted(() => ({
   listPeriods: vi.fn(),
@@ -71,6 +72,7 @@ async function selectCompleteForm(page: ReturnType<typeof mountPage>) {
 
 describe('application period configuration', () => {
   beforeEach(() => {
+    setLanguage('en')
     api.role = 'ADMIN'
     api.myApplication.mockResolvedValue({ preferences: [] })
     api.createApplication.mockResolvedValue({ id: 'application-1', preferences: [] })
@@ -127,6 +129,16 @@ describe('application period configuration', () => {
     expect(page.text()).toContain('Enter a valid opening date and time.')
     expect(page.text()).toContain('Enter a valid closing date and time.')
     expect(page.text()).toContain('Select at least three accepted projects.')
+  })
+
+  it('switches application configuration labels while preserving accepted project titles and descriptions', async () => {
+    setLanguage('de')
+    const page = await openForm()
+    expect(page.text()).toContain('Sieh angenommene Projekte an und reiche eine gereihte Wunschliste ein.')
+    expect(page.text()).toContain('Accepted project 1')
+    expect(page.text()).toContain('2026/2027')
+    page.unmount()
+    setLanguage('en')
   })
 
   it('requires a non-blank label before enabling creation', async () => {

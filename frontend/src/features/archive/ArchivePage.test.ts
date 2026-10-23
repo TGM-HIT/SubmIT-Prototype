@@ -1,9 +1,9 @@
 import { flushPromises, mount } from '@vue/test-utils'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ArchivePage from './ArchivePage.vue'
 import { resolveBrowserLanguage, setLanguage } from '../../i18n'
 
-const api = vi.hoisted(() => ({ publicList: vi.fn(), publicContent: vi.fn(), download: vi.fn() }))
+const api = vi.hoisted(() => ({ publicList: vi.fn(), publicContent: vi.fn(), list: vi.fn(), download: vi.fn() }))
 vi.mock('../../api/services', () => ({ archiveApi: api }))
 vi.mock('../../api/client', () => ({ downloadBlob: api.download }))
 vi.mock('../../stores/auth', () => ({ useAuthStore: () => ({ user: null }) }))
@@ -13,6 +13,7 @@ vi.mock('vue-router', () => ({
 }))
 
 describe('G6 anonymous archive privacy boundary', () => {
+  beforeEach(() => setLanguage('en'))
   it('does not render private invitation/roster/consent/cohort values in DOM or links and downloads only approved content', async () => {
     api.publicList.mockResolvedValue({ content: [{ id: 'public-file', type: 'POSTER', size: 18,
       invitation: 'INVITE_PRIVATE_SENTINEL', roster: 'ROSTER_PRIVATE_SENTINEL',
@@ -54,6 +55,50 @@ describe('G6 anonymous archive privacy boundary', () => {
     expect(wrapper.text()).toContain(expectedLabel)
     expect(wrapper.findAll('.data-row')).toHaveLength(1)
     wrapper.unmount()
+    setLanguage('en')
+  })
+
+  it('localizes authenticated archive UI and known publication status while preserving title, description, review, and submission prose', async () => {
+    api.list.mockResolvedValue({
+      content: [{
+        id: 'private-file',
+        title: 'UNCHANGED_ARCHIVE_TITLE',
+        description: 'UNCHANGED_ARCHIVE_DESCRIPTION',
+        reviewNote: 'UNCHANGED_BACKEND_REVIEW_SENTINEL',
+        publicationSubmissionMetadata: 'UNCHANGED_SUBMISSION_SENTINEL',
+        publicationStatus: 'APPROVED',
+        type: 'POSTER',
+        filename: 'poster.pdf',
+        size: 2048,
+        uploadedAt: '2026-10-01T00:00:00Z',
+        uploaderId: 'uploader-id',
+      }],
+      page: 0,
+      size: 20,
+      totalElements: 1,
+      totalPages: 1,
+    })
+    for (const [language, heading, status] of [
+      ['en', 'Manage private project artefacts.', 'Approved'],
+      ['de', 'Verwalte private Projektartefakte.', 'Freigegeben'],
+    ] as const) {
+      setLanguage(language)
+      const wrapper = mount(ArchivePage, {
+        props: { publicOnly: false },
+        global: { stubs: { AsyncPanel: { template: '<div><slot /></div>' } } },
+      })
+      await wrapper.get('#archive-project').setValue('private-project')
+      await wrapper.get('form.toolbar').trigger('submit')
+      await flushPromises()
+
+      expect(wrapper.text()).toContain(heading)
+      expect(api.list).toHaveBeenLastCalledWith('private-project', 0)
+      expect(wrapper.text()).toContain(status)
+      expect(wrapper.text()).toContain('UNCHANGED_ARCHIVE_TITLE')
+      expect(wrapper.text()).toContain('UNCHANGED_BACKEND_REVIEW_SENTINEL')
+      expect(wrapper.text()).toContain('UNCHANGED_SUBMISSION_SENTINEL')
+      wrapper.unmount()
+    }
     setLanguage('en')
   })
 })

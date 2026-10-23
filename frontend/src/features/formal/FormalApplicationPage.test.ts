@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { components } from '../../api/schema'
 import { useAuthStore } from '../../stores/auth'
 import FormalApplicationPage from './FormalApplicationPage.vue'
+import { setLanguage } from '../../i18n'
 
 const api = vi.hoisted(() => ({
   eligibleProjects: vi.fn(), get: vi.fn(), create: vi.fn(), update: vi.fn(), submit: vi.fn(), review: vi.fn(),
@@ -84,6 +85,7 @@ async function load(page: VueWrapper, status: FormalApplication['status'] = 'DRA
 
 describe('Formal proposal presentation and unchanged lifecycle', () => {
   beforeEach(() => {
+    setLanguage('en')
     setActivePinia(createPinia())
     api.eligibleProjects.mockResolvedValue(eligiblePage([eligible()]))
     useAuthStore().updateUser({
@@ -113,6 +115,37 @@ describe('Formal proposal presentation and unchanged lifecycle', () => {
     expect(api.get).not.toHaveBeenCalled()
     expect(api.create).not.toHaveBeenCalled()
     page.unmount()
+  })
+
+  it('localizes formal application labels and status while preserving project title and teacher review text', async () => {
+    setLanguage('de')
+    api.eligibleProjects.mockResolvedValue(eligiblePage([eligible()]))
+    const page = mount(FormalApplicationPage)
+    await flushPromises()
+    api.get.mockResolvedValue({
+      ...record('NEEDS_REVISION'),
+      reviewHistory: {
+        content: [{
+          id: 'review-1',
+          decision: 'NEEDS_REVISION',
+          feedback: 'UNCHANGED_FORMAL_TEACHER_REVIEW',
+        }],
+        page: 0,
+        size: 20,
+        totalElements: 1,
+        totalPages: 1,
+      },
+    })
+    await page.get('#eligible-project').setValue(projectId)
+    await flushPromises()
+    expect(api.get).toHaveBeenCalledWith(projectId)
+
+    expect(page.text()).toContain('Dies ist der offizielle Projektantrag der zugeteilten Gruppe')
+    expect(page.text()).toContain('Überarbeitung erforderlich')
+    expect(page.text()).toContain('UNCHANGED_FORMAL_TEACHER_REVIEW')
+    expect(page.text()).toContain('Allocated project')
+    page.unmount()
+    setLanguage('en')
   })
 
   it('starts an allocated-project draft and creates it with the existing field payload', async () => {

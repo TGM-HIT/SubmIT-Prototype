@@ -587,6 +587,11 @@ const de = {
         rubric: 'Bewertungsraster',
         assessed: 'bewertet',
         category: 'Kategorie',
+        status: {
+          ACTIVE: 'Aktiv',
+          SUPERSEDED: 'Abgelöst',
+          PUBLISHED: 'Veröffentlicht',
+        },
         electiveSubjects: 'Wahlfächer:',
         class: 'Klasse:',
         none: 'Keine',

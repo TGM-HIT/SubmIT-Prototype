@@ -68,6 +68,7 @@ async function openEditor(page: VueWrapper = wrapper!) {
 
 describe('administrator account management', () => {
   beforeEach(() => {
+    setLanguage('en')
     api.users.mockImplementation(async (page = 0) => pageResult([account], page))
     api.audit.mockResolvedValue(pageResult([]))
     api.classes.mockResolvedValue(pageResult([{ id: 'default-class', name: 'No class / unassigned' }]))
@@ -90,6 +91,16 @@ describe('administrator account management', () => {
     vi.unstubAllGlobals()
     vi.useRealTimers()
     setLanguage('en')
+  })
+
+  it('switches administration labels and role names while preserving account display names', async () => {
+    setLanguage('de')
+    const page = pageWith()
+    await flushPromises()
+    expect(page.get('#accounts-heading').text()).toBe('Konten')
+    expect(page.find('[aria-label="Konto Student Account (student-account) bearbeiten"]').exists()).toBe(true)
+    expect(page.text()).toContain('Student Account')
+    expect(page.text()).toContain('Benutzer und Rollen')
   })
 
   it('applies role and debounced search server-side from the first page, and clear restores the full list', async () => {

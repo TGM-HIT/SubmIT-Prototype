@@ -1,6 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import IdeasPage from './IdeasPage.vue'
+import { setLanguage } from '../../i18n'
 
 const state = vi.hoisted(() => ({ role: 'STUDENT', id: undefined as string | undefined }))
 const api = vi.hoisted(() => ({
@@ -99,6 +100,7 @@ afterEach(() => {
 })
 
 beforeEach(() => {
+  setLanguage('en')
   vi.resetAllMocks()
   state.role = 'STUDENT'
   state.id = undefined
@@ -123,6 +125,38 @@ beforeEach(() => {
 })
 
 describe("student details in idea identities", () => {
+  it("localizes idea and review UI while leaving project and teacher-authored content unchanged", async () => {
+    state.role = 'TEACHER'
+    setLanguage('de')
+    const reviewedIdea = {
+      ...idea('IDEA_DRAFT'),
+      title: 'UNCHANGED_IDEA_TITLE',
+      description: 'UNCHANGED_IDEA_DESCRIPTION',
+      owners: [{ id: 'student-1', displayName: 'UNCHANGED_DISPLAY_NAME', creator: true }],
+      reviews: [{
+        id: 'review-1',
+        decision: 'APPROVE_FOR_SPECIFICATION',
+        feedback: 'UNCHANGED_TEACHER_REVIEW_PROSE',
+        teacherDisplayName: 'UNCHANGED_TEACHER_NAME',
+      }],
+    }
+    api.list.mockResolvedValue({ ...pageIdeas('IDEA_DRAFT'), content: [reviewedIdea] })
+    api.get.mockResolvedValue(reviewedIdea)
+    const page = mountPage()
+    await flushPromises()
+    await page.get('#details-button-idea-IDEA_DRAFT').trigger('click')
+    await flushPromises()
+
+    expect(page.text()).toContain('Ideenentwurf')
+    expect(page.text()).toContain('UNCHANGED_IDEA_TITLE')
+    expect(page.text()).toContain('UNCHANGED_IDEA_DESCRIPTION')
+    expect(page.text()).toContain('UNCHANGED_DISPLAY_NAME')
+    expect(page.text()).toContain('UNCHANGED_TEACHER_REVIEW_PROSE')
+    expect(page.text()).toContain('UNCHANGED_TEACHER_NAME')
+    page.unmount()
+    setLanguage('en')
+  })
+
   it("shows current class and subjects beside student owner names only to staff", async () => {
     const staffedIdea = { ...idea("IDEA_DRAFT"), owners: [{ id: "student-1", displayName: "Student One", creator: true, className: "Class 10A", electiveSubjectNames: ["Biology", "Art"] }] }
     api.list.mockResolvedValue({ ...pageIdeas("IDEA_DRAFT"), content: [staffedIdea] })

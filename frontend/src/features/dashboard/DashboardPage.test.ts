@@ -1,6 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import DashboardPage from './DashboardPage.vue'
+import { setLanguage } from '../../i18n'
 
 const api = vi.hoisted(() => ({
   years: vi.fn(),
@@ -20,6 +21,7 @@ vi.mock('../../stores/auth', () => ({
 
 describe('Overview layout groups', () => {
   beforeEach(() => {
+    setLanguage('en')
     api.role = 'STUDENT'
     api.years.mockResolvedValue({ content: ['2026/2027'] })
     api.periods.mockResolvedValue({ content: [], totalElements: 0 })
@@ -81,5 +83,36 @@ describe('Overview layout groups', () => {
     expect(stats.findAll(':scope > .stat-card')).toHaveLength(3)
     expect(workflow.classes()).toContain('grid-2')
     expect(workflow.findAll(':scope > .panel')).toHaveLength(2)
+  })
+
+  it('switches the dashboard UI language without translating an assigned project title', async () => {
+    api.periods.mockResolvedValue({
+      content: [{
+        id: 'period-locale',
+        label: 'Period name sentinel',
+        schoolYear: '2026/2027',
+        status: 'ALLOCATED',
+        studentApplicationStatus: 'SUBMITTED',
+        studentAssignment: { state: 'PRELIMINARY', projectTitle: 'UNCHANGED_DASHBOARD_PROJECT_TITLE' },
+      }],
+      totalElements: 1,
+    })
+    const page = mount(DashboardPage, {
+      global: { stubs: { AsyncPanel: { template: '<div><slot /></div>' }, RouterLink: { template: '<a><slot /></a>' } } },
+    })
+    await flushPromises()
+    expect(page.text()).toContain('A quick view of your project lifecycle')
+    expect(page.text()).toContain('UNCHANGED_DASHBOARD_PROJECT_TITLE')
+    page.unmount()
+    setLanguage('de')
+    const germanPage = mount(DashboardPage, {
+      global: { stubs: { AsyncPanel: { template: '<div><slot /></div>' }, RouterLink: { template: '<a><slot /></a>' } } },
+    })
+    await flushPromises()
+    expect(germanPage.text()).toContain('Übersicht über deinen Projektablauf')
+    expect(germanPage.text()).toContain('UNCHANGED_DASHBOARD_PROJECT_TITLE')
+    expect(germanPage.text()).toContain('Period name sentinel')
+    germanPage.unmount()
+    setLanguage('en')
   })
 })

@@ -4,6 +4,7 @@ import { resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import AllocationPage from './AllocationPage.vue'
 import { ApiError } from '../../api/client'
+import { setLanguage } from '../../i18n'
 
 const api = vi.hoisted(() => ({
   listPeriods: vi.fn(),
@@ -53,6 +54,7 @@ function mountPage() {
 
 describe('allocation supervisor display', () => {
   beforeEach(() => {
+    setLanguage('en')
     state.role = 'TEACHER'
     api.listPeriods.mockResolvedValue({
       content: [{ id: 'period-1', label: 'Allocation preview', schoolYear: '2026/2027', status: 'ALLOCATED', projectIds: ['project-1'] }],
@@ -94,6 +96,24 @@ describe('allocation supervisor display', () => {
     await page.get('#period-select').setValue('period-1')
     await flushPromises()
     expect(page.text()).toContain('Selected period: Allocation preview · school year 2026/2027')
+  })
+
+  it('localizes allocation status and route labels while preserving backend error text and project names', async () => {
+    setLanguage('de')
+    api.listRuns.mockResolvedValue({
+      content: [{ id: 'run-locale', status: 'COMPLETED', error: 'UNCHANGED_BACKEND_ALLOCATION_ERROR' }],
+      page: 0,
+      size: 20,
+      totalElements: 1,
+      totalPages: 1,
+    })
+    const page = mountPage()
+    await flushPromises()
+    expect(page.text()).toContain('Zuteilungsläufe')
+    expect(page.text()).toContain('Abgeschlossen')
+    expect(page.text()).toContain('UNCHANGED_BACKEND_ALLOCATION_ERROR')
+    page.unmount()
+    setLanguage('en')
   })
 
   it('offers and explains an early run, preserves state on cancellation, refreshes the result, and focuses it', async () => {
