@@ -66,4 +66,9 @@ describe('shared form and responsive layout styles', () => {
     expect(styles).toMatch(/\.nav-link\s*\{[^}]*min-width:\s*0;/)
     expect(styles).toMatch(/\.nav-link \.nav-label\s*\{\s*min-width:\s*0;\s*overflow-wrap:\s*anywhere;/)
   })
+
+  it('keeps the responsive navigation links intrinsic-width inside its horizontal scroller', () => {
+    expect(styles).toMatch(/\.nav-list\s*\{\s*display:\s*flex;\s*overflow-x:\s*auto;/)
+    expect(styles).toMatch(/\.nav-link\s*\{\s*flex:\s*0 0 auto;\s*white-space:\s*nowrap;/)
+  })
 })
