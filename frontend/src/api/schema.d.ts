@@ -715,6 +715,23 @@ export interface paths {
         patch: operations["changeRole"];
         trace?: never;
     };
+    "/api/users/{id}/language": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change the authenticated account's interface language. */
+        patch: operations["changeLanguage"];
+        trace?: never;
+    };
     "/api/student-classes/{id}": {
         parameters: {
             query?: never;
@@ -2496,6 +2513,11 @@ export interface components {
              * @enum {string}
              */
             role: "STUDENT" | "TEACHER" | "ADMIN";
+            /**
+             * @description Persisted account language.
+             * @enum {string}
+             */
+            language: "en" | "de";
             /** @description Current student class; returned only on the administrator account-list endpoint. */
             className?: string;
             /** @description Current elective subject names; returned only on the administrator account-list endpoint. */
@@ -2778,6 +2800,13 @@ export interface components {
              * @enum {string}
              */
             role: "STUDENT" | "TEACHER" | "ADMIN";
+        };
+        LanguageRequest: {
+            /**
+             * @description Language to use for the authenticated account.
+             * @enum {string}
+             */
+            language: "en" | "de";
         };
         PageResponseUserResponse: {
             /** @description Items returned in this page. */
@@ -7086,6 +7115,68 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    changeLanguage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LanguageRequest"];
+            };
+        };
+        responses: {
+            /** @description The account language was changed. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["UserResponse"];
+                };
+            };
+            /** @description The account UUID or language request is invalid. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Authentication is required. Missing or invalid bearer authentication credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Only the account owner may change its language. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description The account does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiErrorResponse"];
                 };
             };
         };

@@ -48,7 +48,7 @@ public class UserService {
             }
             StudentDetailsResponse details = studentDetails.response(user);
             return new UserResponse(response.id(), response.username(), response.displayName(), response.role(),
-                    details.className(), details.electiveSubjectNames());
+                    response.language(), details.className(), details.electiveSubjectNames());
         }).getContent(), result.getNumber(),
                 result.getSize(), result.getTotalElements(), result.getTotalPages());
     }

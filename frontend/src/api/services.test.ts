@@ -1,11 +1,35 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { configureApi } from './client'
-import { ideasApi } from './services'
+import { ideasApi, userApi } from './services'
 
 describe('ideas API service', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     configureApi({ getToken: () => null, onUnauthorized: () => undefined })
+  })
+
+  describe('account language API service', () => {
+    afterEach(() => {
+      vi.unstubAllGlobals()
+      configureApi({ getToken: () => null, onUnauthorized: () => undefined })
+    })
+
+    it('patches only the self-language endpoint with the stable selected language', async () => {
+      const response = {
+        id: 'account-id', username: 'student', displayName: 'Student', role: 'STUDENT', language: 'de',
+      }
+      const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(response), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      }))
+      vi.stubGlobal('fetch', fetchMock)
+
+      await userApi.changeLanguage('account/id', 'de')
+
+      expect(fetchMock).toHaveBeenCalledExactlyOnceWith('/api/users/account%2Fid/language', expect.objectContaining({
+        method: 'PATCH',
+        body: JSON.stringify({ language: 'de' }),
+      }))
+    })
   })
 
   it('serializes optional filters while preserving existing positional arguments', async () => {

@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import type { components } from '../api/schema'
 import { configureApi, request } from '../api/client'
+import { browserLanguage, setBrowserLanguage, setLanguage } from '../i18n'
 
 type TokenResponse = components['schemas']['TokenResponse']
 type RegisterRequest = components['schemas']['RegisterRequest']
@@ -14,6 +15,8 @@ export const useAuthStore = defineStore('auth', () => {
   const token = ref<string | null>(localStorage.getItem(TOKEN_KEY))
   const user = ref<components['schemas']['UserResponse'] | null>(readUser())
   const isAuthenticated = computed(() => Boolean(token.value && user.value))
+  if (user.value) setLanguage(user.value.language ?? 'en')
+  else setLanguage(browserLanguage())
 
   configureApi({
     getToken: () => token.value,
@@ -34,6 +37,7 @@ export const useAuthStore = defineStore('auth', () => {
   function save(session: TokenResponse): void {
     token.value = session.token ?? null
     user.value = session.user ?? null
+    if (user.value) setLanguage(user.value.language ?? 'en')
     if (token.value) localStorage.setItem(TOKEN_KEY, token.value)
     else localStorage.removeItem(TOKEN_KEY)
     if (user.value) localStorage.setItem(USER_KEY, JSON.stringify(user.value))
@@ -51,6 +55,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   function updateUser(updated: components['schemas']['UserResponse']): void {
     user.value = updated
+    setLanguage(updated.language ?? 'en')
     localStorage.setItem(USER_KEY, JSON.stringify(updated))
   }
 
@@ -59,6 +64,7 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = null
     localStorage.removeItem(TOKEN_KEY)
     localStorage.removeItem(USER_KEY)
+    setBrowserLanguage()
   }
 
   return { token, user, isAuthenticated, login, register, updateUser, logout }

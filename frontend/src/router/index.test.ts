@@ -17,7 +17,7 @@ describe('User Settings route authentication', () => {
   it.each(['STUDENT', 'TEACHER', 'ADMIN'] as const)('opens /settings for an authenticated %s', async (role) => {
     const auth = useAuthStore()
     auth.token = 'test-token'
-    auth.updateUser({ id: 'user-id', username: 'account', displayName: 'Name', role })
+    auth.updateUser({ id: 'user-id', username: 'account', displayName: 'Name', role, language: 'en' })
     await router.push('/settings')
 
     expect(router.currentRoute.value.name).toBe('settings')

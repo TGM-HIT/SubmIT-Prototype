@@ -1,21 +1,21 @@
 <template>
   <div class="stack">
-    <div class="field"><label class="label" :for="`${prefix}-criterion`">Rubric category and criterion</label>
+    <div class="field"><label class="label" :for="`${prefix}-criterion`">{{ $t('gradingFields.categoryCriterion') }}</label>
       <select :id="`${prefix}-criterion`" :value="modelValue.criterionId" class="select" required @change="update('criterionId', ($event.target as HTMLSelectElement).value)">
-        <option value="">Select a configured criterion…</option>
+        <option value="">{{ $t('gradingFields.selectCriterion') }}</option>
         <optgroup v-for="category in categories" :key="String(category.id)" :label="String(category.name)">
           <option v-for="criterion in criteriaFor(category)" :key="String(criterion.id)" :value="criterion.id">{{ criterion.name }} · {{ criterion.subject }}<span v-if="criterion.evidenceRequired"> · evidence required</span></option>
         </optgroup>
       </select>
     </div>
-    <p v-if="selected" class="notice">{{ selected.description || selected.name }} · range {{ scaleObject(selected.scale).min }} to {{ scaleObject(selected.scale).max }} by {{ scaleObject(selected.scale).step }}<span v-if="selected.evidenceRequired"> · written evidence required</span></p>
+    <p v-if="selected" class="notice">{{ selected.description || selected.name }} · {{ $t('gradingFields.range', { min: scaleObject(selected.scale).min, max: scaleObject(selected.scale).max, step: scaleObject(selected.scale).step }) }}<span v-if="selected.evidenceRequired"> · {{ $t('gradingFields.writtenEvidenceRequired') }}</span></p>
     <div class="grid grid-2">
-      <div class="field"><label class="label" :for="`${prefix}-grade`">Grade</label><select :id="`${prefix}-grade`" :value="modelValue.grade" class="select" required @change="update('grade', ($event.target as HTMLSelectElement).value)"><option value="">Select a value…</option><option v-for="value in scaleOptions" :key="value" :value="value">{{ value }}{{ label(value) }}</option></select></div>
-      <div class="field"><label class="label" :for="`${prefix}-date`">Assessment date</label><input :id="`${prefix}-date`" :value="modelValue.assessedOn" class="input" type="date" required @input="update('assessedOn', ($event.target as HTMLInputElement).value)" /></div>
+      <div class="field"><label class="label" :for="`${prefix}-grade`">{{ $t('gradingFields.grade') }}</label><select :id="`${prefix}-grade`" :value="modelValue.grade" class="select" required @change="update('grade', ($event.target as HTMLSelectElement).value)"><option value="">{{ $t('gradingFields.selectValue') }}</option><option v-for="value in scaleOptions" :key="value" :value="value">{{ value }}{{ label(value) }}</option></select></div>
+      <div class="field"><label class="label" :for="`${prefix}-date`">{{ $t('gradingFields.assessmentDate') }}</label><input :id="`${prefix}-date`" :value="modelValue.assessedOn" class="input" type="date" required @input="update('assessedOn', ($event.target as HTMLInputElement).value)" /></div>
     </div>
-    <div class="field"><label class="label" :for="`${prefix}-evidence`">Evidence</label><textarea :id="`${prefix}-evidence`" :value="modelValue.evidence" class="textarea" maxlength="4000" :required="Boolean(selected?.evidenceRequired)" @input="update('evidence', ($event.target as HTMLTextAreaElement).value)" /></div>
-    <div class="field"><label class="label" :for="`${prefix}-comments`">Teacher comments</label><textarea :id="`${prefix}-comments`" :value="modelValue.comments" class="textarea" maxlength="4000" @input="update('comments', ($event.target as HTMLTextAreaElement).value)" /></div>
-    <p v-if="selected?.evidenceRequired" class="muted">This criterion requires evidence. Assessment entries retain the rubric version and history.</p>
+    <div class="field"><label class="label" :for="`${prefix}-evidence`">{{ $t('gradingFields.evidence') }}</label><textarea :id="`${prefix}-evidence`" :value="modelValue.evidence" class="textarea" maxlength="4000" :required="Boolean(selected?.evidenceRequired)" @input="update('evidence', ($event.target as HTMLTextAreaElement).value)" /></div>
+    <div class="field"><label class="label" :for="`${prefix}-comments`">{{ $t('gradingFields.teacherComments') }}</label><textarea :id="`${prefix}-comments`" :value="modelValue.comments" class="textarea" maxlength="4000" @input="update('comments', ($event.target as HTMLTextAreaElement).value)" /></div>
+    <p v-if="selected?.evidenceRequired" class="muted">{{ $t('gradingFields.evidenceRequirement') }}</p>
   </div>
 </template>
 

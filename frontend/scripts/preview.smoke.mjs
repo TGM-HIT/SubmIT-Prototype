@@ -23,6 +23,7 @@ import {
   stopChild,
   isPortFree,
   launchBrowser,
+  configureBrowserLocale,
   run,
   RECORD_LOCATOR_EXPRESSION,
   viewportFor,
@@ -54,9 +55,22 @@ test('G8 parses scoped attribute selectors without consuming assignment characte
   assert.deepEqual(parsed.selectByKey[0], { selector: '[data-kind="shared"] select', value: 'Project=c' })
 })
 
+test('browser locale override sets both navigator language and Intl locale through CDP', async () => {
+  const calls = []
+  const client = { send: async (...args) => { calls.push(args) } }
+  await configureBrowserLocale(client, 'fr-FR', 'Chrome user agent')
+  assert.deepEqual(calls, [
+    ['Network.setUserAgentOverride', { userAgent: 'Chrome user agent', acceptLanguage: 'fr-FR' }],
+    ['Emulation.setLocaleOverride', { locale: 'fr-FR' }],
+  ])
+})
+
 test('parses preview options and rejects incomplete or invalid invocations', () => {
   assert.equal(parseArgs([]).start, true)
   assert.equal(parseArgs(['--headed']).headed, true)
+  assert.equal(parseArgs(['--locale', 'de-DE']).locale, 'de-DE')
+  assert.equal(parseArgs(['--locale', 'en-us']).locale, 'en-US')
+  assert.throws(() => parseArgs(['--locale', 'not_a_locale']), /valid BCP 47/)
   assert.equal(parseArgs(['--viewport', 'mobile', '--output-dir', '/tmp/previews']).viewport, 'mobile')
   assert.equal(parseArgs(['--no-start', '--url', 'http://localhost:5173']).start, false)
   assert.deepEqual(parseArgs(['--step', 'focus:#trigger', '--step', 'scroll:#result', '--step', 'read:body']).steps, [
@@ -168,6 +182,7 @@ test('launchBrowser uses the submit profile prefix and removes only its failed p
     chrome: process.execPath,
     profileRoot,
     headed: false,
+    locale: 'de-DE',
   }, 'http://127.0.0.1:5173', {
     env: process.env,
     onBrowser: (_child, profile) => { capturedProfile = profile },
@@ -180,6 +195,7 @@ test('launchBrowser uses the submit profile prefix and removes only its failed p
 
   assert.match(path.basename(capturedProfile), /^submit-preview-/)
   assert.ok(capturedArgs.includes(`--user-data-dir=${capturedProfile}`))
+  assert.ok(capturedArgs.includes('--lang=de-DE'))
   await assert.rejects(readFile(capturedProfile), { code: 'ENOENT' })
   assert.equal(await readFile(unrelatedSession, 'utf8'), 'keep')
 })

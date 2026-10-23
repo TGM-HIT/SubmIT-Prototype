@@ -14,6 +14,7 @@ const defaults = {
   viewport: 'desktop',
   outputDir: path.join(frontendDir, '.preview'),
   screenshot: 'preview.png',
+  locale: undefined,
   startupTimeout: 180_000,
   sessionFile: path.join(frontendDir, '.preview', 'session.json'),
 }
@@ -70,6 +71,7 @@ export function parseArgs(args) {
     ['--output-dir', 'outputDir'],
     ['--screenshot', 'screenshot'],
     ['--username', 'username'],
+    ['--locale', 'locale'],
     ['--seed-idea-owner', 'seedIdeaOwner'],
     ['--seed-idea-history', 'seedIdeaHistory'],
     ['--seed-idea-title', 'seedIdeaTitle'],
@@ -199,6 +201,15 @@ export function parseArgs(args) {
   }
   if (!['desktop', 'mobile'].includes(options.viewport)) {
     throw new Error('--viewport must be desktop or mobile.')
+  }
+  if (options.locale !== undefined) {
+    try {
+      const canonical = Intl.getCanonicalLocales(options.locale)
+      if (canonical.length !== 1) throw new Error('invalid')
+      options.locale = canonical[0]
+    } catch {
+      throw new Error('--locale must be a valid BCP 47 language tag.')
+    }
   }
   if ((options.width === undefined) !== (options.height === undefined)) {
     throw new Error('--width and --height must be supplied together.')
@@ -1266,6 +1277,7 @@ export async function launchBrowser(options, url, {
   let browserErrors = []
   const browser = startBrowser(executable, [
     ...(options.headed ? [] : ['--headless=new']),
+    ...(options.locale ? [`--lang=${options.locale}`] : []),
     '--no-first-run',
     '--no-default-browser-check',
     '--disable-gpu',
@@ -1290,6 +1302,10 @@ export async function launchBrowser(options, url, {
       client.send('Network.enable'),
       client.send('Log.enable'),
     ])
+    if (options.locale) {
+      const browserInfo = await client.send('Browser.getVersion')
+      await configureBrowserLocale(client, options.locale, browserInfo.userAgent)
+    }
     const viewport = viewportFor(options)
     await client.send('Emulation.setDeviceMetricsOverride', viewport)
     console.log(`Chrome ${version.Browser}; viewport ${viewport.width}x${viewport.height}${viewport.mobile ? ' (mobile)' : ' (desktop)'}.`)
@@ -1300,13 +1316,18 @@ export async function launchBrowser(options, url, {
       await login(client, options.username, password)
       await navigate(client, url, signal)
     }
+
     await applyPageInteractions(client, options)
     await new Promise((resolve) => setTimeout(resolve, 250))
     const evaluation = await client.send('Runtime.evaluate', {
-      expression: '({ title: document.title, url: location.href })',
+      expression: '({ title: document.title, url: location.href, language: navigator.language })',
       returnByValue: true,
     })
     if (evaluation.exceptionDetails) throw new Error(`Could not inspect rendered page: ${evaluation.exceptionDetails.text}`)
+    if (options.locale && !evaluation.result?.value?.language?.toLowerCase().startsWith(options.locale.split('-')[0].toLowerCase())) {
+      throw new Error(`Chromium did not apply --locale ${options.locale}; navigator.language was ${evaluation.result?.value?.language ?? 'unavailable'}.`)
+    }
+    if (options.locale) console.log(`Chromium navigator.language: ${evaluation.result.value.language}.`)
     if (options.networkReport) for (const line of networkReport(browserErrors)) console.log(`Browser request: ${line}`)
     return { browser, profile, client, errors: browserErrors, page: evaluation.result?.value }
   } catch (error) {
@@ -1321,6 +1342,14 @@ export async function launchBrowser(options, url, {
     await rm(profile, { recursive: true, force: true })
     throw error
   }
+}
+
+export async function configureBrowserLocale(client, locale, userAgent) {
+  await client.send('Network.setUserAgentOverride', {
+    userAgent,
+    acceptLanguage: locale,
+  })
+  await client.send('Emulation.setLocaleOverride', { locale })
 }
 
 function buildUrl(options) {
@@ -1357,6 +1386,8 @@ Persistent shared session (opt-in; testing profile only, data lives until it is 
 
 Options:
   --viewport desktop|mobile       Default desktop (1440x1000) or narrow mobile (390x844)
+  --locale BCP-47                Override Chromium's real browser locale (for example de-DE or en-US);
+                                  navigator.language is checked and reported
   --headed                         Use the native browser window instead of headless mode
   --width N --height N            Optional custom viewport, supplied together
   --output-dir DIR                Screenshot directory (default frontend/.preview)

@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonSetter;
 import com.fasterxml.jackson.annotation.Nulls;
 import ac.at.tgm.submit.security.Role;
+import ac.at.tgm.submit.user.AccountLanguage;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
@@ -51,17 +52,25 @@ public final class ApiDtos {
             @Schema(description = "Authenticated account response.") UserResponse user) {
     }
 
-    @Schema(requiredProperties = {"id", "username", "displayName", "role"})
+    @Schema(requiredProperties = {"id", "username", "displayName", "role", "language"})
     public record UserResponse(
             @Schema(description = "Account ID.") UUID id,
             @Schema(description = "Login name.") String username,
             @Schema(description = "Current account display name.", requiredMode = Schema.RequiredMode.REQUIRED)
             String displayName,
             @Schema(description = "Assigned account role.") Role role,
+            @Schema(description = "Persisted account language.", requiredMode = Schema.RequiredMode.REQUIRED)
+            AccountLanguage language,
             @Schema(description = "Current student class; returned only on the administrator account-list endpoint.")
             @JsonInclude(JsonInclude.Include.NON_NULL) String className,
             @Schema(description = "Current elective subject names; returned only on the administrator account-list endpoint.")
             @JsonInclude(JsonInclude.Include.NON_NULL) List<String> electiveSubjectNames) {
+    }
+
+    public record LanguageRequest(
+            @NotNull @Schema(description = "Language to use for the authenticated account.",
+                    allowableValues = {"en", "de"}, requiredMode = Schema.RequiredMode.REQUIRED)
+            AccountLanguage language) {
     }
 
     public record DisplayNameRequest(

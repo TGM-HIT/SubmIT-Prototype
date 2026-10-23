@@ -104,7 +104,8 @@ class OpenApiContractTest {
             Map.entry("PageResponseEligibleFormalProjectResponse",
                     contract("content,page,size,totalElements,totalPages", "", "")),
             Map.entry("TokenResponse", contract("token,tokenType,expiresIn,user", "", "")),
-            Map.entry("UserResponse", contract("id,username,displayName,role", "className,electiveSubjectNames", "")),
+            Map.entry("UserResponse", contract("id,username,displayName,role,language",
+                    "className,electiveSubjectNames", "")),
             Map.entry("CatalogueEntryResponse", contract("id,name", "", "")),
             Map.entry("StudentDetailsResponse", contract(
                     "studentId,displayName,classId,className,electiveSubjectIds,electiveSubjectNames", "", "")),
@@ -239,11 +240,37 @@ class OpenApiContractTest {
 
         List<String> failures = new ArrayList<>();
         int operations = checkOperations(document.path("paths"), failures);
-        assertEquals(83, operations, "The generated API operation count should be reviewed when endpoints change.");
+        assertEquals(84, operations, "The generated API operation count should be reviewed when endpoints change.");
         JsonNode schemas = document.path("components").path("schemas");
         checkComponentSchemas(schemas, failures);
         checkResponseRequiredness(schemas, failures);
         assertTrue(failures.isEmpty(), () -> String.join(System.lineSeparator(), failures));
+    }
+
+    @Test
+    void accountLanguageOperationAndSchemaAreExact() throws Exception {
+        JsonNode document = apiDocument();
+        JsonNode operation = document.path("paths").path("/api/users/{id}/language").path("patch");
+        for (String status : List.of("200", "400", "401", "403", "404")) {
+            assertTrue(operation.path("responses").has(status), "Missing language endpoint status " + status);
+        }
+        assertTrue(operation.path("requestBody").path("required").asBoolean());
+        assertEquals("#/components/schemas/LanguageRequest",
+                operation.path("requestBody").path("content").path("application/json").path("schema")
+                        .path("$ref").asText());
+
+        JsonNode schemas = document.path("components").path("schemas");
+        JsonNode languageRequest = schemas.path("LanguageRequest");
+        Set<String> required = new TreeSet<>();
+        languageRequest.path("required").forEach(value -> required.add(value.asText()));
+        Set<String> languages = new TreeSet<>();
+        languageRequest.path("properties").path("language").path("enum")
+                .forEach(value -> languages.add(value.asText()));
+        Set<String> userRequired = new TreeSet<>();
+        schemas.path("UserResponse").path("required").forEach(value -> userRequired.add(value.asText()));
+        assertEquals(Set.of("language"), required);
+        assertEquals(Set.of("de", "en"), languages);
+        assertTrue(userRequired.contains("language"));
     }
 
     @Test
@@ -637,8 +664,8 @@ class OpenApiContractTest {
                 }
             }
         }
-        assertEquals(83, operationCount);
-        assertEquals(79, protectedCount);
+        assertEquals(84, operationCount);
+        assertEquals(80, protectedCount);
         assertTrue(failures.isEmpty(), () -> String.join(System.lineSeparator(), failures));
     }
 
@@ -899,7 +926,7 @@ class OpenApiContractTest {
             }
             baselineCodes.computeIfAbsent(location, unused -> new TreeSet<>()).add(expected.status());
         }
-        assertEquals(78, BASELINE_SUCCESS_RESPONSES.size(), "The checked-in baseline must cover all operations.");
+        assertEquals(79, BASELINE_SUCCESS_RESPONSES.size(), "The checked-in baseline must cover all operations.");
 
         for (Map.Entry<String, Set<String>> route : TICKET_ERROR_CODES.entrySet()) {
             String[] parts = route.getKey().split(" ", 2);
@@ -1520,6 +1547,7 @@ class OpenApiContractTest {
                 post|/api/application-periods/{periodId}/allocation-runs|201|#/components/schemas/AllocationRunResponse
                 post|/api/allocation-runs/{id}/finalize|200|#/components/schemas/AllocationRunResponse
                 patch|/api/users/{id}|200|#/components/schemas/UserResponse
+                patch|/api/users/{id}/language|200|#/components/schemas/UserResponse
                 patch|/api/users/{id}/role|200|#/components/schemas/UserResponse
                 patch|/api/student-classes/{id}|200|#/components/schemas/CatalogueEntryResponse
                 patch|/api/elective-subjects/{id}|200|#/components/schemas/CatalogueEntryResponse

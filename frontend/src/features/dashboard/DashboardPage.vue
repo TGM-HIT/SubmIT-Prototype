@@ -1,54 +1,54 @@
 <template>
   <section class="page">
-    <p class="page-intro">A quick view of your project lifecycle, upcoming dates and actions that need your attention.</p>
+    <p class="page-intro">{{ $t('dashboard.intro') }}</p>
     <AsyncPanel :loading="task.loading.value" :error="task.error.value" @retry="load">
       <div class="grid grid-3 overview-stats">
         <article class="panel stat-card">
-          <p class="eyebrow">CURRENT SCHOOL YEAR</p>
-          <p class="stat-value">{{ years[0] ?? 'Not available' }}</p>
-          <p class="muted">School calendar</p>
+          <p class="eyebrow">{{ $t('dashboard.currentYear') }}</p>
+          <p class="stat-value">{{ years[0] ?? $t('dashboard.notAvailable') }}</p>
+          <p class="muted">{{ $t('dashboard.calendar') }}</p>
         </article>
         <article class="panel stat-card">
-          <p class="eyebrow">APPLICATION PERIODS</p>
+          <p class="eyebrow">{{ $t('dashboard.periods') }}</p>
           <p class="stat-value">{{ periods.totalElements ?? '—' }}</p>
-          <p class="muted">{{ openPeriod ? `Open until ${date(openPeriod.closesAt)}` : 'No period currently open' }}</p>
+          <p class="muted">{{ openPeriod ? $t('dashboard.openUntil', { date: date(openPeriod.closesAt) }) : $t('dashboard.noOpenPeriod') }}</p>
         </article>
         <article class="panel stat-card">
-          <p class="eyebrow">IDEAS IN VIEW</p>
+          <p class="eyebrow">{{ $t('dashboard.ideas') }}</p>
           <p class="stat-value">{{ ideas.totalElements ?? '—' }}</p>
           <p class="muted">{{ roleHint }}</p>
         </article>
       </div>
       <div class="grid grid-2 stack overview-workflow">
         <article class="panel">
-          <h2 class="section-title">Application timeline</h2>
-          <p v-if="!periods.content?.length" class="empty">Application periods will appear here when configured.</p>
+          <h2 class="section-title">{{ $t('dashboard.timeline') }}</h2>
+          <p v-if="!periods.content?.length" class="empty">{{ $t('dashboard.periodsAppear') }}</p>
           <div v-for="period in periods.content" :key="period.id" class="data-row">
             <div class="row-main">
               <h3>{{ period.label || period.schoolYear }}</h3>
-              <p>School year {{ period.schoolYear }}</p>
+              <p>{{ $t('dashboard.schoolYear', { year: period.schoolYear }) }}</p>
               <p>{{ date(period.opensAt) }} – {{ date(period.closesAt) }}</p>
             <div v-if="isStudent" class="student-assignment-summary">
-              <p v-if="period.studentAssignment?.state === 'PRELIMINARY'"><strong>Preliminary assignment:</strong> {{ period.studentAssignment.projectTitle }}</p>
-              <p v-else-if="period.studentAssignment?.state === 'FINAL'"><strong>Final assignment:</strong> {{ period.studentAssignment.projectTitle }}</p>
-              <p v-else-if="period.studentAssignment?.state === 'NO_RESULT'"><strong>Application:</strong> {{ readable(period.studentApplicationStatus) }} · No allocation result yet</p>
+              <p v-if="period.studentAssignment?.state === 'PRELIMINARY'"><strong>{{ $t('dashboard.preliminary') }}</strong> {{ period.studentAssignment.projectTitle }}</p>
+              <p v-else-if="period.studentAssignment?.state === 'FINAL'"><strong>{{ $t('dashboard.final') }}</strong> {{ period.studentAssignment.projectTitle }}</p>
+              <p v-else-if="period.studentAssignment?.state === 'NO_RESULT'"><strong>{{ $t('dashboard.application') }}</strong> {{ readable(period.studentApplicationStatus) }} · {{ $t('dashboard.noResult') }}</p>
               <p v-else-if="period.studentAssignment">{{ assignmentSummary(period.studentAssignment.state) }}</p>
-              <p v-else><strong>Application:</strong> {{ period.studentApplicationStatus === 'NOT_SUBMITTED' ? 'No application submitted' : readable(period.studentApplicationStatus) }}</p>
-              <RouterLink to="/applications">View Applications</RouterLink>
+              <p v-else><strong>{{ $t('dashboard.application') }}</strong> {{ period.studentApplicationStatus === 'NOT_SUBMITTED' ? $t('dashboard.noApplication') : readable(period.studentApplicationStatus) }}</p>
+              <RouterLink to="/applications">{{ $t('dashboard.viewApplications') }}</RouterLink>
             </div>
             </div>
             <span class="status-badge" :class="`status-${period.status?.toLowerCase()}`">{{ readable(period.status) }}</span>
           </div>
         </article>
         <article class="panel">
-          <h2 class="section-title">Your next actions</h2>
+          <h2 class="section-title">{{ $t('dashboard.nextActions') }}</h2>
           <div class="choice-list">
             <RouterLink v-for="action in actions" :key="action.label" class="choice-item" :to="action.to">
               <span>{{ action.label }}</span><span aria-hidden="true">→</span>
             </RouterLink>
-            <p v-if="!actions.length" class="empty">You are all caught up. Check back as your project progresses.</p>
+            <p v-if="!actions.length" class="empty">{{ $t('dashboard.caughtUp') }}</p>
           </div>
-          <div class="notice">At each application deadline, applications close automatically and an initial allocation run starts.</div>
+          <div class="notice">{{ $t('dashboard.deadlineNotice') }}</div>
         </article>
       </div>
     </AsyncPanel>
@@ -64,6 +64,7 @@ import type { Page } from '../../api/client'
 import { useAuthStore } from '../../stores/auth'
 import { useTask } from '../../composables/useTask'
 import AsyncPanel from '../../components/AsyncPanel.vue'
+import { i18n } from '../../i18n'
 
 type Period = components['schemas']['ApplicationPeriodResponse']
 type Idea = components['schemas']['IdeaResponse']
@@ -74,25 +75,25 @@ const periods = ref<Page<Period>>({ content: [], page: 0, size: 20, totalElement
 const ideas = ref<Page<Idea>>({ content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 })
 const openPeriod = computed(() => periods.value.content.find((item) => item.status === 'OPEN'))
 const isStudent = computed(() => auth.user?.role === 'STUDENT')
-const roleHint = computed(() => auth.user?.role === 'STUDENT' ? 'Your ideas and submissions' : 'Submissions requiring attention')
+const roleHint = computed(() => String(i18n.global.t(auth.user?.role === 'STUDENT' ? 'dashboard.studentIdeas' : 'dashboard.staffIdeas')))
 const actions = computed(() => {
   const items = []
-  if (auth.user?.role === 'STUDENT') items.push({ label: 'Continue an idea or check teacher feedback', to: '/ideas' })
-  if (auth.user?.role === 'TEACHER') items.push({ label: 'Review ideas and full specifications', to: '/ideas' })
-  if (auth.user?.role === 'ADMIN') items.push({ label: 'Review allocation runs and application periods', to: '/allocation' })
-  if (openPeriod.value && auth.user?.role === 'STUDENT') items.push({ label: 'Rank your project preferences', to: '/applications' })
-  if (auth.user?.role === 'TEACHER') items.push({ label: 'Assess project progress using the active rubric', to: '/grading' })
+  if (auth.user?.role === 'STUDENT') items.push({ label: String(i18n.global.t('dashboard.continueIdea')), to: '/ideas' })
+  if (auth.user?.role === 'TEACHER') items.push({ label: String(i18n.global.t('dashboard.reviewIdeas')), to: '/ideas' })
+  if (auth.user?.role === 'ADMIN') items.push({ label: String(i18n.global.t('dashboard.reviewAllocation')), to: '/allocation' })
+  if (openPeriod.value && auth.user?.role === 'STUDENT') items.push({ label: String(i18n.global.t('dashboard.rankPreferences')), to: '/applications' })
+  if (auth.user?.role === 'TEACHER') items.push({ label: String(i18n.global.t('dashboard.assessProgress')), to: '/grading' })
   return items
 })
 
 function date(value?: string): string {
-  return value ? new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : 'Date not set'
+  return value ? new Intl.DateTimeFormat(i18n.global.locale.value, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : String(i18n.global.t('dashboard.noDate'))
 }
 function assignmentSummary(state?: string): string {
-  if (state === 'NO_RESULT') return 'No allocation result yet'
-  if (state === 'NOT_ASSIGNED_PRELIMINARY') return 'Not assigned in the preliminary allocation'
-  if (state === 'NOT_ASSIGNED_FINAL') return 'Not assigned in the final allocation'
-  return 'No assignment yet'
+  if (state === 'NO_RESULT') return String(i18n.global.t('dashboard.noResult'))
+  if (state === 'NOT_ASSIGNED_PRELIMINARY') return String(i18n.global.t('dashboard.notAssignedPreliminary'))
+  if (state === 'NOT_ASSIGNED_FINAL') return String(i18n.global.t('dashboard.notAssignedFinal'))
+  return String(i18n.global.t('dashboard.noAssignment'))
 }
 function readable(value?: string): string {
   return (value ?? 'Unknown').replaceAll('_', ' ').toLowerCase().replace(/^./, (s) => s.toUpperCase())

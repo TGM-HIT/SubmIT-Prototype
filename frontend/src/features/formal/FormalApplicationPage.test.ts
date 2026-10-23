@@ -87,7 +87,7 @@ describe('Formal proposal presentation and unchanged lifecycle', () => {
     setActivePinia(createPinia())
     api.eligibleProjects.mockResolvedValue(eligiblePage([eligible()]))
     useAuthStore().updateUser({
-      id: studentId, username: 'student01', displayName: 'Student', role: 'STUDENT',
+      id: studentId, username: 'student01', displayName: 'Student', role: 'STUDENT', language: 'en',
     })
   })
 
@@ -193,7 +193,7 @@ describe('Formal proposal presentation and unchanged lifecycle', () => {
   })
 
   it.each(['STUDENT', 'TEACHER'] as const)('shows submitted review state with unchanged %s controls', async (role) => {
-    useAuthStore().updateUser({ id: studentId, username: 'reviewer', displayName: role, role })
+    useAuthStore().updateUser({ id: studentId, username: 'reviewer', displayName: role, role, language: 'en' })
     const page = role === 'STUDENT' ? await mountStudent('SUBMITTED') : mount(FormalApplicationPage)
     await load(page, 'SUBMITTED')
     expectProposalCopy(page)
@@ -417,7 +417,7 @@ describe('Formal proposal presentation and unchanged lifecycle', () => {
   })
 
   it.each(['TEACHER', 'ADMIN'] as const)('retains the existing %s project-ID lookup workflow', async (role) => {
-    useAuthStore().updateUser({ id: studentId, username: 'staff', displayName: role, role })
+    useAuthStore().updateUser({ id: studentId, username: 'staff', displayName: role, role, language: 'en' })
     const page = mount(FormalApplicationPage)
     expect(page.get('label[for="project-id"]').text()).toBe('Allocated project ID')
     expect(page.find('#eligible-project').exists()).toBe(false)
@@ -430,7 +430,9 @@ describe('Formal proposal presentation and unchanged lifecycle', () => {
   })
 
   it('retains teacher review decisions and feedback submission', async () => {
-    useAuthStore().updateUser({ id: studentId, username: 'teacher01', displayName: 'Teacher', role: 'TEACHER' })
+    useAuthStore().updateUser({
+      id: studentId, username: 'teacher01', displayName: 'Teacher', role: 'TEACHER', language: 'en',
+    })
     const page = mount(FormalApplicationPage)
     await load(page, 'SUBMITTED')
     api.get.mockResolvedValueOnce(record('APPROVED'))

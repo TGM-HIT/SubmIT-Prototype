@@ -26,6 +26,12 @@ Use semantic HTML, responsive layouts, keyboard-accessible controls, visible foc
 
 Every async view must define loading, empty, error, retry, and success states. Forms must display field-level validation and preserve user input after server errors. Use clear confirmations for submitting/withdrawing applications, publishing or removing public artefacts, and finalizing allocation or grading actions. Public archive browsing should make it clear that the content is a reviewed, read-only snapshot and not the live project website.
 
+## Interface localization
+
+All frontend-owned interface strings belong in the parallel `en` and `de` catalogs under `src/locales/`; keys must match exactly. Use the installed Vue I18n composer (`$t` in templates or `i18n.global.t` in TypeScript) rather than embedded locale conditionals. Missing translations are warnings and English fallback is disabled. Keep user- and backend-authored content, including API error messages, unchanged. Resolve anonymous language from `navigator.language`; authenticated language comes from the account response. Use the selected locale for frontend-generated date and number formatting.
+
+For browser-locale verification, use the supported preview tool's `--locale <BCP-47-tag>` option, for example `npm run preview -- --path /login --locale de-DE`. The preview sets Chromium's locale and verifies/reports its actual `navigator.language`; do not assign that browser property in application code. Keep parser and CLI regressions in `scripts/preview.smoke.mjs` and run `npm run preview:test` after changing preview behavior.
+
 ## Verification
 
 Run the scripts defined in `frontend/package.json` after frontend code changes:

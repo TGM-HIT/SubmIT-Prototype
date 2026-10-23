@@ -35,6 +35,10 @@ public class UserAccount {
     @Column(nullable = false, length = 20)
     private Role role;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 2, columnDefinition = "varchar(2) default 'en'")
+    private AccountLanguage language = AccountLanguage.en;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "student_class_id")
     private StudentClassEntity studentClass;
@@ -94,6 +98,14 @@ public class UserAccount {
 
     public Role getRole() {
         return role;
+    }
+
+    public AccountLanguage getLanguage() {
+        return language;
+    }
+
+    public void setLanguage(AccountLanguage language) {
+        this.language = language;
     }
 
     public void setRole(Role role) {

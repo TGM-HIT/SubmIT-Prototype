@@ -64,7 +64,8 @@ public class AuthService {
     }
 
     public UserResponse toResponse(UserAccount user) {
-        return new UserResponse(user.getId(), user.getUsername(), user.getDisplayName(), user.getRole(), null, null);
+        return new UserResponse(user.getId(), user.getUsername(), user.getDisplayName(), user.getRole(),
+                user.getLanguage(), null, null);
     }
 
     public String normalizedName(String displayName) {

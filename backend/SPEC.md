@@ -14,13 +14,16 @@ Use standard statuses: `200` for successful reads or body-returning mutations, `
 
 ### Authentication and users
 
-- `POST /api/auth/register` creates an immediately usable `STUDENT` account; a supplied role is ignored. The default `No class / unassigned` catalogue class is assigned to each new student. Login behavior is unchanged; no role migration is performed.
-- `POST /api/auth/login` returns a JWT and the account name.
+- `POST /api/auth/register` creates an immediately usable `STUDENT` account with language `en`; a supplied role is ignored. The default `No class / unassigned` catalogue class is assigned to each new student. Login behavior is otherwise unchanged; no role migration is performed.
+- `POST /api/auth/login` returns a JWT, the account name, and its persisted language.
 - `GET /api/users` returns a paginated user list for `ADMIN`; optional `role` (`STUDENT`, `TEACHER`, or `ADMIN`) and `q` parameters filter by role and case-insensitive username/display-name substring, respectively. Blank `q` is ignored, and `%` and `_` are literal search characters. Filters combine with AND and apply before pagination.
 - `PATCH /api/users/{id}` changes the account name for the account owner or `ADMIN`.
+- `PATCH /api/users/{id}/language` accepts `{"language":"en"|"de"}` and changes only the language of the authenticated caller's own account. It returns the updated `UserResponse`; language is required on every user response. Existing account records default to `en` when the language column is added. Missing, malformed, or unsupported values return `400`; missing/invalid authentication returns `401`; a caller changing another account (including an administrator) receives `403`; a missing account receives `404`. This operation does not invalidate tokens or change other account data.
 - `PATCH /api/users/{id}/role` changes a role for `ADMIN`; changing an account to `STUDENT` assigns the default `No class / unassigned` class if the account has no class. Administrators can change the class through `PUT /api/users/{id}/student-details`.
 
 Every account has a required display name separate from its unique username. Registration and name updates trim leading and trailing whitespace, then reject blank names and names longer than 120 characters. Registration, login, name-update, and administrator user-list responses include the display name. A name update changes no other account field; role changes remain restricted to the existing administrator-only role endpoint. Testing-profile student, teacher, and administrator accounts have stable, distinct, human-readable display names while retaining their existing usernames; the `testing` profile seeds the `Testing Class` and `Testing Class 2` classes and distributes student accounts between them (student01 remains in `Testing Class`); a configured bootstrap administrator is named `Administrator`.
+
+Account language uses only the stable codes `en` and `de`, defaults to `en` for existing and newly registered accounts, and is exposed in authentication and account responses. Registration does not accept a language choice. Only the authenticated account owner may change language; administrator role and name editing remain separate and unchanged.
 
 ### School years and application periods
 

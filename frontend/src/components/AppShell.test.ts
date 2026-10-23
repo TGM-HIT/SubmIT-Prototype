@@ -15,6 +15,7 @@ const account = (role: 'STUDENT' | 'TEACHER' | 'ADMIN') => ({
   username: `${role.toLowerCase()}-username`,
   displayName: 'Current display name',
   role,
+  language: 'en' as const,
 })
 
 const TestRoot = defineComponent({ components: { RouterView }, template: '<RouterView />' })
@@ -136,7 +137,9 @@ describe('authenticated shell profile and settings navigation', () => {
     expect(settingsLinks[0].find('[aria-hidden="true"]').text()).toBe('⚙')
     expect(wrapper.get('.profile').text()).toContain('Current display name')
     expect(wrapper.get('.profile').text()).toContain(`${role.toLowerCase()}-username`)
-    expect(wrapper.get('.profile').text()).toContain(role)
+    expect(wrapper.get('.profile').text()).toContain(
+      role === 'STUDENT' ? 'Student' : role === 'TEACHER' ? 'Teacher' : 'Administrator',
+    )
     expect(wrapper.find('[aria-label="Edit name"]').exists()).toBe(false)
     wrapper.unmount()
   })

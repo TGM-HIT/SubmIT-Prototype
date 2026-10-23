@@ -11,7 +11,7 @@
     >
       <header class="modal-header">
         <h2 :id="titleId">{{ title }}</h2>
-        <button class="button button-secondary button-small" type="button" aria-label="Close dialog" @click="$emit('close')">Close</button>
+        <button class="button button-secondary button-small" type="button" :aria-label="$t('common.closeDialog')" @click="$emit('close')">{{ $t('common.close') }}</button>
       </header>
       <div class="modal-body"><slot /></div>
     </section>

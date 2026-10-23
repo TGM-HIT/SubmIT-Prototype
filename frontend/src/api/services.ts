@@ -13,6 +13,7 @@ type ReviewRequest = components['schemas']['ReviewRequest']
 type ArtifactResponse = components['schemas']['ArtifactResponse']
 type UserResponse = components['schemas']['UserResponse']
 type DisplayNameRequest = components['schemas']['DisplayNameRequest']
+type LanguageRequest = components['schemas']['LanguageRequest']
 type CatalogueEntryRequest = components['schemas']['CatalogueEntryRequest']
 type CatalogueEntryResponse = components['schemas']['CatalogueEntryResponse']
 type StudentDetailsRequest = components['schemas']['StudentDetailsRequest']
@@ -253,6 +254,10 @@ export const userApi = {
   changeName(id: string, displayName: string): Promise<UserResponse> {
     const body: DisplayNameRequest = { displayName }
     return json(`/api/users/${encodeURIComponent(id)}`, 'PATCH', body)
+  },
+  changeLanguage(id: string, language: NonNullable<UserResponse['language']>): Promise<UserResponse> {
+    const body: LanguageRequest = { language }
+    return json(`/api/users/${encodeURIComponent(id)}/language`, 'PATCH', body)
   },
 }
 

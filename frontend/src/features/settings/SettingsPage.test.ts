@@ -4,14 +4,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import SettingsPage from './SettingsPage.vue'
 import { useAuthStore } from '../../stores/auth'
 
-const api = vi.hoisted(() => ({ changeName: vi.fn() }))
-vi.mock('../../api/services', () => ({ userApi: { changeName: api.changeName } }))
+const api = vi.hoisted(() => ({ changeName: vi.fn(), changeLanguage: vi.fn() }))
+vi.mock('../../api/services', () => ({ userApi: { changeName: api.changeName, changeLanguage: api.changeLanguage } }))
 
 const account = (role: 'STUDENT' | 'TEACHER' | 'ADMIN') => ({
   id: `account-${role.toLowerCase()}`,
   username: `${role.toLowerCase()}-username`,
   displayName: 'Saved name',
   role,
+  language: 'en' as const,
 })
 
 function mountPage() {
@@ -22,6 +23,7 @@ describe('User Settings', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     api.changeName.mockResolvedValue({ ...account('STUDENT'), displayName: 'Updated name' })
+    api.changeLanguage.mockResolvedValue({ ...account('STUDENT'), language: 'de' })
   })
 
   afterEach(() => {
@@ -43,7 +45,7 @@ describe('User Settings', () => {
     const page = mountPage()
     const input = page.get('#settings-account-name')
     await input.setValue('  Updated name  ')
-    await page.get('form').trigger('submit')
+    await page.findAll('form')[0].trigger('submit')
     await flushPromises()
 
     expect(api.changeName).toHaveBeenCalledWith('account-teacher', 'Updated name')
@@ -74,7 +76,7 @@ describe('User Settings', () => {
     useAuthStore().updateUser(account('STUDENT'))
     const page = mountPage()
     await page.get('#settings-account-name').setValue(value)
-    await page.get('form').trigger('submit')
+    await page.findAll('form')[0].trigger('submit')
 
     expect(api.changeName).not.toHaveBeenCalled()
     expect(page.get('[role="alert"]').text()).toContain('1 to 120 characters')
@@ -101,6 +103,54 @@ describe('User Settings', () => {
     await flushPromises()
     expect(auth.user?.displayName).toBe('Corrected name')
     expect(api.changeName).toHaveBeenCalledTimes(2)
+    page.unmount()
+  })
+
+  it.each(['STUDENT', 'TEACHER', 'ADMIN'] as const)('lets %s update their own locale immediately', async (role) => {
+    const auth = useAuthStore()
+    auth.updateUser(account(role))
+    api.changeLanguage.mockResolvedValue({ ...account(role), language: 'de' })
+    const page = mountPage()
+    const select = page.get('#settings-language')
+    await select.setValue('de')
+    await page.findAll('form')[1].trigger('submit')
+    await flushPromises()
+
+    expect(api.changeLanguage).toHaveBeenCalledWith(`account-${role.toLowerCase()}`, 'de')
+    expect(auth.user?.language).toBe('de')
+    expect(page.get('[role="status"]').text()).toContain('Sprache erfolgreich gespeichert')
+    expect(document.activeElement).toBe(select.element)
+    page.unmount()
+  })
+
+  it('cancels a language draft without mutation and restores focus', async () => {
+    useAuthStore().updateUser(account('TEACHER'))
+    const page = mountPage()
+    const select = page.get('#settings-language')
+    await select.setValue('de')
+    await page.get('#settings-language').element.dispatchEvent(new Event('change'))
+    await page.findAll('button[type="button"]')[1].trigger('click')
+    expect((select.element as HTMLSelectElement).value).toBe('en')
+    expect(api.changeLanguage).not.toHaveBeenCalled()
+    expect(document.activeElement).toBe(select.element)
+    page.unmount()
+  })
+
+  it('retains the saved language and selected draft after a failed save', async () => {
+    const auth = useAuthStore()
+    auth.updateUser(account('ADMIN'))
+    api.changeLanguage.mockRejectedValueOnce(new Error('Language update was rejected.'))
+    const page = mountPage()
+    const select = page.get('#settings-language')
+    await select.setValue('de')
+    await page.get('#settings-language').element.dispatchEvent(new Event('change'))
+    await page.findAll('form')[1].trigger('submit')
+    await flushPromises()
+
+    expect(page.get('[role="alert"]').text()).toBe('Language update was rejected.')
+    expect((select.element as HTMLSelectElement).value).toBe('de')
+    expect(auth.user?.language).toBe('en')
+    expect(api.changeLanguage).toHaveBeenCalledTimes(1)
     page.unmount()
   })
 })

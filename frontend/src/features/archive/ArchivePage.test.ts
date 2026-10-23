@@ -1,6 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import ArchivePage from './ArchivePage.vue'
+import { resolveBrowserLanguage, setLanguage } from '../../i18n'
 
 const api = vi.hoisted(() => ({ publicList: vi.fn(), publicContent: vi.fn(), download: vi.fn() }))
 vi.mock('../../api/services', () => ({ archiveApi: api }))
@@ -30,5 +31,29 @@ describe('G6 anonymous archive privacy boundary', () => {
     expect(api.publicContent).toHaveBeenCalledWith('public-project', 'public-file')
     expect(api.download).toHaveBeenCalledWith(content, 'approved-archive-poster')
     wrapper.unmount()
+  })
+
+  it.each([
+    ['de-DE', 'Projektabschlussplakat', 'Archiv abgeschlossener Projekte'],
+    ['en-US', 'Final project poster', 'Completed project archive'],
+    ['fr-FR', 'Final project poster', 'Completed project archive'],
+  ])('loads a successful public archive route with browser locale %s', async (browserLocale, expectedLabel, expectedHeading) => {
+    setLanguage(resolveBrowserLanguage(browserLocale))
+    api.publicList.mockResolvedValue({
+      content: [{ id: 'public-file', type: 'POSTER', size: 2048 }],
+      page: 0, size: 20, totalElements: 1, totalPages: 1,
+    })
+    const wrapper = mount(ArchivePage, {
+      props: { publicOnly: true },
+      global: { stubs: { AsyncPanel: { template: '<div><slot /></div>' } } },
+    })
+    await flushPromises()
+
+    expect(api.publicList).toHaveBeenCalledWith('public-project', 0)
+    expect(wrapper.text()).toContain(expectedHeading)
+    expect(wrapper.text()).toContain(expectedLabel)
+    expect(wrapper.findAll('.data-row')).toHaveLength(1)
+    wrapper.unmount()
+    setLanguage('en')
   })
 })
