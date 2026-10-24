@@ -14,6 +14,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import ac.at.tgm.submit.data.RecordStore;
 import ac.at.tgm.submit.data.StoredRecord;
+import ac.at.tgm.submit.user.StudentClassRepository;
 import ac.at.tgm.submit.user.UserAccountRepository;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -41,6 +42,7 @@ class AllocationEarlyRunApiTest {
     @Autowired private ObjectMapper mapper;
     @Autowired private RecordStore store;
     @Autowired private UserAccountRepository users;
+    @Autowired private StudentClassRepository classes;
     @Autowired private AllocationService allocationService;
     private String adminToken;
     private String teacherToken;
@@ -71,6 +73,7 @@ class AllocationEarlyRunApiTest {
         for (int index = 0; index < 4; index++) {
             applicationIds.add(createApplication(studentTokens.get(index), projects));
         }
+
         mockMvc.perform(put(pinPath(students.get(3))).header("Authorization", bearer(adminToken))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(Map.of("projectId", projects.get(0)))))
@@ -198,6 +201,157 @@ class AllocationEarlyRunApiTest {
         assertEquals("FAILED", failedRun.path("status").asText());
         assertTrue(failedRun.path("error").asText().contains("at most"));
         assertEquals("OPEN", getPeriod(adminToken).path("status").asText());
+    }
+
+    @Test
+    void selectedClassAndStudentUnionIsDeduplicatedAndEachRunSnapshotsCurrentMembership() throws Exception {
+        var selectedClass = classes.findByName("Testing Class").orElseThrow();
+        var otherClass = classes.findByName("Testing Class 2").orElseThrow();
+        for (var user : users.findAll()) {
+            if ("STUDENT".equals(user.getRole().name())) {
+                boolean selectedMember = students.subList(0, 3).contains(user.getId());
+                user.setStudentClass(selectedMember ? selectedClass : otherClass);
+                users.save(user);
+            }
+        }
+        ObjectNode payload = store.object().put("label", "Selected no-preference cohort")
+                .put("schoolYear", "2026/2027").put("opensAt", Instant.now().minusSeconds(3600).toString())
+                .put("closesAt", Instant.now().minusSeconds(60).toString()).put("eligibilityMode", "SELECTED");
+        payload.set("projectIds", store.value(projects));
+        payload.set("eligibleStudentIds", store.value(List.of(students.get(0))));
+        payload.set("eligibleClassIds", store.value(List.of(selectedClass.getId())));
+        StoredRecord selectedPeriod = store.create("application_period", null, null, "CLOSED", payload);
+
+        JsonNode run = startRunFor(selectedPeriod.getId());
+        assertEquals("COMPLETED", run.path("status").asText());
+        assertEquals(3, run.path("eligibleStudentIds").size());
+        JsonNode assignments = run.path("result").path("assignments");
+        assertEquals(3, assignments.size());
+        for (JsonNode assignment : assignments) {
+            assertTrue(assignment.path("hadPreferences").isBoolean());
+            assertFalse(assignment.path("hadPreferences").asBoolean());
+        }
+        assertEquals(0, run.path("result").path("preferenceScore").asInt());
+
+        JsonNode ownResult = mapper.readTree(mockMvc.perform(get("/api/application-periods/{id}",
+                        selectedPeriod.getId()).header("Authorization", bearer(studentTokens.get(0))))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString()).path("studentAssignment");
+        assertEquals("PRELIMINARY", ownResult.path("state").asText());
+        assertTrue(ownResult.path("assignedWithoutPreferences").isBoolean());
+        assertTrue(ownResult.path("assignedWithoutPreferences").asBoolean());
+        assertFalse(ownResult.has("hadPreferences"));
+        JsonNode outsideResult = mapper.readTree(mockMvc.perform(get("/api/application-periods/{id}",
+                        selectedPeriod.getId()).header("Authorization", bearer(studentTokens.get(3))))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        assertFalse(outsideResult.has("studentAssignment"));
+
+        var reassigned = users.findById(students.get(1)).orElseThrow();
+        reassigned.setStudentClass(otherClass);
+        users.saveAndFlush(reassigned);
+        JsonNode replacement = startRunFor(selectedPeriod.getId());
+        assertEquals(2, replacement.path("eligibleStudentIds").size());
+        assertEquals(0, replacement.path("result").path("assignments").size());
+        JsonNode previous = mapper.readTree(mockMvc.perform(get("/api/allocation-runs/{id}", run.path("id").asText())
+                        .header("Authorization", bearer(teacherToken)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        assertEquals(3, previous.path("eligibleStudentIds").size());
+        assertEquals(3, previous.path("result").path("assignments").size());
+    }
+
+    @Test
+    void savedIndividualApplicationRemainsReadableAndWithdrawableWhileIneligibleAndCanRejoinRun() throws Exception {
+        UUID savedApplication = createApplication(studentTokens.get(0), projects);
+        UUID withdrawnApplication = createApplication(studentTokens.get(2), projects);
+        createApplication(studentTokens.get(1), projects);
+
+        updateEligibleStudents(List.of(students.get(1)));
+        JsonNode stillReadable = mapper.readTree(mockMvc.perform(get(
+                                "/api/application-periods/{id}/applications/me", periodId)
+                        .header("Authorization", bearer(studentTokens.get(0))))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        assertEquals(savedApplication.toString(), stillReadable.path("id").asText());
+        assertEquals(projects.get(0).toString(), stillReadable.path("preferences").get(0)
+                .path("projectId").asText());
+        mockMvc.perform(put("/api/applications/{id}", savedApplication)
+                        .header("Authorization", bearer(studentTokens.get(0)))
+                        .contentType(MediaType.APPLICATION_JSON).content(applicationRequest(projects)))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(delete("/api/applications/{id}", withdrawnApplication)
+                        .header("Authorization", bearer(studentTokens.get(2))))
+                .andExpect(status().isNoContent());
+        assertEquals("WITHDRAWN", store.get("student_application", withdrawnApplication).getStatus());
+
+        mockMvc.perform(get("/api/application-periods/{id}/applications/me", periodId)
+                        .header("Authorization", bearer(studentTokens.get(3))))
+                .andExpect(status().isNotFound());
+
+        updateEligibleStudents(List.of(students.get(0), students.get(3), students.get(4)));
+        JsonNode run = startRun(adminToken);
+        JsonNode runApplications = run.path("applications");
+        assertTrue(runApplications.isArray());
+        JsonNode savedSnapshot = null;
+        for (JsonNode application : runApplications) {
+            if (savedApplication.toString().equals(application.path("applicationId").asText())) {
+                savedSnapshot = application;
+                break;
+            }
+        }
+        assertTrue(savedSnapshot != null, "The restored student's saved application must enter the run snapshot.");
+        assertEquals(projects.get(0).toString(), savedSnapshot.path("preferences").get(0).path("projectId").asText());
+        assertEquals("SUBMITTED", store.get("student_application", savedApplication).getStatus());
+        assertTrue(assignment(run, students.get(0)).path("hadPreferences").asBoolean());
+        assertFalse(assignment(run, students.get(3)).path("hadPreferences").asBoolean());
+        assertFalse(assignment(run, students.get(4)).path("hadPreferences").asBoolean());
+    }
+
+    @Test
+    void ineligiblePinnedStudentIsNotSnapshottedAsCandidateAndSavedPinRemains() throws Exception {
+        updateEligibleStudents(List.of(students.get(0)));
+        mockMvc.perform(put(pinPath(students.get(0))).header("Authorization", bearer(adminToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(Map.of(
+                                "projectId", projects.get(0), "acknowledgeUnranked", true))))
+                .andExpect(status().isOk());
+        updateEligibleStudents(List.of(students.get(1), students.get(2), students.get(3)));
+
+        JsonNode run = startRun(adminToken);
+        JsonNode eligibleIds = run.path("eligibleStudentIds");
+        assertTrue(eligibleIds.isArray());
+        assertEquals(3, eligibleIds.size());
+        for (JsonNode eligibleId : eligibleIds) {
+            assertFalse(students.get(0).toString().equals(eligibleId.asText()));
+        }
+        for (int index = 1; index <= 3; index++) {
+            assertFalse(assignment(run, students.get(index)).path("hadPreferences").asBoolean());
+        }
+        JsonNode savedRunPins = run.path("pins");
+        assertTrue(savedRunPins.isArray());
+        assertEquals(0, savedRunPins.size());
+        var savedPin = store.repository().findByTypeAndParentId("allocation_pin", periodId.toString()).stream()
+                .filter(pin -> students.get(0).toString().equals(pin.getOwnerId())).findFirst().orElseThrow();
+        assertEquals("PINNED", savedPin.getStatus());
+    }
+
+    @Test
+    void roleChangeAwayFromStudentExcludesExplicitlySelectedAccountAtRunSnapshot() throws Exception {
+        updateEligibleStudents(List.of(students.get(0), students.get(1), students.get(2)));
+        var changed = users.findById(students.get(0)).orElseThrow();
+        try {
+            changed.setRole(ac.at.tgm.submit.security.Role.TEACHER);
+            users.saveAndFlush(changed);
+
+            JsonNode run = startRun(adminToken);
+            JsonNode eligibleIds = run.path("eligibleStudentIds");
+            assertTrue(eligibleIds.isArray());
+            assertEquals(2, eligibleIds.size());
+            for (JsonNode eligibleId : eligibleIds) {
+                assertFalse(students.get(0).toString().equals(eligibleId.asText()));
+            }
+            assertEquals(0, run.path("result").path("assignments").size());
+        } finally {
+            changed.setRole(ac.at.tgm.submit.security.Role.STUDENT);
+            users.saveAndFlush(changed);
+        }
     }
 
     @Test
@@ -408,17 +562,49 @@ class AllocationEarlyRunApiTest {
 
     private UUID createPeriod(String status, Instant closesAt) {
         ObjectNode payload = store.object().put("label", "Early run API test").put("schoolYear", "2026/2027")
-                .put("opensAt", Instant.now().minusSeconds(3600).toString()).put("closesAt", closesAt.toString());
+                .put("opensAt", Instant.now().minusSeconds(3600).toString()).put("closesAt", closesAt.toString())
+                .put("eligibilityMode", "SELECTED");
         payload.set("projectIds", store.value(projects));
+        payload.putArray("eligibleStudentIds");
+        payload.putArray("eligibleClassIds");
         return store.create("application_period", null, null, status, payload).getId();
     }
 
     private UUID createApplication(String token, List<UUID> projectIds) throws Exception {
+        int index = studentTokens.indexOf(token);
+        includeEligible(students.get(index));
         MvcResult result = mockMvc.perform(post("/api/application-periods/{id}/applications", periodId)
                         .header("Authorization", bearer(token)).contentType(MediaType.APPLICATION_JSON)
                         .content(applicationRequest(projectIds)))
                 .andExpect(status().isCreated()).andReturn();
         return UUID.fromString(mapper.readTree(result.getResponse().getContentAsString()).path("id").asText());
+    }
+
+    private void includeEligible(UUID student) {
+        StoredRecord period = store.get("application_period", periodId);
+        ObjectNode payload = store.parse(period);
+        var eligibleIds = payload.withArray("eligibleStudentIds");
+        boolean present = false;
+        for (JsonNode id : eligibleIds) present |= student.toString().equals(id.asText());
+        if (!present) {
+            eligibleIds.add(student.toString());
+            store.update(period, period.getStatus(), payload);
+        }
+    }
+
+    private void updateEligibleStudents(List<UUID> eligibleStudents) throws Exception {
+        ObjectNode request = store.object().put("label", "Early run API test")
+                .put("schoolYear", "2026/2027")
+                .put("opensAt", Instant.now().minusSeconds(3600).toString())
+                .put("closesAt", Instant.now().plusSeconds(3600).toString())
+                .put("eligibilityMode", "SELECTED");
+        request.set("projectIds", store.value(projects));
+        request.set("eligibleStudentIds", store.value(eligibleStudents));
+        request.putArray("eligibleClassIds");
+        mockMvc.perform(put("/api/application-periods/{id}", periodId)
+                        .header("Authorization", bearer(adminToken)).contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(request)))
+                .andExpect(status().isOk());
     }
 
     private String applicationRequest(List<UUID> projectIds) throws Exception {

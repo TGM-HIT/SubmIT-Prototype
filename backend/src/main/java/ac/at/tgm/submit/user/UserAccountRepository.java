@@ -35,4 +35,5 @@ public interface UserAccountRepository extends JpaRepository<UserAccount, UUID> 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select user from UserAccount user where user.role = :role")
     List<UserAccount> findAllByRoleForUpdate(@Param("role") Role role);
+
 }

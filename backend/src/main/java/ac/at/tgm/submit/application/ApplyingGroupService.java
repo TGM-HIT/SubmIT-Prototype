@@ -194,6 +194,7 @@ public class ApplyingGroupService {
         List<String> projects = request.projectIds().stream().map(UUID::toString).toList();
         records.validateRanking(period, projects);
         if (!projects.equals(records.ids(data.path(PROJECT_IDS)))) {
+            records.requireEligibleMembers(period, records.ids(data.path(MEMBERS)));
             data.set(PROJECT_IDS, store.value(projects));
             reopen(group, data);
         }
@@ -227,6 +228,7 @@ public class ApplyingGroupService {
                 throw ApplyingGroupRecords.conflict("Every accepted member must approve the current roster and ranking revision.");
             }
         }
+        records.requireEligibleMembers(period, members);
     }
 
     private void replaceSolo(StoredRecord application, AuthenticatedUser caller) {

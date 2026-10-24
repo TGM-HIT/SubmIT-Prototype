@@ -1859,7 +1859,7 @@ export interface components {
              * @description Explicitly acknowledge that the student did not rank the selected project.
              * @default false
              */
-            acknowledgeUnranked: boolean;
+            acknowledgeUnranked?: boolean;
         };
         AllocationPinResponse: {
             /**
@@ -1901,6 +1901,22 @@ export interface components {
             closesAt: string;
             /** @description At least three distinct accepted project IDs for this period's school year must be included. */
             projectIds: string[];
+            /**
+             * @description Eligibility mode; omitted requests default to ALL_STUDENTS. ALL_STUDENTS requires empty ID arrays; SELECTED uses the deduplicated student/class union.
+             * @default ALL_STUDENTS
+             * @enum {string}
+             */
+            eligibilityMode?: "ALL_STUDENTS" | "SELECTED";
+            /**
+             * @description Selected student account IDs; unique UUIDs referencing current STUDENT accounts; defaults to an empty array. Unknown, duplicate, or non-student IDs return 400.
+             * @default []
+             */
+            eligibleStudentIds?: string[];
+            /**
+             * @description Selected class IDs; unique UUIDs referencing existing classes; defaults to an empty array. Unknown or duplicate IDs return 400.
+             * @default []
+             */
+            eligibleClassIds?: string[];
         };
         ApplicationPeriodResponse: {
             /**
@@ -1931,6 +1947,17 @@ export interface components {
             studentApplicationStatus?: string;
             /** @description Present only for the authenticated student's own submitted application. */
             studentAssignment?: components["schemas"]["StudentAssignmentResponse"];
+            /**
+             * @description Present only for administrators; current period eligibility mode.
+             * @enum {string}
+             */
+            eligibilityMode?: "ALL_STUDENTS" | "SELECTED";
+            /** @description Present only for administrators; selected student IDs, empty in ALL_STUDENTS mode. */
+            eligibleStudentIds?: string[];
+            /** @description Present only for administrators; selected class IDs, empty in ALL_STUDENTS mode. */
+            eligibleClassIds?: string[];
+            /** @description Present only for the authenticated student; whether the caller may currently apply. */
+            eligibleToApply?: boolean;
         };
         ProjectTitleResponse: {
             /**
@@ -1956,6 +1983,8 @@ export interface components {
             preferenceRank: number | null;
             /** @description Current display names of this assigned project's group only; contains no IDs. */
             groupMembers: components["schemas"]["StudentGroupMemberResponse"][];
+            /** @description Present only when the immutable run snapshot establishes whether the caller's assignment used preferences; true means assignment without preferences. */
+            assignedWithoutPreferences?: boolean;
         };
         StudentGroupMemberResponse: {
             /** @description Current account display name, or Unknown student. */
@@ -2652,6 +2681,8 @@ export interface components {
             projectTitle: string;
             className?: string;
             electiveSubjectNames?: string[];
+            /** @description Whether this run used a saved individual or shared preference ranking. Absent for legacy results without immutable preference state. */
+            hadPreferences?: boolean;
         };
         AllocationPinSnapshot: {
             /**
@@ -2741,6 +2772,8 @@ export interface components {
             finalizedAt?: string;
             /** @description Immutable submitted applying units. Omitted on historical runs; never inferred. */
             applyingUnits?: components["schemas"]["ApplyingUnitSnapshot"][];
+            /** @description Submitted applying groups excluded whole because a member was ineligible. */
+            excludedApplyingUnits?: components["schemas"]["ExcludedApplyingUnitResponse"][];
         };
         AllocationUnassignedProjectResponse: {
             /**
@@ -2789,6 +2822,22 @@ export interface components {
             studentIds: string[];
             /** @description Shared ordered distinct project preferences. */
             projectIds: string[];
+        };
+        ExcludedApplyingUnitResponse: {
+            /**
+             * Format: uuid
+             * @description Excluded submitted applying-group ID.
+             */
+            groupId: string;
+            /**
+             * @description Exclusion reason: at least one accepted member was not eligible at snapshot time.
+             * @enum {string}
+             */
+            reason: "MEMBER_INELIGIBLE";
+            /** @description Accepted member IDs in the excluded indivisible unit. */
+            memberIds: string[];
+            /** @description Current display names corresponding to the member IDs. */
+            memberDisplayNames: string[];
         };
         DisplayNameRequest: {
             /** @description Required account name; leading and trailing whitespace is trimmed. The trimmed name must contain 1 to 120 characters. */
@@ -6646,7 +6695,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description Period is locked; revision is stale or group dissolved; target, confirmation or ranking is missing; duplicate invitation, membership uniqueness/size, catalogue acceptance, unanimous consent, creator departure, conflicting effective pins or effective capacity prevents the transition. */
+            /** @description Period is locked; revision is stale or group dissolved; target, confirmation or ranking is missing; duplicate invitation, membership uniqueness/size, catalogue acceptance, unanimous consent, an ineligible accepted member, creator departure, conflicting effective pins or effective capacity prevents the transition. */
             409: {
                 headers: {
                     [name: string]: unknown;

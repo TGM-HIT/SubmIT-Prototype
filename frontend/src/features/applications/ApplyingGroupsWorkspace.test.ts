@@ -74,6 +74,26 @@ describe('G7 shared application consent and interaction', () => {
     expect(api.change).toHaveBeenCalledWith('period', 'group', 'SUBMIT', { revision: 4, confirm: true })
   })
 
+  it('preserves a submitted group while ineligible and disables ranking or submission changes', async () => {
+    const submitted = group({ status: 'SUBMITTED',
+      members: group().members.map(member => ({ ...member, approved: true })) })
+    api.list.mockResolvedValue(page([submitted]))
+    const wrapper = mount(Workspace, {
+      props: { period: { ...period, eligibleToApply: false } },
+      attachTo: document.body,
+    })
+    wrappers.push(wrapper)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('You are not currently eligible to apply in this period.')
+    expect(wrapper.get('#group-group').text()).toContain('Submitted')
+    expect(wrapper.get('[aria-label="Current shared ranking"]').text()).toContain('A')
+    expect(wrapper.get('[data-shared-action="save-ranking"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-shared-action="submit"]').attributes('disabled')).toBeDefined()
+    expect(wrapper.get('[data-shared-action="withdraw"]').attributes('disabled')).toBeUndefined()
+    expect(api.change).not.toHaveBeenCalled()
+  })
+
   it('declines only the caller’s invitation and refreshes to the primary action without pretending consent', async () => {
     api.list.mockResolvedValueOnce(page([group({ manager: false, invited: true,
       members: [{ studentId: 'creator', displayName: 'Creator', creator: true, self: false, approved: true }] })]))

@@ -38,7 +38,7 @@ public class StudentDetailsService {
     @Transactional(readOnly = true)
     public PageResponse<CatalogueEntryResponse> classes(AuthenticatedUser caller, int page, int size) {
         requireStaff(caller);
-        Page<StudentClassEntity> results = classes.findAll(PageRequest.of(page, size, Sort.by("name")));
+        Page<StudentClassEntity> results = classes.findAll(PageRequest.of(page, size, Sort.by("id")));
         return new PageResponse<>(results.map(value -> new CatalogueEntryResponse(value.getId(), value.getName()))
                 .getContent(), results.getNumber(), results.getSize(), results.getTotalElements(),
                 results.getTotalPages());

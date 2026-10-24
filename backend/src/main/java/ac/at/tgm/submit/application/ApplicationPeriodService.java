@@ -23,6 +23,11 @@ public class ApplicationPeriodService {
     private static final String OPENS_AT = "opensAt";
     private static final String CLOSES_AT = "closesAt";
     private static final String STUDENT = "STUDENT";
+    private static final String ADMIN = "ADMIN";
+    private static final String ELIGIBILITY_MODE = "eligibilityMode";
+    private static final String ALL_STUDENTS = "ALL_STUDENTS";
+    private static final String ELIGIBLE_STUDENT_IDS = "eligibleStudentIds";
+    private static final String ELIGIBLE_CLASS_IDS = "eligibleClassIds";
 
     private final RecordStore store;
     private final AuditService audit;
@@ -54,6 +59,7 @@ public class ApplicationPeriodService {
     @org.springframework.security.access.prepost.PreAuthorize("hasRole('ADMIN')")
     public ApiDtos.ApplicationPeriodResponse create(AuthenticatedUser caller, JsonNode request) {
         ObjectNode payload = validatePeriod(request);
+        lifecycle.validateEligibility(payload);
         var projectIds = projectIds(payload.path(PROJECT_IDS));
         if (projectIds.size() < 3) {
             throw new ApiException(
@@ -64,7 +70,7 @@ public class ApplicationPeriodService {
         var status = periodStatus(payload);
         var period = store.create(PERIOD, caller.id().toString(), null, status, payload);
         audit.record(caller, "APPLICATION_PERIOD_CREATED", PERIOD, period.getId());
-        return mapper.period(period);
+        return mapper.period(period, false, null, true);
     }
 
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
@@ -72,13 +78,15 @@ public class ApplicationPeriodService {
             AuthenticatedUser caller, int page, int size) {
         return mapper.periods(
                 store.page(PERIOD, null, null, org.springframework.data.domain.PageRequest.of(page, size)),
-                STUDENT.equals(caller.role().name()) ? caller.id() : null);
+                STUDENT.equals(caller.role().name()) ? caller.id() : null,
+                ADMIN.equals(caller.role().name()));
     }
 
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ApiDtos.ApplicationPeriodResponse get(AuthenticatedUser caller, java.util.UUID id) {
         var studentView = STUDENT.equals(caller.role().name());
-        return mapper.period(findPeriod(id), studentView, studentView ? caller.id() : null);
+        return mapper.period(findPeriod(id), studentView, studentView ? caller.id() : null,
+                ADMIN.equals(caller.role().name()));
     }
 
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
@@ -124,6 +132,7 @@ public class ApplicationPeriodService {
             throw conflict("A finalized application period cannot be changed.");
         }
         var payload = validatePeriod(request);
+        lifecycle.validateEligibility(payload);
         var projectIds = projectIds(payload.path(PROJECT_IDS));
         if (projectIds.size() < 3) {
             throw new ApiException(
@@ -140,7 +149,7 @@ public class ApplicationPeriodService {
         lifecycle.ensureInitialRunIfDue(period);
         store.update(period, periodStatus(payload), payload);
         audit.record(caller, "APPLICATION_PERIOD_UPDATED", PERIOD, id);
-        return mapper.period(period);
+        return mapper.period(period, false, null, true);
     }
 
     @org.springframework.transaction.annotation.Transactional
@@ -149,6 +158,7 @@ public class ApplicationPeriodService {
         requireRole(caller, STUDENT);
         var period = findPeriodForUpdate(periodId);
         requireOpen(period);
+        requireStudentEligible(period, caller.id());
         lifecycle.rejectSubmittedSoloWrite(periodId, caller.id().toString());
         if (store.repository().findByTypeAndParentIdAndOwnerId(APPLICATION,
                 periodId.toString(), caller.id().toString()).isPresent()) {
@@ -196,6 +206,7 @@ public class ApplicationPeriodService {
         var period = findPeriodForUpdate(java.util.UUID.fromString(application.getParentId()));
         store.refresh(application);
         requireOpen(period);
+        requireStudentEligible(period, caller.id());
         lifecycle.rejectSubmittedSoloWrite(period.getId(), caller.id().toString());
         var payload = validateApplication(request, period);
         store.create(APPLICATION_REVISION, caller.id().toString(), id.toString(),
@@ -226,6 +237,13 @@ public class ApplicationPeriodService {
                     "Request body must be a JSON object.");
         }
         var payload = (ObjectNode) request.deepCopy();
+        normalizePeriodFields(payload);
+        projectIds(payload.path(PROJECT_IDS));
+        defaultEligibility(payload);
+        return payload;
+    }
+
+    private void normalizePeriodFields(ObjectNode payload) {
         var label = text(payload, LABEL).trim();
         if (label.isBlank() || label.length() > 100) {
             throw new ApiException(
@@ -244,8 +262,29 @@ public class ApplicationPeriodService {
         payload.put(SCHOOL_YEAR, schoolYear);
         payload.put(OPENS_AT, openingAt.toString());
         payload.put(CLOSES_AT, closingAt.toString());
-        projectIds(payload.path(PROJECT_IDS));
-        return payload;
+    }
+
+    private void defaultEligibility(ObjectNode payload) {
+        if (!payload.has(ELIGIBILITY_MODE) || payload.path(ELIGIBILITY_MODE).isNull()) {
+            payload.put(ELIGIBILITY_MODE, ALL_STUDENTS);
+        }
+        if (!payload.has(ELIGIBLE_STUDENT_IDS) || payload.path(ELIGIBLE_STUDENT_IDS).isNull()) {
+            payload.putArray(ELIGIBLE_STUDENT_IDS);
+        }
+        if (!payload.has(ELIGIBLE_CLASS_IDS) || payload.path(ELIGIBLE_CLASS_IDS).isNull()) {
+            payload.putArray(ELIGIBLE_CLASS_IDS);
+        }
+    }
+
+    private void requireStudentEligible(StoredRecord period, java.util.UUID studentId) {
+        if (!lifecycle.isEligible(period, studentId)) {
+            throw new ApiException(org.springframework.http.HttpStatus.FORBIDDEN,
+                    "You are not eligible to apply in this application period.");
+        }
+    }
+
+    private ApiException badRequest(String message) {
+        return new ApiException(org.springframework.http.HttpStatus.BAD_REQUEST, message);
     }
 
     private ObjectNode validateApplication(JsonNode request, StoredRecord period) {

@@ -74,8 +74,8 @@ class AllocationSupervisorIndependenceTest {
         for (String projectId : supervisedProjectIds) {
             assertEquals(1, store.repository().findByTypeAndParentId("confirmed_supervisor", projectId).size());
         }
-        for (String username : List.of("student01", "student02", "student03", "student04",
-                "student05", "teacher01", "teacher02", "teacher03", "teacher04")) {
+        for (String username : List.of("student01", "student02", "student03", "student04", "student05",
+                "student06", "student07", "student08", "student09")) {
             String studentId = users.findByUsername(username).orElseThrow().getId().toString();
             createApplication(withoutSupervisors, studentId, supervisorFreeProjectIds);
             createApplication(withSupervisors, studentId, supervisedProjectIds);
@@ -132,8 +132,8 @@ class AllocationSupervisorIndependenceTest {
         Instant closesAt = Instant.now().minusSeconds(60);
         StoredRecord teacherPeriod = createPeriod(teacherProjectIds, opensAt, closesAt);
         StoredRecord studentPeriod = createPeriod(studentProjectIds, opensAt, closesAt);
-        for (String username : List.of("student01", "student02", "student03", "student04",
-                "student05", "teacher01", "teacher02", "teacher03", "teacher04")) {
+        for (String username : List.of("student01", "student02", "student03", "student04", "student05",
+                "student06", "student07", "student08", "student09")) {
             String applicantId = users.findByUsername(username).orElseThrow().getId().toString();
             createApplication(teacherPeriod, applicantId, teacherProjectIds);
             createApplication(studentPeriod, applicantId, studentProjectIds);
@@ -199,8 +199,8 @@ class AllocationSupervisorIndependenceTest {
 
         StoredRecord allocatedPeriod = createPeriod(projectIds);
         StoredRecord finalizedPeriod = createPeriod(projectIds);
-        for (String username : List.of("student01", "student02", "student03", "student04",
-                "student05", "teacher01", "teacher02", "teacher03", "teacher04")) {
+        for (String username : List.of("student01", "student02", "student03", "student04", "student05",
+                "student06", "student07", "student08", "student09")) {
             String studentId = users.findByUsername(username).orElseThrow().getId().toString();
             createApplication(allocatedPeriod, studentId, projectIds);
             createApplication(finalizedPeriod, studentId, projectIds);
@@ -337,13 +337,25 @@ class AllocationSupervisorIndependenceTest {
         projectIds.forEach(ids::add);
         ObjectNode payload = store.object().put("label", "Allocation independence")
                 .put("schoolYear", "2026/2027").put("opensAt", opensAt.toString())
-                .put("closesAt", closesAt.toString());
+                .put("closesAt", closesAt.toString()).put("eligibilityMode", "SELECTED");
         payload.set("projectIds", ids);
+        payload.putArray("eligibleStudentIds");
+        payload.putArray("eligibleClassIds");
         return store.create("application_period", users.findByUsername("admin01").orElseThrow()
                 .getId().toString(), null, "OPEN", payload);
     }
 
     private void createApplication(StoredRecord period, String studentId, List<String> projectIds) {
+        ObjectNode periodData = store.parse(period);
+        ArrayNode eligibleIds = (ArrayNode) periodData.path("eligibleStudentIds");
+        boolean selected = false;
+        for (JsonNode id : eligibleIds) {
+            selected |= studentId.equals(id.asText());
+        }
+        if (!selected) {
+            eligibleIds.add(studentId);
+            store.update(period, period.getStatus(), periodData);
+        }
         ArrayNode preferences = store.object().arrayNode();
         for (int index = 0; index < projectIds.size(); index++) {
             preferences.addObject().put("projectId", projectIds.get(index)).put("rank", index + 1);

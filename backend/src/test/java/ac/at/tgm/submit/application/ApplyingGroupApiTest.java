@@ -54,8 +54,12 @@ class ApplyingGroupApiTest {
         }
         var data = store.object().put("label", "Shared application test").put("schoolYear", "2026/2027")
                 .put("opensAt", Instant.now().minusSeconds(60).toString())
-                .put("closesAt", Instant.now().plusSeconds(3600).toString());
+                .put("closesAt", Instant.now().plusSeconds(3600).toString())
+                .put("eligibilityMode", "SELECTED");
         data.set("projectIds", store.value(projects));
+        data.set("eligibleStudentIds", store.value(List.of(users.findByUsername("student01")
+                .orElseThrow().getId())));
+        data.putArray("eligibleClassIds");
         period = store.create("application_period", null, null, "OPEN", data).getId();
     }
 
@@ -687,7 +691,7 @@ class ApplyingGroupApiTest {
     }
 
     @Test
-    void G5_roleChangeBlocksInvalidSubmissionAndFailsWholeSnapshotWithoutSplitting() throws Exception {
+    void G5_roleChangeBlocksInvalidSubmissionAndExcludesWholeSubmittedUnit() throws Exception {
         String id = approvedUnit(List.of(1, 2));
         var account = users.findByUsername("student02").orElseThrow();
         try {
@@ -702,16 +706,79 @@ class ApplyingGroupApiTest {
             account.setRole(ac.at.tgm.submit.security.Role.TEACHER);
             users.saveAndFlush(account);
             var invalid = run();
-            assertEquals("FAILED", text(invalid, "status"));
-            assertTrue(text(invalid, "error").contains("no longer a student"));
-            assertTrue(invalid.get("inputSnapshotComplete").isBoolean());
-            assertFalse(invalid.get("inputSnapshotComplete").booleanValue());
-            assertFalse(invalid.has("result"));
+            assertEquals("COMPLETED", text(invalid, "status"));
+            assertEquals(1, array(invalid, "excludedApplyingUnits").size());
+            assertEquals(id, text(array(invalid, "excludedApplyingUnits").get(0), "groupId"));
+            assertEquals(0, array(object(invalid, "result"), "assignments").size());
+            assertTrue(invalid.has("result"));
             assertEquals(bytes, stored(text(earlier, "id")).getPayload());
         } finally {
             account.setRole(ac.at.tgm.submit.security.Role.STUDENT);
             users.saveAndFlush(account);
         }
+    }
+
+    @Test
+    void mixedEligibilityBlocksGroupChangesExcludesWholeSubmittedUnitAndRestoresItUnchanged() throws Exception {
+        JsonNode group = create(1);
+        String groupId = text(group, "id");
+        change(1, groupId, "INVITE", revision(groupId), Map.of("studentId", student(2)), 200);
+        change(2, groupId, "ACCEPT", revision(groupId), Map.of(), 200);
+
+        updateEligibility(1, 3, 4, 5, 6, 7);
+        change(1, groupId, "RANK", revision(groupId), Map.of("projectIds", projects), 409);
+
+        updateEligibility(1, 2, 3, 4, 5, 6, 7);
+        change(1, groupId, "RANK", revision(groupId), Map.of("projectIds", projects), 200);
+        change(1, groupId, "APPROVE", revision(groupId), Map.of(), 200);
+        change(2, groupId, "APPROVE", revision(groupId), Map.of(), 200);
+        updateEligibility(1, 3, 4, 5, 6, 7);
+        change(1, groupId, "SUBMIT", revision(groupId), Map.of("confirm", true), 409);
+
+        updateEligibility(1, 2, 3, 4, 5, 6, 7);
+        change(1, groupId, "SUBMIT", revision(groupId), Map.of("confirm", true), 200);
+        solo(3);
+        String savedGroup = stored(groupId).getPayload();
+        updateEligibility(1, 3, 4, 5, 6, 7);
+        JsonNode excludedRun = perform(post("/api/application-periods/" + period + "/allocation-runs"),
+                admin, null, 201);
+        JsonNode excludedUnits = array(excludedRun, "excludedApplyingUnits");
+        assertEquals(1, excludedUnits.size());
+        assertEquals(groupId, text(excludedUnits.get(0), "groupId"));
+        assertEquals("MEMBER_INELIGIBLE", text(excludedUnits.get(0), "reason"));
+        List<String> excludedRunStudents = assignedStudents(excludedRun);
+        assertTrue(excludedRunStudents.contains(student(3)));
+        assertFalse(excludedRunStudents.contains(student(1)));
+        assertFalse(excludedRunStudents.contains(student(2)));
+        assertEquals("SUBMITTED", stored(groupId).getStatus());
+        assertEquals(savedGroup, stored(groupId).getPayload());
+
+        updateEligibility(1, 2, 3, 4, 5, 6, 7);
+        JsonNode restoredRun = perform(post("/api/application-periods/" + period + "/allocation-runs"),
+                admin, null, 201);
+        assertTrue(array(restoredRun, "applyingUnits").toString().contains(groupId));
+        List<String> restoredRunStudents = assignedStudents(restoredRun);
+        assertTrue(restoredRunStudents.contains(student(1)));
+        assertTrue(restoredRunStudents.contains(student(2)));
+        assertEquals("SUBMITTED", stored(groupId).getStatus());
+        assertEquals(savedGroup, stored(groupId).getPayload());
+    }
+
+    private void updateEligibility(int... studentNumbers) throws Exception {
+        var periodData = store.parse(store.get("application_period", period));
+        periodData.put("eligibilityMode", "SELECTED");
+        List<String> selectedIds = java.util.Arrays.stream(studentNumbers).mapToObj(this::student).toList();
+        periodData.set("eligibleStudentIds", store.value(selectedIds));
+        periodData.putArray("eligibleClassIds");
+        perform(put("/api/application-periods/" + period), admin, periodData, 200);
+    }
+
+    private List<String> assignedStudents(JsonNode run) {
+        List<String> result = new ArrayList<>();
+        for (JsonNode assignment : array(object(run, "result"), "assignments")) {
+            result.add(text(assignment, "studentId"));
+        }
+        return result;
     }
 
     private int requestStatus(int student, String id, String action, long revision, Map<String, Object> fields) throws Exception {
@@ -802,16 +869,20 @@ class ApplyingGroupApiTest {
     }
 
     private JsonNode create(int student) throws Exception {
+        includeEligible(student);
         return perform(post(path()), tokens.get(student), null, 201);
     }
 
     private JsonNode solo(int student) throws Exception {
+        includeEligible(student);
         return perform(post("/api/application-periods/" + period + "/applications"), tokens.get(student),
                 Map.of("projectIds", projects), 201);
     }
 
     private JsonNode change(int student, String id, String action, long revision, Map<String, Object> fields, int expected)
             throws Exception {
+        Object target = fields.get("studentId");
+        if (target != null) includeEligible(target.toString());
         Map<String, Object> body = new HashMap<>(fields);
         body.put("revision", revision);
         return perform(post(path() + "/" + id + "/actions/" + action), tokens.get(student), body, expected);
@@ -825,6 +896,23 @@ class ApplyingGroupApiTest {
 
     private String path() { return "/api/application-periods/" + period + "/applying-groups"; }
     private String student(int number) { return users.findByUsername("student%02d".formatted(number)).orElseThrow().getId().toString(); }
+
+    private void includeEligible(int student) {
+        includeEligible(student(student));
+    }
+
+    private void includeEligible(String studentId) {
+        var periodRecord = store.get("application_period", period);
+        var data = store.parse(periodRecord);
+        var ids = data.withArray("eligibleStudentIds");
+        boolean present = false;
+        for (JsonNode id : ids) present |= studentId.equals(id.asText());
+        if (!present) {
+            ids.add(studentId);
+            store.update(periodRecord, periodRecord.getStatus(), data);
+        }
+    }
+
     private StoredRecord stored(String id) { return store.repository().findById(UUID.fromString(id)).orElseThrow(); }
     private long revision(String id) { return integer(store.parse(stored(id)), "revision"); }
     private void assertSoloStatus(String id, String expected) { assertEquals(expected, stored(id).getStatus()); }

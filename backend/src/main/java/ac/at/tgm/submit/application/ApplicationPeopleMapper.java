@@ -1,5 +1,7 @@
 package ac.at.tgm.submit.application;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import ac.at.tgm.submit.data.StoredRecord;
 import ac.at.tgm.submit.user.StudentDetailsService;
 import ac.at.tgm.submit.user.UserAccountRepository;
 import ac.at.tgm.submit.web.ApiDtos.StudentApplicationResponse;
@@ -10,10 +12,13 @@ import org.springframework.stereotype.Component;
 class ApplicationPeopleMapper {
     private final UserAccountRepository users;
     private final StudentDetailsService details;
+    private final ApplicationPeriodEligibility eligibility;
 
-    ApplicationPeopleMapper(UserAccountRepository users, StudentDetailsService details) {
+    ApplicationPeopleMapper(UserAccountRepository users, StudentDetailsService details,
+            ApplicationPeriodEligibility eligibility) {
         this.users = users;
         this.details = details;
+        this.eligibility = eligibility;
     }
 
     String name(UUID id) {
@@ -28,5 +33,10 @@ class ApplicationPeopleMapper {
                 response.periodId(), response.status(), response.preferences(),
                 student == null ? null : student.className(),
                 student == null ? null : student.electiveSubjectNames());
+    }
+
+    ApplicationPeriodEligibility.ResponseFields periodEligibility(
+            StoredRecord period, JsonNode data, UUID studentId, boolean adminView, boolean studentView) {
+        return eligibility.responseFields(period, data, studentId, adminView, studentView);
     }
 }

@@ -75,7 +75,8 @@ final class ApplyingGroupApiResponses {
             content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
     @ApiResponse(responseCode = "409", description = "Period is locked; revision is stale or group dissolved; target, confirmation "
             + "or ranking is missing; duplicate invitation, membership uniqueness/size, catalogue acceptance, unanimous "
-            + "consent, creator departure, conflicting effective pins or effective capacity prevents the transition.",
+            + "consent, an ineligible accepted member, creator departure, conflicting effective pins or effective capacity "
+            + "prevents the transition.",
             content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
     @interface Change {
     }

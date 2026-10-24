@@ -24,11 +24,14 @@ public class ApplyingGroupRecords {
     public static final int MAX_MEMBERS = 5;
     private final RecordStore store;
     private final UserAccountRepository users;
+    private final ApplicationPeriodEligibility eligibility;
     private final Clock clock;
 
-    public ApplyingGroupRecords(RecordStore store, UserAccountRepository users, Clock clock) {
+    public ApplyingGroupRecords(RecordStore store, UserAccountRepository users,
+            ApplicationPeriodEligibility eligibility, Clock clock) {
         this.store = store;
         this.users = users;
+        this.eligibility = eligibility;
         this.clock = clock;
     }
 
@@ -99,6 +102,7 @@ public class ApplyingGroupRecords {
         if (projects.size() < 3 || projects.stream().distinct().count() != projects.size()) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Rank at least three distinct catalogue projects.");
         }
+
         List<String> catalogue = ids(store.parse(period).path("projectIds"));
         if (!catalogue.containsAll(projects)) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Every preference must belong to this period's catalogue.");
@@ -108,6 +112,15 @@ public class ApplyingGroupRecords {
                     .filter(record -> "idea".equals(record.getType()))
                     .filter(record -> "ACCEPTED_FOR_APPLICATIONS".equals(record.getStatus())).isEmpty()) {
                 throw conflict("A ranked project is no longer accepted for applications.");
+            }
+        }
+
+    }
+
+    public void requireEligibleMembers(StoredRecord period, List<String> members) {
+        for (String member : members) {
+            if (!eligibility.isEligible(period, UUID.fromString(member))) {
+                throw conflict("Every accepted member must be eligible for this application period.");
             }
         }
     }

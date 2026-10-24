@@ -2,12 +2,37 @@
   <section class="page">
     <p class="page-intro">{{ $t('applications.intro') }}</p>
     <form v-if="isAdmin && periodEditor" class="panel stack" @submit.prevent="createPeriod">
-      <h2 class="section-title">{{ $t('applications.configure') }}</h2>
+      <h2 class="section-title" tabindex="-1" ref="editorHeading">{{ editingPeriodId ? $t('applications.editPeriod') : $t('applications.configure') }}</h2>
       <div class="grid grid-2">
         <div class="field"><label class="label" for="period-label">{{ $t('applications.label') }}</label><input id="period-label" v-model="periodForm.label" class="input" maxlength="100" required /></div>
         <div class="field"><label class="label" for="period-year">{{ $t('applications.schoolYear') }}</label><select id="period-year" v-model="periodForm.schoolYear" class="select" required><option value="">{{ $t('applications.chooseYear') }}</option><option v-for="year in years" :key="year" :value="year">{{ year }}</option></select></div>
         <div class="field"><label class="label" for="opens">{{ $t('applications.opensAt') }}</label><input id="opens" v-model="periodForm.opensAt" class="input" type="datetime-local" required /></div>
         <div class="field"><label class="label" for="closes">{{ $t('applications.closesAt') }}</label><input id="closes" v-model="periodForm.closesAt" class="input" type="datetime-local" required /></div>
+      </div>
+      <fieldset class="stack">
+        <legend class="label">{{ $t('applications.eligibility') }}</legend>
+        <label class="choice-item"><span>{{ $t('applications.allStudents') }}</span><input v-model="periodForm.eligibilityMode" type="radio" value="ALL_STUDENTS" /></label>
+        <label class="choice-item"><span>{{ $t('applications.selectedCohort') }}</span><input v-model="periodForm.eligibilityMode" type="radio" value="SELECTED" /></label>
+      </fieldset>
+      <div v-if="periodForm.eligibilityMode === 'SELECTED'" class="grid grid-2">
+        <div class="field">
+          <label class="label" for="eligible-students">{{ $t('applications.eligibleStudents') }}</label>
+          <select id="eligible-students" v-model="periodForm.eligibleStudentIds" class="select" multiple size="8" :disabled="lookupsLoading">
+            <option v-for="student in lookupStudents" :key="student.id" :value="student.id">{{ student.displayName }}</option>
+          </select>
+          <p v-if="lookupsReady && !lookupStudents.length" class="empty">{{ $t('applications.noEligibleStudents') }}</p>
+        </div>
+        <div class="field">
+          <label class="label" for="eligible-classes">{{ $t('applications.eligibleClasses') }}</label>
+          <select id="eligible-classes" v-model="periodForm.eligibleClassIds" class="select" multiple size="8" :disabled="lookupsLoading">
+            <option v-for="entry in lookupClasses" :key="entry.id" :value="entry.id">{{ entry.name }}</option>
+          </select>
+          <p v-if="lookupsReady && !lookupClasses.length" class="empty">{{ $t('applications.noEligibleClasses') }}</p>
+        </div>
+      </div>
+      <p v-if="lookupsLoading && periodForm.eligibilityMode === 'SELECTED'" class="loading">{{ $t('applications.loadingEligibility') }}</p>
+      <div v-if="lookupError && periodForm.eligibilityMode === 'SELECTED'" class="error-box" role="alert">
+        {{ lookupError }} <button class="button button-secondary button-small" type="button" @click="loadEligibilityLookups">{{ $t('applications.retry') }}</button>
       </div>
       <p class="label">{{ $t('applications.acceptedChoose') }}</p>
       <div class="choice-list">
@@ -18,31 +43,42 @@
         <li v-for="message in periodValidationMessages" :key="message">{{ message }}</li>
       </ul>
       <div v-if="task.error.value" class="error-box" role="alert">{{ task.error.value }}</div>
-      <div class="actions"><button class="button" type="submit" :disabled="task.loading.value || periodValidationMessages.length > 0">{{ $t('applications.createPeriod') }}</button><button class="button button-secondary" type="button" @click="periodEditor = false">{{ $t('applications.cancel') }}</button></div>
+      <div class="actions"><button class="button" type="submit" :disabled="task.loading.value || periodValidationMessages.length > 0 || lookupsLoading || Boolean(lookupError)">{{ editingPeriodId ? $t('applications.savePeriod') : $t('applications.createPeriod') }}</button><button class="button button-secondary" type="button" @click="cancelEditor">{{ $t('applications.cancel') }}</button></div>
     </form>
 
     <div class="page-heading">
       <h2 class="section-title">{{ isStudent ? $t('applications.availablePeriods') : $t('applications.periods') }}</h2>
-      <button v-if="isAdmin" class="button" @click="periodEditor = !periodEditor">＋ {{ $t('applications.configurePeriod') }}</button>
+      <button v-if="isAdmin" class="button" @click="openEditor()">＋ {{ $t('applications.configurePeriod') }}</button>
     </div>
     <AsyncPanel :loading="task.loading.value" :error="task.error.value" @retry="load">
       <div v-if="periods.content.length" class="data-list">
         <article v-for="period in periods.content" :key="period.id" class="data-row" :data-period-label="period.label">
           <div class="row-main">
-            <h3>{{ period.label || period.schoolYear }} <span class="status-badge" :class="`status-${period.status?.toLowerCase()}`">{{ readable(period.status) }}</span></h3>
+            <h3 :data-period-heading="period.id" tabindex="-1">{{ period.label || period.schoolYear }} <span class="status-badge" :class="`status-${period.status?.toLowerCase()}`">{{ readable(period.status) }}</span></h3>
             <p>{{ $t('applications.schoolYearValue', { year: period.schoolYear }) }}</p>
             <p>{{ $t('applications.opensDeadline', { opens: date(period.opensAt), closes: date(period.closesAt) }) }}</p>
             <p>{{ $t('applications.acceptedCount', { count: number(period.projectIds?.length ?? 0) }) }}</p>
+            <p v-if="isAdmin"><strong>{{ $t('applications.eligibility') }}:</strong> {{ eligibilitySummary(period) }}</p>
+            <p v-if="isAdmin && period.eligibilityMode === 'SELECTED' && lookupError" class="error-box" role="alert">{{ lookupError }} <button class="button button-secondary button-small" type="button" @click="loadEligibilityLookups">{{ $t('applications.retry') }}</button></p>
+            <p v-else-if="isAdmin && period.eligibilityMode === 'SELECTED' && lookupsLoading" class="muted" role="status">{{ $t('applications.loadingEligibility') }}</p>
             <section v-if="isStudent" class="student-period-result" :aria-label="$t('applications.result')">
               <p><strong>{{ $t('applications.yourApplication') }}</strong> {{ period.studentApplicationStatus === 'NOT_SUBMITTED' ? $t('applications.noApplication') : readable(period.studentApplicationStatus) }}</p>
               <template v-if="period.studentAssignment">
                 <p><strong>{{ $t('applications.assignment') }}</strong> {{ assignmentLabel(period.studentAssignment.state) }}<template v-if="period.studentAssignment.projectTitle"> · {{ period.studentAssignment.projectTitle }}</template></p>
+                <p v-if="period.studentAssignment.assignedWithoutPreferences === true">{{ $t('applications.assignedWithoutPreferences') }}</p>
+                <p v-else-if="period.studentAssignment.state === 'FINAL' || period.studentAssignment.state === 'PRELIMINARY'">{{ period.studentAssignment.assignedWithoutPreferences === false ? $t('applications.preferencesUsed') : $t('applications.preferenceStateUnavailable') }}</p>
                 <p v-if="period.studentAssignment.state === 'PRELIMINARY'" class="muted">{{ $t('applications.preliminary') }}</p>
                 <p v-if="period.studentAssignment.preferenceRank">{{ $t('applications.preferenceRank', { rank: number(period.studentAssignment.preferenceRank) }) }}</p>
                 <ul v-if="period.studentAssignment.groupMembers?.length" class="group-member-list" :aria-label="$t('applications.assignedStudents')">
                   <li v-for="(member, index) in period.studentAssignment.groupMembers" :key="`${member.displayName}-${index}`">{{ member.displayName }}<strong v-if="member.self"> ({{ $t('applications.you') }})</strong> · {{ member.originLabel || $t('applications.originUnavailable') }}<strong v-if="member.ownCohort"> · {{ $t('applications.ownCohort') }}</strong></li>
                 </ul>
               </template>
+            </section>
+            <p v-if="isStudent && period.eligibleToApply === false" class="notice" role="status">{{ $t('applications.ineligible') }}</p>
+            <section v-if="isStudent && period.eligibleToApply === false && applicationFor(period.id ?? '') && applicationFor(period.id ?? '')?.status !== 'REPLACED' && period.studentApplicationStatus !== 'SHARED_SUBMITTED'" class="stack">
+              <h4>{{ $t('applications.savedRanking') }}</h4>
+              <ol><li v-for="choice in applicationFor(period.id ?? '')?.preferences ?? []" :key="choice.projectId">{{ choice.projectTitle || projectTitle(period, choice.projectId) }}</li></ol>
+              <button v-if="periodEditable(period) && applicationFor(period.id ?? '')?.status === 'SUBMITTED'" class="button button-danger" type="button" @click="withdrawApplication(period)">{{ $t('applications.withdraw') }}</button>
             </section>
             <div v-if="isStudent" class="choice-list application-catalogue">
               <details v-for="(projectId, index) in period.projectIds ?? []" :key="projectId" class="choice-item" @toggle="onProjectToggle($event, period.id ?? '', projectId)">
@@ -88,7 +124,7 @@
                 <RouterLink class="button button-secondary button-small" :to="`/archive/${projectId}`">{{ $t('applications.browseArchive') }}</RouterLink>
               </details>
             </div>
-            <template v-if="isStudent && periodEditable(period) && period.studentApplicationStatus !== 'SHARED_SUBMITTED'">
+            <template v-if="isStudent && period.eligibleToApply !== false && periodEditable(period) && period.studentApplicationStatus !== 'SHARED_SUBMITTED'">
               <h3>{{ $t('applications.applyIndividually') }}</h3>
               <div class="choice-list application-ranking">
                 <p class="muted">{{ $t('applications.rankingHelp') }}</p>
@@ -108,7 +144,7 @@
             </template>
             <ApplyingGroupsWorkspace :period="period" @changed="refreshApplicationState" />
           </div>
-          <div class="actions" v-if="isTeacher || isAdmin"><button class="button button-secondary button-small" @click="loadApplications(period)">{{ $t('applications.viewSummary') }}</button><RouterLink v-if="isAdmin" class="button button-secondary button-small" to="/allocation">{{ $t('applications.allocationRuns') }}</RouterLink></div>
+          <div class="actions" v-if="isTeacher || isAdmin"><button v-if="isAdmin" class="button button-secondary button-small" type="button" @click="openEditor(period)">{{ $t('applications.editPeriod') }}</button><button class="button button-secondary button-small" type="button" @click="loadApplications(period)">{{ $t('applications.viewSummary') }}</button><RouterLink v-if="isAdmin" class="button button-secondary button-small" to="/allocation">{{ $t('applications.allocationRuns') }}</RouterLink></div>
         </article>
       </div>
       <p v-else class="empty">{{ $t('applications.noPeriods') }}</p>
@@ -127,11 +163,11 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import type { components } from '../../api/schema'
 import { ApiError, type Page } from '../../api/client'
-import { ideasApi, periodsApi } from '../../api/services'
+import { adminApi, ideasApi, periodsApi, studentDetailsApi } from '../../api/services'
 import { useAuthStore } from '../../stores/auth'
 import { useTask } from '../../composables/useTask'
 import AsyncPanel from '../../components/AsyncPanel.vue'
@@ -143,6 +179,8 @@ type Idea = components['schemas']['IdeaResponse']
 type Application = components['schemas']['StudentApplicationResponse']
 type CatalogueProject = components['schemas']['CatalogueProjectResponse']
 type CatalogueProjectState = { loading: boolean, error?: string, data?: CatalogueProject }
+type StudentLookup = components['schemas']['UserResponse']
+type ClassLookup = components['schemas']['CatalogueEntryResponse']
 const auth = useAuthStore()
 const isStudent = computed(() => auth.user?.role === 'STUDENT')
 const isAdmin = computed(() => auth.user?.role === 'ADMIN')
@@ -154,11 +192,23 @@ const years = ref<string[]>([])
 const currentApplications = ref<Record<string, Application>>({})
 const rankedIds = ref<Record<string, string[]>>({})
 const periodEditor = ref(false)
+const editingPeriodId = ref<string | null>(null)
+const editorHeading = ref<HTMLElement | null>(null)
+const editorTrigger = ref<HTMLElement | null>(null)
+const lookupStudents = ref<StudentLookup[]>([])
+const lookupClasses = ref<ClassLookup[]>([])
+const lookupsLoading = ref(false)
+const lookupError = ref('')
+const lookupsReady = ref(false)
 const projectToAdd = ref('')
 const catalogueDetails = ref<Record<string, CatalogueProjectState>>({})
 const applicationSummary = ref<Page<Application> | null>(null)
 const summaryPeriod = ref({ label: '', schoolYear: '' })
-const periodForm = reactive({ label: '', schoolYear: '', opensAt: '', closesAt: '', projectIds: [] as string[] })
+const periodForm = reactive({
+  label: '', schoolYear: '', opensAt: '', closesAt: '', projectIds: [] as string[],
+  eligibilityMode: 'ALL_STUDENTS' as 'ALL_STUDENTS' | 'SELECTED',
+  eligibleStudentIds: [] as string[], eligibleClassIds: [] as string[],
+})
 const periodValidationMessages = computed(() => {
   const messages: string[] = []
   if (!periodForm.label.trim()) messages.push(String(i18n.global.t('applications.enterLabel')))
@@ -197,6 +247,16 @@ function assignmentLabel(state?: string): string {
   if (state === 'PRELIMINARY') return String(i18n.global.t('applications.preliminaryLabel'))
   if (state === 'FINAL') return String(i18n.global.t('applications.finalLabel'))
   return String(i18n.global.t('applications.noAssignmentInfo'))
+}
+function eligibilitySummary(period: Period): string {
+  if (period.eligibilityMode !== 'SELECTED') return String(i18n.global.t('applications.allStudents'))
+  const students = (period.eligibleStudentIds ?? []).map((id) =>
+    lookupStudents.value.find((entry) => entry.id === id)?.displayName)
+  const classes = (period.eligibleClassIds ?? []).map((id) =>
+    lookupClasses.value.find((entry) => entry.id === id)?.name)
+  const labels = [...students, ...classes].filter((label): label is string => Boolean(label))
+  return labels.length ? labels.join(', ') : String(i18n.global.t(lookupError.value
+    ? 'applications.lookupUnavailable' : 'applications.noSelection'))
 }
 function date(value?: string): string {
   return value ? new Intl.DateTimeFormat(i18n.global.locale.value, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : String(i18n.global.t('applications.notSet'))
@@ -270,6 +330,7 @@ async function load(page = 0): Promise<void> {
     acceptedIdeas.value = ideaResult.content.filter((idea) => idea.status === 'ACCEPTED_FOR_APPLICATIONS')
     years.value = yearResult.content
     if (!periodForm.schoolYear) periodForm.schoolYear = years.value[0] ?? ''
+    if (isAdmin.value && !lookupsReady.value) await loadEligibilityLookups()
     if (isStudent.value) {
       await Promise.all(periods.value.content.filter((period) => period.status === 'OPEN').map(async (period) => {
         if (!period.id) return
@@ -300,10 +361,85 @@ async function createPeriod(): Promise<void> {
     opensAt: new Date(periodForm.opensAt).toISOString(),
     closesAt: new Date(periodForm.closesAt).toISOString(),
     projectIds: periodForm.projectIds,
+    eligibilityMode: periodForm.eligibilityMode,
+    eligibleStudentIds: periodForm.eligibilityMode === 'SELECTED' ? periodForm.eligibleStudentIds : [],
+    eligibleClassIds: periodForm.eligibilityMode === 'SELECTED' ? periodForm.eligibleClassIds : [],
   }
-  const result = await task.run(() => periodsApi.create(payload), String(i18n.global.t('applications.periodCreated')))
-  if (result) { periodEditor.value = false; await load(0) }
+  const updatedId = editingPeriodId.value
+  const result = await task.run(() => updatedId
+    ? periodsApi.update(updatedId, payload)
+    : periodsApi.create(payload), String(i18n.global.t(updatedId ? 'applications.periodUpdated' : 'applications.periodCreated')))
+  if (result) {
+    periodEditor.value = false
+    editingPeriodId.value = null
+    lookupsReady.value = false
+    await load(0)
+    const focusId = updatedId ?? result.id
+    if (focusId) requestAnimationFrame(() => {
+      Array.from(document.querySelectorAll<HTMLElement>('[data-period-heading]'))
+        .find((heading) => heading.dataset.periodHeading === focusId)?.focus()
+    })
+  }
 }
+function openEditor(period?: Period): void {
+  editorTrigger.value = document.activeElement instanceof HTMLElement ? document.activeElement : null
+  editingPeriodId.value = period?.id ?? null
+  periodForm.label = period?.label ?? ''
+  periodForm.schoolYear = period?.schoolYear ?? years.value[0] ?? ''
+  periodForm.opensAt = period?.opensAt ? new Date(period.opensAt).toISOString().slice(0, 16) : ''
+  periodForm.closesAt = period?.closesAt ? new Date(period.closesAt).toISOString().slice(0, 16) : ''
+  periodForm.projectIds = [...(period?.projectIds ?? [])]
+  periodForm.eligibilityMode = period?.eligibilityMode ?? 'ALL_STUDENTS'
+  periodForm.eligibleStudentIds = [...(period?.eligibleStudentIds ?? [])]
+  periodForm.eligibleClassIds = [...(period?.eligibleClassIds ?? [])]
+  lookupsReady.value = false
+  lookupError.value = ''
+  periodEditor.value = true
+  if (periodForm.eligibilityMode === 'SELECTED') void loadEligibilityLookups()
+  requestAnimationFrame(() => editorHeading.value?.focus())
+}
+function cancelEditor(): void {
+  periodEditor.value = false
+  editingPeriodId.value = null
+  periodForm.eligibilityMode = 'ALL_STUDENTS'
+  periodForm.eligibleStudentIds = []
+  periodForm.eligibleClassIds = []
+  lookupError.value = ''
+  lookupsReady.value = false
+  requestAnimationFrame(() => editorTrigger.value?.focus())
+}
+async function loadEligibilityLookups(): Promise<void> {
+  if (lookupsReady.value || lookupsLoading.value) return
+  lookupsLoading.value = true
+  lookupError.value = ''
+  try {
+    const [firstStudents, firstClasses] = await Promise.all([
+      adminApi.users(0, 'STUDENT', undefined, 100),
+      studentDetailsApi.classes(0),
+    ])
+    const studentPages = await Promise.all(Array.from({ length: Math.max(0, firstStudents.totalPages - 1) },
+      (_, index) => adminApi.users(index + 1, 'STUDENT', undefined, 100)))
+    const classPages = await Promise.all(Array.from({ length: Math.max(0, firstClasses.totalPages - 1) },
+      (_, index) => studentDetailsApi.classes(index + 1)))
+    lookupStudents.value = [...firstStudents.content, ...studentPages.flatMap((page) => page.content)]
+      .filter((student) => student.role === 'STUDENT' && student.id)
+    lookupClasses.value = [...firstClasses.content, ...classPages.flatMap((page) => page.content)]
+      .filter((entry) => entry.id && entry.name)
+    lookupsReady.value = true
+  } catch (error) {
+    lookupError.value = error instanceof ApiError ? error.message : String(i18n.global.t('applications.lookupFailed'))
+  } finally {
+    lookupsLoading.value = false
+  }
+}
+watch(() => periodForm.eligibilityMode, (mode) => {
+  if (mode === 'SELECTED') {
+    void loadEligibilityLookups()
+  } else {
+    periodForm.eligibleStudentIds = []
+    periodForm.eligibleClassIds = []
+  }
+})
 async function saveApplication(period: Period): Promise<void> {
   const id = period.id ?? ''
   const existing = currentApplications.value[id]

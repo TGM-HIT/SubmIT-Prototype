@@ -87,8 +87,13 @@ public class TestingApplyingGroupPreviewConfiguration {
     private UUID period(List<UUID> projects, String label, long deadlineSeconds) {
         var request = store.object().put("label", label).put("schoolYear", "2026/2027")
                 .put("opensAt", Instant.now().minusSeconds(OPENING_LEAD_SECONDS).toString())
-                .put("closesAt", Instant.now().plusSeconds(deadlineSeconds).toString());
+                .put("closesAt", Instant.now().plusSeconds(deadlineSeconds).toString())
+                .put("eligibilityMode", "SELECTED");
         request.set("projectIds", store.value(projects));
+        request.set("eligibleStudentIds", store.value(java.util.stream.IntStream.rangeClosed(1, 3)
+                .mapToObj(index -> users.findByUsername("student%02d".formatted(index)).orElseThrow().getId())
+                .toList()));
+        request.putArray("eligibleClassIds");
         UUID id = periods.create(caller(users.findByUsername("admin01").orElseThrow()), request).id();
         for (int i = 1; i <= 3; i++) {
             var ranking = store.object();

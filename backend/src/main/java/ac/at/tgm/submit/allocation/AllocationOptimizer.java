@@ -71,17 +71,22 @@ public final class AllocationOptimizer {
     }
 
     /** A student's application: ranked project ids, most preferred first. */
-    public record Application(String studentId, List<String> rankedProjectIds, String applyingUnitId) {
+    public record Application(String studentId, List<String> rankedProjectIds, String applyingUnitId,
+            boolean hasPreferences) {
 
         public Application(String studentId, List<String> rankedProjectIds) {
-            this(studentId, rankedProjectIds, null);
+            this(studentId, rankedProjectIds, null, true);
+        }
+
+        public Application(String studentId, List<String> rankedProjectIds, String applyingUnitId) {
+            this(studentId, rankedProjectIds, applyingUnitId, true);
         }
 
         public Application {
             requireId(studentId, "student id");
             Objects.requireNonNull(rankedProjectIds, "rankedProjectIds must not be null");
             rankedProjectIds = List.copyOf(rankedProjectIds);
-            if (rankedProjectIds.isEmpty()) {
+            if (rankedProjectIds.isEmpty() && hasPreferences) {
                 throw new IllegalArgumentException("student " + studentId + " must rank at least one project");
             }
             rankedProjectIds.forEach(id -> requireId(id, "ranked project id"));
@@ -218,10 +223,12 @@ public final class AllocationOptimizer {
             for (int s = 0; s < students; s++) {
                 List<String> ranking = request.applications().get(s).rankedProjectIds();
                 pinned[s] = request.pinnedStudentIds().contains(request.applications().get(s).studentId());
-                for (int r = 0; r < ranking.size(); r++) {
-                    int p = projectIds.indexOf(ranking.get(r));
-                    profit[s][p] = projects - r;
-                    interest[p]++;
+                if (request.applications().get(s).hasPreferences()) {
+                    for (int r = 0; r < ranking.size(); r++) {
+                        int p = projectIds.indexOf(ranking.get(r));
+                        profit[s][p] = projects - r;
+                        interest[p]++;
+                    }
                 }
             }
 
@@ -229,7 +236,20 @@ public final class AllocationOptimizer {
 
         int[] viableProjects() {
             return java.util.stream.IntStream.range(0, projects)
-                    .filter(p -> interest[p] >= AllocationLimits.MIN_GROUP_SIZE).toArray();
+                    .filter(p -> java.util.stream.IntStream.range(0, students)
+                            .filter(s -> canAssign(s, p))
+                            .count() >= AllocationLimits.MIN_GROUP_SIZE).toArray();
+        }
+
+        private boolean canAssign(int student, int project) {
+            Application application = request.applications().get(student);
+            if (profit[student][project] > 0) {
+                return true;
+            }
+            if (application.hasPreferences()) {
+                return false;
+            }
+            return !pinned[student] || application.rankedProjectIds().contains(projectIds.get(project));
         }
 
         int[] select(int[] viable, long mask) {
@@ -324,10 +344,26 @@ public final class AllocationOptimizer {
                     continue;
                 }
                 for (int p : open) {
-                    weighted[s][p] = profit[s][p] == 0 ? 0 : (int) (countWeight + profit[s][p] + (pinned[s] ? pinWeight : 0));
+                    weighted[s][p] = weight(s, p);
                 }
             }
             return weighted;
+        }
+
+        private int weight(int student, int project) {
+            if (profit[student][project] > 0) {
+                return (int) (countWeight + profit[student][project] + (pinned[student] ? pinWeight : 0));
+            }
+            if (unrankedCandidateMayUse(student, project)) {
+                return (int) (countWeight + (pinned[student] ? pinWeight : 0));
+            }
+            return 0;
+        }
+
+        private boolean unrankedCandidateMayUse(int student, int project) {
+            return !request.applications().get(student).hasPreferences()
+                    && (!pinned[student] || request.applications().get(student).rankedProjectIds()
+                            .contains(projectIds.get(project)));
         }
 
         private void mergeFixed(int[] assignment, int[] fixed) {
@@ -390,7 +426,7 @@ public final class AllocationOptimizer {
             for (int s = 0; s < students; s++) {
                 if (assignment[s] == project) {
                     members.add(new Assignment(request.applications().get(s).studentId(), projectIds.get(project),
-                            projects - profit[s][project] + 1));
+                            profit[s][project] == 0 ? 0 : projects - profit[s][project] + 1));
                 }
             }
             return members;

@@ -47,16 +47,30 @@ class AllocationEngine {
         units.persistOrigin(group, run);
     }
 
-    Object optimize(List<String> projectIds, List<StoredRecord> records, List<StoredRecord> pinRecords) {
+    Object optimize(List<String> projectIds, List<StoredRecord> records, List<StoredRecord> pinRecords,
+            List<String> eligibleStudentIds) {
         List<Project> projects = projectIds.stream().map(Project::new).toList();
         Map<String, String> pinnedProjects = readPins(projectIds, pinRecords);
         units.expandPins(records, pinnedProjects);
         Map<String, Integer> originalRanks = new HashMap<>();
-        List<Application> applications = buildApplications(records, pinnedProjects, originalRanks);
+        List<Application> applications = buildApplications(records, pinnedProjects, originalRanks, eligibleStudentIds);
         Request request = new Request(projects, applications, pinnedProjects.keySet());
         ObjectNode result = (ObjectNode) store.value(optimizer.optimize(request));
-        applyPinResults(result, pinnedProjects, originalRanks, projectIds.size());
+        Set<String> preferenceStudents = applications.stream().filter(Application::hasPreferences)
+                .map(Application::studentId).collect(java.util.stream.Collectors.toSet());
+        applyPinResults(result, pinnedProjects, originalRanks, preferenceStudents, projectIds.size());
+        markPreferenceSubmission(result, applications);
         return result;
+    }
+
+    private void markPreferenceSubmission(ObjectNode result, List<Application> applications) {
+        Map<String, Boolean> state = new HashMap<>();
+        applications.forEach(application -> state.put(application.studentId(), application.hasPreferences()));
+        result.path("assignments").forEach(assignment -> {
+            if (assignment instanceof ObjectNode object) {
+                object.put("hadPreferences", state.getOrDefault(object.path(STUDENT_ID).asText(), false));
+            }
+        });
     }
 
     private Map<String, String> readPins(List<String> projectIds, List<StoredRecord> records) {
@@ -85,30 +99,58 @@ class AllocationEngine {
     }
 
     private List<Application> buildApplications(List<StoredRecord> records, Map<String, String> pins,
-            Map<String, Integer> originalRanks) {
+            Map<String, Integer> originalRanks, List<String> eligibleStudentIds) {
         List<Application> applications = new ArrayList<>();
         Set<String> included = new HashSet<>();
         for (StoredRecord record : records) {
-            if (ApplyingGroupRecords.TYPE.equals(record.getType())) {
-                addShared(record, pins, originalRanks, applications);
-                store.parse(record).path("members").forEach(member -> included.add(member.asText()));
-                continue;
-            }
-            String studentId = record.getOwnerId();
-            List<String> sourceRanking = rankedProjects(record);
-            rememberRanks(studentId, record, originalRanks);
-            List<String> ranking = pins.containsKey(studentId) ? List.of(pins.get(studentId)) : sourceRanking;
-            if (!ranking.isEmpty()) {
-                applications.add(new Application(studentId, ranking));
-                included.add(studentId);
-            }
+            addRecord(record, pins, originalRanks, applications, included);
         }
+        addPinOnlyStudents(pins, included, applications);
+        addEligibleStudents(eligibleStudentIds, pins, included, applications);
+        return applications;
+    }
+
+    private void addRecord(StoredRecord record, Map<String, String> pins, Map<String, Integer> originalRanks,
+            List<Application> applications, Set<String> included) {
+        if (ApplyingGroupRecords.TYPE.equals(record.getType())) {
+            addShared(record, pins, originalRanks, applications);
+            store.parse(record).path("members").forEach(member -> included.add(member.asText()));
+        } else {
+            addIndividual(record, pins, originalRanks, applications, included);
+        }
+    }
+
+    private void addIndividual(StoredRecord record, Map<String, String> pins, Map<String, Integer> originalRanks,
+            List<Application> applications, Set<String> included) {
+        String studentId = record.getOwnerId();
+        List<String> sourceRanking = rankedProjects(record);
+        rememberRanks(studentId, record, originalRanks);
+        List<String> ranking = pins.containsKey(studentId) ? List.of(pins.get(studentId)) : sourceRanking;
+        if (!ranking.isEmpty()) {
+            applications.add(new Application(studentId, ranking, null, !sourceRanking.isEmpty()));
+            included.add(studentId);
+        }
+    }
+
+    private void addPinOnlyStudents(Map<String, String> pins, Set<String> included,
+            List<Application> applications) {
         for (Map.Entry<String, String> pin : pins.entrySet()) {
             if (!included.contains(pin.getKey())) {
-                applications.add(new Application(pin.getKey(), List.of(pin.getValue())));
+                applications.add(new Application(pin.getKey(), List.of(pin.getValue()), null, false));
+                included.add(pin.getKey());
             }
         }
-        return applications;
+    }
+
+    private void addEligibleStudents(List<String> eligibleStudentIds, Map<String, String> pins,
+            Set<String> included, List<Application> applications) {
+        for (String studentId : eligibleStudentIds) {
+            if (included.add(studentId)) {
+                String pinned = pins.get(studentId);
+                applications.add(new Application(studentId, pinned == null ? List.of() : List.of(pinned),
+                        null, false));
+            }
+        }
     }
 
     private void addShared(StoredRecord group, Map<String, String> pins, Map<String, Integer> ranks,
@@ -142,15 +184,15 @@ class AllocationEngine {
     }
 
     private void applyPinResults(ObjectNode result, Map<String, String> pins, Map<String, Integer> ranks,
-            int projectCount) {
+            Set<String> preferenceStudents, int projectCount) {
         long score = result.path("preferenceScore").asLong();
-        score += markPinnedAssignments(result.path("assignments"), pins, ranks, projectCount);
+        score += markPinnedAssignments(result.path("assignments"), pins, ranks, preferenceStudents, projectCount);
         result.put("preferenceScore", score);
         markPinnedUnassigned(result.path("unassignedStudents"), pins);
     }
 
     private long markPinnedAssignments(JsonNode assignments, Map<String, String> pins,
-            Map<String, Integer> ranks, int projectCount) {
+            Map<String, Integer> ranks, Set<String> preferenceStudents, int projectCount) {
         long scoreAdjustment = 0;
         for (JsonNode assignment : assignments) {
             if (assignment instanceof ObjectNode object) {
@@ -160,7 +202,9 @@ class AllocationEngine {
                     int actualRank = ranks.getOrDefault(studentId + "|" + projectId, 0);
                     object.put("pinned", true);
                     object.put("preferenceRank", actualRank);
-                    scoreAdjustment += (actualRank == 0 ? 0 : projectCount - actualRank + 1) - projectCount;
+                    if (preferenceStudents.contains(studentId)) {
+                        scoreAdjustment += (actualRank == 0 ? 0 : projectCount - actualRank + 1) - projectCount;
+                    }
                 }
             }
         }

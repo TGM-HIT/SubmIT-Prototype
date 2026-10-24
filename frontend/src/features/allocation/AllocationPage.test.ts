@@ -283,7 +283,10 @@ describe('allocation supervisor display', () => {
     expect(page.text()).toContain("Unassigned Project · NOT_SELECTED_BY_OPTIMIZATION")
     expect(page.text()).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i)
     const styles = readFileSync(resolve(process.cwd(), "src/styles.css"), "utf8")
+    expect(styles).toContain(".allocation-assignment { display: block; }")
+    expect(styles).toContain(".allocation-assignment > .choice-list { width: 100%; }")
     expect(styles).toContain(".staff-member-label { max-width: 100%; white-space: normal; overflow-wrap: anywhere; word-break: break-word; }")
+    expect(styles).toContain(".status-badge.staff-member-label { display: block; width: 100%; text-align: left; line-height: 1.5; }")
   })
 
 

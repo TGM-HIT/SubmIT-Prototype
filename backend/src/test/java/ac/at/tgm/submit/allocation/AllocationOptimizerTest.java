@@ -84,6 +84,20 @@ class AllocationOptimizerTest {
     }
 
     @Test
+    void allocatesEligibleStudentsWithoutPreferencesToFeasibleCatalogueProjectsAtZeroSatisfaction() {
+        List<Application> eligible = IntStream.range(0, 3)
+                .mapToObj(index -> new Application("eligible-" + index, List.of(), null, false)).toList();
+        Result result = optimizer.optimize(new Request(projects("catalogue-A", "catalogue-B", "catalogue-C"), eligible));
+
+        assertEquals(3, result.assignedStudents());
+        assertEquals(0, result.preferenceScore());
+        assertEquals(1, result.assignments().stream().map(Assignment::projectId).distinct().count());
+        assertTrue(Set.of("catalogue-A", "catalogue-B", "catalogue-C")
+                .contains(result.assignments().getFirst().projectId()));
+        assertTrue(result.assignments().stream().allMatch(assignment -> assignment.preferenceRank() == 0));
+    }
+
+    @Test
     void leavesStudentsUnassignedWithReasonAndPreferences() {
         Result result = optimizer.optimize(new Request(
                 projects("A", "B"), concat(students("a", 6, "A"), List.of(student("x", "B")))));

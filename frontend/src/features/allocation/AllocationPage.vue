@@ -43,10 +43,14 @@
       <div class="page-heading"><div><h2 ref="selectedRunHeading" class="section-title" tabindex="-1">{{ $t('allocation.runOutcome') }}</h2><p>{{ runKind(selectedRun) }}</p><p class="muted">{{ $t('allocation.snapshot', { date: selectedRun.createdAt ? date(String(selectedRun.createdAt)) : $t('allocation.timeUnavailable') }) }}</p></div><button class="button button-secondary button-small" @click="selectedRun = null">{{ $t('allocation.closeResult') }}</button></div>
       <span class="status-badge" :class="`status-${statusOf(selectedRun).toLowerCase()}`">{{ statusLabel(selectedRun) }}</span>
       <p v-if="selectedRun.error" class="error-box">{{ $t('allocation.runError') }}: {{ selectedRun.error }}</p>
-      <div v-for="assignment in assignments(selectedRun)" :key="assignment.projectId" class="data-row">
+      <div v-for="assignment in assignments(selectedRun)" :key="assignment.projectId" class="data-row allocation-assignment">
         <div class="row-main"><h3 class="staff-display-label">{{ assignment.projectTitle }}</h3><p>{{ $t('allocation.assignedStudents', { count: number(assignment.students.length) }) }}</p><p>{{ $t('allocation.supervisor') }}: {{ supervisors[assignment.projectId] || $t('allocation.noSupervisor') }}</p><p class="muted">{{ $t('allocation.staffPrivacy') }}</p></div>
-        <div class="choice-list"><span v-for="(student, index) in assignment.students" :key="student.id || index" class="status-badge staff-member-label">{{ student.name }}<strong v-if="student.pinned"> · {{ $t('allocation.fixedByAdmin') }}</strong> · {{ $t('allocation.class') }} {{ student.className || $t('allocation.notAssigned') }} · {{ $t('allocation.electiveSubjects') }} {{ student.electiveSubjectNames.join(', ') || $t('allocation.none') }} · {{ applyingOrigin(selectedRun, student.id) }}</span></div>
+        <div class="choice-list"><span v-for="(student, index) in assignment.students" :key="student.id || index" class="status-badge staff-member-label">{{ student.name }}<strong v-if="student.pinned"> · {{ $t('allocation.fixedByAdmin') }}</strong><strong v-if="student.hadPreferences === false"> · {{ $t('applications.assignedWithoutPreferences') }}</strong><strong v-else-if="student.hadPreferences === true"> · {{ $t('applications.preferencesUsed') }}</strong> · {{ $t('allocation.class') }} {{ student.className || $t('allocation.notAssigned') }} · {{ $t('allocation.electiveSubjects') }} {{ student.electiveSubjectNames.join(', ') || $t('allocation.none') }} · {{ applyingOrigin(selectedRun, student.id) }}</span></div>
       </div>
+      <section v-if="excludedApplyingUnits(selectedRun).length" class="stack">
+        <h3 class="form-section-title">{{ $t('allocation.excludedGroups') }}</h3>
+        <p v-for="entry in excludedApplyingUnits(selectedRun)" :key="String(entry.groupId)" class="notice staff-display-label">{{ $t('allocation.mixedEligibility') }} · {{ Array.isArray(entry.memberDisplayNames) ? entry.memberDisplayNames.join(', ') : '' }}</p>
+      </section>
       <h3 class="form-section-title">{{ $t('allocation.unassigned') }}</h3>
       <div v-if="unassigned(selectedRun).length" class="choice-list"><p v-for="(entry, index) in unassigned(selectedRun)" :key="unassignedKey(entry, index)" class="notice staff-display-label">{{ unassignedLabel(entry) }}<template v-if="typeof entry.studentId === 'string'"> · {{ $t('allocation.class') }} {{ entry.className || $t('allocation.notAssigned') }} · {{ $t('allocation.electiveSubjects') }} {{ Array.isArray(entry.electiveSubjectNames) ? entry.electiveSubjectNames.join(', ') || $t('allocation.none') : $t('allocation.none') }}</template> · {{ entry.explanation ?? entry.reason ?? $t('allocation.noReason') }}</p></div>
       <p v-else class="muted">{{ $t('allocation.noUnassigned') }}</p>
@@ -119,14 +123,14 @@ function applyingOrigin(run: Data, studentId: string): string {
   const index = (run.applyingUnits as Data[]).findIndex(unit => Array.isArray(unit.studentIds) && unit.studentIds.includes(studentId))
   return index < 0 ? String(i18n.global.t('allocation.appliedAdded')) : String(i18n.global.t('allocation.cohort', { number: number(index + 1) }))
 }
-function assignments(run: Data): { projectId: string; projectTitle: string; students: { id: string; name: string; className?: string; electiveSubjectNames: string[]; pinned: boolean }[] }[] {
+function assignments(run: Data): { projectId: string; projectTitle: string; students: { id: string; name: string; className?: string; electiveSubjectNames: string[]; pinned: boolean; hadPreferences?: boolean }[] }[] {
   const result = run.result
   if (!result || typeof result !== "object" || !Array.isArray((result as Data).assignments)) return []
-  const groups = new Map<string, { title: string; students: Map<string, { name: string; className?: string; electiveSubjectNames: string[]; pinned: boolean }> }>()
+  const groups = new Map<string, { title: string; students: Map<string, { name: string; className?: string; electiveSubjectNames: string[]; pinned: boolean; hadPreferences?: boolean }> }>()
   for (const assignment of (result as Data).assignments as Data[]) {
     const projectId = String(assignment.projectId ?? assignment.project ?? "")
     if (!projectId) continue
-    const group = groups.get(projectId) ?? { title: String(i18n.global.t('allocation.unknownProject')), students: new Map<string, { name: string; className?: string; electiveSubjectNames: string[]; pinned: boolean }>() }
+    const group = groups.get(projectId) ?? { title: String(i18n.global.t('allocation.unknownProject')), students: new Map<string, { name: string; className?: string; electiveSubjectNames: string[]; pinned: boolean; hadPreferences?: boolean }>() }
     if (typeof assignment.projectTitle === "string" && assignment.projectTitle.trim()) group.title = assignment.projectTitle
     const studentIds = Array.isArray(assignment.studentIds) ? assignment.studentIds
       : Array.isArray(assignment.students) ? assignment.students
@@ -139,7 +143,8 @@ function assignments(run: Data): { projectId: string; projectTitle: string; stud
           ? assignment.studentDisplayName : String(i18n.global.t('allocation.unknownStudent'))
       const electiveSubjectNames = Array.isArray(assignment.electiveSubjectNames) ? assignment.electiveSubjectNames.filter((value): value is string => typeof value === "string") : []
       const className = typeof assignment.className === "string" ? assignment.className : undefined
-      group.students.set(id, { name, className, electiveSubjectNames, pinned: assignment.pinned === true })
+      group.students.set(id, { name, className, electiveSubjectNames, pinned: assignment.pinned === true,
+        ...(typeof assignment.hadPreferences === 'boolean' ? { hadPreferences: assignment.hadPreferences } : {}) })
     }
     groups.set(projectId, group)
   }
@@ -148,6 +153,11 @@ function assignments(run: Data): { projectId: string; projectTitle: string; stud
     projectTitle: group.title,
     students: [...group.students.entries()].map(([id, identity]) => ({ id, ...identity })),
   }))
+}
+function excludedApplyingUnits(run: Data): Data[] {
+  return Array.isArray(run.excludedApplyingUnits)
+    ? run.excludedApplyingUnits.filter((entry): entry is Data => typeof entry === 'object' && entry !== null)
+    : []
 }
 function unassignedKey(entry: Data, index: number): string | number {
   const id = entry.studentId ?? entry.projectId

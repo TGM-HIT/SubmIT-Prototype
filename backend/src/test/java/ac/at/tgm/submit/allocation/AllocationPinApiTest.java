@@ -57,8 +57,11 @@ class AllocationPinApiTest {
                 project("Third project"), project("Fourth project"));
         ObjectNode period = store.object().put("label", "Pin API test").put("schoolYear", "2026/2027")
                 .put("opensAt", Instant.now().minusSeconds(3600).toString())
-                .put("closesAt", Instant.now().minusSeconds(60).toString());
+                .put("closesAt", Instant.now().minusSeconds(60).toString())
+                .put("eligibilityMode", "SELECTED");
         period.set("projectIds", store.value(projects));
+        period.set("eligibleStudentIds", store.value(List.of(testStudent.getId())));
+        period.putArray("eligibleClassIds");
         periodId = store.create("application_period", null, null, "CLOSED", period).getId();
     }
 
@@ -468,6 +471,17 @@ class AllocationPinApiTest {
     }
 
     private void addApplication(UUID student, UUID... projectIds) {
+        var period = store.repository().findById(periodId).orElseThrow();
+        ObjectNode periodData = store.parse(period);
+        var selectedIds = (com.fasterxml.jackson.databind.node.ArrayNode) periodData.path("eligibleStudentIds");
+        boolean selected = false;
+        for (JsonNode id : selectedIds) {
+            selected |= student.toString().equals(id.asText());
+        }
+        if (!selected) {
+            selectedIds.add(student.toString());
+            store.update(period, period.getStatus(), periodData);
+        }
         ObjectNode payload = store.object();
         var preferences = payload.putArray("preferences");
         for (int index = 0; index < projectIds.length; index++) {

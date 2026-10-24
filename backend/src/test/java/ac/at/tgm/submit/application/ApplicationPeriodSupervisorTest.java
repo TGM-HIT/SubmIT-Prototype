@@ -11,6 +11,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import ac.at.tgm.submit.data.RecordStore;
 import ac.at.tgm.submit.user.UserAccountRepository;
+import ac.at.tgm.submit.user.StudentClassRepository;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -37,6 +38,8 @@ class ApplicationPeriodSupervisorTest {
     private RecordStore store;
     @Autowired
     private UserAccountRepository users;
+    @Autowired
+    private StudentClassRepository classes;
 
     private String adminToken;
     private List<String> projectIds;
@@ -68,6 +71,9 @@ class ApplicationPeriodSupervisorTest {
                 .andExpect(jsonPath("$.status").value("OPEN"))
                 .andExpect(jsonPath("$.label").value("Supervisor-free period"))
                 .andExpect(jsonPath("$.projectIds.length()").value(3))
+                .andExpect(jsonPath("$.eligibilityMode").value("ALL_STUDENTS"))
+                .andExpect(jsonPath("$.eligibleStudentIds.length()").value(0))
+                .andExpect(jsonPath("$.eligibleClassIds.length()").value(0))
                 .andReturn();
         String periodId = objectMapper.readTree(created.getResponse().getContentAsString())
                 .path("id").asText();
@@ -81,6 +87,159 @@ class ApplicationPeriodSupervisorTest {
                 .andExpect(jsonPath("$.label").value("Supervisor-free period"))
                 .andExpect(jsonPath("$.status").value("OPEN"))
                 .andExpect(jsonPath("$.projectIds.length()").value(3));
+    }
+
+    @Test
+    void selectedEligibilityIsValidatedPersistedAndHiddenFromNonAdministrators() throws Exception {
+        String studentId = users.findByUsername("student02").orElseThrow().getId().toString();
+        String classId = classes.findByName("Testing Class").orElseThrow().getId().toString();
+        Map<String, Object> selected = new java.util.HashMap<>(period("2026/2027",
+                Instant.now().minusSeconds(60).toString(), Instant.now().plusSeconds(86_400).toString(), projectIds));
+        selected.put("eligibilityMode", "SELECTED");
+        selected.put("eligibleStudentIds", List.of(studentId));
+        selected.put("eligibleClassIds", List.of(classId));
+        MvcResult result = mockMvc.perform(post("/api/application-periods")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(selected)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.eligibilityMode").value("SELECTED"))
+                .andExpect(jsonPath("$.eligibleStudentIds[0]").value(studentId))
+                .andExpect(jsonPath("$.eligibleClassIds[0]").value(classId))
+                .andReturn();
+        String periodId = objectMapper.readTree(result.getResponse().getContentAsString()).path("id").asText();
+        mockMvc.perform(get("/api/application-periods/{id}", periodId)
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.eligibilityMode").value("SELECTED"))
+                .andExpect(jsonPath("$.eligibleStudentIds[0]").value(studentId))
+                .andExpect(jsonPath("$.eligibleClassIds[0]").value(classId));
+        JsonNode reloaded = store.parse(store.get("application_period", UUID.fromString(periodId)));
+        org.junit.jupiter.api.Assertions.assertEquals("SELECTED", reloaded.path("eligibilityMode").asText());
+        org.junit.jupiter.api.Assertions.assertEquals(studentId, reloaded.path("eligibleStudentIds").get(0).asText());
+        org.junit.jupiter.api.Assertions.assertEquals(classId, reloaded.path("eligibleClassIds").get(0).asText());
+
+        Map<String, Object> classOnly = eligibilityRequest(period("2026/2027",
+                Instant.now().minusSeconds(60).toString(), Instant.now().plusSeconds(86_400).toString(), projectIds),
+                "SELECTED", List.of(), List.of(classId));
+        mockMvc.perform(post("/api/application-periods").header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(classOnly)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.eligibilityMode").value("SELECTED"))
+                .andExpect(jsonPath("$.eligibleStudentIds.length()").value(0))
+                .andExpect(jsonPath("$.eligibleClassIds[0]").value(classId));
+
+        mockMvc.perform(get("/api/application-periods/{id}", periodId)
+                        .header("Authorization", "Bearer " + login("teacher01")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.eligibilityMode").doesNotExist())
+                .andExpect(jsonPath("$.eligibleStudentIds").doesNotExist())
+                .andExpect(jsonPath("$.eligibleClassIds").doesNotExist());
+
+        selected.put("eligibleStudentIds", List.of(studentId, studentId));
+        mockMvc.perform(post("/api/application-periods")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(selected)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void rejectsInvalidEligibilityReferencesAndEnforcesAdministratorWritesWithoutPartialUpdate() throws Exception {
+        String opens = Instant.now().minusSeconds(60).toString();
+        String closes = Instant.now().plusSeconds(86_400).toString();
+        String studentId = users.findByUsername("student02").orElseThrow().getId().toString();
+        String classId = classes.findByName("Testing Class").orElseThrow().getId().toString();
+        String teacherId = users.findByUsername("teacher01").orElseThrow().getId().toString();
+        Map<String, Object> base = period("2026/2027", opens, closes, projectIds);
+
+        for (String token : List.of(login("student01"), login("teacher01"))) {
+            mockMvc.perform(post("/api/application-periods").header("Authorization", "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(base)))
+                    .andExpect(status().isForbidden());
+        }
+        mockMvc.perform(post("/api/application-periods").contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(base)))
+                .andExpect(status().isUnauthorized());
+
+        List<Map<String, Object>> invalidRequests = new java.util.ArrayList<>();
+        invalidRequests.add(eligibilityRequest(base, "SELECTED", List.of(studentId, studentId), List.of()));
+        invalidRequests.add(eligibilityRequest(base, "SELECTED", List.of(UUID.randomUUID().toString()), List.of()));
+        invalidRequests.add(eligibilityRequest(base, "SELECTED", List.of("malformed"), List.of()));
+        invalidRequests.add(eligibilityRequest(base, "SELECTED", List.of(teacherId), List.of()));
+        invalidRequests.add(eligibilityRequest(base, "SELECTED", List.of(),
+                List.of(UUID.randomUUID().toString())));
+        invalidRequests.add(eligibilityRequest(base, "SELECTED", List.of(), List.of(classId, classId)));
+        invalidRequests.add(eligibilityRequest(base, "ALL_STUDENTS", List.of(studentId), List.of()));
+        for (Map<String, Object> invalid : invalidRequests) {
+            mockMvc.perform(post("/api/application-periods").header("Authorization", "Bearer " + adminToken)
+                            .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(invalid)))
+                    .andExpect(status().isBadRequest());
+        }
+
+        Map<String, Object> selected = eligibilityRequest(base, "SELECTED", List.of(studentId), List.of(classId));
+        JsonNode created = objectMapper.readTree(mockMvc.perform(post("/api/application-periods")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(selected)))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString());
+        UUID periodId = UUID.fromString(created.path("id").asText());
+        String before = store.get("application_period", periodId).getPayload();
+        Map<String, Object> invalidUpdate = eligibilityRequest(base, "SELECTED", List.of(studentId, studentId),
+                List.of(classId));
+        mockMvc.perform(put("/api/application-periods/{id}", periodId)
+                        .header("Authorization", "Bearer " + adminToken).contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(invalidUpdate)))
+                .andExpect(status().isBadRequest());
+        org.junit.jupiter.api.Assertions.assertEquals(before, store.get("application_period", periodId).getPayload());
+    }
+
+    @Test
+    void selectedCohortCanBeChangedBackToAllUntilFinalizationAndLegacyPeriodsReadAsAllStudents() throws Exception {
+        String opens = Instant.now().minusSeconds(60).toString();
+        String closes = Instant.now().plusSeconds(86_400).toString();
+        String studentId = users.findByUsername("student02").orElseThrow().getId().toString();
+        Map<String, Object> selected = eligibilityRequest(period("2026/2027", opens, closes, projectIds),
+                "SELECTED", List.of(studentId), List.of());
+        JsonNode created = objectMapper.readTree(mockMvc.perform(post("/api/application-periods")
+                        .header("Authorization", "Bearer " + adminToken).contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(selected)))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString());
+        UUID periodId = UUID.fromString(created.path("id").asText());
+        Map<String, Object> all = new java.util.HashMap<>(period("2026/2027", opens, closes, projectIds));
+        all.put("eligibilityMode", "ALL_STUDENTS");
+        all.put("eligibleStudentIds", List.of());
+        all.put("eligibleClassIds", List.of());
+        mockMvc.perform(put("/api/application-periods/{id}", periodId).header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(all)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.eligibilityMode").value("ALL_STUDENTS"))
+                .andExpect(jsonPath("$.eligibleStudentIds.length()").value(0))
+                .andExpect(jsonPath("$.eligibleClassIds.length()").value(0));
+        var storedPeriod = store.get("application_period", periodId);
+        String persistedBeforeFinalizedWrite = storedPeriod.getPayload();
+        store.update(storedPeriod, "FINALIZED", store.parse(storedPeriod));
+        all.put("label", "Should not persist");
+        mockMvc.perform(put("/api/application-periods/{id}", periodId).header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(all)))
+                .andExpect(status().isConflict());
+        org.junit.jupiter.api.Assertions.assertEquals(persistedBeforeFinalizedWrite,
+                store.get("application_period", periodId).getPayload());
+    }
+
+    @Test
+    void ineligibleStudentCannotSubmitPreferences() throws Exception {
+        Map<String, Object> request = new java.util.HashMap<>(period("2026/2027",
+                Instant.now().minusSeconds(60).toString(), Instant.now().plusSeconds(86_400).toString(), projectIds));
+        request.put("eligibilityMode", "SELECTED");
+        request.put("eligibleStudentIds", List.of(users.findByUsername("student02").orElseThrow().getId().toString()));
+        request.put("eligibleClassIds", List.of());
+        JsonNode periodResponse = objectMapper.readTree(mockMvc.perform(post("/api/application-periods")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString());
+        mockMvc.perform(post("/api/application-periods/{id}/applications", periodResponse.path("id").asText())
+                        .header("Authorization", "Bearer " + login("student01"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("projectIds", projectIds))))
+                .andExpect(status().isForbidden());
     }
 
     @Test
@@ -301,5 +460,14 @@ class ApplicationPeriodSupervisorTest {
             List<String> projectIds) {
         return Map.of("label", "Supervisor-free period", "schoolYear", schoolYear, "opensAt", opensAt, "closesAt", closesAt,
                 "projectIds", projectIds);
+    }
+
+    private Map<String, Object> eligibilityRequest(Map<String, Object> base, String mode,
+            List<String> studentIds, List<String> classIds) {
+        Map<String, Object> request = new java.util.HashMap<>(base);
+        request.put("eligibilityMode", mode);
+        request.put("eligibleStudentIds", studentIds);
+        request.put("eligibleClassIds", classIds);
+        return request;
     }
 }

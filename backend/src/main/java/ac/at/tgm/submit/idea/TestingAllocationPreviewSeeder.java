@@ -48,6 +48,9 @@ public class TestingAllocationPreviewSeeder {
     private static final String SCHOOL_YEAR_FIELD = "schoolYear";
     private static final String CLOSES_AT_FIELD = "closesAt";
     private static final String PROJECT_IDS_FIELD = "projectIds";
+    private static final String ELIGIBILITY_MODE_FIELD = "eligibilityMode";
+    private static final String ELIGIBLE_STUDENT_IDS_FIELD = "eligibleStudentIds";
+    private static final String ELIGIBLE_CLASS_IDS_FIELD = "eligibleClassIds";
     private static final int MULTI_GROUP_PROJECT_COUNT = 10;
     private static final int FIRST_GROUP_PROJECT_INDEX = 0;
     private static final int SECOND_GROUP_PROJECT_INDEX = 1;
@@ -84,6 +87,7 @@ public class TestingAllocationPreviewSeeder {
                 .put(OPENS_AT_FIELD, openedAt.toString())
                 .put(CLOSES_AT_FIELD, closingAt.toString());
         periodRequest.set(PROJECT_IDS_FIELD, store.value(projectIds));
+        selectStudents(periodRequest, students);
         setCaller(admin);
         var periodResponse = periods.create(authenticatedUser(admin), periodRequest);
         StoredRecord periodRecord = store.repository().findById(periodResponse.id()).orElseThrow();
@@ -119,7 +123,7 @@ public class TestingAllocationPreviewSeeder {
             return;
         }
         validatePinPaginationInputs(students, projectIds);
-        StoredRecord period = createPinPaginationPeriod(admin, projectIds);
+        StoredRecord period = createPinPaginationPeriod(admin, students, projectIds);
         List<StoredRecord> applications = createPinPaginationApplications(period, students, projectIds);
         List<StoredRecord> seededPins = createPinPaginationPins(admin, period, students, projectIds);
         StoredRecord run = completePinPaginationRun(period);
@@ -138,13 +142,15 @@ public class TestingAllocationPreviewSeeder {
         }
     }
 
-    private StoredRecord createPinPaginationPeriod(UserAccount admin, List<UUID> projectIds) {
+    private StoredRecord createPinPaginationPeriod(UserAccount admin, List<UserAccount> students,
+            List<UUID> projectIds) {
         Instant openedAt = Instant.now().minusSeconds(OPENING_LEAD_SECONDS);
         Instant closingAt = Instant.now().plusSeconds(ONE_DAY_SECONDS);
         ObjectNode periodRequest = store.object().put(LABEL_FIELD, "Pin pagination and explanation preview")
                 .put(SCHOOL_YEAR_FIELD, SCHOOL_YEAR).put(OPENS_AT_FIELD, openedAt.toString())
                 .put(CLOSES_AT_FIELD, closingAt.toString());
         periodRequest.set(PROJECT_IDS_FIELD, store.value(projectIds));
+        selectStudents(periodRequest, students.subList(0, PIN_PAGINATION_STUDENT_COUNT));
         setCaller(admin);
         var periodResponse = periods.create(authenticatedUser(admin), periodRequest);
         return store.repository().findById(periodResponse.id()).orElseThrow();
@@ -271,6 +277,9 @@ public class TestingAllocationPreviewSeeder {
         ObjectNode periodRequest = store.object().put(LABEL_FIELD, label).put(SCHOOL_YEAR_FIELD, SCHOOL_YEAR)
                 .put(OPENS_AT_FIELD, openedAt.toString()).put(CLOSES_AT_FIELD, closingAt.toString());
         periodRequest.set(PROJECT_IDS_FIELD, store.value(projectIds));
+        List<UserAccount> eligibleStudents = java.util.stream.Stream.concat(groupedStudents.stream(),
+                java.util.stream.Stream.of(unassigned)).toList();
+        selectStudents(periodRequest, eligibleStudents);
         setCaller(admin);
         var response = periods.create(authenticatedUser(admin), periodRequest);
         StoredRecord period = store.repository().findById(response.id()).orElseThrow();
@@ -344,6 +353,7 @@ public class TestingAllocationPreviewSeeder {
                 .put(CLOSES_AT_FIELD, (completedRun ? Instant.now().minusSeconds(1)
                         : Instant.now().plusSeconds(2 * ONE_DAY_SECONDS)).toString());
         periodPayload.set(PROJECT_IDS_FIELD, store.value(projectIds));
+        selectStudents(periodPayload, List.of(student));
         StoredRecord period = store.create("application_period", admin.getId().toString(), null, periodStatus,
                 periodPayload);
         ObjectNode applicationPayload = store.object();
@@ -377,6 +387,13 @@ public class TestingAllocationPreviewSeeder {
             outcome.set("rankedProjectIds", store.value(projectIds.stream().map(UUID::toString).toList()));
         }
         store.update(run, run.getStatus(), snapshot);
+    }
+
+    private void selectStudents(ObjectNode period, List<UserAccount> students) {
+        period.put(ELIGIBILITY_MODE_FIELD, "SELECTED");
+        period.set(ELIGIBLE_STUDENT_IDS_FIELD,
+                store.value(students.stream().map(UserAccount::getId).toList()));
+        period.putArray(ELIGIBLE_CLASS_IDS_FIELD);
     }
 
     private AuthenticatedUser authenticatedUser(UserAccount account) {

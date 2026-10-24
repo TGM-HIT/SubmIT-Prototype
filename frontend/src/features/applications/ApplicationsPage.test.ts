@@ -11,6 +11,9 @@ const api = vi.hoisted(() => ({
   listIdeas: vi.fn(),
   years: vi.fn(),
   createPeriod: vi.fn(),
+  updatePeriod: vi.fn(),
+  users: vi.fn(),
+  classes: vi.fn(),
   applications: vi.fn(),
   myApplication: vi.fn(),
   projectDetails: vi.fn(),
@@ -25,6 +28,7 @@ vi.mock('../../api/services', () => ({
     list: api.listPeriods,
     years: api.years,
     create: api.createPeriod,
+    update: api.updatePeriod,
     applications: api.applications,
     myApplication: api.myApplication,
     projectDetails: api.projectDetails,
@@ -33,6 +37,8 @@ vi.mock('../../api/services', () => ({
     withdrawApplication: api.withdrawApplication,
   },
   ideasApi: { list: api.listIdeas },
+  adminApi: { users: api.users },
+  studentDetailsApi: { classes: api.classes },
 }))
 
 vi.mock('../../stores/auth', () => ({
@@ -41,8 +47,9 @@ vi.mock('../../stores/auth', () => ({
 
 const projectIds = ['project-1', 'project-2', 'project-3']
 
-function mountPage() {
+function mountPage(attachTo?: HTMLElement) {
   return mount(ApplicationsPage, {
+    attachTo,
     global: {
       stubs: {
         AsyncPanel: { template: '<div><slot /></div>' },
@@ -112,6 +119,9 @@ describe('application period configuration', () => {
     })
     api.years.mockResolvedValue({ content: ['2026/2027'] })
     api.createPeriod.mockResolvedValue({ id: 'period-1' })
+    api.updatePeriod.mockResolvedValue({ id: 'period-1' })
+    api.users.mockResolvedValue({ content: [], totalPages: 1 })
+    api.classes.mockResolvedValue({ content: [], totalPages: 1 })
     api.applications.mockResolvedValue({ content: [] })
   })
 
@@ -177,8 +187,146 @@ describe('application period configuration', () => {
       opensAt: new Date('2026-10-10T09:00').toISOString(),
       closesAt: new Date('2026-10-20T17:00').toISOString(),
       projectIds,
+      eligibilityMode: 'ALL_STUDENTS',
+      eligibleStudentIds: [],
+      eligibleClassIds: [],
     })
     expect(page.find('form').exists()).toBe(false)
+  })
+
+  it('loads every student and class lookup page and saves selected cohort IDs using display-name labels', async () => {
+    api.users.mockImplementation(async (page: number) => page === 0
+      ? { content: [{ id: 'student-account-a', displayName: 'Alex Student', role: 'STUDENT' }], totalPages: 2 }
+      : { content: [{ id: 'student-account-b', displayName: 'Robin Student', role: 'STUDENT' }], totalPages: 2 })
+    api.classes.mockImplementation(async (page: number) => page === 0
+      ? { content: [{ id: 'class-id-a', name: 'Testing Class' }], totalPages: 2 }
+      : { content: [{ id: 'class-id-b', name: 'Testing Class 2' }], totalPages: 2 })
+    const page = await openForm()
+    await page.get('input[type="radio"][value="SELECTED"]').setValue(true)
+    await flushPromises()
+    expect(page.text()).toContain('Alex Student')
+    expect(page.text()).toContain('Robin Student')
+    expect(page.text()).toContain('Testing Class')
+    expect(page.text()).toContain('Testing Class 2')
+    expect(page.text()).not.toContain('student-account-a')
+    await page.get('#eligible-students').setValue(['student-account-b'])
+    await page.get('#eligible-classes').setValue(['class-id-a'])
+    await selectCompleteForm(page)
+    await page.get('form').trigger('submit')
+    await flushPromises()
+    expect(api.createPeriod).toHaveBeenCalledWith(expect.objectContaining({
+      eligibilityMode: 'SELECTED',
+      eligibleStudentIds: ['student-account-b'],
+      eligibleClassIds: ['class-id-a'],
+    }))
+    expect(api.users).toHaveBeenCalledWith(1, 'STUDENT', undefined, 100)
+    expect(api.classes).toHaveBeenCalledWith(1)
+  })
+
+  it('edits a saved cohort, refreshes the period, and focuses its updated row', async () => {
+    const period = {
+      id: 'period-edit',
+      label: 'Saved cohort',
+      schoolYear: '2026/2027',
+      opensAt: '2026-10-10T09:00:00Z',
+      closesAt: '2026-10-20T17:00:00Z',
+      status: 'OPEN',
+      projectIds,
+      eligibilityMode: 'SELECTED',
+      eligibleStudentIds: ['student-account-a'],
+      eligibleClassIds: ['class-id-a'],
+    }
+    api.listPeriods.mockResolvedValueOnce({ content: [period], page: 0, size: 20, totalElements: 1, totalPages: 1 })
+      .mockResolvedValue({ content: [{ ...period, label: 'Updated cohort' }], page: 0, size: 20, totalElements: 1, totalPages: 1 })
+    api.users.mockResolvedValue({ content: [
+      { id: 'student-account-a', displayName: 'Alex Student', role: 'STUDENT' },
+      { id: 'student-account-b', displayName: 'Robin Student', role: 'STUDENT' },
+    ], totalPages: 1 })
+    api.classes.mockResolvedValue({ content: [{ id: 'class-id-a', name: 'Testing Class' }], totalPages: 1 })
+    api.updatePeriod.mockResolvedValue({ ...period, label: 'Updated cohort' })
+
+    const page = mountPage(document.body)
+    await flushPromises()
+    const edit = page.findAll('button').find((button) => button.text().includes('Edit period'))
+    expect(edit).toBeDefined()
+    await edit!.trigger('click')
+    await flushPromises()
+    expect(page.get('#eligible-students').text()).toContain('Alex Student')
+    expect(page.get('#eligible-classes').text()).toContain('Testing Class')
+    expect((page.get('#eligible-students option[value="student-account-a"]').element as HTMLOptionElement).selected)
+      .toBe(true)
+    await selectCompleteForm(page)
+    await page.get('#period-label').setValue('Updated cohort')
+    await page.get('form').trigger('submit')
+    await flushPromises()
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    expect(api.updatePeriod).toHaveBeenCalledWith('period-edit', expect.objectContaining({
+      label: 'Updated cohort',
+      eligibilityMode: 'SELECTED',
+      eligibleStudentIds: ['student-account-a'],
+      eligibleClassIds: ['class-id-a'],
+    }))
+    expect(page.text()).toContain('Updated cohort')
+    expect(document.activeElement).toBe(page.get('[data-period-heading="period-edit"]').element)
+    page.unmount()
+  })
+
+  it('shows lookup failures and permits a retry instead of presenting an empty cohort', async () => {
+    api.users.mockRejectedValue(new Error('Lookup unavailable'))
+    const page = await openForm()
+    await page.get('input[type="radio"][value="SELECTED"]').setValue(true)
+    await flushPromises()
+    expect(page.get('[role="alert"]').text()).toContain('Eligibility options could not be loaded')
+    expect(page.get('button[type="submit"]').attributes('disabled')).toBeDefined()
+    api.users.mockResolvedValue({
+      content: [{ id: 'student-account-a', displayName: 'Alex Student', role: 'STUDENT' }],
+      totalPages: 1,
+    })
+    await page.get('[role="alert"] button').trigger('click')
+    await flushPromises()
+    expect(page.text()).toContain('Alex Student')
+    expect(page.text()).not.toContain('Eligibility options could not be loaded')
+  })
+
+  it('does not show administrator cohort controls or IDs to a student', async () => {
+    api.role = 'STUDENT'
+    api.listPeriods.mockResolvedValue({
+      content: [{
+        id: 'student-period',
+        label: 'Student period',
+        schoolYear: '2026/2027',
+        status: 'OPEN',
+        projectIds,
+        eligibleToApply: false,
+        studentApplicationStatus: 'NOT_SUBMITTED',
+      }],
+      page: 0,
+      size: 20,
+      totalElements: 1,
+      totalPages: 1,
+    })
+    const page = mountPage()
+    await flushPromises()
+    expect(page.text()).not.toContain('Configure period')
+    expect(page.text()).not.toContain('Eligible students')
+    expect(page.text()).not.toContain('student-account')
+    expect(page.text()).not.toContain('class-id')
+  })
+
+  it('cancels without a mutation and restores focus to the editor trigger', async () => {
+    const page = mountPage(document.body)
+    await flushPromises()
+    const trigger = page.get('button')
+    trigger.element.focus()
+    await trigger.trigger('click')
+    await flushPromises()
+    await page.get('button[type="button"]').trigger('click')
+    await flushPromises()
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    expect(api.createPeriod).not.toHaveBeenCalled()
+    expect(api.updatePeriod).not.toHaveBeenCalled()
+    expect(document.activeElement).toBe(trigger.element)
+    page.unmount()
   })
 
   it('offers accepted projects with no supervisor and does not explain supervision as a prerequisite', async () => {
@@ -499,6 +647,45 @@ describe("student catalogue project titles", () => {
       row.element.firstElementChild?.textContent?.trim())).toEqual(titles.map((title, index) => `${index + 1}. ${title}`))
     expect(page.text()).not.toContain("Stale UUID fallback")
     expect(page.text()).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i)
+  })
+
+  it('explains ineligibility while preserving a saved ranking and its withdrawal action', async () => {
+    api.role = 'STUDENT'
+    api.listIdeas.mockResolvedValue({ content: [] })
+    api.listPeriods.mockResolvedValue({
+      content: [{
+        id: 'period-ineligible',
+        schoolYear: '2026/2027',
+        status: 'OPEN',
+        opensAt: new Date(Date.now() - 3600000).toISOString(),
+        closesAt: new Date(Date.now() + 3600000).toISOString(),
+        projectIds: ids,
+        eligibleToApply: false,
+        studentApplicationStatus: 'SUBMITTED',
+        projectTitles: ids.map((projectId, index) => ({ projectId, title: titles[index] })),
+      }],
+      page: 0, size: 20, totalElements: 1, totalPages: 1,
+    })
+    api.myApplication.mockResolvedValue({
+      id: 'saved-ineligible-application',
+      status: 'SUBMITTED',
+      preferences: ids.map((projectId, index) => ({ projectId, rank: index + 1, projectTitle: titles[index] })),
+    })
+    vi.stubGlobal('confirm', () => true)
+
+    const page = mountPage()
+    await flushPromises()
+
+    expect(page.text()).toContain('You are not currently eligible to apply in this period.')
+    expect(page.text()).toContain('Your saved ranking')
+    expect(page.text()).toContain('Solar design')
+    expect(page.find('#add-project-period-ineligible').exists()).toBe(false)
+    expect(page.findAll('button').some((button) => button.text() === 'Submit ranked application')).toBe(false)
+    expect(api.updateApplication).not.toHaveBeenCalled()
+    await page.findAll('button').find((button) => button.text() === 'Withdraw')!.trigger('click')
+    await flushPromises()
+    expect(api.withdrawApplication).toHaveBeenCalledExactlyOnceWith('saved-ineligible-application')
+    expect(page.text()).toContain('Withdrawn')
   })
 
   it("requires explicit reapplication rather than presenting a replaced solo as eligible after group exit", async () => {

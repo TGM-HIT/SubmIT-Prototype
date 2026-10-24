@@ -163,21 +163,32 @@ public class AllocationService {
     private StoredRecord createRun(AuthenticatedUser caller, StoredRecord period, boolean initial, boolean early) {
         ObjectNode periodData = store.parse(period);
         List<String> projectIds = readIds(periodData.path("projectIds"), "projectIds");
-        List<StoredRecord> pins = readPins(period.getId());
+        List<String> eligibleIds = runtime.eligibleStudents(period).stream()
+                .map(user -> user.getId().toString()).toList();
+        Set<String> eligible = Set.copyOf(eligibleIds);
+        List<StoredRecord> allShared = engine.submittedGroups(period.getId());
+        List<StoredRecord> eligibleGroups = selectSharedGroups(allShared, eligible);
+        Set<String> excludedMembers = excludedGroupMembers(allShared, eligibleGroups);
+        List<String> candidateIds = eligibleIds.stream()
+                .filter(id -> !excludedMembers.contains(id)).toList();
+        List<StoredRecord> pins = eligiblePins(period.getId(), eligible, excludedMembers);
         ObjectNode snapshot = snapshot(projectIds, List.of(), pins);
+        snapshot.set("eligibleStudentIds", store.value(eligibleIds));
         snapshot.put("initial", initial);
         snapshot.put(EARLY_FIELD, early);
         snapshot.put("createdAt", runtime.now().toString());
         StoredRecord run = store.create(RUN, caller == null ? null : caller.id().toString(),
                 period.getId().toString(), "RUNNING", snapshot);
         try {
-            List<StoredRecord> applications = readApplications(period.getId());
+            List<StoredRecord> applications = readApplications(period.getId()).stream()
+                    .filter(application -> eligible.contains(application.getOwnerId()))
+                    .filter(application -> !excludedMembers.contains(application.getOwnerId())).toList();
             snapshot.set("applications", serializeApplications(applications));
-            List<StoredRecord> shared = engine.submittedGroups(period.getId());
-            snapshot.set("applyingUnits", engine.serializeUnits(shared));
+            snapshot.set("excludedApplyingUnits", excludedApplyingUnits(allShared, eligibleGroups));
+            snapshot.set("applyingUnits", engine.serializeUnits(eligibleGroups));
             applications = new ArrayList<>(applications);
-            applications.addAll(shared);
-            Object result = engine.optimize(projectIds, applications, pins);
+            applications.addAll(eligibleGroups);
+            Object result = engine.optimize(projectIds, applications, pins, candidateIds);
             snapshot.set(RESULT_FIELD, store.value(result));
             store.update(run, "COMPLETED", snapshot);
             if (!early) {
@@ -197,6 +208,65 @@ public class AllocationService {
             audit.recordSystem("ALLOCATION_RUN_STARTED", RUN, run.getId());
         }
         return run;
+    }
+
+    private boolean allMembersEligible(StoredRecord group, Set<String> eligible) {
+        JsonNode members = store.parse(group).path("members");
+        if (!members.isArray()) {
+            return false;
+        }
+        for (JsonNode member : members) {
+            if (!eligible.contains(member.asText())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private List<StoredRecord> selectSharedGroups(List<StoredRecord> groups, Set<String> eligible) {
+        return groups.stream().filter(group -> allMembersEligible(group, eligible)).toList();
+    }
+
+    private Set<String> excludedGroupMembers(List<StoredRecord> all, List<StoredRecord> included) {
+        Set<UUID> includedIds = included.stream().map(StoredRecord::getId)
+                .collect(java.util.stream.Collectors.toSet());
+        Set<String> excluded = new HashSet<>();
+        for (StoredRecord group : all) {
+            if (!includedIds.contains(group.getId())) {
+                store.parse(group).path("members").forEach(member -> excluded.add(member.asText()));
+            }
+        }
+        return Set.copyOf(excluded);
+    }
+
+    private List<StoredRecord> eligiblePins(UUID periodId, Set<String> eligible, Set<String> excludedMembers) {
+        return readPins(periodId).stream()
+                .filter(pin -> eligible.contains(pin.getOwnerId()))
+                .filter(pin -> !excludedMembers.contains(pin.getOwnerId())).toList();
+    }
+
+    private ArrayNode excludedApplyingUnits(List<StoredRecord> all, List<StoredRecord> included) {
+        Set<UUID> includedIds = included.stream().map(StoredRecord::getId)
+                .collect(java.util.stream.Collectors.toSet());
+        ArrayNode excluded = store.object().arrayNode();
+        for (StoredRecord group : all) {
+            if (includedIds.contains(group.getId())) {
+                continue;
+            }
+            List<String> memberIds = new ArrayList<>();
+            store.parse(group).path("members").forEach(member -> memberIds.add(member.asText()));
+            List<UUID> ids = memberIds.stream().map(UUID::fromString).toList();
+            Map<UUID, String> displayNames = runtime.displayNames(ids);
+            ObjectNode entry = excluded.addObject().put("groupId", group.getId().toString())
+                    .put("reason", "MEMBER_INELIGIBLE");
+            ArrayNode savedIds = entry.putArray("memberIds");
+            ArrayNode savedNames = entry.putArray("memberDisplayNames");
+            for (UUID id : ids) {
+                savedIds.add(id.toString());
+                savedNames.add(displayNames.getOrDefault(id, "Unknown student"));
+            }
+        }
+        return excluded;
     }
 
     private List<StoredRecord> readApplications(UUID periodId) {

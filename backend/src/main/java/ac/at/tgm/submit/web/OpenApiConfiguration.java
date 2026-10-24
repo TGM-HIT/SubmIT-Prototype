@@ -9,7 +9,9 @@ import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.Operation;
 import io.swagger.v3.oas.models.PathItem;
 import io.swagger.v3.oas.models.parameters.Parameter;
+import io.swagger.v3.oas.models.media.Schema;
 import java.util.List;
+import java.util.Map;
 import org.springdoc.core.customizers.OpenApiCustomizer;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -25,6 +27,28 @@ public class OpenApiConfiguration {
     @Bean
     OpenApiCustomizer collectionSizeDescriptionCustomizer() {
         return this::describeCollectionSizes;
+    }
+
+    @Bean
+    OpenApiCustomizer applicationPeriodEligibilityDefaultsCustomizer() {
+        return openApi -> {
+            if (openApi.getComponents() == null || openApi.getComponents().getSchemas() == null) {
+                return;
+            }
+            Schema<?> request = openApi.getComponents().getSchemas().get("ApplicationPeriodRequest");
+            if (request == null || request.getProperties() == null) {
+                return;
+            }
+            Map<String, Schema> properties = request.getProperties();
+            setEmptyArrayDefault(properties.get("eligibleStudentIds"));
+            setEmptyArrayDefault(properties.get("eligibleClassIds"));
+        };
+    }
+
+    private void setEmptyArrayDefault(Schema<?> schema) {
+        if (schema != null) {
+            schema.setDefault(List.of());
+        }
     }
 
     private void describeCollectionSizes(OpenAPI openApi) {

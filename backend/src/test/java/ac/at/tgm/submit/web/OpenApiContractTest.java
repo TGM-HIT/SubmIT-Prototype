@@ -115,7 +115,7 @@ class OpenApiContractTest {
             Map.entry("AllocationApplicationSnapshot", contract("applicationId,studentId,preferences", "", "")),
             Map.entry("AllocationAssignmentResponse", contract(
                     "studentId,projectId,preferenceRank,pinned,studentDisplayName,projectTitle",
-                    "className,electiveSubjectNames", "")),
+                    "className,electiveSubjectNames,hadPreferences", "")),
             Map.entry("AllocationUnassignedStudentResponse", contract(
                     "studentId,reason,rankedProjectIds,studentDisplayName",
                     "explanation,className,electiveSubjectNames", "")),
@@ -125,7 +125,9 @@ class OpenApiContractTest {
                     "assignments,unassignedStudents,unassignedProjects,assignedStudents,preferenceScore", "", "")),
             Map.entry("AllocationRunResponse", contract(
                     "id,status,periodId,createdAt,initial,early,projectIds,applications,pins",
-                    "result,error,inputSnapshotComplete,finalizedAt,applyingUnits", "")),
+                    "result,error,inputSnapshotComplete,finalizedAt,applyingUnits,excludedApplyingUnits", "")),
+            Map.entry("ExcludedApplyingUnitResponse", contract(
+                    "groupId,reason,memberIds,memberDisplayNames", "", "")),
             Map.entry("AllocationRunPageResponse", contract(
                     "content,page,size,totalElements,totalPages", "", "")),
             Map.entry("AllocationPinResponse", contract(
@@ -151,7 +153,8 @@ class OpenApiContractTest {
                     "confirmedSupervisorDisplayName,teacherIdea", "ownerDisplayName,specification")),
             Map.entry("ApplicationPeriodResponse", contract(
                     "id,label,schoolYear,opensAt,closesAt,status,projectIds",
-                    "projectTitles,studentApplicationStatus,studentAssignment", "")),
+                    "projectTitles,studentApplicationStatus,studentAssignment,eligibilityMode,eligibleStudentIds,"
+                            + "eligibleClassIds,eligibleToApply", "")),
             Map.entry("CatalogueProjectResponse.specification", contract(
                     "objectives,intendedUsers,requirements,deliverables,scope,dependencies", "", "")),
             Map.entry("CatalogueProjectResponse", contract(
@@ -160,7 +163,8 @@ class OpenApiContractTest {
             Map.entry("ProjectTitleResponse", contract("projectId,title", "", "")),
             Map.entry("PreferenceResponse", contract("projectId,rank,projectTitle", "", "")),
             Map.entry("StudentAssignmentResponse", contract(
-                    "state,projectTitle,preferenceRank,groupMembers", "", "projectTitle,preferenceRank")),
+                    "state,projectTitle,preferenceRank,groupMembers", "assignedWithoutPreferences",
+                    "projectTitle,preferenceRank")),
             Map.entry("StudentGroupMemberResponse", contract("displayName,self", "originLabel,ownCohort", "")),
             Map.entry("ApplyingUnitSnapshot", contract("groupId,revision,studentIds,projectIds", "", "")),
             Map.entry("StudentApplicationResponse", contract(
@@ -245,6 +249,60 @@ class OpenApiContractTest {
         checkComponentSchemas(schemas, failures);
         checkResponseRequiredness(schemas, failures);
         assertTrue(failures.isEmpty(), () -> String.join(System.lineSeparator(), failures));
+    }
+
+    @Test
+    void eligibilityAndPreferenceStateSchemasAreOptionalNonNullAndDocumented() throws Exception {
+        JsonNode schemas = apiDocument().path("components").path("schemas");
+        JsonNode request = schemas.path("ApplicationPeriodRequest");
+        JsonNode requestRequired = request.path("required");
+        assertFalse(textualMembers(requestRequired).contains("eligibilityMode"));
+        assertFalse(textualMembers(requestRequired).contains("eligibleStudentIds"));
+        assertFalse(textualMembers(requestRequired).contains("eligibleClassIds"));
+
+        JsonNode requestMode = request.path("properties").path("eligibilityMode");
+        assertEquals("string", requestMode.path("type").asText());
+        assertEquals("ALL_STUDENTS", requestMode.path("default").asText());
+        assertEquals(Set.of("ALL_STUDENTS", "SELECTED"), textualMembers(requestMode.path("enum")));
+        assertTrue(request.path("properties").path("eligibleStudentIds").path("default").isArray());
+        assertEquals(0, request.path("properties").path("eligibleStudentIds").path("default").size());
+        assertTrue(request.path("properties").path("eligibleClassIds").path("default").isArray());
+        assertEquals(0, request.path("properties").path("eligibleClassIds").path("default").size());
+        JsonNode response = schemas.path("ApplicationPeriodResponse");
+        Set<String> responseRequired = textualMembers(response.path("required"));
+        for (String name : List.of("eligibilityMode", "eligibleStudentIds", "eligibleClassIds")) {
+            assertFalse(responseRequired.contains(name), name + " must be optional in responses.");
+        }
+        JsonNode responseMode = response.path("properties").path("eligibilityMode");
+        assertEquals(Set.of("ALL_STUDENTS", "SELECTED"), textualMembers(responseMode.path("enum")));
+        for (String name : List.of("eligibleStudentIds", "eligibleClassIds")) {
+            assertUuidArray(request.path("properties").path(name));
+            assertUuidArray(response.path("properties").path(name));
+            assertFalse(allowsNull(request.path("properties").path(name)));
+            assertFalse(allowsNull(response.path("properties").path(name)));
+        }
+        assertTrue(request.path("properties").path("eligibleStudentIds").path("uniqueItems").asBoolean());
+        assertTrue(request.path("properties").path("eligibleClassIds").path("uniqueItems").asBoolean());
+        assertTrue(request.path("properties").path("eligibleStudentIds").path("description").asText()
+                .contains("current STUDENT accounts"));
+        assertTrue(request.path("properties").path("eligibleClassIds").path("description").asText()
+                .contains("existing classes"));
+
+        assertOptionalBoolean(schemas.path("AllocationAssignmentResponse"), "hadPreferences");
+        assertOptionalBoolean(schemas.path("StudentAssignmentResponse"), "assignedWithoutPreferences");
+    }
+
+    private void assertUuidArray(JsonNode schema) {
+        assertEquals("array", schema.path("type").asText());
+        assertEquals("string", schema.path("items").path("type").asText());
+        assertEquals("uuid", schema.path("items").path("format").asText());
+    }
+
+    private void assertOptionalBoolean(JsonNode schema, String property) {
+        assertFalse(textualMembers(schema.path("required")).contains(property));
+        JsonNode definition = schema.path("properties").path(property);
+        assertEquals("boolean", definition.path("type").asText());
+        assertFalse(allowsNull(definition));
     }
 
     @Test
@@ -1705,7 +1763,7 @@ class OpenApiContractTest {
 
         ApiDtos.ApplicationPeriodResponse period = new ApiDtos.ApplicationPeriodResponse(id, "Period", "2026",
                 Instant.parse("2026-01-01T00:00:00Z"), Instant.parse("2026-02-01T00:00:00Z"), "OPEN",
-                List.of(id), null, null, null);
+                List.of(id), null, null, null, null, null, null, null);
         JsonNode periodJson = objectMapper.readTree(objectMapper.writeValueAsBytes(period));
         assertFalse(periodJson.has("projectTitles"));
         assertFalse(periodJson.has("studentApplicationStatus"));

@@ -2,6 +2,7 @@
   <section class="panel stack applying-workspace" :aria-label="$t('applyingGroups.ariaLabel')">
     <h3 ref="heading" tabindex="-1">{{ $t('applyingGroups.heading') }}</h3>
     <p>{{ $t('applyingGroups.intro') }}</p>
+    <p v-if="student && period.eligibleToApply === false" class="notice" role="status">{{ $t('applications.ineligible') }}</p>
     <p v-if="locked" class="notice">{{ $t('applyingGroups.locked') }}</p>
     <p v-if="loading" role="status">{{ $t('applyingGroups.loading') }}</p>
     <div v-if="error" class="error-box" role="alert">{{ error }} <button type="button" class="button button-secondary" @click="load()">{{ $t('applyingGroups.retry') }}</button></div>
@@ -72,10 +73,10 @@
             <select :id="`shared-choice-${group.id}`" v-model="choices[group.id]" class="select"><option value="">{{ $t('applyingGroups.chooseProject') }}</option>
               <option v-for="project in period.projectTitles ?? []" :key="project.projectId" :value="project.projectId" :disabled="rankings[group.id]?.includes(project.projectId ?? '')">{{ project.title }}</option></select>
             <button data-shared-action="add-choice" class="button button-secondary" type="button" :disabled="!choices[group.id]" @click="addChoice(group.id)">{{ $t('applyingGroups.addChoice') }}</button>
-            <button data-shared-action="save-ranking" class="button" type="submit" :disabled="busy || (rankings[group.id]?.length ?? 0) < 3">{{ $t('applyingGroups.saveRanking') }}</button>
+            <button data-shared-action="save-ranking" class="button" type="submit" :disabled="busy || period.eligibleToApply === false || (rankings[group.id]?.length ?? 0) < 3">{{ $t('applyingGroups.saveRanking') }}</button>
           </form>
           <div class="actions">
-            <button data-shared-action="submit" class="button" :disabled="busy || group.status === 'SUBMITTED' || group.members.length < 2 || group.preferences.length < 3 || group.members.some(member => !member.approved)" @click="confirm(group, 'SUBMIT', $event)">{{ $t('applyingGroups.submit') }}</button>
+            <button data-shared-action="submit" class="button" :disabled="busy || period.eligibleToApply === false || group.status === 'SUBMITTED' || group.members.length < 2 || group.preferences.length < 3 || group.members.some(member => !member.approved)" @click="confirm(group, 'SUBMIT', $event)">{{ $t('applyingGroups.submit') }}</button>
             <button v-if="group.status === 'SUBMITTED'" data-shared-action="withdraw" class="button button-danger" :disabled="busy" @click="confirm(group, 'WITHDRAW', $event)">{{ $t('applyingGroups.withdraw') }}</button>
             <button data-shared-action="dissolve" class="button button-danger" :disabled="busy" @click="confirm(group, 'DISSOLVE', $event)">{{ $t('applyingGroups.dissolve') }}</button>
           </div>

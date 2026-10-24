@@ -360,24 +360,55 @@ public final class ApiDtos {
             Boolean acknowledgeRefusal) {
     }
 
-    public record ApplicationPeriodRequest(
-            @NotBlank @Size(min = 1, max = 100)
-            @Schema(minLength = 1, maxLength = 100,
-                    description = "Required administrator-set period label; trimmed, non-blank after trimming, "
-                            + "and at most 100 characters. Blank or whitespace-only values are rejected.")
-            String label,
-            @NotBlank @Size(max = 20) @Schema(description = "Required, non-blank school year; at most 20 characters.",
-                    minLength = 1)
-            String schoolYear,
-            @NotNull @Schema(description = "Period opening instant in ISO 8601 date-time format.", format = "date-time")
-            Instant opensAt,
-            @NotNull @Schema(description = "Period closing instant in ISO 8601 date-time format; must be after opensAt.",
-                    format = "date-time")
-            Instant closesAt,
-            @NotEmpty @ArraySchema(arraySchema = @Schema(
-                    description = "At least three distinct accepted project IDs for this period's school year must be included."),
-                    minItems = 3, uniqueItems = true, schema = @Schema(description = "Project ID.", format = "uuid"))
-            List<@NotNull UUID> projectIds) {
+    public static class ApplicationPeriodRequest {
+        @NotBlank
+        @Size(min = 1, max = 100)
+        @Schema(minLength = 1, maxLength = 100,
+                description = "Required administrator-set period label; trimmed, non-blank after trimming, "
+                        + "and at most 100 characters. Blank or whitespace-only values are rejected.")
+        public String label;
+
+        @NotBlank
+        @Size(max = 20)
+        @Schema(description = "Required, non-blank school year; at most 20 characters.", minLength = 1)
+        public String schoolYear;
+
+        @NotNull
+        @Schema(description = "Period opening instant in ISO 8601 date-time format.", format = "date-time")
+        public Instant opensAt;
+
+        @NotNull
+        @Schema(description = "Period closing instant in ISO 8601 date-time format; must be after opensAt.",
+                format = "date-time")
+        public Instant closesAt;
+
+        @NotEmpty
+        @ArraySchema(arraySchema = @Schema(
+                description = "At least three distinct accepted project IDs for this period's school year must be included."),
+                minItems = 3, uniqueItems = true, schema = @Schema(description = "Project ID.", format = "uuid"))
+        public List<@NotNull UUID> projectIds;
+
+        @Schema(description = "Eligibility mode; omitted requests default to ALL_STUDENTS. ALL_STUDENTS requires "
+                + "empty ID arrays; SELECTED uses the deduplicated student/class union.",
+                allowableValues = {"ALL_STUDENTS", "SELECTED"}, defaultValue = "ALL_STUDENTS")
+        public EligibilityMode eligibilityMode = EligibilityMode.ALL_STUDENTS;
+
+        @ArraySchema(arraySchema = @Schema(
+                description = "Selected student account IDs; unique UUIDs referencing current STUDENT accounts; "
+                        + "defaults to an empty array. Unknown, duplicate, or non-student IDs return 400."),
+                uniqueItems = true, schema = @Schema(format = "uuid"))
+        public List<@NotNull UUID> eligibleStudentIds = List.of();
+
+        @ArraySchema(arraySchema = @Schema(
+                description = "Selected class IDs; unique UUIDs referencing existing classes; defaults to an empty "
+                        + "array. Unknown or duplicate IDs return 400."),
+                uniqueItems = true, schema = @Schema(format = "uuid"))
+        public List<@NotNull UUID> eligibleClassIds = List.of();
+    }
+
+    public enum EligibilityMode {
+        ALL_STUDENTS,
+        SELECTED
     }
 
     @Schema(requiredProperties = {"studentId", "projectId", "savedAt"})
@@ -413,7 +444,11 @@ public final class ApiDtos {
                     description = "True when fixed to this project by an administrator pin.") Boolean pinned,
             @Schema(description = "Current student display name.") String studentDisplayName,
             @Schema(description = "Current project title.") String projectTitle,
-            String className, List<String> electiveSubjectNames) {
+            String className, List<String> electiveSubjectNames,
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "Whether this run used a saved individual or shared preference ranking. "
+                    + "Absent for legacy results without immutable preference state.")
+            Boolean hadPreferences) {
     }
 
     @Schema(requiredProperties = {"studentId", "reason", "rankedProjectIds", "studentDisplayName"})
@@ -464,7 +499,20 @@ public final class ApiDtos {
             @Schema(description = "Instant when an administrator successfully finalized the allocation run.")
             Instant finalizedAt,
             @Schema(description = "Immutable submitted applying units. Omitted on historical runs; never inferred.")
-            @JsonInclude(JsonInclude.Include.NON_NULL) List<ApplyingUnitSnapshot> applyingUnits) {
+            @JsonInclude(JsonInclude.Include.NON_NULL) List<ApplyingUnitSnapshot> applyingUnits,
+            @Schema(description = "Submitted applying groups excluded whole because a member was ineligible.")
+            @JsonInclude(JsonInclude.Include.NON_NULL) List<ExcludedApplyingUnitResponse> excludedApplyingUnits) {
+    }
+
+    @Schema(requiredProperties = {"groupId", "reason", "memberIds", "memberDisplayNames"})
+    public record ExcludedApplyingUnitResponse(
+            @Schema(description = "Excluded submitted applying-group ID.") UUID groupId,
+            @Schema(description = "Exclusion reason: at least one accepted member was not eligible at snapshot time.",
+                    allowableValues = {"MEMBER_INELIGIBLE"})
+            String reason,
+            @Schema(description = "Accepted member IDs in the excluded indivisible unit.") List<UUID> memberIds,
+            @Schema(description = "Current display names corresponding to the member IDs.")
+            List<String> memberDisplayNames) {
     }
 
     @Schema(requiredProperties = {"groupId", "revision", "studentIds", "projectIds"})
@@ -713,7 +761,19 @@ public final class ApiDtos {
             String studentApplicationStatus,
             @JsonInclude(JsonInclude.Include.NON_NULL)
             @Schema(description = "Present only for the authenticated student's own submitted application.")
-            StudentAssignmentResponse studentAssignment) {
+            StudentAssignmentResponse studentAssignment,
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "Present only for administrators; current period eligibility mode.")
+            EligibilityMode eligibilityMode,
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "Present only for administrators; selected student IDs, empty in ALL_STUDENTS mode.")
+            List<UUID> eligibleStudentIds,
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "Present only for administrators; selected class IDs, empty in ALL_STUDENTS mode.")
+            List<UUID> eligibleClassIds,
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "Present only for the authenticated student; whether the caller may currently apply.")
+            Boolean eligibleToApply) {
     }
 
     @Schema(requiredProperties = {"objectives", "intendedUsers", "requirements", "deliverables", "scope",
@@ -767,7 +827,15 @@ public final class ApiDtos {
             @Schema(description = "The caller's rank for the assigned project, when present in their application.",
                     types = {"integer", "null"}) Integer preferenceRank,
             @Schema(description = "Current display names of this assigned project's group only; contains no IDs.")
-            List<StudentGroupMemberResponse> groupMembers) {
+            List<StudentGroupMemberResponse> groupMembers,
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "Present only when the immutable run snapshot establishes whether the caller's "
+                    + "assignment used preferences; true means assignment without preferences.")
+            Boolean assignedWithoutPreferences) {
+        public StudentAssignmentResponse(String state, String projectTitle, Integer preferenceRank,
+                List<StudentGroupMemberResponse> groupMembers) {
+            this(state, projectTitle, preferenceRank, groupMembers, null);
+        }
     }
 
     @Schema(requiredProperties = {"displayName", "self"})
