@@ -58,8 +58,9 @@ close.
 Choose exactly one:
 
 - [ ] **Decisions given, continue.** Part B and/or Part C amend the ticket and
-  go back for another implementation revision. Nothing in Part A is treated as
-  verified by this choice.
+  go back for another implementation revision. This choice is valid only when
+  Part B contains an actual decision or Part C contains a requested change.
+  Nothing in Part A is treated as verified by this choice.
 - [ ] **Request evaluator continuation.** Verification only: the observations
   in Part A are for independent evaluator review, and no code change is
   requested. Not valid while a Part B decision is open. This does not itself
