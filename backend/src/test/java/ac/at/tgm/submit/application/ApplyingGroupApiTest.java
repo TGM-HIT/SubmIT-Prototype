@@ -739,6 +739,16 @@ class ApplyingGroupApiTest {
         change(1, groupId, "SUBMIT", revision(groupId), Map.of("confirm", true), 200);
         solo(3);
         String savedGroup = stored(groupId).getPayload();
+        JsonNode savedRoster = array(store.parse(stored(groupId)), "members");
+        List<String> savedStudentIds = new ArrayList<>();
+        for (JsonNode savedStudentId : savedRoster) {
+            assertTrue(savedStudentId.isTextual(), "Stored group member IDs must be textual UUIDs.");
+            UUID.fromString(savedStudentId.textValue());
+            savedStudentIds.add(savedStudentId.textValue());
+        }
+        assertEquals(2, savedRoster.size());
+        assertEquals(2, Set.copyOf(savedStudentIds).size(), "Stored group member IDs must be unique.");
+        assertEquals(Set.of(student(1), student(2)), Set.copyOf(savedStudentIds));
         updateEligibility(1, 3, 4, 5, 6, 7);
         JsonNode excludedRun = perform(post("/api/application-periods/" + period + "/allocation-runs"),
                 admin, null, 201);
@@ -757,12 +767,36 @@ class ApplyingGroupApiTest {
         updateEligibility(1, 2, 3, 4, 5, 6, 7);
         JsonNode restoredRun = perform(post("/api/application-periods/" + period + "/allocation-runs"),
                 admin, null, 201);
-        assertTrue(array(restoredRun, "applyingUnits").toString().contains(groupId));
+        JsonNode restoredGroupUnit = null;
+        int matchingGroupUnits = 0;
+        for (JsonNode applyingUnit : array(restoredRun, "applyingUnits")) {
+            assertTrue(applyingUnit.isObject());
+            JsonNode applyingGroupId = applyingUnit.get("groupId");
+            if (applyingGroupId != null) {
+                assertTrue(applyingGroupId.isTextual());
+                if (groupId.equals(applyingGroupId.textValue())) {
+                    restoredGroupUnit = applyingUnit;
+                    matchingGroupUnits++;
+                }
+            }
+        }
+        assertEquals(1, matchingGroupUnits, "The restored run must contain the submitted unit exactly once.");
+        assertNotNull(restoredGroupUnit, "The exact submitted group must be present in the restored run.");
+        JsonNode restoredStudentIds = array(restoredGroupUnit, "studentIds");
+        List<String> restoredMemberIds = new ArrayList<>();
+        for (JsonNode restoredStudentId : restoredStudentIds) {
+            assertTrue(restoredStudentId.isTextual(), "Applying-unit student IDs must be textual UUIDs.");
+            UUID.fromString(restoredStudentId.textValue());
+            restoredMemberIds.add(restoredStudentId.textValue());
+        }
+        assertEquals(savedStudentIds.size(), restoredStudentIds.size());
+        assertEquals(Set.copyOf(savedStudentIds), Set.copyOf(restoredMemberIds));
         List<String> restoredRunStudents = assignedStudents(restoredRun);
         assertTrue(restoredRunStudents.contains(student(1)));
         assertTrue(restoredRunStudents.contains(student(2)));
         JsonNode firstMemberAssignment = assignmentForStudent(restoredRun, student(1));
         JsonNode secondMemberAssignment = assignmentForStudent(restoredRun, student(2));
+        assertEquals(text(firstMemberAssignment, "projectId"), text(secondMemberAssignment, "projectId"));
         assertTrue(firstMemberAssignment.path("hadPreferences").isBoolean());
         assertTrue(firstMemberAssignment.path("hadPreferences").asBoolean());
         assertTrue(secondMemberAssignment.path("hadPreferences").isBoolean());
@@ -774,7 +808,11 @@ class ApplyingGroupApiTest {
 
     @Test
     void releasedReplacedSoloApplicationDoesNotHideEligibleCallersOwnAssignment() throws Exception {
-        String replacedSoloId = text(solo(1), "id");
+        JsonNode soloApplication = solo(1);
+        String replacedSoloId = text(soloApplication, "id");
+        String savedSoloPayload = stored(replacedSoloId).getPayload();
+        JsonNode savedSoloPreferences = array(store.parse(stored(replacedSoloId)), "preferences").deepCopy();
+        assertFalse(savedSoloPreferences.isEmpty(), "The replaced solo application must have saved preferences.");
         String groupId = text(create(1), "id");
         change(1, groupId, "INVITE", revision(groupId), Map.of("studentId", student(2)), 200);
         change(2, groupId, "ACCEPT", revision(groupId), Map.of(), 200);
@@ -787,10 +825,11 @@ class ApplyingGroupApiTest {
 
         change(2, groupId, "LEAVE", revision(groupId), Map.of(), 200);
         assertEquals("DRAFT", stored(groupId).getStatus());
-        assertEquals("REPLACED", stored(replacedSoloId).getStatus());
+        assertReplacedSoloUnchanged(replacedSoloId, savedSoloPayload, savedSoloPreferences);
         updateEligibility(1, 3, 4);
         closePeriodThroughApi();
         JsonNode run = run();
+        assertReplacedSoloUnchanged(replacedSoloId, savedSoloPayload, savedSoloPreferences);
         JsonNode staffAssignment = assignmentForStudent(run, student(1));
         assertTrue(staffAssignment.get("hadPreferences").isBoolean());
         assertFalse(staffAssignment.get("hadPreferences").booleanValue());
@@ -802,6 +841,9 @@ class ApplyingGroupApiTest {
         assertTrue(ownAssignment.get("assignedWithoutPreferences").isBoolean());
         assertTrue(ownAssignment.get("assignedWithoutPreferences").booleanValue());
         assertFalse(ownAssignment.has("hadPreferences"));
+        assertFalse(ownAssignment.hasNonNull("preferenceRank"),
+                "A replaced solo ranking must not appear as this run's preference rank.");
+        assertFalse(ownAssignment.has("preferences"));
         assertFalse(ownAssignment.toString().contains("rankings"));
         assertFalse(ownAssignment.toString().contains("eligibleStudentIds"));
         assertFalse(ownAssignment.toString().contains("class"));
@@ -813,7 +855,14 @@ class ApplyingGroupApiTest {
             assertFalse(member.has("hadPreferences"));
             assertFalse(member.has("assignedWithoutPreferences"));
         }
-        assertEquals("REPLACED", stored(replacedSoloId).getStatus());
+        assertReplacedSoloUnchanged(replacedSoloId, savedSoloPayload, savedSoloPreferences);
+    }
+
+    private void assertReplacedSoloUnchanged(String applicationId, String savedPayload, JsonNode savedPreferences) {
+        StoredRecord application = stored(applicationId);
+        assertEquals("REPLACED", application.getStatus());
+        assertEquals(savedPayload, application.getPayload());
+        assertEquals(savedPreferences, array(store.parse(application), "preferences"));
     }
 
     private void updateEligibility(int... studentNumbers) throws Exception {

@@ -20,6 +20,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
@@ -224,9 +225,12 @@ class AllocationEarlyRunApiTest {
 
         JsonNode run = startRunFor(selectedPeriod.getId());
         assertEquals("COMPLETED", run.path("status").asText());
-        assertEquals(3, run.path("eligibleStudentIds").size());
-        JsonNode assignments = run.path("result").path("assignments");
-        assertEquals(3, assignments.size());
+        Set<String> initialEligibleIds = Set.of(students.get(0).toString(), students.get(1).toString(),
+                students.get(2).toString());
+        assertEquals(initialEligibleIds, uuidMembers(run.get("eligibleStudentIds")));
+        JsonNode initialAssignments = array(object(run, "result"), "assignments");
+        assertEquals(initialEligibleIds, assignedStudentIds(initialAssignments));
+        JsonNode assignments = initialAssignments;
         for (JsonNode assignment : assignments) {
             assertTrue(assignment.path("hadPreferences").isBoolean());
             assertFalse(assignment.path("hadPreferences").asBoolean());
@@ -249,13 +253,55 @@ class AllocationEarlyRunApiTest {
         reassigned.setStudentClass(otherClass);
         users.saveAndFlush(reassigned);
         JsonNode replacement = startRunFor(selectedPeriod.getId());
-        assertEquals(2, replacement.path("eligibleStudentIds").size());
-        assertEquals(0, replacement.path("result").path("assignments").size());
+        Set<String> remainingEligibleIds = Set.of(students.get(0).toString(), students.get(2).toString());
+        assertEquals(remainingEligibleIds, uuidMembers(replacement.get("eligibleStudentIds")));
+        JsonNode replacementAssignments = array(object(replacement, "result"), "assignments");
+        assertEquals(Set.of(), assignedStudentIds(replacementAssignments));
         JsonNode previous = mapper.readTree(mockMvc.perform(get("/api/allocation-runs/{id}", run.path("id").asText())
                         .header("Authorization", bearer(teacherToken)))
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
-        assertEquals(3, previous.path("eligibleStudentIds").size());
-        assertEquals(3, previous.path("result").path("assignments").size());
+        assertEquals(initialEligibleIds, uuidMembers(previous.get("eligibleStudentIds")));
+        assertEquals(initialEligibleIds, assignedStudentIds(array(object(previous, "result"), "assignments")));
+    }
+
+    private JsonNode object(JsonNode parent, String property) {
+        assertTrue(parent != null && parent.isObject(), "Expected an object containing " + property);
+        JsonNode value = parent.get(property);
+        assertTrue(value != null && value.isObject(), "Expected " + property + " to be an object.");
+        return value;
+    }
+
+    private JsonNode array(JsonNode parent, String property) {
+        assertTrue(parent != null && parent.isObject(), "Expected an object containing " + property);
+        JsonNode value = parent.get(property);
+        assertTrue(value != null && value.isArray(), "Expected " + property + " to be an array.");
+        return value;
+    }
+
+    private Set<String> uuidMembers(JsonNode node) {
+        assertTrue(node != null && node.isArray(), "Expected an array of UUID strings.");
+        Set<String> members = new java.util.HashSet<>();
+        for (JsonNode member : node) {
+            assertTrue(member.isTextual(), "Expected a textual UUID array member.");
+            UUID.fromString(member.textValue());
+            assertTrue(members.add(member.textValue()), "UUID arrays must not contain duplicates.");
+        }
+        assertEquals(node.size(), members.size(), "UUID array members must be unique.");
+        return members;
+    }
+
+    private Set<String> assignedStudentIds(JsonNode assignments) {
+        assertTrue(assignments != null && assignments.isArray(), "Expected assignments to be an array.");
+        Set<String> studentIds = new java.util.HashSet<>();
+        for (JsonNode assignment : assignments) {
+            assertTrue(assignment.isObject(), "Expected each assignment to be an object.");
+            JsonNode studentId = assignment.get("studentId");
+            assertTrue(studentId != null && studentId.isTextual(), "Expected a textual assignment student UUID.");
+            UUID.fromString(studentId.textValue());
+            assertTrue(studentIds.add(studentId.textValue()), "An assigned student must occur only once.");
+        }
+        assertEquals(assignments.size(), studentIds.size(), "Assigned student IDs must be unique.");
+        return studentIds;
     }
 
     @Test

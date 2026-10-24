@@ -498,8 +498,11 @@ class ApplicationPeriodSupervisorTest {
             org.junit.jupiter.api.Assertions.assertTrue(value.isTextual(), "Expected a textual UUID.");
             org.junit.jupiter.api.Assertions.assertDoesNotThrow(
                     () -> java.util.UUID.fromString(value.textValue()), "Expected a textual UUID value.");
-            values.add(value.textValue());
+            org.junit.jupiter.api.Assertions.assertTrue(values.add(value.textValue()),
+                    "UUID member arrays must not contain duplicates.");
         });
+        org.junit.jupiter.api.Assertions.assertEquals(array.size(), values.size(),
+                "UUID member arrays must not contain duplicates.");
         return values;
     }
 
