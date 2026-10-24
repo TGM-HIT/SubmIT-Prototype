@@ -4,7 +4,7 @@
     <div class="grid grid-2">
       <section class="panel">
         <div class="page-heading"><div><p class="eyebrow">{{ $t('grading.effectiveToday') }}</p><h2 class="section-title">{{ activeRubric.name ?? $t('grading.activeRubric') }}</h2></div><span v-if="activeRubric.version" class="status-badge">{{ activeRubric.version }}</span></div>
-        <p v-if="activeRubric.effectiveFrom" class="muted">{{ $t('grading.effective') }} {{ activeRubric.effectiveFrom }}<span v-if="activeRubric.schoolYear"> · {{ $t('grading.schoolYear', { year: activeRubric.schoolYear }) }}</span></p>
+        <p v-if="activeRubric.effectiveFrom" class="muted">{{ $t('grading.effective') }} {{ date(activeRubric.effectiveFrom) }}<span v-if="activeRubric.schoolYear"> · {{ $t('grading.schoolYear', { year: activeRubric.schoolYear }) }}</span></p>
         <p v-if="!activeRubric.version" class="empty">{{ $t('grading.noActiveRubric') }}</p>
         <div v-for="category in categories" :key="String(category.id)" class="stack">
           <h3 class="form-section-title">{{ category.name }}</h3><p v-if="category.description" class="muted">{{ category.description }}</p>
@@ -86,7 +86,7 @@
           <div class="field"><label class="label" for="student-transition">{{ $t('grading.transitionReason') }}</label><textarea id="student-transition" v-model="studentFinalForm.transitionReason" class="textarea" maxlength="2000" /></div>
           <button class="button">{{ $t('grading.saveStudentGrade') }}</button>
         </form>
-        <pre v-if="finalGrade" class="json-view">{{ JSON.stringify(finalGrade, null, 2) }}</pre>
+        <pre v-if="finalGrade" class="json-view">{{ localizedFinalGrade() }}</pre>
         <p v-else class="empty">{{ $t('grading.noFinalGrade') }}</p>
       </div>
       <div v-if="task.error.value" class="error-box stack" role="alert">{{ task.error.value }} <button class="button button-secondary button-small" @click="loadProject">{{ $t('grading.retry') }}</button></div>
@@ -94,7 +94,7 @@
     </div>
     <section v-if="rubrics.content.length" class="panel stack">
       <h2 class="section-title">{{ $t('grading.rubricHistory') }}</h2>
-      <div class="data-list"><article v-for="rubric in rubrics.content" :key="String(rubric.id)" class="data-row"><div class="row-main"><h3>{{ rubric.name }} · {{ rubric.version }}</h3><p>{{ rubric.schoolYear ?? $t('grading.allSchoolYears') }} · {{ $t('grading.effectiveFrom') }} {{ rubric.effectiveFrom }}</p></div><span class="status-badge">{{ statusLabel(rubric.status) }}</span></article></div>
+      <div class="data-list"><article v-for="rubric in rubrics.content" :key="String(rubric.id)" class="data-row"><div class="row-main"><h3>{{ rubric.name }} · {{ rubric.version }}</h3><p>{{ rubric.schoolYear ?? $t('grading.allSchoolYears') }} · {{ $t('grading.effectiveFrom') }} {{ date(rubric.effectiveFrom) }}</p></div><span class="status-badge">{{ statusLabel(rubric.status) }}</span></article></div>
     </section>
   </section>
 </template>
@@ -106,7 +106,7 @@ import { gradingApi } from '../../api/services'
 import { ApiError } from '../../api/client'
 import { useAuthStore } from '../../stores/auth'
 import { useTask } from '../../composables/useTask'
-import { formatDate, formatNumber, i18n } from '../../i18n'
+import { formatDateOnly, formatNumber, formatTimestamp, i18n } from '../../i18n'
 import GradeFields from './GradeFields.vue'
 
 type Data = Record<string, unknown>
@@ -154,13 +154,24 @@ function list(value: unknown): Data[] { return Array.isArray(value) ? value.filt
 function stringList(value: unknown): string[] { return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [] }
 function number(value: unknown, fallback = 0): number { return typeof value === 'number' ? value : Number(value ?? fallback) }
 function displayNumber(value: unknown): string { return typeof value === 'number' ? formatNumber(value) : String(value ?? '') }
+function localizedFinalGrade(): string {
+  return JSON.stringify(finalGrade.value, (key: string, value: unknown) => {
+    if (typeof value !== 'string') return value
+    if ((key === 'assessedOn' || key === 'effectiveFrom') && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
+      return formatDateOnly(value)
+    }
+    if (/(?:At|timestamp)$/i.test(key) && /^\d{4}-\d{2}-\d{2}T/.test(value)) {
+      const parsed = new Date(value)
+      return Number.isNaN(parsed.valueOf()) ? value : formatTimestamp(parsed)
+    }
+    return value
+  }, 2)
+}
 function date(value: unknown): string {
-  if (typeof value !== 'string' && typeof value !== 'number') return String(value ?? '')
-  const dateOnly = typeof value === 'string' ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(value) : null
-  const parsed = dateOnly
-    ? new Date(Number(dateOnly[1]), Number(dateOnly[2]) - 1, Number(dateOnly[3]), 12)
-    : new Date(value)
-  return Number.isNaN(parsed.valueOf()) ? String(value) : formatDate(parsed)
+  if (typeof value !== 'string') return String(value ?? '')
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return formatDateOnly(value)
+  const parsed = new Date(value)
+  return Number.isNaN(parsed.valueOf()) ? value : formatTimestamp(parsed)
 }
 function scaleObject(value: unknown): Data {
   return typeof value === 'object' && value !== null ? value as Data : {}

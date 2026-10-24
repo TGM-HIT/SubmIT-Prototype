@@ -1,7 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import DashboardPage from './DashboardPage.vue'
-import { setLanguage } from '../../i18n'
+import { formatTimestamp, setLanguage } from '../../i18n'
 
 const api = vi.hoisted(() => ({
   years: vi.fn(),
@@ -49,6 +49,7 @@ describe('Overview layout groups', () => {
     expect(page.text()).toContain('No application submitted')
     expect(page.text()).toContain('Not assigned in the final allocation')
     expect(page.text()).toContain('Submitted · No allocation result yet')
+    expect(page.text()).toContain('Date not set')
     expect(page.findAll('.student-assignment-summary a')).toHaveLength(5)
     expect(page.findAll('.student-assignment-summary a').every((link) => link.attributes('href') === '/applications')).toBe(true)
   })
@@ -86,12 +87,16 @@ describe('Overview layout groups', () => {
   })
 
   it('switches the dashboard UI language without translating an assigned project title', async () => {
+    const opensAt = '2026-10-10T09:00:00Z'
+    const closesAt = '2026-10-20T17:00:00Z'
     api.periods.mockResolvedValue({
       content: [{
         id: 'period-locale',
         label: 'Period name sentinel',
         schoolYear: '2026/2027',
-        status: 'ALLOCATED',
+        status: 'OPEN',
+        opensAt,
+        closesAt,
         studentApplicationStatus: 'SUBMITTED',
         studentAssignment: { state: 'PRELIMINARY', projectTitle: 'UNCHANGED_DASHBOARD_PROJECT_TITLE' },
       }],
@@ -103,16 +108,20 @@ describe('Overview layout groups', () => {
     await flushPromises()
     expect(page.text()).toContain('A quick view of your project lifecycle')
     expect(page.text()).toContain('UNCHANGED_DASHBOARD_PROJECT_TITLE')
-    page.unmount()
+    expect(page.text()).toContain(formatTimestamp(opensAt))
+    expect(page.text()).toContain(formatTimestamp(closesAt))
     setLanguage('de')
-    const germanPage = mount(DashboardPage, {
-      global: { stubs: { AsyncPanel: { template: '<div><slot /></div>' }, RouterLink: { template: '<a><slot /></a>' } } },
-    })
     await flushPromises()
-    expect(germanPage.text()).toContain('Übersicht über deinen Projektablauf')
-    expect(germanPage.text()).toContain('UNCHANGED_DASHBOARD_PROJECT_TITLE')
-    expect(germanPage.text()).toContain('Period name sentinel')
-    germanPage.unmount()
+    expect(page.text()).toContain('Übersicht über deinen Projektablauf')
+    expect(page.text()).toContain('UNCHANGED_DASHBOARD_PROJECT_TITLE')
+    expect(page.text()).toContain('Period name sentinel')
+    expect(page.text()).toContain(formatTimestamp(opensAt))
+    expect(page.text()).toContain(formatTimestamp(closesAt))
+    setLanguage('en')
+    await flushPromises()
+    expect(page.text()).toContain('A quick view of your project lifecycle')
+    expect(page.text()).toContain(formatTimestamp(opensAt))
+    page.unmount()
     setLanguage('en')
   })
 })

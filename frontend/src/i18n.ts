@@ -47,3 +47,19 @@ export function formatNumber(value: number, options?: Intl.NumberFormatOptions):
 export function formatDate(value: string | number | Date, options?: Intl.DateTimeFormatOptions): string {
   return new Intl.DateTimeFormat(i18n.global.locale.value, options).format(new Date(value))
 }
+
+export function formatTimestamp(value: string | number | Date): string {
+  return formatDate(value, { dateStyle: 'medium', timeStyle: 'short' })
+}
+
+export function formatDateOnly(value: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  if (!match) return value
+  const calendarDate = new Date(0)
+  calendarDate.setUTCFullYear(Number(match[1]), Number(match[2]) - 1, Number(match[3]))
+  calendarDate.setUTCHours(12, 0, 0, 0)
+  if (calendarDate.getUTCFullYear() !== Number(match[1])
+    || calendarDate.getUTCMonth() !== Number(match[2]) - 1
+    || calendarDate.getUTCDate() !== Number(match[3])) return value
+  return formatDate(calendarDate, { dateStyle: 'medium', timeZone: 'UTC' })
+}

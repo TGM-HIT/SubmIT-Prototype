@@ -1,7 +1,7 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import ArchivePage from './ArchivePage.vue'
-import { resolveBrowserLanguage, setLanguage } from '../../i18n'
+import { formatTimestamp, resolveBrowserLanguage, setLanguage } from '../../i18n'
 
 const api = vi.hoisted(() => ({ publicList: vi.fn(), publicContent: vi.fn(), list: vi.fn(), download: vi.fn() }))
 vi.mock('../../api/services', () => ({ archiveApi: api }))
@@ -94,11 +94,57 @@ describe('G6 anonymous archive privacy boundary', () => {
       expect(wrapper.text()).toContain(heading)
       expect(api.list).toHaveBeenLastCalledWith('private-project', 0)
       expect(wrapper.text()).toContain(status)
+      expect(wrapper.text()).toContain(formatTimestamp('2026-10-01T00:00:00Z'))
       expect(wrapper.text()).toContain('UNCHANGED_ARCHIVE_TITLE')
       expect(wrapper.text()).toContain('UNCHANGED_BACKEND_REVIEW_SENTINEL')
       expect(wrapper.text()).toContain('UNCHANGED_SUBMISSION_SENTINEL')
       wrapper.unmount()
     }
     setLanguage('en')
+  })
+
+  it('keeps the private upload-date fallback when uploadedAt is absent', async () => {
+    api.list.mockResolvedValue({
+      content: [{ id: 'private-file-no-date', title: 'Private file without date', type: 'POSTER' }],
+      page: 0, size: 20, totalElements: 1, totalPages: 1,
+    })
+    setLanguage('de')
+    const wrapper = mount(ArchivePage, {
+      props: { publicOnly: false },
+      global: { stubs: { AsyncPanel: { template: '<div><slot /></div>' } } },
+    })
+    await wrapper.get('#archive-project').setValue('private-project')
+    await wrapper.get('form.toolbar').trigger('submit')
+    await flushPromises()
+    expect(wrapper.text()).toContain('Datum nicht verfügbar')
+    wrapper.unmount()
+    setLanguage('en')
+  })
+
+  it('updates a private uploadedAt display en→de→en without changing the source API timestamp', async () => {
+    const uploadedAt = '2026-10-01T00:00:00Z'
+    const artifact = { id: 'private-file-locale', title: 'Locale private file', type: 'POSTER', uploadedAt }
+    api.list.mockResolvedValue({
+      content: [artifact], page: 0, size: 20, totalElements: 1, totalPages: 1,
+    })
+    setLanguage('en')
+    const wrapper = mount(ArchivePage, {
+      props: { publicOnly: false },
+      global: { stubs: { AsyncPanel: { template: '<div><slot /></div>' } } },
+    })
+    await wrapper.get('#archive-project').setValue('private-project')
+    await wrapper.get('form.toolbar').trigger('submit')
+    await flushPromises()
+    expect(wrapper.text()).toContain(formatTimestamp(uploadedAt))
+
+    setLanguage('de')
+    await flushPromises()
+    expect(wrapper.text()).toContain(formatTimestamp(uploadedAt))
+    expect(artifact.uploadedAt).toBe(uploadedAt)
+
+    setLanguage('en')
+    await flushPromises()
+    expect(wrapper.text()).toContain(formatTimestamp(uploadedAt))
+    wrapper.unmount()
   })
 })

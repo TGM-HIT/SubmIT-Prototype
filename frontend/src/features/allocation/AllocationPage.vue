@@ -68,8 +68,7 @@ import { allocationApi, applyingGroupsApi, ideasApi, periodsApi } from '../../ap
 import { useAuthStore } from '../../stores/auth'
 import { useTask } from '../../composables/useTask'
 import AsyncPanel from '../../components/AsyncPanel.vue'
-import { i18n } from '../../i18n'
-import { formatNumber } from '../../i18n'
+import { formatNumber, formatTimestamp, i18n } from '../../i18n'
 
 type Period = components['schemas']['ApplicationPeriodResponse']
 type Data = Record<string, unknown>
@@ -109,7 +108,7 @@ function runKind(run: Data): string {
     : run.initial === true ? 'allocation.automaticRun' : 'allocation.replacementRun'
   return String(i18n.global.t(key))
 }
-function date(value?: string): string { return value ? new Intl.DateTimeFormat(i18n.global.locale.value, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : String(i18n.global.t('common.unknown')) }
+function date(value?: string): string { return value ? formatTimestamp(value) : String(i18n.global.t('common.unknown')) }
 function statusLabel(run: Data): string {
   const key = `allocation.states.${statusOf(run).toLowerCase()}`
   return i18n.global.te(key) ? String(i18n.global.t(key)) : statusOf(run)

@@ -4,7 +4,7 @@ import { resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from "../../api/client"
 import ApplicationsPage from './ApplicationsPage.vue'
-import { setLanguage } from '../../i18n'
+import { formatTimestamp, setLanguage } from '../../i18n'
 
 const api = vi.hoisted(() => ({
   listPeriods: vi.fn(),
@@ -127,6 +127,40 @@ describe('application period configuration', () => {
 
   afterEach(() => {
     vi.clearAllMocks()
+  })
+
+  it('localizes application opening and closing timestamps in both languages and preserves missing-date fallback text', async () => {
+    const opensAt = '2026-10-10T09:00:00Z'
+    const closesAt = '2026-10-20T17:00:00Z'
+    const period = {
+      id: 'locale-period', label: 'Locale period', schoolYear: '2026/2027', status: 'CLOSED',
+      opensAt, closesAt, projectIds: projectIds,
+    }
+    api.listPeriods.mockResolvedValue({
+      content: [period, { id: 'legacy-period', label: 'Legacy period', schoolYear: '2025/2026', status: 'CLOSED', projectIds }],
+      page: 0, size: 20, totalElements: 2, totalPages: 1,
+    })
+    const page = mountPage()
+    await flushPromises()
+
+    const assertLocaleDates = () => {
+      expect(page.text()).toContain(formatTimestamp(opensAt))
+      expect(page.text()).toContain(formatTimestamp(closesAt))
+      expect(page.text()).not.toContain(opensAt)
+      expect(page.text()).not.toContain(closesAt)
+    }
+    assertLocaleDates()
+    expect(page.text()).toContain('Not set')
+    setLanguage('de')
+    await flushPromises()
+    assertLocaleDates()
+    expect(page.text()).toContain('Nicht festgelegt')
+    setLanguage('en')
+    await flushPromises()
+    assertLocaleDates()
+    expect(period.opensAt).toBe(opensAt)
+    expect(period.closesAt).toBe(closesAt)
+    page.unmount()
   })
 
   it('explains missing fields and the project minimum while keeping creation disabled', async () => {

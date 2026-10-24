@@ -70,7 +70,7 @@ import { archiveApi } from '../../api/services'
 import { useAuthStore } from '../../stores/auth'
 import { useTask } from '../../composables/useTask'
 import AsyncPanel from '../../components/AsyncPanel.vue'
-import { i18n } from '../../i18n'
+import { formatTimestamp, i18n } from '../../i18n'
 
 const props = defineProps<{ publicOnly: boolean }>()
 type PrivateArtifact = components['schemas']['ArtifactResponse']
@@ -110,7 +110,7 @@ function formatSize(size?: number): string {
   return `${number.format((size ?? 0) / (1024 * 1024))} MB`
 }
 function date(value?: string): string {
-  return value ? new Intl.DateTimeFormat(i18n.global.locale.value, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : String(i18n.global.t('archive.dateUnavailable'))
+  return value ? formatTimestamp(value) : String(i18n.global.t('archive.dateUnavailable'))
 }
 function hasType(type: string): boolean {
   return privateEntries.value.content.some((artifact) => artifact.type === type)

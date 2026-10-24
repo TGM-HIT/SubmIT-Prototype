@@ -115,7 +115,7 @@ import AsyncPanel from '../../components/AsyncPanel.vue'
 import ModalDialog from '../../components/ModalDialog.vue'
 import Pager from './Pager.vue'
 import { i18n } from '../../i18n'
-import { formatDate } from '../../i18n'
+import { formatTimestamp } from '../../i18n'
 import { ApiError } from '../../api/client'
 
 type Data = Record<string, unknown>
@@ -163,7 +163,7 @@ function timestamp(value: unknown): string {
   const date = new Date(value)
   return Number.isNaN(date.getTime())
     ? value
-    : formatDate(date, { dateStyle: 'medium', timeStyle: 'short' })
+    : formatTimestamp(date)
 }
 function clearSearchDebounce(): void {
   if (searchDebounce !== undefined) clearTimeout(searchDebounce)

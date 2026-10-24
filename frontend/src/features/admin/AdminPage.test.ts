@@ -2,7 +2,7 @@ import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../api/client'
 import AdminPage from './AdminPage.vue'
-import { formatDate, setLanguage } from '../../i18n'
+import { formatTimestamp, setLanguage } from '../../i18n'
 
 const api = vi.hoisted(() => ({
   users: vi.fn(),
@@ -149,20 +149,37 @@ describe('administrator account management', () => {
   })
 
   it('formats audit timestamps with the selected account locale', async () => {
-    const instant = '2024-02-03T15:04:00Z'
-    setLanguage('de')
-    api.audit.mockResolvedValue(pageResult([{
-      id: 'audit-1', action: 'LOGIN', occurredAt: instant, entityType: 'USER',
-      entityId: 'user-1', actorId: 'actor-1', status: 'RECORDED',
-    }]))
+    const occurredAt = '2024-02-03T15:04:00Z'
+    const createdAt = '2024-02-04T16:05:00Z'
+    const timestamp = '2024-02-05T17:06:00Z'
+    const auditEvents = [
+      { id: 'audit-1', action: 'LOGIN', occurredAt, createdAt: 'UNUSED_FALLBACK', entityType: 'USER' },
+      { id: 'audit-2', action: 'UPDATE', createdAt, entityType: 'USER' },
+      { id: 'audit-3', action: 'DELETE', timestamp, entityType: 'USER' },
+      { id: 'audit-4', action: 'UNKNOWN', entityType: 'USER' },
+    ]
+    api.audit.mockResolvedValue(pageResult(auditEvents))
     const page = pageWith()
     await flushPromises()
-    const auditTab = page.findAll('[role="tab"]').find((tab) => tab.text() === 'Audit-Verlauf')
+    const auditTab = page.findAll('[role="tab"]').find((tab) => tab.text() === 'Audit history')
     if (!auditTab) throw new Error('Audit tab is not rendered.')
     await auditTab.trigger('click')
     await page.get('.page-heading button').trigger('click')
     await flushPromises()
-    expect(page.text()).toContain(formatDate(instant, { dateStyle: 'medium', timeStyle: 'short' }))
+    for (const instant of [occurredAt, createdAt, timestamp]) {
+      expect(page.text()).toContain(formatTimestamp(instant))
+      expect(page.text()).not.toContain(instant)
+    }
+    expect(page.text()).toContain('Timestamp unavailable')
+
+    setLanguage('de')
+    await flushPromises()
+    for (const instant of [occurredAt, createdAt, timestamp]) expect(page.text()).toContain(formatTimestamp(instant))
+    expect(page.text()).toContain('Zeitstempel nicht verfügbar')
+    setLanguage('en')
+    await flushPromises()
+    expect(page.text()).toContain('Timestamp unavailable')
+    expect(auditEvents[0].occurredAt).toBe(occurredAt)
   })
 
   it('uses one Edit button per row and opens an accessible prefilled modal with unchanged Save disabled', async () => {

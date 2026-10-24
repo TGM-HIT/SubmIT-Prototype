@@ -172,7 +172,7 @@ import { useAuthStore } from '../../stores/auth'
 import { useTask } from '../../composables/useTask'
 import AsyncPanel from '../../components/AsyncPanel.vue'
 import ApplyingGroupsWorkspace from './ApplyingGroupsWorkspace.vue'
-import { i18n } from '../../i18n'
+import { formatTimestamp, i18n } from '../../i18n'
 
 type Period = components['schemas']['ApplicationPeriodResponse']
 type Idea = components['schemas']['IdeaResponse']
@@ -261,7 +261,7 @@ function eligibilitySummary(period: Period): string {
     ? 'applications.lookupUnavailable' : 'applications.noSelection'))
 }
 function date(value?: string): string {
-  return value ? new Intl.DateTimeFormat(i18n.global.locale.value, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : String(i18n.global.t('applications.notSet'))
+  return value ? formatTimestamp(value) : String(i18n.global.t('applications.notSet'))
 }
 function number(value: number): string {
   return new Intl.NumberFormat(i18n.global.locale.value).format(value)

@@ -1,7 +1,7 @@
 import { flushPromises, mount } from "@vue/test-utils"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import GradingPage from "./GradingPage.vue"
-import { setLanguage } from "../../i18n"
+import { formatDateOnly, formatTimestamp, i18n, setLanguage } from "../../i18n"
 
 const api = vi.hoisted(() => ({
   activeRubric: vi.fn(),
@@ -94,6 +94,110 @@ describe("grading student identities", () => {
     expect(page.findAll(".status-badge").map((badge) => badge.text())).not.toContain("ACTIVE")
     expect(page.findAll(".status-badge").map((badge) => badge.text())).not.toContain("SUPERSEDED")
     expect(page.findAll(".status-badge").map((badge) => badge.text())).not.toContain("PUBLISHED")
+    page.unmount()
+  })
+
+  it("formats active/listed rubric dates and individual/group assessments as stable calendar dates, and metric timestamps in the selected locale", async () => {
+    const effectiveFrom = "2026-09-01"
+    const assessedOn = "2026-10-10"
+    const measuredAt = "2026-10-11T15:04:00Z"
+    const individualGrade = {
+      id: "grade-locale", criterionId: "criterion-a", grade: 4, status: "ACTIVE",
+      assessedOn, rubricVersion: "v1", categoryId: "category-a",
+    }
+    const groupGrade = {
+      id: "group-locale", criterionId: "criterion-group", grade: 3, status: "ACTIVE",
+      assessedOn, rubricVersion: "v1", categoryId: "category-group",
+    }
+    const metric = { id: "metric-locale", metricId: "metric-a", metricVersion: 1, value: 12, measuredAt, rubricVersion: "v1" }
+    const finalGrade = {
+      createdAt: "2026-10-12T09:00:00Z",
+      decidedAt: "2026-10-12T09:05:00Z",
+      inputs: {
+        studentGrades: [{ assessedOn, recordedAt: "2026-10-11T08:00:00Z" }],
+        metrics: [{ measuredAt }],
+      },
+    }
+    api.activeRubric.mockResolvedValue({
+      name: "Current rubric", version: "v-current", effectiveFrom, categories: [],
+    })
+    api.rubrics.mockResolvedValue(pageResult([
+      { id: "rubric-locale", name: "Listed rubric", version: "v-listed", status: "PUBLISHED", effectiveFrom },
+      { id: "rubric-without-date", name: "Legacy rubric", version: "v-legacy", status: "PUBLISHED" },
+    ]))
+    api.grades.mockResolvedValue(pageResult([individualGrade, { id: "grade-without-date", criterionId: "legacy", grade: 3, rubricVersion: "v0" }]))
+    api.groupGrades.mockResolvedValue(pageResult([groupGrade, { id: "group-without-date", criterionId: "legacy-group", grade: 3, rubricVersion: "v0" }]))
+    api.metrics.mockResolvedValue(pageResult([metric, { id: "metric-without-date", metricId: "legacy-metric", value: 2 }]))
+    api.finalGrade.mockResolvedValue(finalGrade)
+
+    const page = mount(GradingPage, { global: { plugins: [i18n] } })
+    await flushPromises()
+    await page.get("#project-id").setValue("project-locale")
+    await page.findAll("button").find((button) => button.text() === "Load authorized project record")!.trigger("click")
+    await flushPromises()
+
+    const dateInputs = page.findAll('input[type="date"]')
+    expect(dateInputs).toHaveLength(2)
+    const originalFormValues = dateInputs.map((input) => (input.element as HTMLInputElement).value)
+    const assertDateOnlyDisplays = () => {
+      expect(page.text()).toContain(formatDateOnly(effectiveFrom))
+      expect(page.text()).toContain(formatDateOnly(assessedOn))
+      expect(page.text()).not.toContain(effectiveFrom)
+      expect(page.text()).not.toContain(assessedOn)
+      expect(page.text()).not.toContain("undefined")
+      expect(page.text()).not.toContain("null")
+    }
+    const assertMetricTimestamp = () => {
+      expect(page.text()).toContain(formatTimestamp(measuredAt))
+      expect(page.text()).not.toContain(measuredAt)
+    }
+    assertDateOnlyDisplays()
+    const missingIndividualDate = page.findAll(".data-row").find((row) => row.text().includes("legacy"))
+    const missingListedRubricDate = page.findAll(".data-row").find((row) => row.text().includes("Legacy rubric"))
+    expect(missingIndividualDate?.text()).toContain("assessed  · category")
+    expect(missingListedRubricDate?.text()).toContain("effective from")
+    expect(missingListedRubricDate?.text()).not.toContain("undefined")
+
+    setLanguage("de")
+    await flushPromises()
+    assertDateOnlyDisplays()
+    expect(dateInputs.map((input) => (input.element as HTMLInputElement).value)).toEqual(originalFormValues)
+    expect(individualGrade.assessedOn).toBe(assessedOn)
+    expect(groupGrade.assessedOn).toBe(assessedOn)
+    expect(metric.measuredAt).toBe(measuredAt)
+
+    await page.findAll('[role="tab"]').find((tab) => tab.text() === "Gruppenbewertungen")!.trigger("click")
+    await flushPromises()
+    expect(page.text()).toContain(formatDateOnly(assessedOn))
+    expect(page.findAll(".data-row").find((row) => row.text().includes("legacy-group"))?.text()).toContain("· bewertet Kein Nachweis")
+    await page.findAll('[role="tab"]').find((tab) => tab.text() === "Messwertbeobachtungen")!.trigger("click")
+    await flushPromises()
+    assertMetricTimestamp()
+    expect(page.findAll(".data-row").find((row) => row.text().includes("legacy-metric"))?.text()).toContain("Gemessen  · Bewertungsraster")
+
+    setLanguage("en")
+    await flushPromises()
+    assertMetricTimestamp()
+    await page.findAll('[role="tab"]').find((tab) => tab.text() === "Group assessments")!.trigger("click")
+    await flushPromises()
+    expect(page.text()).toContain(formatDateOnly(assessedOn))
+
+    await page.findAll('[role="tab"]').find((tab) => tab.text() === "Final grades")!.trigger("click")
+    await flushPromises()
+    expect(page.text()).toContain(formatTimestamp(finalGrade.createdAt))
+    expect(page.text()).toContain(formatTimestamp(finalGrade.decidedAt))
+    expect(page.text()).toContain(formatDateOnly(assessedOn))
+    expect(page.text()).toContain(formatTimestamp("2026-10-11T08:00:00Z"))
+    expect(page.text()).not.toContain(finalGrade.createdAt)
+    expect(page.text()).not.toContain(assessedOn)
+
+    setLanguage("de")
+    await flushPromises()
+    expect(page.text()).toContain(formatTimestamp(finalGrade.createdAt))
+    expect(page.text()).toContain(formatDateOnly(assessedOn))
+    expect(page.text()).toContain(formatTimestamp(measuredAt))
+    expect(finalGrade.createdAt).toBe("2026-10-12T09:00:00Z")
+    expect(finalGrade.inputs.studentGrades[0].assessedOn).toBe(assessedOn)
     page.unmount()
   })
 })

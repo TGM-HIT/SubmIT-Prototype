@@ -3,10 +3,10 @@ import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { baseParse, NodeTypes } from '@vue/compiler-dom'
 import { parse } from '@vue/compiler-sfc'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import en from './locales/en'
 import de from './locales/de'
-import { browserLanguage, formatDate, formatNumber, i18n, resolveBrowserLanguage, setLanguage } from './i18n'
+import { browserLanguage, formatDate, formatDateOnly, formatNumber, formatTimestamp, i18n, resolveBrowserLanguage, setLanguage } from './i18n'
 
 function keys(value: Record<string, unknown>, prefix = ''): string[] {
   return Object.entries(value).flatMap(([key, child]) => {
@@ -146,5 +146,39 @@ describe('locale resolution and catalogs', () => {
     expect(formatNumber(1.5)).toBe('1.5')
     const englishDate = formatDate('2024-02-03T15:04:00Z', { dateStyle: 'medium', timeZone: 'UTC' })
     expect(germanDate).not.toBe(englishDate)
+  })
+
+  it.each([
+    ['en', 'en-US'],
+    ['de', 'de-DE'],
+  ] as const)('formats timestamp instants in selected locale %s and the runtime timezone', (language, locale) => {
+    vi.stubEnv('TZ', 'America/Los_Angeles')
+    setLanguage(language)
+    const instant = '2024-02-03T02:04:00Z'
+    const expected = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(instant))
+    expect(formatTimestamp(instant)).toBe(expected)
+    expect(formatTimestamp(instant)).not.toContain(instant)
+    vi.unstubAllEnvs()
+  })
+
+  it.each([
+    ['en', 'en-US'],
+    ['de', 'de-DE'],
+  ] as const)('keeps date-only calendar dates stable across positive and negative runtime offsets in %s', (language, locale) => {
+    setLanguage(language)
+    const storedDate = '2024-02-03'
+    const expected = new Intl.DateTimeFormat(locale, { dateStyle: 'medium', timeZone: 'UTC' })
+      .format(new Date('2024-02-03T12:00:00Z'))
+
+    vi.stubEnv('TZ', 'Pacific/Kiritimati')
+    const positiveOffset = formatDateOnly(storedDate)
+    vi.stubEnv('TZ', 'America/Adak')
+    const negativeOffset = formatDateOnly(storedDate)
+
+    expect(positiveOffset).toBe(expected)
+    expect(negativeOffset).toBe(expected)
+    expect(positiveOffset).toBe(negativeOffset)
+    expect(formatDateOnly('2024-02-30')).toBe('2024-02-30')
+    vi.unstubAllEnvs()
   })
 })

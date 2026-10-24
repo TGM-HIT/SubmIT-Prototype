@@ -64,7 +64,7 @@ import type { Page } from '../../api/client'
 import { useAuthStore } from '../../stores/auth'
 import { useTask } from '../../composables/useTask'
 import AsyncPanel from '../../components/AsyncPanel.vue'
-import { formatNumber, i18n } from '../../i18n'
+import { formatNumber, formatTimestamp, i18n } from '../../i18n'
 
 type Period = components['schemas']['ApplicationPeriodResponse']
 type Idea = components['schemas']['IdeaResponse']
@@ -88,7 +88,7 @@ const actions = computed(() => {
 })
 
 function date(value?: string): string {
-  return value ? new Intl.DateTimeFormat(i18n.global.locale.value, { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value)) : String(i18n.global.t('dashboard.noDate'))
+  return value ? formatTimestamp(value) : String(i18n.global.t('dashboard.noDate'))
 }
 function assignmentSummary(state?: string): string {
   if (state === 'NO_RESULT') return String(i18n.global.t('dashboard.noResult'))

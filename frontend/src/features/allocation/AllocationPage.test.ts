@@ -4,7 +4,7 @@ import { resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import AllocationPage from './AllocationPage.vue'
 import { ApiError } from '../../api/client'
-import { setLanguage } from '../../i18n'
+import { formatTimestamp, setLanguage } from '../../i18n'
 
 const api = vi.hoisted(() => ({
   listPeriods: vi.fn(),
@@ -96,6 +96,7 @@ describe('allocation supervisor display', () => {
     await page.get('#period-select').setValue('period-1')
     await flushPromises()
     expect(page.text()).toContain('Selected period: Allocation preview · school year 2026/2027')
+    expect(page.text()).toContain('Unknown')
   })
 
   it('localizes allocation status and route labels while preserving backend error text and project names', async () => {
@@ -114,6 +115,55 @@ describe('allocation supervisor display', () => {
     expect(page.text()).toContain('UNCHANGED_BACKEND_ALLOCATION_ERROR')
     page.unmount()
     setLanguage('en')
+  })
+
+  it('formats run createdAt/startedAt, snapshot, and deadline in the selected locale without changing deadline comparisons or API values', async () => {
+    state.role = 'ADMIN'
+    const closesAt = new Date(Date.now() + 60 * 60 * 1000).toISOString()
+    const createdAt = '2024-02-03T15:04:00Z'
+    const startedAt = '2024-02-04T16:05:00Z'
+    const period = {
+      id: 'period-1', label: 'Allocation preview', schoolYear: '2026/2027', status: 'OPEN',
+      closesAt, projectIds: ['project-1'],
+    }
+    api.listPeriods.mockResolvedValue({ content: [period] })
+    api.listRuns.mockResolvedValue({
+      content: [
+        { id: 'created-run', status: 'COMPLETED', createdAt },
+        { id: 'started-run', status: 'COMPLETED', startedAt },
+      ],
+      page: 0, size: 20, totalElements: 2, totalPages: 1,
+    })
+    api.getRun.mockResolvedValue({ id: 'created-run', status: 'COMPLETED', createdAt, result: { assignments: [] } })
+
+    const page = mountPage()
+    await flushPromises()
+    await page.get('#period-select').setValue('period-1')
+    await flushPromises()
+
+    const englishClosesAt = formatTimestamp(closesAt)
+    expect(page.text()).toContain(englishClosesAt)
+    expect(page.get('#start-replacement-run').text()).toBe('Start early preliminary run')
+    expect(page.text()).toContain(formatTimestamp(createdAt))
+    expect(page.text()).toContain(formatTimestamp(startedAt))
+    expect(period.closesAt).toBe(closesAt)
+
+    await page.findAll('button').find((button) => button.text() === 'Inspect result')!.trigger('click')
+    await flushPromises()
+    expect(page.text()).toContain(formatTimestamp(createdAt))
+
+    setLanguage('de')
+    await flushPromises()
+    expect(page.text()).toContain(formatTimestamp(closesAt))
+    expect(page.text()).toContain(formatTimestamp(createdAt))
+    expect(page.text()).toContain(formatTimestamp(startedAt))
+    expect(page.get('#start-replacement-run').text()).toBe('Vorläufigen Lauf starten')
+
+    setLanguage('en')
+    await flushPromises()
+    expect(page.text()).toContain(englishClosesAt)
+    expect(period.closesAt).toBe(closesAt)
+    page.unmount()
   })
 
   it('offers and explains an early run, preserves state on cancellation, refreshes the result, and focuses it', async () => {
