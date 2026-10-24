@@ -263,7 +263,12 @@ class ApplicationResponseMapper {
 
     private StudentAssignmentResponse assignment(StoredRecord period, String studentId, StoredRecord application) {
         if (application != null && !"SUBMITTED".equals(application.getStatus())) {
-            return null;
+            if (!includedInLatestEligibilitySnapshot(period, studentId)) {
+                return null;
+            }
+            // An inactive historical application is not evidence that its preferences
+            // were used by this run. The immutable run result supplies the projection.
+            application = null;
         }
         return assignmentFromRun(period, studentId, application);
     }

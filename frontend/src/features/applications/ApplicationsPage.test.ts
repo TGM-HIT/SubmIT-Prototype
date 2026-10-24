@@ -271,6 +271,151 @@ describe('application period configuration', () => {
     page.unmount()
   })
 
+  it('keeps an edited period visible and focuses it when editing from a later page', async () => {
+    const firstPagePeriod = {
+      id: 'period-first',
+      label: 'First page period',
+      schoolYear: '2026/2027',
+      opensAt: '2027-01-10T09:00:00Z',
+      closesAt: '2027-01-20T17:00:00Z',
+      status: 'OPEN',
+      projectIds,
+      eligibilityMode: 'ALL_STUDENTS',
+      eligibleStudentIds: [],
+      eligibleClassIds: [],
+    }
+    const savedPeriod = {
+      id: 'period-later',
+      label: 'Later page period',
+      schoolYear: '2026/2027',
+      opensAt: '2027-02-10T09:00:00Z',
+      closesAt: '2027-02-20T17:00:00Z',
+      status: 'OPEN',
+      projectIds,
+      eligibilityMode: 'ALL_STUDENTS',
+      eligibleStudentIds: [],
+      eligibleClassIds: [],
+    }
+    const updatedPeriod = { ...savedPeriod, label: 'Later page updated' }
+    api.listPeriods.mockImplementation(async (page: number) => page === 0
+      ? { content: [firstPagePeriod], page: 0, size: 20, totalElements: 21, totalPages: 2 }
+      : { content: [updatedPeriod], page: 1, size: 20, totalElements: 21, totalPages: 2 })
+    api.updatePeriod.mockResolvedValue(updatedPeriod)
+    const page = mountPage(document.body)
+    await flushPromises()
+    const next = page.findAll('button').find((button) => button.text().includes('Next'))!
+    await next.trigger('click')
+    await flushPromises()
+    const edit = page.findAll('button').find((button) => button.text().includes('Edit period'))!
+    await edit.trigger('click')
+    await flushPromises()
+    await page.get('#period-label').setValue('Later page updated')
+    await page.get('form').trigger('submit')
+    await flushPromises()
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+
+    expect(api.listPeriods).toHaveBeenLastCalledWith(1)
+    expect(page.text()).toContain('Later page updated')
+    expect(page.text()).not.toContain('First page period')
+    expect(document.activeElement).toBe(page.get('[data-period-heading="period-later"]').element)
+    page.unmount()
+  })
+
+  it('renders and focuses a newly created period when page zero does not include it', async () => {
+    const createdPeriod = {
+      id: 'new-period',
+      label: 'Created beyond page zero',
+      schoolYear: '2026/2027',
+      opensAt: new Date('2027-03-10T09:00').toISOString(),
+      closesAt: new Date('2027-03-20T17:00').toISOString(),
+      status: 'OPEN',
+      projectIds,
+      eligibilityMode: 'ALL_STUDENTS',
+      eligibleStudentIds: [],
+      eligibleClassIds: [],
+    }
+    api.listPeriods.mockResolvedValue({
+      content: [{ ...createdPeriod, id: 'other-period', label: 'Existing page zero period' }],
+      page: 0,
+      size: 20,
+      totalElements: 20,
+      totalPages: 1,
+    })
+    api.createPeriod.mockResolvedValue(createdPeriod)
+    const page = mountPage(document.body)
+    await flushPromises()
+    await page.get('button').trigger('click')
+    await flushPromises()
+    await selectCompleteForm(page)
+    await page.get('#period-label').setValue(createdPeriod.label)
+    await page.get('#opens').setValue('2027-03-10T09:00')
+    await page.get('#closes').setValue('2027-03-20T17:00')
+    await page.get('form').trigger('submit')
+    await flushPromises()
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+
+    expect(page.text()).toContain('Created beyond page zero')
+    expect(page.text()).toContain('All students')
+    expect(document.activeElement).toBe(page.get('[data-period-heading="new-period"]').element)
+    page.unmount()
+  })
+
+  it('preserves exact saved instants on non-UTC cohort-only edits across repeated saves', async () => {
+    const priorTimezone = process.env.TZ
+    process.env.TZ = 'Europe/Vienna'
+    try {
+      let savedPeriod = {
+        id: 'period-timezone',
+        label: 'Timezone period',
+        schoolYear: '2026/2027',
+        opensAt: '2027-02-05T08:15:37.123Z',
+        closesAt: '2027-02-10T10:45:51.789Z',
+        status: 'OPEN',
+        projectIds,
+        eligibilityMode: 'SELECTED',
+        eligibleStudentIds: ['student-a'],
+        eligibleClassIds: ['class-a'],
+      }
+      api.listPeriods.mockImplementation(async () => ({
+        content: [savedPeriod], page: 0, size: 20, totalElements: 1, totalPages: 1,
+      }))
+      api.users.mockResolvedValue({ content: [
+        { id: 'student-a', displayName: 'Alex Student', role: 'STUDENT' },
+        { id: 'student-b', displayName: 'Robin Student', role: 'STUDENT' },
+      ], totalPages: 1 })
+      api.classes.mockResolvedValue({ content: [{ id: 'class-a', name: 'Testing Class' }], totalPages: 1 })
+      api.updatePeriod.mockImplementation(async (_id: string, request: typeof savedPeriod) => {
+        savedPeriod = { ...savedPeriod, ...request }
+        return savedPeriod
+      })
+
+      const page = mountPage(document.body)
+      await flushPromises()
+      for (const selectedStudent of ['student-b', 'student-a']) {
+        const edit = page.findAll('button').find((button) => button.text().includes('Edit period'))!
+        await edit.trigger('click')
+        await flushPromises()
+        expect((page.get('#opens').element as HTMLInputElement).value).toBe('2027-02-05T09:15')
+        expect((page.get('#closes').element as HTMLInputElement).value).toBe('2027-02-10T11:45')
+        await page.get('#eligible-students').setValue([selectedStudent])
+        await page.get('form').trigger('submit')
+        await flushPromises()
+      }
+
+      expect(api.updatePeriod).toHaveBeenCalledTimes(2)
+      for (const [, payload] of api.updatePeriod.mock.calls) {
+        expect(payload.opensAt).toBe('2027-02-05T08:15:37.123Z')
+        expect(payload.closesAt).toBe('2027-02-10T10:45:51.789Z')
+      }
+      expect(savedPeriod.opensAt).toBe('2027-02-05T08:15:37.123Z')
+      expect(savedPeriod.closesAt).toBe('2027-02-10T10:45:51.789Z')
+      page.unmount()
+    } finally {
+      if (priorTimezone === undefined) delete process.env.TZ
+      else process.env.TZ = priorTimezone
+    }
+  })
+
   it('updates a saved selected cohort to all students with cleared arrays and refreshes the row', async () => {
     const period = {
       id: 'period-edit-all',

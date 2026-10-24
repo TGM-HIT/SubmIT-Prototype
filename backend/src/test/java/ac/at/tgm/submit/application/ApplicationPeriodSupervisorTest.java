@@ -492,8 +492,14 @@ class ApplicationPeriodSupervisorTest {
     }
 
     private java.util.Set<String> textualMembers(JsonNode array) {
+        org.junit.jupiter.api.Assertions.assertTrue(array.isArray(), "Expected an array of UUID strings.");
         java.util.Set<String> values = new java.util.HashSet<>();
-        array.forEach(value -> values.add(value.asText()));
+        array.forEach(value -> {
+            org.junit.jupiter.api.Assertions.assertTrue(value.isTextual(), "Expected a textual UUID.");
+            org.junit.jupiter.api.Assertions.assertDoesNotThrow(
+                    () -> java.util.UUID.fromString(value.textValue()), "Expected a textual UUID value.");
+            values.add(value.textValue());
+        });
         return values;
     }
 

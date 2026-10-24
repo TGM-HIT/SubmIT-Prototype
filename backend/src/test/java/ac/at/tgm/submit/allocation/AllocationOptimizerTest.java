@@ -99,16 +99,20 @@ class AllocationOptimizerTest {
 
     @Test
     void maximizesAssignedCountWithMixedRankedAndNoPreferenceCandidatesBeforePreferenceScore() {
-        List<Application> ranked = students("ranked-", 6, "A", "B");
-        List<Application> withoutPreferences = IntStream.range(0, 3)
+        List<Application> ranked = students("ranked-", 5, "A", "B");
+        List<Application> withoutPreferences = IntStream.range(0, 1)
                 .mapToObj(index -> new Application("unranked-" + index, List.of(), null, false)).toList();
         Result result = optimizer.optimize(new Request(projects("A", "B"), concat(ranked, withoutPreferences)));
 
-        assertEquals(9, result.assignedStudents());
-        assertEquals(6, result.assignments().stream().filter(assignment -> assignment.preferenceRank() > 0).count());
-        assertEquals(3, result.assignments().stream().filter(assignment -> assignment.preferenceRank() == 0).count());
-        assertEquals(result.assignments().stream().mapToLong(assignment -> assignment.preferenceRank() == 0
-                ? 0 : 3 - assignment.preferenceRank()).sum(), result.preferenceScore());
+        assertEquals(6, result.assignedStudents(),
+                "Assigning all six at score 8 must beat the five-ranked score-10 solution.");
+        assertEquals(2, groupCount(result));
+        assertTrue(result.assignments().stream().collect(java.util.stream.Collectors.groupingBy(
+                Assignment::projectId, java.util.stream.Collectors.counting())).values().stream()
+                .allMatch(size -> size >= 3 && size <= 5));
+        assertEquals(1, result.assignments().stream().filter(assignment -> assignment.preferenceRank() == 0).count());
+        assertEquals(5, result.assignments().stream().filter(assignment -> assignment.preferenceRank() > 0).count());
+        assertEquals(8, result.preferenceScore());
         assertEquals(0, result.unassignedStudents().size());
     }
 

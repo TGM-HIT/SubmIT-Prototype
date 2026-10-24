@@ -312,9 +312,58 @@ class AllocationEarlyRunApiTest {
         assertTrue(savedSnapshot != null, "The restored student's saved application must enter the run snapshot.");
         assertEquals(projects.get(0).toString(), savedSnapshot.path("preferences").get(0).path("projectId").asText());
         assertEquals("SUBMITTED", store.get("student_application", savedApplication).getStatus());
-        assertTrue(assignment(run, students.get(0)).path("hadPreferences").asBoolean());
-        assertFalse(assignment(run, students.get(3)).path("hadPreferences").asBoolean());
-        assertFalse(assignment(run, students.get(4)).path("hadPreferences").asBoolean());
+        assertBooleanProperty(assignment(run, students.get(0)), "hadPreferences", true);
+        assertBooleanProperty(assignment(run, students.get(3)), "hadPreferences", false);
+        assertBooleanProperty(assignment(run, students.get(4)), "hadPreferences", false);
+    }
+
+    @Test
+    void eligibleWithdrawnApplicantSeesOwnNoPreferenceAssignmentWithoutRestoringPreferences() throws Exception {
+        UUID applicationId = createApplication(studentTokens.get(0), projects);
+        String originalPreferences = store.repository().findById(applicationId).orElseThrow().getPayload();
+        mockMvc.perform(delete("/api/applications/{id}", applicationId)
+                        .header("Authorization", bearer(studentTokens.get(0))))
+                .andExpect(status().isNoContent());
+        assertEquals("WITHDRAWN", store.get("student_application", applicationId).getStatus());
+        updateEligibleStudents(List.of(students.get(0), students.get(1), students.get(2)));
+        closePeriodThroughApi();
+
+        JsonNode run = startRun(adminToken);
+        JsonNode staffAssignment = assignment(run, students.get(0));
+        assertBooleanProperty(staffAssignment, "hadPreferences", false);
+        JsonNode assignedCount = run.path("result").path("assignedStudents");
+        assertTrue(assignedCount.isIntegralNumber());
+        assertEquals(3, assignedCount.intValue());
+        assertEquals("WITHDRAWN", store.get("student_application", applicationId).getStatus());
+        assertEquals(originalPreferences,
+                store.repository().findById(applicationId).orElseThrow().getPayload());
+
+        JsonNode ownPeriod = getPeriod(studentTokens.get(0));
+        assertTrue(ownPeriod.isObject());
+        assertTrue(ownPeriod.path("studentApplicationStatus").isTextual());
+        assertEquals("WITHDRAWN", ownPeriod.path("studentApplicationStatus").asText());
+        JsonNode ownAssignment = ownPeriod.path("studentAssignment");
+        assertTrue(ownAssignment.isObject());
+        assertTrue(ownAssignment.path("state").isTextual());
+        assertEquals("PRELIMINARY", ownAssignment.path("state").asText());
+        JsonNode projectId = staffAssignment.path("projectId");
+        assertTrue(projectId.isTextual());
+        String assignedProjectTitle = store.parse(store.get("idea", UUID.fromString(projectId.textValue())))
+                .path("title").asText();
+        assertTrue(ownAssignment.path("projectTitle").isTextual());
+        assertEquals(assignedProjectTitle, ownAssignment.path("projectTitle").asText());
+        assertTrue(ownAssignment.path("assignedWithoutPreferences").isBoolean());
+        assertTrue(ownAssignment.path("assignedWithoutPreferences").booleanValue());
+        assertTrue(ownAssignment.path("preferenceRank").isNull());
+        assertFalse(ownAssignment.has("hadPreferences"));
+        assertTrue(ownAssignment.path("groupMembers").isArray());
+        assertEquals(3, ownAssignment.path("groupMembers").size());
+        assertFalse(ownAssignment.toString().contains("eligibleStudentIds"));
+        assertFalse(ownAssignment.toString().contains("class"));
+        for (JsonNode member : ownAssignment.path("groupMembers")) {
+            assertTrue(member.isObject());
+            assertFalse(member.has("hadPreferences"));
+        }
     }
 
     @Test
@@ -335,7 +384,7 @@ class AllocationEarlyRunApiTest {
             assertFalse(students.get(0).toString().equals(eligibleId.asText()));
         }
         for (int index = 1; index <= 3; index++) {
-            assertFalse(assignment(run, students.get(index)).path("hadPreferences").asBoolean());
+            assertBooleanProperty(assignment(run, students.get(index)), "hadPreferences", false);
         }
         JsonNode savedRunPins = run.path("pins");
         assertTrue(savedRunPins.isArray());
@@ -350,7 +399,7 @@ class AllocationEarlyRunApiTest {
         JsonNode restoredRun = startRun(adminToken);
         assertEquals(4, restoredRun.path("eligibleStudentIds").size());
         assertEquals(projects.get(0).toString(), assignment(restoredRun, students.get(0)).path("projectId").asText());
-        assertTrue(assignment(restoredRun, students.get(0)).path("pinned").asBoolean());
+        assertBooleanProperty(assignment(restoredRun, students.get(0)), "pinned", true);
         assertEquals(students.get(0).toString(), restoredRun.path("pins").get(0).path("studentId").asText());
         assertEquals(firstRunBytes, store.repository().findById(UUID.fromString(run.path("id").asText()))
                 .orElseThrow().getPayload());
@@ -568,11 +617,13 @@ class AllocationEarlyRunApiTest {
     }
 
     private void assertBooleanProperty(JsonNode node, String property, boolean expected) {
+        assertTrue(node != null && node.isObject());
         assertEquals(expected, booleanProperty(node, property),
                 () -> "Expected Boolean property '" + property + "' to be " + expected + " in " + node);
     }
 
     private boolean booleanProperty(JsonNode node, String property) {
+        assertTrue(node != null && node.isObject());
         assertTrue(node.has(property), () -> "Expected property '" + property + "' in " + node);
         JsonNode value = node.get(property);
         assertTrue(value.isBoolean(), () -> "Expected Boolean property '" + property + "' in " + node);
@@ -631,6 +682,15 @@ class AllocationEarlyRunApiTest {
                 .andExpect(status().isOk());
     }
 
+    private void closePeriodThroughApi() throws Exception {
+        ObjectNode request = store.parse(store.get("application_period", periodId));
+        request.put("closesAt", Instant.now().minusSeconds(60).toString());
+        mockMvc.perform(put("/api/application-periods/{id}", periodId)
+                        .header("Authorization", bearer(adminToken)).contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(request)))
+                .andExpect(status().isOk());
+    }
+
     private String applicationRequest(List<UUID> projectIds) throws Exception {
         return mapper.writeValueAsString(Map.of("projectIds", projectIds));
     }
@@ -650,8 +710,15 @@ class AllocationEarlyRunApiTest {
     }
 
     private JsonNode assignment(JsonNode run, UUID studentId) {
-        for (JsonNode entry : run.path("result").path("assignments")) {
-            if (studentId.toString().equals(entry.path("studentId").asText())) {
+        JsonNode result = run.get("result");
+        assertTrue(result != null && result.isObject());
+        JsonNode assignments = result.get("assignments");
+        assertTrue(assignments != null && assignments.isArray());
+        for (JsonNode entry : assignments) {
+            assertTrue(entry.isObject());
+            JsonNode id = entry.get("studentId");
+            assertTrue(id != null && id.isTextual());
+            if (studentId.toString().equals(id.textValue())) {
                 return entry;
             }
         }
@@ -659,8 +726,15 @@ class AllocationEarlyRunApiTest {
     }
 
     private boolean containsAssignment(JsonNode run, UUID studentId) {
-        for (JsonNode assigned : run.path("result").path("assignments")) {
-            if (studentId.toString().equals(assigned.path("studentId").asText())) {
+        JsonNode result = run.get("result");
+        assertTrue(result != null && result.isObject());
+        JsonNode assignments = result.get("assignments");
+        assertTrue(assignments != null && assignments.isArray());
+        for (JsonNode assigned : assignments) {
+            assertTrue(assigned.isObject());
+            JsonNode id = assigned.get("studentId");
+            assertTrue(id != null && id.isTextual());
+            if (studentId.toString().equals(id.textValue())) {
                 return true;
             }
         }
@@ -685,9 +759,16 @@ class AllocationEarlyRunApiTest {
     }
 
     private boolean applicationIsInSnapshot(JsonNode run, UUID applicationId, UUID studentId) {
-        for (JsonNode application : run.path("applications")) {
-            if (applicationId.toString().equals(application.path("applicationId").asText())
-                    && studentId.toString().equals(application.path("studentId").asText())) {
+        JsonNode applications = run.get("applications");
+        assertTrue(applications != null && applications.isArray());
+        for (JsonNode application : applications) {
+            assertTrue(application.isObject());
+            JsonNode id = application.get("applicationId");
+            JsonNode owner = application.get("studentId");
+            assertTrue(id != null && id.isTextual());
+            assertTrue(owner != null && owner.isTextual());
+            if (applicationId.toString().equals(id.textValue())
+                    && studentId.toString().equals(owner.textValue())) {
                 return true;
             }
         }

@@ -772,12 +772,62 @@ class ApplyingGroupApiTest {
         assertEquals(excludedRunBytes, stored(text(excludedRun, "id")).getPayload());
     }
 
+    @Test
+    void releasedReplacedSoloApplicationDoesNotHideEligibleCallersOwnAssignment() throws Exception {
+        String replacedSoloId = text(solo(1), "id");
+        String groupId = text(create(1), "id");
+        change(1, groupId, "INVITE", revision(groupId), Map.of("studentId", student(2)), 200);
+        change(2, groupId, "ACCEPT", revision(groupId), Map.of(), 200);
+        updateEligibility(1, 2, 3, 4, 5, 6, 7);
+        change(1, groupId, "RANK", revision(groupId), Map.of("projectIds", projects), 200);
+        change(1, groupId, "APPROVE", revision(groupId), Map.of(), 200);
+        change(2, groupId, "APPROVE", revision(groupId), Map.of(), 200);
+        change(1, groupId, "SUBMIT", revision(groupId), Map.of("confirm", true), 200);
+        assertEquals("REPLACED", stored(replacedSoloId).getStatus());
+
+        change(2, groupId, "LEAVE", revision(groupId), Map.of(), 200);
+        assertEquals("DRAFT", stored(groupId).getStatus());
+        assertEquals("REPLACED", stored(replacedSoloId).getStatus());
+        updateEligibility(1, 3, 4);
+        closePeriodThroughApi();
+        JsonNode run = run();
+        JsonNode staffAssignment = assignmentForStudent(run, student(1));
+        assertTrue(staffAssignment.get("hadPreferences").isBoolean());
+        assertFalse(staffAssignment.get("hadPreferences").booleanValue());
+
+        JsonNode ownPeriod = perform(get("/api/application-periods/" + period), tokens.get(1), null, 200);
+        assertEquals("NOT_SUBMITTED", text(ownPeriod, "studentApplicationStatus"));
+        JsonNode ownAssignment = object(ownPeriod, "studentAssignment");
+        assertEquals("PRELIMINARY", text(ownAssignment, "state"));
+        assertTrue(ownAssignment.get("assignedWithoutPreferences").isBoolean());
+        assertTrue(ownAssignment.get("assignedWithoutPreferences").booleanValue());
+        assertFalse(ownAssignment.has("hadPreferences"));
+        assertFalse(ownAssignment.toString().contains("rankings"));
+        assertFalse(ownAssignment.toString().contains("eligibleStudentIds"));
+        assertFalse(ownAssignment.toString().contains("class"));
+        JsonNode assignedProject = store.parse(store.get("idea",
+                UUID.fromString(text(staffAssignment, "projectId"))));
+        assertEquals(text(assignedProject, "title"), text(ownAssignment, "projectTitle"));
+        for (JsonNode member : array(ownAssignment, "groupMembers")) {
+            assertTrue(member.isObject());
+            assertFalse(member.has("hadPreferences"));
+            assertFalse(member.has("assignedWithoutPreferences"));
+        }
+        assertEquals("REPLACED", stored(replacedSoloId).getStatus());
+    }
+
     private void updateEligibility(int... studentNumbers) throws Exception {
         var periodData = store.parse(store.get("application_period", period));
         periodData.put("eligibilityMode", "SELECTED");
         List<String> selectedIds = java.util.Arrays.stream(studentNumbers).mapToObj(this::student).toList();
         periodData.set("eligibleStudentIds", store.value(selectedIds));
         periodData.putArray("eligibleClassIds");
+        perform(put("/api/application-periods/" + period), admin, periodData, 200);
+    }
+
+    private void closePeriodThroughApi() throws Exception {
+        var periodData = store.parse(store.get("application_period", period));
+        periodData.put("closesAt", Instant.now().minusSeconds(60).toString());
         perform(put("/api/application-periods/" + period), admin, periodData, 200);
     }
 

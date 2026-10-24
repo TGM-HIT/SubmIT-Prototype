@@ -195,6 +195,8 @@ const periodEditor = ref(false)
 const editingPeriodId = ref<string | null>(null)
 const editorHeading = ref<HTMLElement | null>(null)
 const editorTrigger = ref<HTMLElement | null>(null)
+const originalOpensAt = ref<string | null>(null)
+const originalClosesAt = ref<string | null>(null)
 const lookupStudents = ref<StudentLookup[]>([])
 const lookupClasses = ref<ClassLookup[]>([])
 const lookupsLoading = ref(false)
@@ -358,8 +360,8 @@ async function createPeriod(): Promise<void> {
   const payload: components['schemas']['ApplicationPeriodRequest'] = {
     label: periodForm.label.trim(),
     schoolYear: periodForm.schoolYear,
-    opensAt: new Date(periodForm.opensAt).toISOString(),
-    closesAt: new Date(periodForm.closesAt).toISOString(),
+    opensAt: periodInstant(periodForm.opensAt, originalOpensAt.value),
+    closesAt: periodInstant(periodForm.closesAt, originalClosesAt.value),
     projectIds: periodForm.projectIds,
     eligibilityMode: periodForm.eligibilityMode,
     eligibleStudentIds: periodForm.eligibilityMode === 'SELECTED' ? periodForm.eligibleStudentIds : [],
@@ -373,8 +375,21 @@ async function createPeriod(): Promise<void> {
     periodEditor.value = false
     editingPeriodId.value = null
     lookupsReady.value = false
-    await load(0)
-    const focusId = updatedId ?? result.id
+    const currentPage = periods.value.page
+    await load(currentPage)
+    const focusId = result.id ?? updatedId
+    const visibleIndex = periods.value.content.findIndex((period) => period.id === focusId)
+    if (focusId && visibleIndex >= 0) {
+      periods.value.content[visibleIndex] = { ...periods.value.content[visibleIndex], ...(result as Period) }
+    } else if (focusId) {
+      const updatedPeriod = result as Period
+      const created = !updatedId
+      periods.value = {
+        ...periods.value,
+        content: [...periods.value.content, updatedPeriod],
+        totalElements: periods.value.totalElements + (created ? 1 : 0),
+      }
+    }
     if (focusId) requestAnimationFrame(() => {
       Array.from(document.querySelectorAll<HTMLElement>('[data-period-heading]'))
         .find((heading) => heading.dataset.periodHeading === focusId)?.focus()
@@ -386,8 +401,10 @@ function openEditor(period?: Period): void {
   editingPeriodId.value = period?.id ?? null
   periodForm.label = period?.label ?? ''
   periodForm.schoolYear = period?.schoolYear ?? years.value[0] ?? ''
-  periodForm.opensAt = period?.opensAt ? new Date(period.opensAt).toISOString().slice(0, 16) : ''
-  periodForm.closesAt = period?.closesAt ? new Date(period.closesAt).toISOString().slice(0, 16) : ''
+  originalOpensAt.value = period?.opensAt ?? null
+  originalClosesAt.value = period?.closesAt ?? null
+  periodForm.opensAt = period?.opensAt ? localDateTimeInput(period.opensAt) : ''
+  periodForm.closesAt = period?.closesAt ? localDateTimeInput(period.closesAt) : ''
   periodForm.projectIds = [...(period?.projectIds ?? [])]
   periodForm.eligibilityMode = period?.eligibilityMode ?? 'ALL_STUDENTS'
   periodForm.eligibleStudentIds = [...(period?.eligibleStudentIds ?? [])]
@@ -397,6 +414,16 @@ function openEditor(period?: Period): void {
   periodEditor.value = true
   if (periodForm.eligibilityMode === 'SELECTED') void loadEligibilityLookups()
   requestAnimationFrame(() => editorHeading.value?.focus())
+}
+function localDateTimeInput(instant: string): string {
+  const date = new Date(instant)
+  const pad = (value: number) => String(value).padStart(2, '0')
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+    + `T${pad(date.getHours())}:${pad(date.getMinutes())}`
+}
+function periodInstant(value: string, original: string | null): string {
+  if (original && value === localDateTimeInput(original)) return original
+  return new Date(value).toISOString()
 }
 function cancelEditor(): void {
   periodEditor.value = false

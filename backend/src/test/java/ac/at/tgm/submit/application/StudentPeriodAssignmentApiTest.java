@@ -185,28 +185,45 @@ class StudentPeriodAssignmentApiTest {
         createApplication(preferenceBackedPeriod, "SUBMITTED");
         createRunWithPreferenceState(preferenceBackedPeriod, project.getId(), Boolean.TRUE, Boolean.FALSE);
         JsonNode preferenceBacked = periodResponse(preferenceBackedPeriod).path("studentAssignment");
-        org.junit.jupiter.api.Assertions.assertEquals(Boolean.FALSE,
-                preferenceBacked.path("assignedWithoutPreferences").booleanValue());
+        org.junit.jupiter.api.Assertions.assertTrue(preferenceBacked.isObject());
         org.junit.jupiter.api.Assertions.assertTrue(preferenceBacked.path("assignedWithoutPreferences").isBoolean());
+        org.junit.jupiter.api.Assertions.assertFalse(preferenceBacked.path("assignedWithoutPreferences").booleanValue());
         assertStudentProjectionOmitsStaffPreferenceStatus(preferenceBacked);
 
         UUID noPreferencePeriod = createPeriod(project.getId(), "ALLOCATED");
         createRunWithPreferenceState(noPreferencePeriod, project.getId(), Boolean.FALSE, Boolean.TRUE);
         JsonNode noPreference = periodResponse(noPreferencePeriod).path("studentAssignment");
+        org.junit.jupiter.api.Assertions.assertTrue(noPreference.isObject());
         org.junit.jupiter.api.Assertions.assertTrue(noPreference.path("assignedWithoutPreferences").isBoolean());
         org.junit.jupiter.api.Assertions.assertTrue(noPreference.path("assignedWithoutPreferences").asBoolean());
         assertStudentProjectionOmitsStaffPreferenceStatus(noPreference);
 
         UUID legacyPeriod = createPeriod(project.getId(), "ALLOCATED");
+        createApplication(legacyPeriod, "WITHDRAWN");
         createRunWithPreferenceState(legacyPeriod, project.getId(), null, Boolean.TRUE);
         JsonNode legacy = periodResponse(legacyPeriod).path("studentAssignment");
+        org.junit.jupiter.api.Assertions.assertTrue(legacy.isObject());
+        JsonNode state = legacy.get("state");
+        org.junit.jupiter.api.Assertions.assertTrue(state != null && state.isTextual());
+        org.junit.jupiter.api.Assertions.assertEquals("PRELIMINARY", state.textValue());
+        JsonNode members = legacy.get("groupMembers");
+        org.junit.jupiter.api.Assertions.assertTrue(members != null && members.isArray());
+        org.junit.jupiter.api.Assertions.assertEquals(3, members.size());
+        JsonNode firstMember = members.get(0);
+        org.junit.jupiter.api.Assertions.assertTrue(firstMember.isObject());
+        JsonNode firstDisplayName = firstMember.get("displayName");
+        org.junit.jupiter.api.Assertions.assertTrue(firstDisplayName != null && firstDisplayName.isTextual());
         org.junit.jupiter.api.Assertions.assertTrue(legacy.path("assignedWithoutPreferences").isMissingNode());
         assertStudentProjectionOmitsStaffPreferenceStatus(legacy);
     }
 
     private void assertStudentProjectionOmitsStaffPreferenceStatus(JsonNode assignment) {
+        org.junit.jupiter.api.Assertions.assertTrue(assignment != null && assignment.isObject());
         org.junit.jupiter.api.Assertions.assertFalse(assignment.has("hadPreferences"));
-        for (JsonNode memberNode : assignment.path("groupMembers")) {
+        JsonNode members = assignment.get("groupMembers");
+        org.junit.jupiter.api.Assertions.assertTrue(members != null && members.isArray());
+        for (JsonNode memberNode : members) {
+            org.junit.jupiter.api.Assertions.assertTrue(memberNode.isObject());
             org.junit.jupiter.api.Assertions.assertFalse(memberNode.has("hadPreferences"));
         }
         org.junit.jupiter.api.Assertions.assertFalse(assignment.toString().contains("hadPreferences"));
