@@ -225,6 +225,33 @@ class ApplicationPeriodSupervisorTest {
     }
 
     @Test
+    void updateRequiresAdministratorAndLeavesTheStoredPeriodPayloadUnchangedForOtherCallers() throws Exception {
+        String opens = Instant.now().minusSeconds(60).toString();
+        String closes = Instant.now().plusSeconds(86_400).toString();
+        var period = store.create("application_period", null, null, "OPEN",
+                store.object().put("label", "Authorization target")
+                        .put("schoolYear", "2026/2027").put("opensAt", opens).put("closesAt", closes)
+                        .set("projectIds", store.value(projectIds)));
+        String before = store.repository().findById(period.getId()).orElseThrow().getPayload();
+        String request = objectMapper.writeValueAsString(period("2026/2027", opens, closes, projectIds));
+
+        mockMvc.perform(put("/api/application-periods/{id}", period.getId())
+                        .contentType(MediaType.APPLICATION_JSON).content(request))
+                .andExpect(status().isUnauthorized());
+        org.junit.jupiter.api.Assertions.assertEquals(before,
+                store.repository().findById(period.getId()).orElseThrow().getPayload());
+
+        for (String username : List.of("student01", "teacher01")) {
+            mockMvc.perform(put("/api/application-periods/{id}", period.getId())
+                            .header("Authorization", "Bearer " + login(username))
+                            .contentType(MediaType.APPLICATION_JSON).content(request))
+                    .andExpect(status().isForbidden());
+            org.junit.jupiter.api.Assertions.assertEquals(before,
+                    store.repository().findById(period.getId()).orElseThrow().getPayload());
+        }
+    }
+
+    @Test
     void ineligibleStudentCannotSubmitPreferences() throws Exception {
         Map<String, Object> request = new java.util.HashMap<>(period("2026/2027",
                 Instant.now().minusSeconds(60).toString(), Instant.now().plusSeconds(86_400).toString(), projectIds));
@@ -432,11 +459,42 @@ class ApplicationPeriodSupervisorTest {
                         .set("projectIds", store.value(projectIds)));
         mockMvc.perform(get("/api/application-periods/{id}", record.getId())
                         .header("Authorization", "Bearer " + adminToken))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.label").value(year));
+                .andExpect(status().isOk()).andExpect(jsonPath("$.label").value(year))
+                .andExpect(jsonPath("$.eligibilityMode").value("ALL_STUDENTS"))
+                .andExpect(jsonPath("$.eligibleStudentIds.length()").value(0))
+                .andExpect(jsonPath("$.eligibleClassIds.length()").value(0));
         mockMvc.perform(get("/api/application-periods")
                         .header("Authorization", "Bearer " + adminToken))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.content[?(@.label == '2026/2027')] ").exists());
+        String originalPeriodPayload = record.getPayload();
+        var expectedStudentIds = users.findAll().stream()
+                .filter(account -> account.getRole().name().equals("STUDENT"))
+                .map(account -> account.getId().toString()).collect(java.util.stream.Collectors.toSet());
         org.junit.jupiter.api.Assertions.assertFalse(store.parse(record).has("label"));
+        org.junit.jupiter.api.Assertions.assertFalse(store.parse(record).has("eligibilityMode"));
+        org.junit.jupiter.api.Assertions.assertEquals(List.of(), store.repository()
+                .findByTypeAndParentId("student_application", record.getId().toString()));
+        org.junit.jupiter.api.Assertions.assertEquals(List.of(), store.repository()
+                .findByTypeAndParentId("allocation_pin", record.getId().toString()));
+        int previousRunCount = store.repository()
+                .findByTypeAndParentId("allocation_run", record.getId().toString()).size();
+        MvcResult runResponse = mockMvc.perform(post("/api/application-periods/{id}/allocation-runs", record.getId())
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isCreated()).andReturn();
+        JsonNode run = objectMapper.readTree(runResponse.getResponse().getContentAsString());
+        org.junit.jupiter.api.Assertions.assertEquals(expectedStudentIds,
+                textualMembers(run.path("eligibleStudentIds")));
+        org.junit.jupiter.api.Assertions.assertFalse(run.path("eligibleStudentIds").isEmpty());
+        org.junit.jupiter.api.Assertions.assertEquals(originalPeriodPayload,
+                store.repository().findById(record.getId()).orElseThrow().getPayload());
+        org.junit.jupiter.api.Assertions.assertTrue(store.repository()
+                .findByTypeAndParentId("allocation_run", record.getId().toString()).size() >= previousRunCount + 1);
+    }
+
+    private java.util.Set<String> textualMembers(JsonNode array) {
+        java.util.Set<String> values = new java.util.HashSet<>();
+        array.forEach(value -> values.add(value.asText()));
+        return values;
     }
 
     private String login(String username) throws Exception {

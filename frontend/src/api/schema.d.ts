@@ -1945,7 +1945,7 @@ export interface components {
             projectTitles?: components["schemas"]["ProjectTitleResponse"][];
             /** @description Present only to the authenticated student: individual status, SHARED_SUBMITTED for an effective shared submission, or NOT_SUBMITTED when absent or a solo submission was replaced. */
             studentApplicationStatus?: string;
-            /** @description Present only for the authenticated student's own submitted application. */
+            /** @description Present only to the authenticated student for their own assignment when they have a submitted application, a pin, or were included in the latest run's eligible-student snapshot; the last condition includes eligible candidates with no application and no pin. */
             studentAssignment?: components["schemas"]["StudentAssignmentResponse"];
             /**
              * @description Present only for administrators; current period eligibility mode.
@@ -4425,7 +4425,7 @@ export interface operations {
                     "*/*": components["schemas"]["ApplicationPeriodResponse"];
                 };
             };
-            /** @description The period ID, configuration, or proposed project selection is invalid, including absent, ineligible, or out-of-catalogue projects. */
+            /** @description The period ID must be a UUID; malformed request bodies, invalid required fields or dates, eligibility configuration, or catalogue selection (including absent, ineligible, or out-of-catalogue references and duplicate IDs) are rejected. */
             400: {
                 headers: {
                     [name: string]: unknown;

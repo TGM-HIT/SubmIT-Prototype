@@ -760,7 +760,9 @@ public final class ApiDtos {
                     + "an effective shared submission, or NOT_SUBMITTED when absent or a solo submission was replaced.")
             String studentApplicationStatus,
             @JsonInclude(JsonInclude.Include.NON_NULL)
-            @Schema(description = "Present only for the authenticated student's own submitted application.")
+            @Schema(description = "Present only to the authenticated student for their own assignment when they have "
+                    + "a submitted application, a pin, or were included in the latest run's eligible-student "
+                    + "snapshot; the last condition includes eligible candidates with no application and no pin.")
             StudentAssignmentResponse studentAssignment,
             @JsonInclude(JsonInclude.Include.NON_NULL)
             @Schema(description = "Present only for administrators; current period eligibility mode.")

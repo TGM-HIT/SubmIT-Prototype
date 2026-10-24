@@ -177,6 +177,63 @@ class StudentPeriodAssignmentApiTest {
     }
 
     @Test
+    void preferenceStateProjectionIsCallerOnlyAndLegacyStateRemainsAbsent() throws Exception {
+        StoredRecord project = store.create("idea", student.getId().toString(), null,
+                "ACCEPTED_FOR_APPLICATIONS", objectMapper.createObjectNode().put("title", "Preference-state project"));
+
+        UUID preferenceBackedPeriod = createPeriod(project.getId(), "ALLOCATED");
+        createApplication(preferenceBackedPeriod, "SUBMITTED");
+        createRunWithPreferenceState(preferenceBackedPeriod, project.getId(), Boolean.TRUE, Boolean.FALSE);
+        JsonNode preferenceBacked = periodResponse(preferenceBackedPeriod).path("studentAssignment");
+        org.junit.jupiter.api.Assertions.assertEquals(Boolean.FALSE,
+                preferenceBacked.path("assignedWithoutPreferences").booleanValue());
+        org.junit.jupiter.api.Assertions.assertTrue(preferenceBacked.path("assignedWithoutPreferences").isBoolean());
+        assertStudentProjectionOmitsStaffPreferenceStatus(preferenceBacked);
+
+        UUID noPreferencePeriod = createPeriod(project.getId(), "ALLOCATED");
+        createRunWithPreferenceState(noPreferencePeriod, project.getId(), Boolean.FALSE, Boolean.TRUE);
+        JsonNode noPreference = periodResponse(noPreferencePeriod).path("studentAssignment");
+        org.junit.jupiter.api.Assertions.assertTrue(noPreference.path("assignedWithoutPreferences").isBoolean());
+        org.junit.jupiter.api.Assertions.assertTrue(noPreference.path("assignedWithoutPreferences").asBoolean());
+        assertStudentProjectionOmitsStaffPreferenceStatus(noPreference);
+
+        UUID legacyPeriod = createPeriod(project.getId(), "ALLOCATED");
+        createRunWithPreferenceState(legacyPeriod, project.getId(), null, Boolean.TRUE);
+        JsonNode legacy = periodResponse(legacyPeriod).path("studentAssignment");
+        org.junit.jupiter.api.Assertions.assertTrue(legacy.path("assignedWithoutPreferences").isMissingNode());
+        assertStudentProjectionOmitsStaffPreferenceStatus(legacy);
+    }
+
+    private void assertStudentProjectionOmitsStaffPreferenceStatus(JsonNode assignment) {
+        org.junit.jupiter.api.Assertions.assertFalse(assignment.has("hadPreferences"));
+        for (JsonNode memberNode : assignment.path("groupMembers")) {
+            org.junit.jupiter.api.Assertions.assertFalse(memberNode.has("hadPreferences"));
+        }
+        org.junit.jupiter.api.Assertions.assertFalse(assignment.toString().contains("hadPreferences"));
+    }
+
+    private StoredRecord createRunWithPreferenceState(UUID periodId, UUID projectId,
+            Boolean ownHadPreferences, Boolean memberHadPreferences) {
+        ObjectNode payload = objectMapper.createObjectNode();
+        payload.putArray("eligibleStudentIds").add(student.getId().toString()).add(member.getId().toString())
+                .add(users.findByUsername("student03").orElseThrow().getId().toString());
+        ArrayNode assignments = payload.putObject("result").putArray("assignments");
+        ObjectNode own = assignments.addObject().put("studentId", student.getId().toString())
+                .put("projectId", projectId.toString());
+        if (ownHadPreferences != null) {
+            own.put("hadPreferences", ownHadPreferences);
+        }
+        ObjectNode sharedMember = assignments.addObject().put("studentId", member.getId().toString())
+                .put("projectId", projectId.toString());
+        if (memberHadPreferences != null) {
+            sharedMember.put("hadPreferences", memberHadPreferences);
+        }
+        assignments.addObject().put("studentId", users.findByUsername("student03").orElseThrow().getId().toString())
+                .put("projectId", projectId.toString()).put("hadPreferences", true);
+        return store.create("allocation_run", student.getId().toString(), periodId.toString(), "COMPLETED", payload);
+    }
+
+    @Test
     void seededMultiGroupPeriodsExposeOnlyEachStudentsOwnGroupThroughPublicApi() throws Exception {
         UUID markerId = UUID.nameUUIDFromBytes(
                 "testing-allocation-preview:period".getBytes(java.nio.charset.StandardCharsets.UTF_8));

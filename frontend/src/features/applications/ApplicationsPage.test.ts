@@ -271,6 +271,51 @@ describe('application period configuration', () => {
     page.unmount()
   })
 
+  it('updates a saved selected cohort to all students with cleared arrays and refreshes the row', async () => {
+    const period = {
+      id: 'period-edit-all',
+      label: 'Selected cohort',
+      schoolYear: '2026/2027',
+      opensAt: '2026-10-10T09:00:00Z',
+      closesAt: '2026-10-20T17:00:00Z',
+      status: 'OPEN',
+      projectIds,
+      eligibilityMode: 'SELECTED',
+      eligibleStudentIds: ['student-account-a'],
+      eligibleClassIds: ['class-id-a'],
+    }
+    api.listPeriods.mockResolvedValueOnce({ content: [period], page: 0, size: 20, totalElements: 1, totalPages: 1 })
+      .mockResolvedValue({ content: [{ ...period, label: 'All students now', eligibilityMode: 'ALL_STUDENTS',
+        eligibleStudentIds: [], eligibleClassIds: [] }], page: 0, size: 20, totalElements: 1, totalPages: 1 })
+    api.users.mockResolvedValue({ content: [{ id: 'student-account-a', displayName: 'Alex Student', role: 'STUDENT' }], totalPages: 1 })
+    api.classes.mockResolvedValue({ content: [{ id: 'class-id-a', name: 'Testing Class' }], totalPages: 1 })
+    api.updatePeriod.mockResolvedValue({ ...period, label: 'All students now', eligibilityMode: 'ALL_STUDENTS',
+      eligibleStudentIds: [], eligibleClassIds: [] })
+
+    const page = mountPage(document.body)
+    await flushPromises()
+    const trigger = page.findAll('button').find((button) => button.text().includes('Edit period'))!
+    await trigger.trigger('click')
+    await flushPromises()
+    expect((page.get('#eligible-students option[value="student-account-a"]').element as HTMLOptionElement).selected)
+      .toBe(true)
+    expect((page.get('#eligible-classes option[value="class-id-a"]').element as HTMLOptionElement).selected)
+      .toBe(true)
+    await page.get('input[type="radio"][value="ALL_STUDENTS"]').setValue(true)
+    await selectCompleteForm(page)
+    await page.get('#period-label').setValue('All students now')
+    await page.get('form').trigger('submit')
+    await flushPromises()
+    expect(api.updatePeriod).toHaveBeenCalledWith('period-edit-all', expect.objectContaining({
+      eligibilityMode: 'ALL_STUDENTS',
+      eligibleStudentIds: [],
+      eligibleClassIds: [],
+    }))
+    expect(page.text()).toContain('All students now')
+    expect(page.text()).toContain('All students')
+    page.unmount()
+  })
+
   it('shows lookup failures and permits a retry instead of presenting an empty cohort', async () => {
     api.users.mockRejectedValue(new Error('Lookup unavailable'))
     const page = await openForm()
@@ -326,6 +371,57 @@ describe('application period configuration', () => {
     expect(api.createPeriod).not.toHaveBeenCalled()
     expect(api.updatePeriod).not.toHaveBeenCalled()
     expect(document.activeElement).toBe(trigger.element)
+    page.unmount()
+  })
+
+  it('cancels a changed saved-cohort edit without mutation and restores saved values and focus', async () => {
+    const period = {
+      id: 'period-cancel',
+      label: 'Saved cohort',
+      schoolYear: '2026/2027',
+      opensAt: '2026-10-10T09:00:00Z',
+      closesAt: '2026-10-20T17:00:00Z',
+      status: 'OPEN',
+      projectIds,
+      eligibilityMode: 'SELECTED',
+      eligibleStudentIds: ['student-account-a'],
+      eligibleClassIds: ['class-id-a'],
+    }
+    api.listPeriods.mockResolvedValue({ content: [period], page: 0, size: 20, totalElements: 1, totalPages: 1 })
+    api.users.mockResolvedValue({ content: [
+      { id: 'student-account-a', displayName: 'Alex Student', role: 'STUDENT' },
+      { id: 'student-account-b', displayName: 'Robin Student', role: 'STUDENT' },
+    ], totalPages: 1 })
+    api.classes.mockResolvedValue({ content: [
+      { id: 'class-id-a', name: 'Testing Class' },
+      { id: 'class-id-b', name: 'Other Class' },
+    ], totalPages: 1 })
+
+    const page = mountPage(document.body)
+    await flushPromises()
+    const trigger = page.findAll('button').find((button) => button.text().includes('Edit period'))!
+    trigger.element.focus()
+    await trigger.trigger('click')
+    await flushPromises()
+    await page.get('#eligible-students').setValue(['student-account-b'])
+    await page.get('#eligible-classes').setValue(['class-id-b'])
+    await page.get('button[type="button"]').trigger('click')
+    await flushPromises()
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+
+    expect(api.updatePeriod).not.toHaveBeenCalled()
+    expect(document.activeElement).toBe(trigger.element)
+    const reopen = page.findAll('button').find((button) => button.text().includes('Edit period'))!
+    await reopen.trigger('click')
+    await flushPromises()
+    expect((page.get('#eligible-students option[value="student-account-a"]').element as HTMLOptionElement).selected)
+      .toBe(true)
+    expect((page.get('#eligible-students option[value="student-account-b"]').element as HTMLOptionElement).selected)
+      .toBe(false)
+    expect((page.get('#eligible-classes option[value="class-id-a"]').element as HTMLOptionElement).selected)
+      .toBe(true)
+    expect((page.get('#eligible-classes option[value="class-id-b"]').element as HTMLOptionElement).selected)
+      .toBe(false)
     page.unmount()
   })
 
@@ -733,6 +829,40 @@ describe("student catalogue project titles", () => {
     expect(page.text()).toContain("Alex Student (you)")
     expect(page.text()).toContain("Casey Member")
     expect(page.text()).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i)
+  })
+
+  it("shows only the caller's true, false, or unavailable preference state", async () => {
+    api.role = "STUDENT"
+    api.listIdeas.mockResolvedValue({ content: [] })
+    api.listPeriods.mockResolvedValue({
+      content: [
+        { id: 'own-no-preferences', schoolYear: '2026/2027', status: 'ALLOCATED', projectIds: [],
+          studentApplicationStatus: 'NOT_SUBMITTED',
+          studentAssignment: { state: 'PRELIMINARY', projectTitle: 'No preference project',
+            assignedWithoutPreferences: true,
+            groupMembers: [{ displayName: 'You', self: true },
+              { displayName: 'Other member', self: false, hadPreferences: true }] } },
+        { id: 'own-preferences', schoolYear: '2025/2026', status: 'FINALIZED', projectIds: [],
+          studentApplicationStatus: 'SUBMITTED',
+          studentAssignment: { state: 'FINAL', projectTitle: 'Preference project',
+            assignedWithoutPreferences: false, groupMembers: [] } },
+        { id: 'legacy-result', schoolYear: '2024/2025', status: 'FINALIZED', projectIds: [],
+          studentApplicationStatus: 'SUBMITTED',
+          studentAssignment: { state: 'FINAL', projectTitle: 'Legacy project', groupMembers: [] } },
+      ], page: 0, size: 20, totalElements: 3, totalPages: 1,
+    })
+    const page = mountPage()
+    await flushPromises()
+
+    expect(page.text()).toContain('No preference project')
+    expect(page.text()).toContain('Assigned without submitted preferences')
+    expect(page.text()).toContain('Preference project')
+    expect(page.text()).toContain('Assignment used submitted preferences')
+    expect(page.text()).toContain('Legacy project')
+    expect(page.text()).toContain('Preference state unavailable for this legacy result')
+    expect(page.text()).toContain('Other member')
+    expect(page.text()).not.toContain('Assignment used submitted preferences · Other member')
+    expect(page.text()).not.toContain('hadPreferences')
   })
 
   it("does not show the student result panel to teachers or administrators", async () => {

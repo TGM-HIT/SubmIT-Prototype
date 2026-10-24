@@ -98,6 +98,34 @@ class AllocationOptimizerTest {
     }
 
     @Test
+    void maximizesAssignedCountWithMixedRankedAndNoPreferenceCandidatesBeforePreferenceScore() {
+        List<Application> ranked = students("ranked-", 6, "A", "B");
+        List<Application> withoutPreferences = IntStream.range(0, 3)
+                .mapToObj(index -> new Application("unranked-" + index, List.of(), null, false)).toList();
+        Result result = optimizer.optimize(new Request(projects("A", "B"), concat(ranked, withoutPreferences)));
+
+        assertEquals(9, result.assignedStudents());
+        assertEquals(6, result.assignments().stream().filter(assignment -> assignment.preferenceRank() > 0).count());
+        assertEquals(3, result.assignments().stream().filter(assignment -> assignment.preferenceRank() == 0).count());
+        assertEquals(result.assignments().stream().mapToLong(assignment -> assignment.preferenceRank() == 0
+                ? 0 : 3 - assignment.preferenceRank()).sum(), result.preferenceScore());
+        assertEquals(0, result.unassignedStudents().size());
+    }
+
+    @Test
+    void fewerThanThreeNoPreferenceCandidatesNeverFormAnUndersizedGroup() {
+        List<Application> unranked = IntStream.range(0, 2)
+                .mapToObj(index -> new Application("unranked-" + index, List.of(), null, false)).toList();
+        Result result = optimizer.optimize(new Request(projects("catalogue-A"), unranked));
+
+        assertTrue(result.assignments().isEmpty());
+        assertEquals(0, result.assignedStudents());
+        assertEquals(0, result.preferenceScore());
+        assertEquals(2, result.unassignedStudents().size());
+        assertTrue(result.unassignedStudents().stream().allMatch(student -> student.rankedProjectIds().isEmpty()));
+    }
+
+    @Test
     void leavesStudentsUnassignedWithReasonAndPreferences() {
         Result result = optimizer.optimize(new Request(
                 projects("A", "B"), concat(students("a", 6, "A"), List.of(student("x", "B")))));

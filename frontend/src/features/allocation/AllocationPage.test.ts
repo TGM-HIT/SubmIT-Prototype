@@ -310,6 +310,32 @@ describe('allocation supervisor display', () => {
     expect(page.text()).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/i)
   })
 
+  it("labels staff preference state as used, absent, or unavailable for legacy rows", async () => {
+    state.role = "ADMIN"
+    api.getRun.mockResolvedValue({
+      id: "run-1",
+      status: "COMPLETED",
+      result: {
+        assignments: [
+          { projectId: "project-1", studentId: "student-1", studentDisplayName: "Ranked Student", hadPreferences: true },
+          { projectId: "project-1", studentId: "student-2", studentDisplayName: "Unranked Student", hadPreferences: false },
+          { projectId: "project-1", studentId: "student-3", studentDisplayName: "Legacy Student" },
+        ],
+      },
+    })
+    api.listApplications.mockResolvedValue({
+      content: [{ studentId: "student-3", preferences: [{ projectId: "project-1" }] }],
+    })
+    const page = mountPage()
+    await flushPromises()
+    await page.findAll("button").find((button) => button.text() === "Inspect result")!.trigger("click")
+    await flushPromises()
+
+    expect(page.text()).toContain("Ranked Student · Assignment used submitted preferences")
+    expect(page.text()).toContain("Unranked Student · Assigned without submitted preferences")
+    expect(page.text()).toContain("Legacy Student · Preference state unavailable for this legacy result")
+  })
+
   it("loads all pin and application pages before showing pins or classifying rankings", async () => {
     state.role = "ADMIN"
     const firstPin = { studentId: "student-1", studentDisplayName: "Student One", projectId: "project-1", projectTitle: "Project One", rankedChoice: true }

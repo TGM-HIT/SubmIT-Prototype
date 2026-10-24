@@ -742,6 +742,7 @@ class ApplyingGroupApiTest {
         updateEligibility(1, 3, 4, 5, 6, 7);
         JsonNode excludedRun = perform(post("/api/application-periods/" + period + "/allocation-runs"),
                 admin, null, 201);
+        String excludedRunBytes = stored(text(excludedRun, "id")).getPayload();
         JsonNode excludedUnits = array(excludedRun, "excludedApplyingUnits");
         assertEquals(1, excludedUnits.size());
         assertEquals(groupId, text(excludedUnits.get(0), "groupId"));
@@ -760,8 +761,15 @@ class ApplyingGroupApiTest {
         List<String> restoredRunStudents = assignedStudents(restoredRun);
         assertTrue(restoredRunStudents.contains(student(1)));
         assertTrue(restoredRunStudents.contains(student(2)));
+        JsonNode firstMemberAssignment = assignmentForStudent(restoredRun, student(1));
+        JsonNode secondMemberAssignment = assignmentForStudent(restoredRun, student(2));
+        assertTrue(firstMemberAssignment.path("hadPreferences").isBoolean());
+        assertTrue(firstMemberAssignment.path("hadPreferences").asBoolean());
+        assertTrue(secondMemberAssignment.path("hadPreferences").isBoolean());
+        assertTrue(secondMemberAssignment.path("hadPreferences").asBoolean());
         assertEquals("SUBMITTED", stored(groupId).getStatus());
         assertEquals(savedGroup, stored(groupId).getPayload());
+        assertEquals(excludedRunBytes, stored(text(excludedRun, "id")).getPayload());
     }
 
     private void updateEligibility(int... studentNumbers) throws Exception {
@@ -779,6 +787,15 @@ class ApplyingGroupApiTest {
             result.add(text(assignment, "studentId"));
         }
         return result;
+    }
+
+    private JsonNode assignmentForStudent(JsonNode run, String studentId) {
+        for (JsonNode assignment : array(object(run, "result"), "assignments")) {
+            if (studentId.equals(text(assignment, "studentId"))) {
+                return assignment;
+            }
+        }
+        throw new AssertionError("No assignment found for " + studentId);
     }
 
     private int requestStatus(int student, String id, String action, long revision, Map<String, Object> fields) throws Exception {

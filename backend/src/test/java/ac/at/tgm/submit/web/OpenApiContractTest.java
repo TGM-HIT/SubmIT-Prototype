@@ -274,7 +274,13 @@ class OpenApiContractTest {
             assertFalse(responseRequired.contains(name), name + " must be optional in responses.");
         }
         JsonNode responseMode = response.path("properties").path("eligibilityMode");
+        assertEquals("string", responseMode.path("type").asText());
         assertEquals(Set.of("ALL_STUDENTS", "SELECTED"), textualMembers(responseMode.path("enum")));
+        assertFalse(allowsNull(responseMode));
+        assertTrue(response.path("properties").path("studentAssignment").path("description").asText()
+                .contains("eligible-student snapshot"));
+        assertTrue(response.path("properties").path("studentAssignment").path("description").asText()
+                .contains("no application and no pin"));
         for (String name : List.of("eligibleStudentIds", "eligibleClassIds")) {
             assertUuidArray(request.path("properties").path(name));
             assertUuidArray(response.path("properties").path(name));
@@ -290,6 +296,33 @@ class OpenApiContractTest {
 
         assertOptionalBoolean(schemas.path("AllocationAssignmentResponse"), "hadPreferences");
         assertOptionalBoolean(schemas.path("StudentAssignmentResponse"), "assignedWithoutPreferences");
+    }
+
+    @Test
+    void applicationPeriodUpdateDocumentsItsCompleteIndependentStatusAndTriggerMatrix() throws Exception {
+        JsonNode operation = apiDocument().path("paths").path("/api/application-periods/{id}").path("put");
+        JsonNode responses = operation.path("responses");
+        Set<String> expectedStatuses = Set.of("200", "400", "401", "403", "404", "409");
+        Set<String> actualStatuses = new TreeSet<>();
+        responses.fieldNames().forEachRemaining(actualStatuses::add);
+        assertEquals(expectedStatuses, actualStatuses);
+        assertEquals("#/components/schemas/ApplicationPeriodResponse",
+                responses.path("200").path("content").path("*/*").path("schema").path("$ref").asText());
+        for (String status : List.of("400", "401", "403", "404", "409")) {
+            assertEquals("#/components/schemas/ApiErrorResponse",
+                    responses.path(status).path("content").path("application/json").path("schema").path("$ref").asText(),
+                    status + " uses the standard API error body");
+        }
+        String badRequest = responses.path("400").path("description").asText().toLowerCase();
+        assertTrue(badRequest.contains("uuid"));
+        assertTrue(badRequest.contains("request bodies"));
+        assertTrue(badRequest.contains("eligibility configuration"));
+        assertTrue(badRequest.contains("catalogue selection"));
+        assertTrue(responses.path("403").path("description").asText().toLowerCase().contains("role"));
+        assertTrue(responses.path("404").path("description").asText().toLowerCase().contains("period"));
+        String conflict = responses.path("409").path("description").asText().toLowerCase();
+        assertTrue(conflict.contains("application-period state"));
+        assertTrue(conflict.contains("allocation pin"));
     }
 
     private void assertUuidArray(JsonNode schema) {

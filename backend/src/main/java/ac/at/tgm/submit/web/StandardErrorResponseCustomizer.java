@@ -93,8 +93,10 @@ public class StandardErrorResponseCustomizer implements OpenApiCustomizer {
                             + "an empty body.")),
             Map.entry(new Route(PUT, APPLICATION_PERIOD_ID),
                     Map.of(BAD_REQUEST,
-                                    "The period ID, configuration, or proposed project selection is invalid, "
-                                            + "including absent, ineligible, or out-of-catalogue projects.",
+                                    "The period ID must be a UUID; malformed request bodies, invalid required "
+                                            + "fields or dates, eligibility configuration, or catalogue selection "
+                                            + "(including absent, ineligible, or out-of-catalogue references and "
+                                            + "duplicate IDs) are rejected.",
                             NOT_FOUND, PERIOD_NOT_FOUND)),
             Map.entry(new Route(POST, "/api/projects/{projectId}/complete"),
                     Map.of(BAD_REQUEST, PROJECT_ID_INVALID,
@@ -353,8 +355,9 @@ public class StandardErrorResponseCustomizer implements OpenApiCustomizer {
                 BAD_REQUEST, "The period ID is not a valid UUID.",
                 NOT_FOUND, PERIOD_NOT_FOUND);
         add(result, PUT, APPLICATION_PERIOD_ID,
-                BAD_REQUEST, "The period ID, configuration, or proposed project selection is invalid, including "
-                        + "absent, ineligible, or out-of-catalogue projects.",
+                BAD_REQUEST, "The period ID must be a UUID; malformed request bodies, invalid required fields or "
+                        + "dates, eligibility configuration, or catalogue selection (including absent, ineligible, "
+                        + "or out-of-catalogue references and duplicate IDs) are rejected.",
                 FORBIDDEN, "The caller lacks the role required to update application periods.",
                 NOT_FOUND, PERIOD_NOT_FOUND,
                 CONFLICT, "The application-period state does not permit the proposed update.");

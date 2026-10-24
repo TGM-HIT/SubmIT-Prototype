@@ -265,6 +265,19 @@ class AllocationEarlyRunApiTest {
         createApplication(studentTokens.get(1), projects);
 
         updateEligibleStudents(List.of(students.get(1)));
+        String savedApplicationBeforeExcludedRun = store.repository().findById(savedApplication)
+                .orElseThrow().getPayload();
+        JsonNode excludedRun = startRun(adminToken);
+        assertEquals(1, excludedRun.path("eligibleStudentIds").size());
+        assertEquals(students.get(1).toString(), excludedRun.path("eligibleStudentIds").get(0).asText());
+        assertTrue(excludedRun.path("applications").isArray());
+        assertEquals(1, excludedRun.path("applications").size());
+        assertFalse(applicationIsInSnapshot(excludedRun, savedApplication, students.get(0)));
+        assertFalse(containsAssignment(excludedRun, students.get(0)));
+        assertEquals(savedApplicationBeforeExcludedRun,
+                store.repository().findById(savedApplication).orElseThrow().getPayload());
+        assertEquals("SUBMITTED", store.get("student_application", savedApplication).getStatus());
+
         JsonNode stillReadable = mapper.readTree(mockMvc.perform(get(
                                 "/api/application-periods/{id}/applications/me", periodId)
                         .header("Authorization", bearer(studentTokens.get(0))))
@@ -330,6 +343,17 @@ class AllocationEarlyRunApiTest {
         var savedPin = store.repository().findByTypeAndParentId("allocation_pin", periodId.toString()).stream()
                 .filter(pin -> students.get(0).toString().equals(pin.getOwnerId())).findFirst().orElseThrow();
         assertEquals("PINNED", savedPin.getStatus());
+
+        String firstRunBytes = store.repository().findById(UUID.fromString(run.path("id").asText()))
+                .orElseThrow().getPayload();
+        updateEligibleStudents(List.of(students.get(0), students.get(1), students.get(2), students.get(3)));
+        JsonNode restoredRun = startRun(adminToken);
+        assertEquals(4, restoredRun.path("eligibleStudentIds").size());
+        assertEquals(projects.get(0).toString(), assignment(restoredRun, students.get(0)).path("projectId").asText());
+        assertTrue(assignment(restoredRun, students.get(0)).path("pinned").asBoolean());
+        assertEquals(students.get(0).toString(), restoredRun.path("pins").get(0).path("studentId").asText());
+        assertEquals(firstRunBytes, store.repository().findById(UUID.fromString(run.path("id").asText()))
+                .orElseThrow().getPayload());
     }
 
     @Test
@@ -632,6 +656,15 @@ class AllocationEarlyRunApiTest {
             }
         }
         throw new AssertionError("No assignment found for " + studentId);
+    }
+
+    private boolean containsAssignment(JsonNode run, UUID studentId) {
+        for (JsonNode assigned : run.path("result").path("assignments")) {
+            if (studentId.toString().equals(assigned.path("studentId").asText())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private String pinPath(UUID studentId) {

@@ -78,7 +78,7 @@ An application contains at least three distinct project IDs, ordered by preferen
 
 An ineligible student receives `403` when creating or updating preferences; saved applications remain stored/readable, can be used if eligibility is restored before a later run, and are not implicitly withdrawn or restored. Existing withdrawal behavior is unchanged.
 
-Authenticated student reads of `GET /api/application-periods` and `GET /api/application-periods/{id}` add `studentApplicationStatus`, containing only the caller's application status or `NOT_SUBMITTED`, and a `studentAssignment` for the caller’s submitted application or, without an application, when the caller has a pin for the period. These properties are omitted from staff responses; students receive no pin metadata.
+Authenticated student reads of `GET /api/application-periods` and `GET /api/application-periods/{id}` add `studentApplicationStatus`, containing only the caller's application status or `NOT_SUBMITTED`, and a `studentAssignment` for the caller's submitted application, a caller with a pin, or a caller included in the latest run's immutable eligible-student snapshot. The latter includes eligible callers without an application or pin. These properties are omitted from staff responses; students receive no pin metadata.
 
 ### Applying groups (before allocation)
 
