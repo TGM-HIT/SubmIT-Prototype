@@ -178,6 +178,10 @@ describe('administrator account management', () => {
     expect(page.text()).toContain('Zeitstempel nicht verfügbar')
     setLanguage('en')
     await flushPromises()
+    for (const instant of [occurredAt, createdAt, timestamp]) {
+      expect(page.text()).toContain(formatTimestamp(instant))
+      expect(page.text()).not.toContain(instant)
+    }
     expect(page.text()).toContain('Timestamp unavailable')
     expect(auditEvents[0].occurredAt).toBe(occurredAt)
   })
