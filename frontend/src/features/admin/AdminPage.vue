@@ -57,8 +57,8 @@
       <div class="page-heading"><div><h2 class="section-title">{{ $t('admin.auditHeading') }}</h2><p class="muted">{{ $t('admin.auditHelp') }}</p></div><button class="button button-secondary" @click="loadAudit(0)">{{ $t('admin.refresh') }}</button></div>
       <AsyncPanel :loading="task.loading.value" :error="task.error.value" @retry="loadAudit(audit.page)">
         <div v-if="audit.content.length" class="data-list">
-          <article v-for="(entry, index) in audit.content" :key="String(entry.id ?? index)" class="data-row">
-            <div class="row-main"><h3>{{ entry.action ?? entry.eventType ?? $t('admin.auditEvent') }}</h3><p>{{ timestamp(entry.occurredAt ?? entry.createdAt ?? entry.timestamp) }}</p><p>{{ entry.entityType ?? $t('admin.resource') }} {{ entry.entityId ?? '' }} · {{ $t('admin.actor') }} {{ entry.actorId ?? $t('admin.actorNotSupplied') }}</p></div><span class="status-badge">{{ entry.status ?? $t('admin.recorded') }}</span>
+          <article v-for="entry in audit.content" :key="`${entry.occurredAt}:${entry.entityType}:${entry.entityId}:${entry.action}`" class="data-row">
+            <div class="row-main"><h3>{{ entry.action }}</h3><p>{{ timestamp(entry.occurredAt) }}</p><p>{{ entry.entityType }} {{ entry.entityId }} · {{ $t('admin.actor') }} {{ entry.actorId ?? $t('admin.actorNotSupplied') }}</p></div><span class="status-badge">{{ $t('admin.recorded') }}</span>
           </article>
         </div>
         <p v-else class="empty">{{ $t('admin.noAudit') }}</p>
@@ -118,13 +118,13 @@ import { i18n } from '../../i18n'
 import { formatTimestamp } from '../../i18n'
 import { ApiError } from '../../api/client'
 
-type Data = Record<string, unknown>
 type User = components['schemas']['UserResponse']
+type AuditEntry = components['schemas']['AuditEntryResponse']
 type AccountRole = NonNullable<User['role']>
 const task = useTask()
 const activeTab = ref<'users' | 'catalogues' | 'audit'>('users')
 const users = ref<Page<User>>(emptyPage())
-const audit = ref<Page<Data>>(emptyPage())
+const audit = ref<Page<AuditEntry>>(emptyPage())
 const roleFilter = ref<AccountRole | ''>('')
 const searchInput = ref('')
 const activeSearch = ref('')
@@ -158,8 +158,8 @@ const hasChanges = computed(() => nameDraft.value.trim() !== originalName.value
       || [...subjectDraft.value].sort().join(',') !== [...originalSubjectIds.value].sort().join(','))))
 
 function emptyPage<T>(): Page<T> { return { content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 } }
-function timestamp(value: unknown): string {
-  if (typeof value !== 'string' || !value) return String(i18n.global.t('admin.timestampUnavailable'))
+function timestamp(value: string): string {
+  if (!value) return String(i18n.global.t('admin.timestampUnavailable'))
   const date = new Date(value)
   return Number.isNaN(date.getTime())
     ? value

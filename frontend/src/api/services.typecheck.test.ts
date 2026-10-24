@@ -34,7 +34,7 @@ test('collection service content items retain their generated component types', 
   expectTypeOf<ContentItem<typeof adminApi.users>>()
     .toEqualTypeOf<components['schemas']['UserResponse']>()
   expectTypeOf<ContentItem<typeof adminApi.audit>>()
-    .toEqualTypeOf<Record<string, never>>()
+    .toEqualTypeOf<components['schemas']['AuditEntryResponse']>()
   expectTypeOf<ContentItem<typeof studentDetailsApi.classes>>()
     .toEqualTypeOf<components['schemas']['CatalogueEntryResponse']>()
   expectTypeOf<ContentItem<typeof studentDetailsApi.subjects>>()

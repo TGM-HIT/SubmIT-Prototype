@@ -616,6 +616,23 @@ public final class ApiDtos {
             String cooperationPartner) {
     }
 
+    @Schema(requiredProperties = {"actorUsername", "action", "entityType", "entityId", "occurredAt"})
+    public record AuditEntryResponse(
+            @NotNull @Schema(description = "UUID of the user who recorded this event; omitted for system-recorded entries.",
+                    format = "uuid", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            @JsonInclude(JsonInclude.Include.NON_NULL) String actorId,
+            @NotNull @Schema(description = "Username of the user or system that recorded this event.",
+                    requiredMode = Schema.RequiredMode.REQUIRED) String actorUsername,
+            @NotNull @Schema(description = "Action recorded for this audit event.",
+                    requiredMode = Schema.RequiredMode.REQUIRED) String action,
+            @NotNull @Schema(description = "Type of entity affected by this event.",
+                    requiredMode = Schema.RequiredMode.REQUIRED) String entityType,
+            @NotNull @Schema(description = "UUID of the affected entity.",
+                    format = "uuid", requiredMode = Schema.RequiredMode.REQUIRED) String entityId,
+            @NotNull @Schema(description = "Time when the audit event was recorded.",
+                    format = "date-time", requiredMode = Schema.RequiredMode.REQUIRED) String occurredAt) {
+    }
+
     @Schema(requiredProperties = {"content", "page", "size", "totalElements", "totalPages"})
     public record PageResponse<T>(
             @Schema(description = "Items returned in this page.") List<T> content,
@@ -842,16 +859,14 @@ public final class ApiDtos {
 
     @Schema(requiredProperties = {"displayName", "self"})
     public record StudentGroupMemberResponse(
-            @Schema(description = "Current account display name, or Unknown student.") String displayName,
-            @Schema(description = "True only for the authenticated caller.") boolean self,
-            @Schema(description = "Display-only cohort label, individual addition, or Origin unavailable; no member IDs.")
-            @JsonInclude(JsonInclude.Include.NON_NULL) String originLabel,
-            @Schema(description = "True when this member belongs to the caller's original applying cohort.")
-            @JsonInclude(JsonInclude.Include.NON_NULL) Boolean ownCohort) {
-
-        public StudentGroupMemberResponse(String displayName, boolean self) {
-            this(displayName, self, null, null);
-        }
+            @NotNull @Schema(description = "Current account display name, or Unknown student.",
+                    requiredMode = Schema.RequiredMode.REQUIRED) String displayName,
+            @Schema(description = "True only for the authenticated caller.",
+                    requiredMode = Schema.RequiredMode.REQUIRED) boolean self,
+            @NotNull @Schema(description = "Display-only cohort label, individual addition, or Origin unavailable; no member IDs.",
+                    requiredMode = Schema.RequiredMode.REQUIRED) String originLabel,
+            @Schema(description = "True when this member belongs to the caller's original applying cohort.",
+                    requiredMode = Schema.RequiredMode.REQUIRED) boolean ownCohort) {
     }
 
     @Schema(requiredProperties = {"id", "studentId", "studentDisplayName", "periodId", "status", "preferences"})

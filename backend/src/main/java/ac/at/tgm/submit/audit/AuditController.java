@@ -1,7 +1,7 @@
 package ac.at.tgm.submit.audit;
 
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import ac.at.tgm.submit.security.AuthenticatedUser;
+import ac.at.tgm.submit.web.ApiDtos.AuditEntryResponse;
 import ac.at.tgm.submit.web.ApiDtos.PageResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -24,7 +24,7 @@ public class AuditController {
 
     @GetMapping
     @Operation(summary = "List audit events visible to the authenticated user.")
-    public PageResponse<ObjectNode> list(@AuthenticationPrincipal AuthenticatedUser caller,
+    public PageResponse<AuditEntryResponse> list(@AuthenticationPrincipal AuthenticatedUser caller,
             @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Page size; values are normalized to the inclusive range 1–100.")
             @RequestParam(defaultValue = "20") int size) {
@@ -33,7 +33,7 @@ public class AuditController {
 
     @GetMapping("/{entityType}/{entityId}")
     @Operation(summary = "List audit events for an entity visible to the authenticated user.")
-    public PageResponse<ObjectNode> forEntity(@AuthenticationPrincipal AuthenticatedUser caller,
+    public PageResponse<AuditEntryResponse> forEntity(@AuthenticationPrincipal AuthenticatedUser caller,
             @PathVariable String entityType, @PathVariable UUID entityId,
             @RequestParam(defaultValue = "0") int page,
             @Parameter(description = "Page size; values are normalized to the inclusive range 1–100.")

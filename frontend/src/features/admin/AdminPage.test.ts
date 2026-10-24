@@ -1,6 +1,7 @@
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../api/client'
+import type { components } from '../../api/schema'
 import AdminPage from './AdminPage.vue'
 import { formatTimestamp, setLanguage } from '../../i18n'
 
@@ -150,14 +151,22 @@ describe('administrator account management', () => {
 
   it('formats audit timestamps with the selected account locale', async () => {
     const occurredAt = '2024-02-03T15:04:00Z'
-    const createdAt = '2024-02-04T16:05:00Z'
-    const timestamp = '2024-02-05T17:06:00Z'
-    const auditEvents = [
-      { id: 'audit-1', action: 'LOGIN', occurredAt, createdAt: 'UNUSED_FALLBACK', entityType: 'USER' },
-      { id: 'audit-2', action: 'UPDATE', createdAt, entityType: 'USER' },
-      { id: 'audit-3', action: 'DELETE', timestamp, entityType: 'USER' },
-      { id: 'audit-4', action: 'UNKNOWN', entityType: 'USER' },
-    ]
+    const userEvent: components['schemas']['AuditEntryResponse'] = {
+      actorId: '11111111-1111-4111-8111-111111111111',
+      actorUsername: 'admin01',
+      action: 'ELECTIVE_SUBJECT_CREATED',
+      entityType: 'elective_subject',
+      entityId: '22222222-2222-4222-8222-222222222222',
+      occurredAt,
+    }
+    const systemEvent: components['schemas']['AuditEntryResponse'] = {
+      actorUsername: 'SYSTEM',
+      action: 'ALLOCATION_RUN_STARTED',
+      entityType: 'allocation_run',
+      entityId: '33333333-3333-4333-8333-333333333333',
+      occurredAt: '2024-02-04T16:05:00Z',
+    }
+    const auditEvents = [userEvent, systemEvent]
     api.audit.mockResolvedValue(pageResult(auditEvents))
     const page = pageWith()
     await flushPromises()
@@ -166,23 +175,29 @@ describe('administrator account management', () => {
     await auditTab.trigger('click')
     await page.get('.page-heading button').trigger('click')
     await flushPromises()
-    for (const instant of [occurredAt, createdAt, timestamp]) {
+    for (const instant of [occurredAt, systemEvent.occurredAt]) {
       expect(page.text()).toContain(formatTimestamp(instant))
       expect(page.text()).not.toContain(instant)
     }
-    expect(page.text()).toContain('Timestamp unavailable')
+    expect(page.text()).toContain('ELECTIVE_SUBJECT_CREATED')
+    expect(page.text()).toContain('ALLOCATION_RUN_STARTED')
+    expect(page.text()).toContain('elective_subject')
+    expect(page.text()).toContain(userEvent.entityId)
+    expect(page.text()).toContain(userEvent.actorId)
+    expect(page.text()).toContain('allocation_run')
+    expect(page.text()).toContain(systemEvent.entityId)
+    expect(page.text()).toContain('not supplied')
+    expect(page.findAll('.status-badge').some((badge) => badge.text() === 'Recorded')).toBe(true)
 
     setLanguage('de')
     await flushPromises()
-    for (const instant of [occurredAt, createdAt, timestamp]) expect(page.text()).toContain(formatTimestamp(instant))
-    expect(page.text()).toContain('Zeitstempel nicht verfügbar')
+    for (const instant of [occurredAt, systemEvent.occurredAt]) expect(page.text()).toContain(formatTimestamp(instant))
     setLanguage('en')
     await flushPromises()
-    for (const instant of [occurredAt, createdAt, timestamp]) {
+    for (const instant of [occurredAt, systemEvent.occurredAt]) {
       expect(page.text()).toContain(formatTimestamp(instant))
       expect(page.text()).not.toContain(instant)
     }
-    expect(page.text()).toContain('Timestamp unavailable')
     expect(auditEvents[0].occurredAt).toBe(occurredAt)
   })
 

@@ -165,7 +165,10 @@ class OpenApiContractTest {
             Map.entry("StudentAssignmentResponse", contract(
                     "state,projectTitle,preferenceRank,groupMembers", "assignedWithoutPreferences",
                     "projectTitle,preferenceRank")),
-            Map.entry("StudentGroupMemberResponse", contract("displayName,self", "originLabel,ownCohort", "")),
+            Map.entry("AuditEntryResponse", contract("actorUsername,action,entityType,entityId,occurredAt",
+                    "actorId", "")),
+            Map.entry("StudentGroupMemberResponse",
+                    contract("displayName,self,originLabel,ownCohort", "", "")),
             Map.entry("ApplyingUnitSnapshot", contract("groupId,revision,studentIds,projectIds", "", "")),
             Map.entry("StudentApplicationResponse", contract(
                     "id,studentId,studentDisplayName,periodId,status,preferences",
@@ -213,6 +216,7 @@ class OpenApiContractTest {
                     "", "publicationSubmissionMetadata,reviewNote,reviewedAt")),
             Map.entry("PublicArtifactResponse", contract("id,type,size", "", "")),
             Map.entry("CompletionResponse", contract("projectId,status,completedAt", "", "")),
+            Map.entry("PageResponseAuditEntryResponse", pageContract()),
             Map.entry("PageResponseFormalReviewResponse", pageContract()),
             Map.entry("PageResponseUserResponse", pageContract()),
             Map.entry("PageResponseStudentLookupResponse", pageContract()),
@@ -224,7 +228,6 @@ class OpenApiContractTest {
             Map.entry("PageResponseArtifactResponse", pageContract()),
             Map.entry("PageResponseIdeaResponse", pageContract()),
             Map.entry("PageResponseRubricSummary", pageContract()),
-            Map.entry("PageResponseObjectNode", pageContract()),
             Map.entry("PageResponseApplicationPeriodResponse", pageContract()),
             Map.entry("PageResponseStudentApplicationResponse", pageContract()),
             Map.entry("PageResponseAllocationPinResponse", pageContract()));
@@ -234,6 +237,44 @@ class OpenApiContractTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Test
+    void auditOperationsDocumentTypedEntries() throws Exception {
+        JsonNode document = apiDocument();
+        JsonNode paths = document.path("paths");
+        for (String path : List.of("/api/audit", "/api/audit/{entityType}/{entityId}")) {
+            JsonNode operation = paths.path(path).path("get");
+            JsonNode content = operation.path("responses").path("200").path("content");
+            assertTrue(content.isObject(), path + " response content");
+            Set<String> schemasInResponse = new TreeSet<>();
+            content.elements().forEachRemaining(mediaType ->
+                    schemasInResponse.add(mediaType.path("schema").path("$ref").asText()));
+            assertEquals(Set.of("#/components/schemas/PageResponseAuditEntryResponse"), schemasInResponse,
+                    path + " success page schema");
+        }
+
+        JsonNode schemas = document.path("components").path("schemas");
+        JsonNode page = schemas.path("PageResponseAuditEntryResponse");
+        assertEquals("#/components/schemas/AuditEntryResponse",
+                page.path("properties").path("content").path("items").path("$ref").asText());
+        JsonNode auditEntry = schemas.path("AuditEntryResponse");
+        assertEquals(names("actorId,actorUsername,action,entityType,entityId,occurredAt"),
+                fieldNames(auditEntry.path("properties")));
+        assertEquals(names("actorUsername,action,entityType,entityId,occurredAt"),
+                textualMembers(auditEntry.path("required")));
+        for (String property : fieldNames(auditEntry.path("properties"))) {
+            JsonNode schema = auditEntry.path("properties").path(property);
+            assertEquals("string", schema.path("type").asText(), property + " type");
+            assertTrue(schema.path("description").isTextual() && !schema.path("description").asText().isBlank(),
+                    property + " description");
+            assertFalse(schema.path("nullable").asBoolean(false), property + " must not be nullable");
+        }
+        assertEquals("uuid", auditEntry.path("properties").path("actorId").path("format").asText());
+        assertEquals("uuid", auditEntry.path("properties").path("entityId").path("format").asText());
+        assertEquals("date-time", auditEntry.path("properties").path("occurredAt").path("format").asText());
+        assertTrue(auditEntry.path("properties").path("actorId").path("description").asText()
+                .contains("omitted for system-recorded entries"));
+    }
 
     @Test
     void operationsHaveSummariesAndConstrainedFieldsHaveDescriptions() throws Exception {
@@ -1690,8 +1731,8 @@ class OpenApiContractTest {
                 get|/api/projects/{projectId}/students/{studentId}/final-grade|200|#/components/schemas/FinalGradeHistory
                 get|/api/grading-rubrics/{id}|200|#/components/schemas/RubricResponse
                 get|/api/grading-rubrics/active|200|#/components/schemas/RubricResponse
-                get|/api/audit|200|#/components/schemas/PageResponseObjectNode
-                get|/api/audit/{entityType}/{entityId}|200|#/components/schemas/PageResponseObjectNode
+                get|/api/audit|200|#/components/schemas/PageResponseAuditEntryResponse
+                get|/api/audit/{entityType}/{entityId}|200|#/components/schemas/PageResponseAuditEntryResponse
                 get|/api/artifacts/{artifactId}|200|#/components/schemas/ArtifactResponse
                 delete|/api/artifacts/{artifactId}|204|
                 get|/api/artifacts/{artifactId}/content|200|binary

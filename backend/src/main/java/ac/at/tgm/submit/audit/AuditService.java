@@ -5,6 +5,7 @@ import ac.at.tgm.submit.data.RecordStore;
 import ac.at.tgm.submit.data.StoredRecord;
 import ac.at.tgm.submit.security.AuthenticatedUser;
 import ac.at.tgm.submit.security.Role;
+import ac.at.tgm.submit.web.ApiDtos.AuditEntryResponse;
 import ac.at.tgm.submit.web.ApiDtos.PageResponse;
 import java.time.Instant;
 import java.util.UUID;
@@ -39,24 +40,32 @@ public class AuditService {
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<ObjectNode> list(AuthenticatedUser caller, int page, int size) {
+    public PageResponse<AuditEntryResponse> list(AuthenticatedUser caller, int page, int size) {
         if (caller.role() == Role.STUDENT) {
             throw new org.springframework.security.access.AccessDeniedException("Audit access is restricted.");
         }
         Page<StoredRecord> records = store.page("audit", null, null, PageRequest.of(page, size));
-        return new PageResponse<>(records.map(store::parse).getContent(), records.getNumber(),
+        return new PageResponse<>(records.map(this::response).getContent(), records.getNumber(),
                 records.getSize(), records.getTotalElements(), records.getTotalPages());
     }
 
     @Transactional(readOnly = true)
-    public PageResponse<ObjectNode> forEntity(AuthenticatedUser caller, String entityType, UUID entityId,
+    public PageResponse<AuditEntryResponse> forEntity(AuthenticatedUser caller, String entityType, UUID entityId,
             int page, int size) {
         if (caller.role() == Role.STUDENT) {
             throw new org.springframework.security.access.AccessDeniedException("Audit access is restricted.");
         }
         Page<StoredRecord> records = store.repository().findByTypeAndReferenceTypeAndParentId(
                 "audit", entityType, entityId.toString(), PageRequest.of(page, size));
-        return new PageResponse<>(records.map(store::parse).getContent(), records.getNumber(),
+        return new PageResponse<>(records.map(this::response).getContent(), records.getNumber(),
                 records.getSize(), records.getTotalElements(), records.getTotalPages());
+    }
+
+    private AuditEntryResponse response(StoredRecord record) {
+        ObjectNode event = store.parse(record);
+        return new AuditEntryResponse(event.hasNonNull("actorId") ? event.path("actorId").asText() : null,
+                event.path("actorUsername").asText(), event.path("action").asText(),
+                event.path("entityType").asText(), event.path("entityId").asText(),
+                event.path("occurredAt").asText());
     }
 }

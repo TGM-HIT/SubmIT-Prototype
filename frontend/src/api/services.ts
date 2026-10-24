@@ -272,7 +272,7 @@ export const adminApi = {
   role(id: string, role: UserResponse['role']): Promise<UserResponse> {
     return json(`/api/users/${encodeURIComponent(id)}/role`, 'PATCH', { role })
   },
-  audit(page = 0): Promise<Page<components['schemas']['PageResponseObjectNode']>> {
+  audit(page = 0): Promise<Page<components['schemas']['PageResponseAuditEntryResponse']>> {
     return json(`/api/audit?${pageQuery(page)}`)
   },
 }

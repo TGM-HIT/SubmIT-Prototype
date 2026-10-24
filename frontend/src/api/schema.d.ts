@@ -1992,9 +1992,9 @@ export interface components {
             /** @description True only for the authenticated caller. */
             self: boolean;
             /** @description Display-only cohort label, individual addition, or Origin unavailable; no member IDs. */
-            originLabel?: string;
+            originLabel: string;
             /** @description True when this member belongs to the caller's original applying cohort. */
-            ownCohort?: boolean;
+            ownCohort: boolean;
         };
         CatalogueEntryRequest: {
             /** @description Unique case-insensitively shared class or elective-subject name; trimmed before storage; 1 to 100 characters. */
@@ -3203,9 +3203,32 @@ export interface components {
              */
             totalPages: number;
         };
-        PageResponseObjectNode: {
+        AuditEntryResponse: {
+            /**
+             * Format: uuid
+             * @description UUID of the user who recorded this event; omitted for system-recorded entries.
+             */
+            actorId?: string;
+            /** @description Username of the user or system that recorded this event. */
+            actorUsername: string;
+            /** @description Action recorded for this audit event. */
+            action: string;
+            /** @description Type of entity affected by this event. */
+            entityType: string;
+            /**
+             * Format: uuid
+             * @description UUID of the affected entity.
+             */
+            entityId: string;
+            /**
+             * Format: date-time
+             * @description Time when the audit event was recorded.
+             */
+            occurredAt: string;
+        };
+        PageResponseAuditEntryResponse: {
             /** @description Items returned in this page. */
-            content: Record<string, never>[];
+            content: components["schemas"]["AuditEntryResponse"][];
             /**
              * Format: int32
              * @description Zero-based index of this page.
@@ -7816,7 +7839,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["PageResponseObjectNode"];
+                    "*/*": components["schemas"]["PageResponseAuditEntryResponse"];
                 };
             };
             /** @description A pagination query parameter is invalid. */
@@ -7870,7 +7893,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["PageResponseObjectNode"];
+                    "*/*": components["schemas"]["PageResponseAuditEntryResponse"];
                 };
             };
             /** @description The entity ID is not a valid UUID. */
