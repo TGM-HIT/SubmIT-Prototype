@@ -49,6 +49,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Bug-27](tickets/Bug-27.md) | to-do | Gate project realization on formal-application approval |
 | [Bug-28](tickets/Bug-28.md) | to-do | Make generated request string constraints match runtime validation |
 | [Bug-29](tickets/Bug-29.md) | to-do | Declare always-returned audit and group-member response fields |
+| [Bug-30](tickets/Bug-30.md) | to-do | Show meaningful audit events with timestamps, resources, and actors |
 
 ### Development
 
