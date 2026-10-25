@@ -8,7 +8,7 @@
         </optgroup>
       </select>
     </div>
-    <p v-if="selected" class="notice">{{ selected.description || selected.name }} · {{ $t('gradingFields.range', { min: number(scaleObject(selected.scale).min), max: number(scaleObject(selected.scale).max), step: number(scaleObject(selected.scale).step) }) }}<span v-if="selected.evidenceRequired"> · {{ $t('gradingFields.writtenEvidenceRequired') }}</span></p>
+    <p v-if="selected" class="notice">{{ selected.description || selected.name }} · {{ $t('gradingFields.range', { min: number(scaleField(selected.scale, 'min')), max: number(scaleField(selected.scale, 'max')), step: number(scaleField(selected.scale, 'step')) }) }}<span v-if="selected.evidenceRequired"> · {{ $t('gradingFields.writtenEvidenceRequired') }}</span></p>
     <div class="grid grid-2">
       <div class="field"><label class="label" :for="`${prefix}-grade`">{{ $t('gradingFields.grade') }}</label><select :id="`${prefix}-grade`" :value="modelValue.grade" class="select" required @change="update('grade', ($event.target as HTMLSelectElement).value)"><option value="">{{ $t('gradingFields.selectValue') }}</option><option v-for="value in scaleOptions" :key="value" :value="value">{{ number(value) }}{{ label(value) }}</option></select></div>
       <div class="field"><label class="label" :for="`${prefix}-date`">{{ $t('gradingFields.assessmentDate') }}</label><input :id="`${prefix}-date`" :value="modelValue.assessedOn" class="input" type="date" required @input="update('assessedOn', ($event.target as HTMLInputElement).value)" /></div>
@@ -21,40 +21,39 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import type { components } from '../../api/schema'
 import { formatNumber } from '../../i18n'
 
-type Data = Record<string, unknown>
+type Rubric = components['schemas']['RubricResponse']
+type Category = Rubric['categories'][number]
+type Criterion = Category['criteria'][number]
 type GradeDraft = { criterionId: string; grade: string; assessedOn: string; evidence: string; comments: string }
-const props = withDefaults(defineProps<{ modelValue: GradeDraft; rubric: Data; prefix?: string }>(), { prefix: 'grade' })
+const props = withDefaults(defineProps<{ modelValue: GradeDraft; rubric: Rubric | null; prefix?: string }>(), { prefix: 'grade' })
 const emit = defineEmits<{ 'update:modelValue': [value: GradeDraft] }>()
 const number = (value: unknown): string => typeof value === 'number' && Number.isFinite(value)
   ? formatNumber(value) : String(value ?? '')
-const categories = computed(() => Array.isArray(props.rubric.categories)
-  ? props.rubric.categories.filter((item): item is Data => typeof item === 'object' && item !== null) : [])
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+function scaleField(value: unknown, field: 'min' | 'max' | 'step' | 'labels'): unknown {
+  return isRecord(value) ? value[field] : undefined
+}
+const categories = computed(() => props.rubric?.categories ?? [])
 const criteria = computed(() => categories.value.flatMap((category) => criteriaFor(category)))
 const selected = computed(() => criteria.value.find((criterion) => criterion.id === props.modelValue.criterionId))
 const scaleOptions = computed(() => {
-  if (!selected.value || typeof selected.value.scale !== 'object' || selected.value.scale === null) return []
-  const scale = selected.value.scale as Data
-  const min = Number(scale.min)
-  const max = Number(scale.max)
-  const step = Number(scale.step ?? 1)
+  if (!selected.value) return []
+  const min = Number(scaleField(selected.value.scale, 'min'))
+  const max = Number(scaleField(selected.value.scale, 'max'))
+  const step = Number(scaleField(selected.value.scale, 'step') ?? 1)
   if (step <= 0 || max < min || (max - min) / step > 200) return []
   return Array.from({ length: Math.floor((max - min) / step) + 1 }, (_, index) => min + index * step)
 })
 
-function criteriaFor(category: Data): Data[] {
-  return Array.isArray(category.criteria)
-    ? category.criteria.filter((item): item is Data => typeof item === 'object' && item !== null) : []
-}
-function scaleObject(value: unknown): Data {
-  return typeof value === 'object' && value !== null ? value as Data : {}
-}
+function criteriaFor(category: Category): Criterion[] { return category.criteria }
 function label(value: number): string {
-  if (!selected.value || typeof selected.value.scale !== 'object' || selected.value.scale === null) return ''
-  const labels = (selected.value.scale as Data).labels
-  if (typeof labels !== 'object' || labels === null) return ''
-  const text = (labels as Data)[String(value)]
+  const labels = scaleField(selected.value?.scale, 'labels')
+  const text = isRecord(labels) ? labels[String(value)] : undefined
   return typeof text === 'string' ? ` · ${text}` : ''
 }
 function update(key: keyof GradeDraft, value: string): void {

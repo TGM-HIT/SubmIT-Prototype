@@ -3,12 +3,8 @@ import { i18n } from '../i18n'
 
 export type Role = components['schemas']['UserResponse']['role']
 export type User = components['schemas']['UserResponse']
-export type Page<T> = {
+export type Page<T> = Omit<components['schemas']['PageResponseUserResponse'], 'content'> & {
   content: T[]
-  page: number
-  size: number
-  totalElements: number
-  totalPages: number
 }
 
 export class ApiError extends Error {

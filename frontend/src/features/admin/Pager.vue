@@ -9,9 +9,11 @@
 </template>
 
 <script setup lang="ts">
+import type { components } from '../../api/schema'
 import type { Page } from '../../api/client'
 import { formatNumber } from '../../i18n'
-defineProps<{ page: Page<unknown> }>()
+type PageItem = components['schemas']['UserResponse'] | components['schemas']['AuditEntryResponse']
+defineProps<{ page: Page<PageItem> }>()
 defineEmits<{ page: [number] }>()
 const number = formatNumber
 </script>

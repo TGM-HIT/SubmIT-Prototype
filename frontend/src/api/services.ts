@@ -11,6 +11,28 @@ type StudentApplicationResponse = components['schemas']['StudentApplicationRespo
 type FormalApplicationRequest = components['schemas']['FormalApplicationRequest']
 type FormalApplicationResponse = components['schemas']['FormalApplicationResponse']
 type ReviewRequest = components['schemas']['ReviewRequest']
+type ReviewResponse = components['schemas']['ReviewResponse']
+type IdeaReviewRequest = components['schemas']['IdeaReviewRequest']
+type SpecificationRequest = components['schemas']['SpecificationRequest']
+type SpecificationResponse = components['schemas']['SpecificationResponse']
+type SupervisionPreferenceRequest = components['schemas']['SupervisionPreferenceRequest']
+type SupervisionPreferenceResponse = components['schemas']['SupervisionPreferenceResponse']
+type SupervisorRequest = components['schemas']['SupervisorRequest']
+type SupervisorResponse = components['schemas']['SupervisorResponse']
+type CatalogueProjectResponse = components['schemas']['CatalogueProjectResponse']
+type AllocationRunResponse = components['schemas']['AllocationRunResponse']
+type FormalReviewResponse = components['schemas']['FormalReviewResponse']
+type RubricResponse = components['schemas']['RubricResponse']
+type PublishRubricRequest = components['schemas']['PublishRubricRequest']
+type StudentGradeRequest = components['schemas']['StudentGradeRequest']
+type GroupGradeRequest = components['schemas']['GroupGradeRequest']
+type GradeResponse = components['schemas']['GradeResponse']
+type MetricRequest = components['schemas']['MetricRequest']
+type MetricResponse = components['schemas']['MetricResponse']
+type FinalGradeHistory = components['schemas']['FinalGradeHistory']
+type FinalGradesRequest = components['schemas']['FinalGradesRequest']
+type FinalGradesResponse = components['schemas']['FinalGradesResponse']
+type CompletionResponse = components['schemas']['CompletionResponse']
 type ArtifactResponse = components['schemas']['ArtifactResponse']
 type UserResponse = components['schemas']['UserResponse']
 type DisplayNameRequest = components['schemas']['DisplayNameRequest']
@@ -19,7 +41,6 @@ type CatalogueEntryRequest = components['schemas']['CatalogueEntryRequest']
 type CatalogueEntryResponse = components['schemas']['CatalogueEntryResponse']
 type StudentDetailsRequest = components['schemas']['StudentDetailsRequest']
 type StudentDetailsResponse = components['schemas']['StudentDetailsResponse']
-type Data = Record<string, unknown>
 type Page<T extends { content?: unknown[] }> = Required<Omit<T, 'content'>> & {
   content: NonNullable<T['content']>
 }
@@ -27,6 +48,25 @@ type IdeaListFilters = Pick<NonNullable<operations['list_1']['parameters']['quer
 
 function json<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
   return request<T>(path, { method, ...(body === undefined ? {} : { body }) })
+}
+
+function reviewIdea(
+  id: string,
+  input: IdeaReviewRequest,
+  specification?: false,
+): Promise<ReviewResponse>
+function reviewIdea(
+  id: string,
+  input: ReviewRequest,
+  specification: true,
+): Promise<ReviewResponse>
+function reviewIdea(
+  id: string,
+  input: IdeaReviewRequest | ReviewRequest,
+  specification = false,
+): Promise<ReviewResponse> {
+  const path = specification ? 'specification/reviews' : 'reviews'
+  return json<ReviewResponse>(`/api/ideas/${encodeURIComponent(id)}/${path}`, 'POST', input)
 }
 
 export const applyingGroupsApi = {
@@ -88,21 +128,25 @@ export const ideasApi = {
   withdraw(id: string): Promise<IdeaResponse> {
     return json(`/api/ideas/${encodeURIComponent(id)}/withdraw`, 'POST')
   },
-  specification(id: string, input: Data): Promise<unknown> {
-    return json(`/api/ideas/${encodeURIComponent(id)}/specification`, 'PUT', input)
+  specification(id: string, input: SpecificationRequest): Promise<SpecificationResponse> {
+    return json<SpecificationResponse>(`/api/ideas/${encodeURIComponent(id)}/specification`, 'PUT', input)
   },
-  submitSpecification(id: string): Promise<unknown> {
-    return json(`/api/ideas/${encodeURIComponent(id)}/specification/submit`, 'POST')
+  submitSpecification(id: string): Promise<SpecificationResponse> {
+    return json<SpecificationResponse>(`/api/ideas/${encodeURIComponent(id)}/specification/submit`, 'POST')
   },
-  review(id: string, input: ReviewRequest, specification = false): Promise<unknown> {
-    const path = specification ? 'specification/reviews' : 'reviews'
-    return json(`/api/ideas/${encodeURIComponent(id)}/${path}`, 'POST', input)
+  review: reviewIdea,
+  supervision(
+    id: string,
+    preference: SupervisionPreferenceRequest['preference'],
+    note: string,
+  ): Promise<SupervisionPreferenceResponse> {
+    const body: SupervisionPreferenceRequest = { preference, note }
+    return json<SupervisionPreferenceResponse>(
+      `/api/ideas/${encodeURIComponent(id)}/supervision-preference`, 'PUT', body)
   },
-  supervision(id: string, preference: string, note: string): Promise<unknown> {
-    return json(`/api/ideas/${encodeURIComponent(id)}/supervision-preference`, 'PUT', { preference, note })
-  },
-  assignSupervisor(id: string, teacherId: string, acknowledgeRefusal = false): Promise<unknown> {
-    return json(`/api/ideas/${encodeURIComponent(id)}/supervisor`, 'PUT', { teacherId, acknowledgeRefusal })
+  assignSupervisor(id: string, teacherId: string, acknowledgeRefusal = false): Promise<SupervisorResponse> {
+    const body: SupervisorRequest = { teacherId, acknowledgeRefusal }
+    return json<SupervisorResponse>(`/api/ideas/${encodeURIComponent(id)}/supervisor`, 'PUT', body)
   },
 }
 
@@ -122,8 +166,9 @@ export const periodsApi = {
   myApplication(periodId: string): Promise<StudentApplicationResponse> {
     return json(`/api/application-periods/${encodeURIComponent(periodId)}/applications/me`)
   },
-  projectDetails(periodId: string, projectId: string): Promise<Data> {
-    return json(`/api/application-periods/${encodeURIComponent(periodId)}/catalogue/${encodeURIComponent(projectId)}`)
+  projectDetails(periodId: string, projectId: string): Promise<CatalogueProjectResponse> {
+    return json<CatalogueProjectResponse>(
+      `/api/application-periods/${encodeURIComponent(periodId)}/catalogue/${encodeURIComponent(projectId)}`)
   },
   applications(periodId: string, page: number): Promise<Page<components['schemas']['PageResponseStudentApplicationResponse']>> {
     return json(`/api/application-periods/${encodeURIComponent(periodId)}/applications?${pageQuery(page)}`)
@@ -149,17 +194,17 @@ export const periodsApi = {
   runs(periodId: string, page: number): Promise<Page<components['schemas']['AllocationRunPageResponse']>> {
     return json(`/api/application-periods/${encodeURIComponent(periodId)}/allocation-runs?${pageQuery(page)}`)
   },
-  startRun(periodId: string): Promise<Data> {
-    return json(`/api/application-periods/${encodeURIComponent(periodId)}/allocation-runs`, 'POST')
+  startRun(periodId: string): Promise<AllocationRunResponse> {
+    return json<AllocationRunResponse>(`/api/application-periods/${encodeURIComponent(periodId)}/allocation-runs`, 'POST')
   },
 }
 
 export const allocationApi = {
-  getRun(id: string): Promise<Data> {
-    return json(`/api/allocation-runs/${encodeURIComponent(id)}`)
+  getRun(id: string): Promise<AllocationRunResponse> {
+    return json<AllocationRunResponse>(`/api/allocation-runs/${encodeURIComponent(id)}`)
   },
-  finalize(id: string): Promise<Data> {
-    return json(`/api/allocation-runs/${encodeURIComponent(id)}/finalize`, 'POST')
+  finalize(id: string): Promise<AllocationRunResponse> {
+    return json<AllocationRunResponse>(`/api/allocation-runs/${encodeURIComponent(id)}/finalize`, 'POST')
   },
 }
 
@@ -179,8 +224,8 @@ export const formalApi = {
   submit(id: string): Promise<FormalApplicationResponse> {
     return json(`/api/formal-applications/${encodeURIComponent(id)}/submit`, 'POST')
   },
-  review(id: string, input: ReviewRequest): Promise<unknown> {
-    return json(`/api/formal-applications/${encodeURIComponent(id)}/reviews`, 'POST', input)
+  review(id: string, input: ReviewRequest): Promise<FormalReviewResponse> {
+    return json<FormalReviewResponse>(`/api/formal-applications/${encodeURIComponent(id)}/reviews`, 'POST', input)
   },
 }
 
@@ -188,38 +233,39 @@ export const gradingApi = {
   rubrics(page = 0): Promise<Page<components['schemas']['PageResponseRubricSummary']>> {
     return json(`/api/grading-rubrics?${pageQuery(page)}`)
   },
-  activeRubric(): Promise<Data> {
-    return json('/api/grading-rubrics/active')
+  activeRubric(): Promise<RubricResponse> {
+    return json<RubricResponse>('/api/grading-rubrics/active')
   },
-  publishRubric(input: Data): Promise<Data> {
-    return json('/api/grading-rubrics', 'POST', input)
+  publishRubric(input: PublishRubricRequest): Promise<RubricResponse> {
+    return json<RubricResponse>('/api/grading-rubrics', 'POST', input)
   },
   grades(projectId: string, page = 0): Promise<Page<components['schemas']['PageResponseGradeResponse']>> {
     return json(`/api/projects/${encodeURIComponent(projectId)}/student-grades?${pageQuery(page)}`)
   },
-  recordGrade(projectId: string, input: Data): Promise<Data> {
-    return json(`/api/projects/${encodeURIComponent(projectId)}/student-grades`, 'POST', input)
+  recordGrade(projectId: string, input: StudentGradeRequest): Promise<GradeResponse> {
+    return json<GradeResponse>(`/api/projects/${encodeURIComponent(projectId)}/student-grades`, 'POST', input)
   },
   groupGrades(projectId: string, page = 0): Promise<Page<components['schemas']['PageResponseGradeResponse']>> {
     return json(`/api/projects/${encodeURIComponent(projectId)}/group-grades?${pageQuery(page)}`)
   },
-  recordGroupGrade(projectId: string, input: Data): Promise<Data> {
-    return json(`/api/projects/${encodeURIComponent(projectId)}/group-grades`, 'POST', input)
+  recordGroupGrade(projectId: string, input: GroupGradeRequest): Promise<GradeResponse> {
+    return json<GradeResponse>(`/api/projects/${encodeURIComponent(projectId)}/group-grades`, 'POST', input)
   },
   metrics(projectId: string, page = 0): Promise<Page<components['schemas']['PageResponseMetricResponse']>> {
     return json(`/api/projects/${encodeURIComponent(projectId)}/metrics?${pageQuery(page)}`)
   },
-  recordMetric(projectId: string, input: Data): Promise<Data> {
-    return json(`/api/projects/${encodeURIComponent(projectId)}/metrics`, 'POST', input)
+  recordMetric(projectId: string, input: MetricRequest): Promise<MetricResponse> {
+    return json<MetricResponse>(`/api/projects/${encodeURIComponent(projectId)}/metrics`, 'POST', input)
   },
-  finalGrade(projectId: string): Promise<Data> {
-    return json(`/api/projects/${encodeURIComponent(projectId)}/final-grade`)
+  finalGrade(projectId: string): Promise<FinalGradeHistory> {
+    return json<FinalGradeHistory>(`/api/projects/${encodeURIComponent(projectId)}/final-grade`)
   },
-  finalStudentGrade(projectId: string, studentId: string): Promise<Data> {
-    return json(`/api/projects/${encodeURIComponent(projectId)}/students/${encodeURIComponent(studentId)}/final-grade`)
+  finalStudentGrade(projectId: string, studentId: string): Promise<FinalGradeHistory> {
+    return json<FinalGradeHistory>(
+      `/api/projects/${encodeURIComponent(projectId)}/students/${encodeURIComponent(studentId)}/final-grade`)
   },
-  setFinalGrade(projectId: string, input: Data): Promise<Data> {
-    return json(`/api/projects/${encodeURIComponent(projectId)}/final-grade`, 'PUT', input)
+  setFinalGrade(projectId: string, input: FinalGradesRequest): Promise<FinalGradesResponse> {
+    return json<FinalGradesResponse>(`/api/projects/${encodeURIComponent(projectId)}/final-grade`, 'PUT', input)
   },
 }
 
@@ -246,8 +292,8 @@ export const archiveApi = {
   publicationReview(id: string, decision: string, note: string): Promise<ArtifactResponse> {
     return json(`/api/artifacts/${encodeURIComponent(id)}/publication-review`, 'POST', { decision, note })
   },
-  complete(projectId: string): Promise<Data> {
-    return json(`/api/projects/${encodeURIComponent(projectId)}/complete`, 'POST')
+  complete(projectId: string): Promise<CompletionResponse> {
+    return json<CompletionResponse>(`/api/projects/${encodeURIComponent(projectId)}/complete`, 'POST')
   },
 }
 

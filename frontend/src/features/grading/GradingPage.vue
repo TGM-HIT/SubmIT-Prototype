@@ -3,13 +3,13 @@
     <p class="page-intro">{{ $t('grading.intro') }}</p>
     <div class="grid grid-2">
       <section class="panel">
-        <div class="page-heading"><div><p class="eyebrow">{{ $t('grading.effectiveToday') }}</p><h2 class="section-title">{{ activeRubric.name ?? $t('grading.activeRubric') }}</h2></div><span v-if="activeRubric.version" class="status-badge">{{ activeRubric.version }}</span></div>
-        <p v-if="activeRubric.effectiveFrom" class="muted">{{ $t('grading.effective') }} {{ date(activeRubric.effectiveFrom) }}<span v-if="activeRubric.schoolYear"> · {{ $t('grading.schoolYear', { year: activeRubric.schoolYear }) }}</span></p>
-        <p v-if="!activeRubric.version" class="empty">{{ $t('grading.noActiveRubric') }}</p>
+        <div class="page-heading"><div><p class="eyebrow">{{ $t('grading.effectiveToday') }}</p><h2 class="section-title">{{ activeRubric?.name ?? $t('grading.activeRubric') }}</h2></div><span v-if="activeRubric?.version" class="status-badge">{{ activeRubric.version }}</span></div>
+        <p v-if="activeRubric?.effectiveFrom" class="muted">{{ $t('grading.effective') }} {{ date(activeRubric.effectiveFrom) }}<span v-if="activeRubric.schoolYear"> · {{ $t('grading.schoolYear', { year: activeRubric.schoolYear }) }}</span></p>
+        <p v-if="!activeRubric?.version" class="empty">{{ $t('grading.noActiveRubric') }}</p>
         <div v-for="category in categories" :key="String(category.id)" class="stack">
           <h3 class="form-section-title">{{ category.name }}</h3><p v-if="category.description" class="muted">{{ category.description }}</p>
           <div v-for="criterion in list(category.criteria)" :key="String(criterion.id)" class="data-row">
-            <div class="row-main"><h3>{{ criterion.name }} <span class="status-badge">{{ criterion.subject }}</span></h3><p>{{ criterion.description }}</p><p class="muted">{{ $t('grading.scaleRange', { min: displayNumber(scaleObject(criterion.scale).min), max: displayNumber(scaleObject(criterion.scale).max), step: displayNumber(scaleObject(criterion.scale).step) }) }} <span v-if="criterion.evidenceRequired"> · {{ $t('grading.evidenceRequired') }}</span></p></div>
+            <div class="row-main"><h3>{{ criterion.name }} <span class="status-badge">{{ criterion.subject }}</span></h3><p>{{ criterion.description }}</p><p class="muted">{{ $t('grading.scaleRange', { min: displayNumber(scaleField(criterion.scale, 'min')), max: displayNumber(scaleField(criterion.scale, 'max')), step: displayNumber(scaleField(criterion.scale, 'step')) }) }} <span v-if="criterion.evidenceRequired"> · {{ $t('grading.evidenceRequired') }}</span></p></div>
           </div>
         </div>
         <h3 class="form-section-title">{{ $t('grading.metricsRules') }}</h3>
@@ -72,7 +72,7 @@
       <div v-if="(projectLoaded && activeTab === 'final') || (projectId && auth.user?.role === 'TEACHER')" class="stack">
         <form v-if="auth.user?.role === 'TEACHER'" class="panel" @submit.prevent="saveFinalGrade">
           <h3 class="form-section-title">{{ $t('grading.recordProjectFinal') }}</h3>
-          <div class="grid grid-2"><div class="field"><label class="label" for="rule">{{ $t('grading.projectRule') }}</label><select id="rule" v-model="finalForm.ruleId" class="select"><option value="">{{ $t('grading.manualDecision') }}</option><option v-for="rule in projectRules" :key="String(rule.id)" :value="rule.id">{{ rule.id }} · v{{ rule.version }}</option></select></div><div class="field"><label class="label" for="final-grade">{{ $t('grading.individualGrade') }} {{ finalForm.ruleId ? $t('grading.optionalConfirmation') : '' }}</label><input id="final-grade" v-model.number="finalForm.grade" class="input" type="number" :min="number(scaleObject(activeRubric.finalGradeScale).min)" :max="number(scaleObject(activeRubric.finalGradeScale).max)" :step="number(scaleObject(activeRubric.finalGradeScale).step, 1)" :required="!finalForm.ruleId" /></div></div>
+          <div class="grid grid-2"><div class="field"><label class="label" for="rule">{{ $t('grading.projectRule') }}</label><select id="rule" v-model="finalForm.ruleId" class="select"><option value="">{{ $t('grading.manualDecision') }}</option><option v-for="rule in projectRules" :key="String(rule.id)" :value="rule.id">{{ rule.id }} · v{{ rule.version }}</option></select></div><div class="field"><label class="label" for="final-grade">{{ $t('grading.individualGrade') }} {{ finalForm.ruleId ? $t('grading.optionalConfirmation') : '' }}</label><input id="final-grade" v-model.number="finalForm.grade" class="input" type="number" :min="number(scaleField(activeRubric?.finalGradeScale, 'min'))" :max="number(scaleField(activeRubric?.finalGradeScale, 'max'))" :step="number(scaleField(activeRubric?.finalGradeScale, 'step'), 1)" :required="!finalForm.ruleId" /></div></div>
           <div class="field"><label class="label" for="rationale">{{ $t('grading.teacherRationale') }} {{ finalForm.ruleId ? $t('grading.optional') : $t('grading.requiredNoRule') }}</label><textarea id="rationale" v-model="finalForm.rationale" class="textarea" maxlength="4000" :required="!finalForm.ruleId" /></div>
           <div class="field"><label class="label" for="final-transition">{{ $t('grading.transitionReason') }}</label><textarea id="final-transition" v-model="finalForm.transitionReason" class="textarea" maxlength="2000" /></div>
           <div class="notice">{{ $t('grading.projectGradeHelp') }}</div>
@@ -81,7 +81,7 @@
         <form v-if="auth.user?.role === 'TEACHER'" class="panel stack" @submit.prevent="saveStudentFinalGrade">
           <h3 class="form-section-title">{{ $t('grading.recordStudentFinal') }}</h3>
           <div class="field"><label class="label" for="final-student-id">{{ $t('grading.allocatedStudentId') }}</label><input id="final-student-id" v-model.trim="studentFinalForm.studentId" class="input" required /></div>
-          <div class="grid grid-2"><div class="field"><label class="label" for="student-rule">{{ $t('grading.studentRule') }}</label><select id="student-rule" v-model="studentFinalForm.ruleId" class="select"><option value="">{{ $t('grading.manualDecision') }}</option><option v-for="rule in studentRules" :key="String(rule.id)" :value="rule.id">{{ rule.id }} · v{{ rule.version }}</option></select></div><div class="field"><label class="label" for="student-final-grade">{{ $t('grading.individualGrade') }}</label><input id="student-final-grade" v-model.number="studentFinalForm.grade" class="input" type="number" :min="number(scaleObject(activeRubric.finalGradeScale).min)" :max="number(scaleObject(activeRubric.finalGradeScale).max)" :step="number(scaleObject(activeRubric.finalGradeScale).step, 1)" :required="!studentFinalForm.ruleId" /></div></div>
+          <div class="grid grid-2"><div class="field"><label class="label" for="student-rule">{{ $t('grading.studentRule') }}</label><select id="student-rule" v-model="studentFinalForm.ruleId" class="select"><option value="">{{ $t('grading.manualDecision') }}</option><option v-for="rule in studentRules" :key="String(rule.id)" :value="rule.id">{{ rule.id }} · v{{ rule.version }}</option></select></div><div class="field"><label class="label" for="student-final-grade">{{ $t('grading.individualGrade') }}</label><input id="student-final-grade" v-model.number="studentFinalForm.grade" class="input" type="number" :min="number(scaleField(activeRubric?.finalGradeScale, 'min'))" :max="number(scaleField(activeRubric?.finalGradeScale, 'max'))" :step="number(scaleField(activeRubric?.finalGradeScale, 'step'), 1)" :required="!studentFinalForm.ruleId" /></div></div>
           <div class="field"><label class="label" for="student-rationale">{{ $t('grading.rationale') }} {{ studentFinalForm.ruleId ? $t('grading.optional') : $t('grading.requiredNoRule') }}</label><textarea id="student-rationale" v-model="studentFinalForm.rationale" class="textarea" maxlength="4000" :required="!studentFinalForm.ruleId" /></div>
           <div class="field"><label class="label" for="student-transition">{{ $t('grading.transitionReason') }}</label><textarea id="student-transition" v-model="studentFinalForm.transitionReason" class="textarea" maxlength="2000" /></div>
           <button class="button">{{ $t('grading.saveStudentGrade') }}</button>
@@ -94,13 +94,14 @@
     </div>
     <section v-if="rubrics.content.length" class="panel stack">
       <h2 class="section-title">{{ $t('grading.rubricHistory') }}</h2>
-      <div class="data-list"><article v-for="rubric in rubrics.content" :key="String(rubric.id)" class="data-row"><div class="row-main"><h3>{{ rubric.name }} · {{ rubric.version }}</h3><p>{{ rubric.schoolYear ?? $t('grading.allSchoolYears') }} · {{ $t('grading.effectiveFrom') }} {{ date(rubric.effectiveFrom) }}</p></div><span class="status-badge">{{ statusLabel(rubric.status) }}</span></article></div>
+      <div class="data-list"><article v-for="rubric in rubrics.content" :key="String(rubric.id)" class="data-row"><div class="row-main"><h3>{{ rubric.name }} · {{ rubric.version }}</h3><p>{{ rubric.schoolYear ?? $t('grading.allSchoolYears') }} · {{ $t('grading.effectiveFrom') }} {{ date(rubric.effectiveFrom) }}</p></div></article></div>
     </section>
   </section>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
+import type { components } from '../../api/schema'
 import type { Page } from '../../api/client'
 import { gradingApi } from '../../api/services'
 import { ApiError } from '../../api/client'
@@ -109,7 +110,15 @@ import { useTask } from '../../composables/useTask'
 import { formatDateOnly, formatNumber, formatTimestamp, i18n } from '../../i18n'
 import GradeFields from './GradeFields.vue'
 
-type Data = Record<string, unknown>
+type Rubric = components['schemas']['RubricResponse']
+type Grade = components['schemas']['GradeResponse']
+type Metric = components['schemas']['MetricResponse']
+type FinalGradeHistory = components['schemas']['FinalGradeHistory']
+type PublishRubricRequest = components['schemas']['PublishRubricRequest']
+type StudentGradeRequest = components['schemas']['StudentGradeRequest']
+type GroupGradeRequest = components['schemas']['GroupGradeRequest']
+type MetricRequest = components['schemas']['MetricRequest']
+type FinalGradesRequest = components['schemas']['FinalGradesRequest']
 const auth = useAuthStore()
 const knownStatuses = ['ACTIVE', 'SUPERSEDED', 'PUBLISHED'] as const
 function statusLabel(value: unknown): string {
@@ -119,8 +128,8 @@ function statusLabel(value: unknown): string {
   return typeof value === 'string' ? value : String(i18n.global.t('grading.published'))
 }
 const task = useTask()
-const activeRubric = ref<Data>({})
-const rubrics = ref<Page<Data>>({ content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 })
+const activeRubric = ref<Rubric | null>(null)
+const rubrics = ref<Page<components['schemas']['RubricSummary']>>({ content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 })
 const projectId = ref('')
 const projectLoaded = ref(false)
 const activeTab = ref('individual')
@@ -130,10 +139,10 @@ const tabs = computed(() => [
   { id: 'metrics', label: i18n.global.t('grading.tabs.metrics') },
   { id: 'final', label: i18n.global.t('grading.tabs.final') },
 ])
-const gradeEntries = ref<Page<Data>>(emptyPage())
-const groupEntries = ref<Page<Data>>(emptyPage())
-const metricEntries = ref<Page<Data>>(emptyPage())
-const finalGrade = ref<Data | null>(null)
+const gradeEntries = ref<Page<Grade>>(emptyPage())
+const groupEntries = ref<Page<Grade>>(emptyPage())
+const metricEntries = ref<Page<Metric>>(emptyPage())
+const finalGrade = ref<FinalGradeHistory | null>(null)
 const rubricJson = ref('')
 const jsonError = ref('')
 const gradeForm = reactive({ studentId: '', criterionId: '', grade: '', assessedOn: new Date().toISOString().slice(0, 10), evidence: '', comments: '', transitionReason: '' })
@@ -141,19 +150,25 @@ const groupForm = reactive({ criterionId: '', grade: '', assessedOn: new Date().
 const metricForm = reactive({ metricId: '', value: 0, note: '', transitionReason: '' })
 const finalForm = reactive({ ruleId: '', grade: 0, rationale: '', transitionReason: '' })
 const studentFinalForm = reactive({ studentId: '', ruleId: '', grade: 0, rationale: '', transitionReason: '' })
-const categories = computed(() => list(activeRubric.value.categories))
-const metricsDefinitions = computed(() => list(activeRubric.value.metricDefinitions))
-const aggregationRules = computed(() => list(activeRubric.value.aggregationRules))
+const categories = computed(() => list(activeRubric.value?.categories))
+const metricsDefinitions = computed(() => list(activeRubric.value?.metricDefinitions))
+const aggregationRules = computed(() => list(activeRubric.value?.aggregationRules))
 const studentRules = computed(() => aggregationRules.value.filter((rule) => rule.scope === 'STUDENT'))
 const projectRules = computed(() => aggregationRules.value.filter((rule) => rule.scope === 'PROJECT'))
 const selectedCriterion = computed(() => categories.value.flatMap((category) => list(category.criteria)).find((criterion) => criterion.id === gradeForm.criterionId))
 const selectedGroupCriterion = computed(() => categories.value.flatMap((category) => list(category.criteria)).find((criterion) => criterion.id === groupForm.criterionId))
 
-function emptyPage(): Page<Data> { return { content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 } }
-function list(value: unknown): Data[] { return Array.isArray(value) ? value.filter((item): item is Data => typeof item === 'object' && item !== null) : [] }
+function emptyPage<T>(): Page<T> { return { content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 } }
+function list<T>(value: T[] | null | undefined): T[] { return value ?? [] }
 function stringList(value: unknown): string[] { return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [] }
 function number(value: unknown, fallback = 0): number { return typeof value === 'number' ? value : Number(value ?? fallback) }
 function displayNumber(value: unknown): string { return typeof value === 'number' ? formatNumber(value) : String(value ?? '') }
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+function scaleField(value: unknown, field: 'min' | 'max' | 'step'): unknown {
+  return isRecord(value) ? value[field] : undefined
+}
 function localizedFinalGrade(): string {
   return JSON.stringify(finalGrade.value, (key: string, value: unknown) => {
     if (typeof value !== 'string') return value
@@ -172,9 +187,6 @@ function date(value: unknown): string {
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return formatDateOnly(value)
   const parsed = new Date(value)
   return Number.isNaN(parsed.valueOf()) ? value : formatTimestamp(parsed)
-}
-function scaleObject(value: unknown): Data {
-  return typeof value === 'object' && value !== null ? value as Data : {}
 }
 async function loadRubric(): Promise<void> {
   await task.run(async () => {
@@ -211,10 +223,11 @@ async function loadProject(): Promise<void> {
 }
 async function recordGrade(group: boolean): Promise<void> {
   const selected = group ? selectedGroupCriterion.value : selectedCriterion.value
-  if (!selected || !projectId.value) return
+  if (!selected || !projectId.value || !activeRubric.value?.id) return
+  const rubricId = activeRubric.value.id
   const transitionReason = group ? groupForm.transitionReason : gradeForm.transitionReason
   const common = {
-    rubricId: activeRubric.value.id,
+    rubricId,
     ...(transitionReason ? { versionTransition: { reason: transitionReason } } : {}),
     criterionId: selected.id,
     grade: Number(group ? groupForm.grade : gradeForm.grade),
@@ -222,57 +235,67 @@ async function recordGrade(group: boolean): Promise<void> {
     evidence: group ? groupForm.evidence : gradeForm.evidence,
     comments: group ? groupForm.comments : gradeForm.comments,
   }
-  const payload = group ? common : { ...common, studentId: gradeForm.studentId }
-  const result = await task.run(() => group
-    ? gradingApi.recordGroupGrade(projectId.value, payload)
-    : gradingApi.recordGrade(projectId.value, payload), String(i18n.global.t('grading.assessmentRecorded')))
+  const result = await task.run(() => {
+    if (group) {
+      const body: GroupGradeRequest = common
+      return gradingApi.recordGroupGrade(projectId.value, body)
+    }
+    const body: StudentGradeRequest = { ...common, studentId: gradeForm.studentId }
+    return gradingApi.recordGrade(projectId.value, body)
+  }, String(i18n.global.t('grading.assessmentRecorded')))
   if (result) await loadProject()
 }
 async function recordMetric(): Promise<void> {
-  if (!projectId.value || !activeRubric.value.id) return
-  const result = await task.run(() => gradingApi.recordMetric(projectId.value, {
+  if (!projectId.value || !activeRubric.value?.id) return
+  const body: MetricRequest = {
     rubricId: activeRubric.value.id,
     ...(metricForm.transitionReason ? { versionTransition: { reason: metricForm.transitionReason } } : {}),
     metricId: metricForm.metricId,
     value: Number(metricForm.value),
     note: metricForm.note,
-  }), String(i18n.global.t('grading.metricRecorded')))
+  }
+  const result = await task.run(() => gradingApi.recordMetric(projectId.value, body),
+    String(i18n.global.t('grading.metricRecorded')))
   if (result) await loadProject()
 }
 async function saveFinalGrade(): Promise<void> {
-  if (!projectId.value || !activeRubric.value.id) return
+  if (!projectId.value || !activeRubric.value?.id) return
   const project = finalForm.ruleId
     ? { ruleId: finalForm.ruleId, ...(finalForm.grade ? { grade: finalForm.grade } : {}) }
     : { grade: finalForm.grade, rationale: finalForm.rationale }
-  const result = await task.run(() => gradingApi.setFinalGrade(projectId.value, {
+  const body: FinalGradesRequest = {
     rubricId: activeRubric.value.id,
     ...(finalForm.transitionReason ? { versionTransition: { reason: finalForm.transitionReason } } : {}),
     project,
-  }), String(i18n.global.t('grading.finalGradeRecorded')))
+  }
+  const result = await task.run(() => gradingApi.setFinalGrade(projectId.value, body),
+    String(i18n.global.t('grading.finalGradeRecorded')))
   if (result) await loadProject()
 }
 async function saveStudentFinalGrade(): Promise<void> {
-  if (!projectId.value || !activeRubric.value.id) return
+  if (!projectId.value || !activeRubric.value?.id) return
   const decision = studentFinalForm.ruleId
     ? { ruleId: studentFinalForm.ruleId, ...(studentFinalForm.grade ? { grade: studentFinalForm.grade } : {}) }
     : { grade: studentFinalForm.grade, rationale: studentFinalForm.rationale }
-  const result = await task.run(() => gradingApi.setFinalGrade(projectId.value, {
+  const body: FinalGradesRequest = {
     rubricId: activeRubric.value.id,
     ...(studentFinalForm.transitionReason ? { versionTransition: { reason: studentFinalForm.transitionReason } } : {}),
     students: [{ studentId: studentFinalForm.studentId, ...decision }],
-  }), String(i18n.global.t('grading.individualFinalGradeRecorded')))
+  }
+  const result = await task.run(() => gradingApi.setFinalGrade(projectId.value, body),
+    String(i18n.global.t('grading.individualFinalGradeRecorded')))
   if (result) await loadProject()
 }
 async function publishRubric(): Promise<void> {
   jsonError.value = ''
-  let payload: Data
+  let payload: PublishRubricRequest
   try {
-    const parsed: unknown = JSON.parse(rubricJson.value)
+    const parsed = JSON.parse(rubricJson.value)
     if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
       jsonError.value = String(i18n.global.t('grading.jsonObjectExpected'))
       return
     }
-    payload = parsed as Data
+    payload = parsed
   } catch {
     jsonError.value = String(i18n.global.t('grading.invalidJson'))
     return

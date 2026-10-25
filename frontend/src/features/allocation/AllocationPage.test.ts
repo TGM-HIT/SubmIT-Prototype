@@ -117,7 +117,7 @@ describe('allocation supervisor display', () => {
     setLanguage('en')
   })
 
-  it('formats run createdAt/startedAt, snapshot, and deadline in the selected locale without changing deadline comparisons or API values', async () => {
+  it('formats run createdAt, snapshot, and deadline in the selected locale without changing deadline comparisons or API values', async () => {
     state.role = 'ADMIN'
     const closesAt = new Date(Date.now() + 60 * 60 * 1000).toISOString()
     const createdAt = '2024-02-03T15:04:00Z'
@@ -145,7 +145,7 @@ describe('allocation supervisor display', () => {
     expect(page.text()).toContain(englishClosesAt)
     expect(page.get('#start-replacement-run').text()).toBe('Start early preliminary run')
     expect(page.text()).toContain(formatTimestamp(createdAt))
-    expect(page.text()).toContain(formatTimestamp(startedAt))
+    expect(page.text()).not.toContain(formatTimestamp(startedAt))
     expect(period.closesAt).toBe(closesAt)
 
     await page.findAll('button').find((button) => button.text() === 'Inspect result')!.trigger('click')
@@ -156,7 +156,7 @@ describe('allocation supervisor display', () => {
     await flushPromises()
     expect(page.text()).toContain(formatTimestamp(closesAt))
     expect(page.text()).toContain(formatTimestamp(createdAt))
-    expect(page.text()).toContain(formatTimestamp(startedAt))
+    expect(page.text()).not.toContain(formatTimestamp(startedAt))
     expect(page.get('#start-replacement-run').text()).toBe('Vorläufigen Lauf starten')
 
     setLanguage('en')

@@ -309,9 +309,9 @@ describe("grading student identities", () => {
   })
 
   it.each([
-    ["en", ["Active", "Superseded", "Published"]],
-    ["de", ["Aktiv", "Abgelöst", "Veröffentlicht"]],
-  ] as const)("localizes known grade and rubric statuses in %s while preserving unknown status and authored prose", async (language, labels) => {
+    ["en", ["Active", "Superseded"]],
+    ["de", ["Aktiv", "Abgelöst"]],
+  ] as const)("localizes known grade statuses in %s while preserving authored prose and omitting rubric status", async (language, labels) => {
     setLanguage(language)
     api.activeRubric.mockResolvedValue({ name: "Backend rubric title", categories: [] })
     api.rubrics.mockResolvedValue(pageResult([
@@ -335,6 +335,9 @@ describe("grading student identities", () => {
     expect(page.text()).toContain("UNCHANGED_BACKEND_GRADING_PROSE")
     expect(page.text()).toContain("Jordan Student")
     expect(page.text()).toContain("Backend rubric title")
+    const unknownRubricRow = page.findAll(".data-row").find((row) => row.text().includes("Unknown rubric"))
+    expect(unknownRubricRow?.text()).not.toContain("BACKEND_CUSTOM_STATUS")
+    expect(unknownRubricRow?.text()).not.toContain("PUBLISHED")
     expect(page.findAll(".status-badge").map((badge) => badge.text())).not.toContain("ACTIVE")
     expect(page.findAll(".status-badge").map((badge) => badge.text())).not.toContain("SUPERSEDED")
     expect(page.findAll(".status-badge").map((badge) => badge.text())).not.toContain("PUBLISHED")

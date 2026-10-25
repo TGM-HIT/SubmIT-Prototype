@@ -31,7 +31,7 @@
       <AsyncPanel :loading="task.loading.value" :error="task.error.value" @retry="loadRuns">
         <div v-if="runs.content.length" class="data-list">
           <article v-for="run in runs.content" :key="idOf(run)" class="data-row">
-            <div class="row-main"><h3>{{ $t('allocation.run') }} <span class="muted">{{ idOf(run) }}</span></h3><p>{{ runKind(run) }}</p><p>{{ $t('allocation.state') }} <span class="status-badge" :class="`status-${statusOf(run).toLowerCase()}`">{{ statusLabel(run) }}</span> · {{ date(String(run.createdAt ?? run.startedAt ?? '')) }}</p><p v-if="run.error" class="field-error">{{ $t('allocation.runError') }}: {{ run.error }}</p></div>
+            <div class="row-main"><h3>{{ $t('allocation.run') }} <span class="muted">{{ idOf(run) }}</span></h3><p>{{ runKind(run) }}</p><p>{{ $t('allocation.state') }} <span class="status-badge" :class="`status-${statusOf(run).toLowerCase()}`">{{ statusLabel(run) }}</span> · {{ date(run.createdAt) }}</p><p v-if="run.error" class="field-error">{{ $t('allocation.runError') }}: {{ run.error }}</p></div>
             <div class="actions"><button class="button button-secondary button-small" @click="loadResult(idOf(run))">{{ $t('allocation.inspect') }}</button><button v-if="auth.user?.role === 'ADMIN' && statusOf(run) === 'COMPLETED' && run.early !== true && selectedPeriod?.status !== 'FINALIZED'" class="button button-small" @click="finalize(idOf(run))">{{ $t('allocation.finalizeResult') }}</button></div>
           </article>
         </div>
@@ -52,7 +52,7 @@
         <p v-for="entry in excludedApplyingUnits(selectedRun)" :key="String(entry.groupId)" class="notice staff-display-label">{{ $t('allocation.mixedEligibility') }} · {{ Array.isArray(entry.memberDisplayNames) ? entry.memberDisplayNames.join(', ') : '' }}</p>
       </section>
       <h3 class="form-section-title">{{ $t('allocation.unassigned') }}</h3>
-      <div v-if="unassigned(selectedRun).length" class="choice-list"><p v-for="(entry, index) in unassigned(selectedRun)" :key="unassignedKey(entry, index)" class="notice staff-display-label">{{ unassignedLabel(entry) }}<template v-if="typeof entry.studentId === 'string'"> · {{ $t('allocation.class') }} {{ entry.className || $t('allocation.notAssigned') }} · {{ $t('allocation.electiveSubjects') }} {{ Array.isArray(entry.electiveSubjectNames) ? entry.electiveSubjectNames.join(', ') || $t('allocation.none') : $t('allocation.none') }}</template> · {{ entry.explanation ?? entry.reason ?? $t('allocation.noReason') }}</p></div>
+      <div v-if="unassigned(selectedRun).length" class="choice-list"><p v-for="(entry, index) in unassigned(selectedRun)" :key="unassignedKey(entry, index)" class="notice staff-display-label">{{ unassignedLabel(entry) }}<template v-if="isUnassignedStudent(entry)"> · {{ $t('allocation.class') }} {{ entry.className || $t('allocation.notAssigned') }} · {{ $t('allocation.electiveSubjects') }} {{ entry.electiveSubjectNames?.join(', ') || $t('allocation.none') }}</template> · {{ unassignedReason(entry) }}</p></div>
       <p v-else class="muted">{{ $t('allocation.noUnassigned') }}</p>
     </section>
     <p v-if="task.success.value" class="success-note" role="status">{{ task.success.value }}</p>
@@ -71,7 +71,14 @@ import AsyncPanel from '../../components/AsyncPanel.vue'
 import { formatNumber, formatTimestamp, i18n } from '../../i18n'
 
 type Period = components['schemas']['ApplicationPeriodResponse']
-type Data = Record<string, unknown>
+type Run = components['schemas']['AllocationRunResponse']
+type Pin = components['schemas']['AllocationPinResponse']
+type StudentLookup = components['schemas']['StudentLookupResponse']
+type StudentApplication = components['schemas']['StudentApplicationResponse']
+type Idea = components['schemas']['IdeaResponse']
+type UnassignedStudent = components['schemas']['AllocationUnassignedStudentResponse']
+type UnassignedProject = components['schemas']['AllocationUnassignedProjectResponse']
+type Unassigned = UnassignedStudent | UnassignedProject
 const auth = useAuthStore()
 const task = useTask()
 const number = formatNumber
@@ -79,21 +86,21 @@ const apiMessage = (error: unknown, key: string): string => error instanceof Api
   ? error.message : String(i18n.global.t(key))
 const periods = ref<Period[]>([])
 const periodId = ref('')
-const runs = ref<Page<Data>>({ content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 })
-const selectedRun = ref<Data | null>(null)
+const runs = ref<Page<Run>>({ content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 })
+const selectedRun = ref<Run | null>(null)
 const selectedRunHeading = ref<HTMLHeadingElement | null>(null)
 const startRunControl = ref<HTMLButtonElement | null>(null)
 const supervisors = ref<Record<string, string>>({})
-const pins = ref<Data[]>([])
+const pins = ref<Pin[]>([])
 const pinLoading = ref(false)
 const pinSaving = ref(false)
 const pinError = ref("")
 const pinStudentId = ref("")
 const pinProjectId = ref("")
 const studentQuery = ref("")
-const studentOptions = ref<Data[]>([])
-const catalogueProjects = ref<Data[]>([])
-const submittedApplications = ref<Data[]>([])
+const studentOptions = ref<Pick<StudentLookup, 'id' | 'displayName'>[]>([])
+const catalogueProjects = ref<Idea[]>([])
+const submittedApplications = ref<StudentApplication[]>([])
 const submittedApplyingGroups = ref<components['schemas']['GroupResponse'][]>([])
 const addPinControl = ref<HTMLButtonElement | null>(null)
 const pinControls = new Map<string, HTMLElement>()
@@ -101,15 +108,15 @@ const selectedPeriod = computed(() => periods.value.find((period) => period.id =
 const deadlinePassed = computed(() => Boolean(selectedPeriod.value?.closesAt && Date.now() >= new Date(selectedPeriod.value.closesAt).getTime()))
 const unrankedSelection = computed(() => Boolean(pinStudentId.value && pinProjectId.value && !isRanked(pinStudentId.value, pinProjectId.value)))
 
-function idOf(run: Data): string { return String(run.id ?? '') }
-function statusOf(run: Data): string { return String(run.status ?? 'UNKNOWN').toUpperCase() }
-function runKind(run: Data): string {
+function idOf(run: Run): string { return run.id }
+function statusOf(run: Run): string { return run.status.toUpperCase() }
+function runKind(run: Run): string {
   const key = run.early === true ? 'allocation.earlyRun'
     : run.initial === true ? 'allocation.automaticRun' : 'allocation.replacementRun'
   return String(i18n.global.t(key))
 }
 function date(value?: string): string { return value ? formatTimestamp(value) : String(i18n.global.t('common.unknown')) }
-function statusLabel(run: Data): string {
+function statusLabel(run: Run): string {
   const key = `allocation.states.${statusOf(run).toLowerCase()}`
   return i18n.global.te(key) ? String(i18n.global.t(key)) : statusOf(run)
 }
@@ -117,34 +124,27 @@ function periodStatus(value?: string): string {
   const key = `applications.states.${value?.toLowerCase()}`
   return value && i18n.global.te(key) ? String(i18n.global.t(key)) : String(value ?? i18n.global.t('common.unknown'))
 }
-function applyingOrigin(run: Data, studentId: string): string {
-  if (!Array.isArray(run.applyingUnits)) return String(i18n.global.t('allocation.originUnavailable'))
-  const index = (run.applyingUnits as Data[]).findIndex(unit => Array.isArray(unit.studentIds) && unit.studentIds.includes(studentId))
+function applyingOrigin(run: Run, studentId: string): string {
+  const index = run.applyingUnits?.findIndex(unit => unit.studentIds.includes(studentId)) ?? -1
   return index < 0 ? String(i18n.global.t('allocation.appliedAdded')) : String(i18n.global.t('allocation.cohort', { number: number(index + 1) }))
 }
-function assignments(run: Data): { projectId: string; projectTitle: string; students: { id: string; name: string; className?: string; electiveSubjectNames: string[]; pinned: boolean; hadPreferences?: boolean }[] }[] {
-  const result = run.result
-  if (!result || typeof result !== "object" || !Array.isArray((result as Data).assignments)) return []
+function assignments(run: Run): { projectId: string; projectTitle: string; students: { id: string; name: string; className?: string; electiveSubjectNames: string[]; pinned: boolean; hadPreferences?: boolean }[] }[] {
   const groups = new Map<string, { title: string; students: Map<string, { name: string; className?: string; electiveSubjectNames: string[]; pinned: boolean; hadPreferences?: boolean }> }>()
-  for (const assignment of (result as Data).assignments as Data[]) {
-    const projectId = String(assignment.projectId ?? assignment.project ?? "")
-    if (!projectId) continue
+  for (const assignment of run.result?.assignments ?? []) {
+    const projectId = assignment.projectId
     const group = groups.get(projectId) ?? { title: String(i18n.global.t('allocation.unknownProject')), students: new Map<string, { name: string; className?: string; electiveSubjectNames: string[]; pinned: boolean; hadPreferences?: boolean }>() }
-    if (typeof assignment.projectTitle === "string" && assignment.projectTitle.trim()) group.title = assignment.projectTitle
-    const studentIds = Array.isArray(assignment.studentIds) ? assignment.studentIds
-      : Array.isArray(assignment.students) ? assignment.students
-        : assignment.studentId ? [assignment.studentId] : []
-    for (const studentId of studentIds) {
-      const id = String(studentId)
-      const name = Array.isArray(assignment.studentIds) || Array.isArray(assignment.students)
-        ? String(i18n.global.t('allocation.unknownStudent'))
-        : typeof assignment.studentDisplayName === "string" && assignment.studentDisplayName.trim()
-          ? assignment.studentDisplayName : String(i18n.global.t('allocation.unknownStudent'))
-      const electiveSubjectNames = Array.isArray(assignment.electiveSubjectNames) ? assignment.electiveSubjectNames.filter((value): value is string => typeof value === "string") : []
-      const className = typeof assignment.className === "string" ? assignment.className : undefined
-      group.students.set(id, { name, className, electiveSubjectNames, pinned: assignment.pinned === true,
-        ...(typeof assignment.hadPreferences === 'boolean' ? { hadPreferences: assignment.hadPreferences } : {}) })
+    if (typeof assignment.projectTitle === 'string' && assignment.projectTitle.trim()) {
+      group.title = assignment.projectTitle
     }
+    const name = typeof assignment.studentDisplayName === 'string' && assignment.studentDisplayName.trim()
+      ? assignment.studentDisplayName : String(i18n.global.t('allocation.unknownStudent'))
+    group.students.set(assignment.studentId, {
+      name,
+      className: assignment.className,
+      electiveSubjectNames: assignment.electiveSubjectNames ?? [],
+      pinned: assignment.pinned,
+      ...(assignment.hadPreferences === undefined ? {} : { hadPreferences: assignment.hadPreferences }),
+    })
     groups.set(projectId, group)
   }
   return [...groups.entries()].map(([projectId, group]) => ({
@@ -153,33 +153,32 @@ function assignments(run: Data): { projectId: string; projectTitle: string; stud
     students: [...group.students.entries()].map(([id, identity]) => ({ id, ...identity })),
   }))
 }
-function excludedApplyingUnits(run: Data): Data[] {
-  return Array.isArray(run.excludedApplyingUnits)
-    ? run.excludedApplyingUnits.filter((entry): entry is Data => typeof entry === 'object' && entry !== null)
-    : []
+function excludedApplyingUnits(run: Run): components['schemas']['ExcludedApplyingUnitResponse'][] {
+  return run.excludedApplyingUnits ?? []
 }
-function unassignedKey(entry: Data, index: number): string | number {
-  const id = entry.studentId ?? entry.projectId
-  return typeof id === "string" || typeof id === "number" ? id : index
+function isUnassignedStudent(entry: Unassigned): entry is UnassignedStudent {
+  return 'studentId' in entry
 }
-function unassignedLabel(entry: Data): string {
-  if (typeof entry.studentId === "string") {
-    return typeof entry.studentDisplayName === "string" && entry.studentDisplayName.trim()
+function unassignedKey(entry: Unassigned, index: number): string | number {
+  return isUnassignedStudent(entry) ? entry.studentId : entry.projectId || index
+}
+function unassignedLabel(entry: Unassigned): string {
+  if (isUnassignedStudent(entry)) {
+    return typeof entry.studentDisplayName === 'string' && entry.studentDisplayName.trim()
       ? entry.studentDisplayName : String(i18n.global.t('allocation.unknownStudent'))
   }
-  if (typeof entry.projectId === "string") {
-    return typeof entry.projectTitle === "string" && entry.projectTitle.trim()
-      ? entry.projectTitle : String(i18n.global.t('allocation.unknownProject'))
-  }
-  return typeof entry.studentDisplayName === "string" && entry.studentDisplayName.trim()
-    ? entry.studentDisplayName
-    : typeof entry.projectTitle === "string" && entry.projectTitle.trim() ? entry.projectTitle : String(i18n.global.t('allocation.unassignedFallback'))
+  return typeof entry.projectTitle === 'string' && entry.projectTitle.trim()
+    ? entry.projectTitle : String(i18n.global.t('allocation.unknownProject'))
 }
-function unassigned(run: Data): Data[] {
-  const result = run.result as Data | undefined
-  if (!result) return []
-  const entries = [result.unassignedStudents, result.unassignedProjects]
-  return entries.flatMap((items) => Array.isArray(items) ? items.filter((entry): entry is Data => typeof entry === 'object' && entry !== null) : [])
+function unassignedReason(entry: Unassigned): string {
+  return ('explanation' in entry ? entry.explanation : undefined)
+    ?? entry.reason ?? String(i18n.global.t('allocation.noReason'))
+}
+function unassigned(run: Run): Unassigned[] {
+  return [
+    ...(run.result?.unassignedStudents ?? []),
+    ...(run.result?.unassignedProjects ?? []),
+  ]
 }
 async function allPages<T>(fetchPage: (page: number) => Promise<{ content: T[]; totalPages: number }>): Promise<T[]> {
   const firstPage = await fetchPage(0)
@@ -193,9 +192,8 @@ function isRanked(studentId: string, projectId: string): boolean {
   const shared = submittedApplyingGroups.value.find((group) => group.status === 'SUBMITTED'
     && group.members.some((member) => member.studentId === studentId))
   if (shared) return shared.preferences.some((preference) => preference.projectId === projectId)
-  const application = submittedApplications.value.find((entry) => String(entry.studentId ?? ``) === studentId)
-  const preferences = Array.isArray(application?.preferences) ? application.preferences : []
-  return preferences.some((preference) => typeof preference === `object` && preference !== null && String((preference as Data).projectId ?? ``) === projectId)
+  const application = submittedApplications.value.find((entry) => entry.studentId === studentId)
+  return application?.preferences.some((preference) => preference.projectId === projectId) ?? false
 }
 function setPinControl(id: string, element: unknown): void {
   if (element instanceof HTMLElement) pinControls.set(id, element)
@@ -212,10 +210,10 @@ async function loadPins(): Promise<void> {
       allPages((page) => periodsApi.applications(periodId.value, page)),
       allPages((page) => applyingGroupsApi.list(periodId.value, page)),
     ])
-    pins.value = allPins as unknown as Data[]
+    pins.value = allPins
     const ids = Array.isArray(selectedPeriod.value.projectIds) ? selectedPeriod.value.projectIds.map(String) : []
-    catalogueProjects.value = ideaPage.content.filter((idea) => ids.includes(String(idea.id ?? ``))).map((idea) => ({ id: String(idea.id ?? ``), title: idea.title }))
-    submittedApplications.value = allApplications as unknown as Data[]
+    catalogueProjects.value = ideaPage.content.filter((idea) => ids.includes(String(idea.id ?? ``)))
+    submittedApplications.value = allApplications
     submittedApplyingGroups.value = allGroups.filter((group) => group.status === 'SUBMITTED')
   } catch (error) {
     pinError.value = apiMessage(error, 'allocation.loadPinsFailed')
@@ -228,12 +226,12 @@ async function lookupStudents(event: Event): Promise<void> {
   studentQuery.value = input.value
   try {
     const page = await ideasApi.lookupStudents(studentQuery.value)
-    studentOptions.value = page.content as unknown as Data[]
+    studentOptions.value = page.content
   } catch (error) {
     pinError.value = apiMessage(error, 'allocation.searchFailed')
   }
 }
-function editPin(pin: Data): void {
+function editPin(pin: Pin): void {
   pinStudentId.value = String(pin.studentId ?? ``)
   pinProjectId.value = String(pin.projectId ?? ``)
   studentQuery.value = String(pin.studentDisplayName ?? ``)
@@ -271,7 +269,7 @@ async function savePin(): Promise<void> {
     pinSaving.value = false
   }
 }
-async function removePin(pin: Data, index: number, event: Event): Promise<void> {
+async function removePin(pin: Pin, index: number, event: Event): Promise<void> {
   const opener = event.currentTarget as HTMLElement
   if (!window.confirm(String(i18n.global.t('allocation.removeConfirm', { student: String(pin.studentDisplayName ?? i18n.global.t('allocation.student')) })))) {
     opener.focus()

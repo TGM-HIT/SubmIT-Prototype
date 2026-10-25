@@ -172,6 +172,8 @@ type Owner = components['schemas']['IdeaOwnerResponse']
 type IdeaOverview = Idea & { ownSupervisionPreference?: string }
 type IdeaInput = components['schemas']['IdeaRequest']
 type Review = components['schemas']['ReviewResponse']
+type IdeaReviewRequest = components['schemas']['IdeaReviewRequest']
+type SpecificationReviewRequest = components['schemas']['ReviewRequest']
 type RatingKey = 'workSize' | 'curriculumRelevance' | 'technicalComplexity' | 'feasibility' | 'learningValue' | 'resourceNeeds' | 'riskAndDependencies'
 const ratings = computed(() => ([
   'workSize', 'curriculumRelevance', 'technicalComplexity', 'feasibility',
@@ -201,7 +203,7 @@ const reviewReturnFocus = ref<HTMLElement | null>(null)
 const reviewFallbackFocus = ref<HTMLElement | null>(null)
 const editingId = ref('')
 const isSpecReview = ref(false)
-const preference = ref('WILLING_TO_SUPERVISE')
+const preference = ref<components['schemas']['SupervisionPreferenceRequest']['preference']>('WILLING_TO_SUPERVISE')
 const preferenceNote = ref('')
 const teacherId = ref('')
 const refusalAcknowledged = ref(false)
@@ -596,16 +598,30 @@ async function submitReview(): Promise<void> {
     feedbackError.value = String(i18n.global.t('ideas.feedbackError'))
     return
   }
-  const body: components['schemas']['ReviewRequest'] = {
-    decision: String(reviewForm.decision),
-    feedback,
-    recommendation: String(reviewForm.recommendation),
-  }
-  for (const { key } of ratings.value) {
-    const rating = Number(reviewForm[key])
-    if (Number.isInteger(rating) && rating >= 1 && rating <= 5) body[key] = rating
-  }
-  const result = await task.run(() => ideasApi.review(selectedIdea.value!.id!, body, isSpecReview.value), String(i18n.global.t('ideas.reviewDecisionRecorded')))
+  const result = await task.run(() => {
+    if (isSpecReview.value) {
+      const body: SpecificationReviewRequest = {
+        decision: String(reviewForm.decision),
+        feedback,
+        recommendation: String(reviewForm.recommendation),
+      }
+      for (const { key } of ratings.value) {
+        const rating = Number(reviewForm[key])
+        if (Number.isInteger(rating) && rating >= 1 && rating <= 5) body[key] = rating
+      }
+      return ideasApi.review(selectedIdea.value!.id!, body, true)
+    }
+    const body: IdeaReviewRequest = {
+      decision: String(reviewForm.decision),
+      feedback,
+      recommendation: String(reviewForm.recommendation),
+    }
+    for (const { key } of ratings.value) {
+      const rating = Number(reviewForm[key])
+      if (Number.isInteger(rating) && rating >= 1 && rating <= 5) body[key] = rating
+    }
+    return ideasApi.review(selectedIdea.value!.id!, body, false)
+  }, String(i18n.global.t('ideas.reviewDecisionRecorded')))
   if (result) {
     const idea = selectedIdea.value!
     await selectIdea(idea)
