@@ -441,6 +441,17 @@ class IdeaReviewControllerTest {
         assertEquals(beforeIdeaDecision, decisionState(ideaId),
                 "An idea decision outside IDEA_SUBMITTED must not change the idea, reviews, or audit history.");
 
+        List<String> beforeSpecificationWrongStage = decisionState(ideaId);
+        mockMvc.perform(post("/api/ideas/{id}/specification/reviews", ideaId)
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                specificationReviewRequest("ACCEPT_FOR_APPLICATIONS", "Wrong stage."))))
+                .andExpect(status().isConflict());
+        assertEquals(beforeSpecificationWrongStage, decisionState(ideaId),
+                "A specification decision outside SPECIFICATION_SUBMITTED must preserve the idea, specifications, "
+                        + "revisions, reviews, and all audit history.");
+
         String missingFullSpecificationIdea = submitIdea("Missing submitted specification");
         review(missingFullSpecificationIdea,
                 Map.of("decision", "APPROVE_FOR_SPECIFICATION", "feedback", "Proceed."),

@@ -237,9 +237,13 @@ class ApplicationPeriodLifecycleApiTest {
         assertEquals(beforeExpired, soloMutationSnapshot(),
                 "Expired-period rejections must not create applications or alter application, revision, or audit data.");
 
-        clock.set(OPENS_AT.minusNanos(1));
+        clock.set(OPENS_AT.plusSeconds(1));
         StoredRecord period = store.repository().findById(periodId).orElseThrow();
-        store.update(period, "DRAFT", store.parse(period));
+        store.update(period, "FINALIZED", store.parse(period));
+        assertTrue(clock.instant().isAfter(OPENS_AT) && clock.instant().isBefore(CLOSES_AT),
+                "The non-OPEN status check must occur strictly inside the application window.");
+        assertEquals("FINALIZED", store.repository().findById(periodId).orElseThrow().getStatus(),
+                "The isolated non-OPEN fixture must remain finalized inside the application window.");
         List<String> beforeNotOpen = soloMutationSnapshot();
         rejectSoloMutations(student02, soloId);
         assertEquals(beforeNotOpen, soloMutationSnapshot(),
