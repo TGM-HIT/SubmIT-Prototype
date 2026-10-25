@@ -21,12 +21,17 @@ import org.springframework.context.annotation.Configuration;
         security = @SecurityRequirement(name = "bearerAuth"))
 @SecurityScheme(name = "bearerAuth", type = SecuritySchemeType.HTTP, scheme = "bearer", bearerFormat = "JWT")
 public class OpenApiConfiguration {
+    private static final String PAGE_INDEX_DESCRIPTION =
+            "Zero-based page index; negative values are normalized to zero.";
     private static final String PAGE_SIZE_DESCRIPTION =
             "Page size; values are normalized to the inclusive range 1–100.";
+    private static final String STUDENT_LOOKUP_QUERY_DESCRIPTION =
+            "Optional, case-insensitive display-name substring filter. "
+                    + "Blank or whitespace-only input is ignored; '%' and '_' are treated literally.";
 
     @Bean
-    OpenApiCustomizer collectionSizeDescriptionCustomizer() {
-        return this::describeCollectionSizes;
+    OpenApiCustomizer collectionParameterDescriptionCustomizer() {
+        return this::describeCollectionParameters;
     }
 
     @Bean
@@ -51,27 +56,50 @@ public class OpenApiConfiguration {
         }
     }
 
-    private void describeCollectionSizes(OpenAPI openApi) {
+    private void describeCollectionParameters(OpenAPI openApi) {
         if (openApi.getPaths() != null) {
-            openApi.getPaths().values().forEach(this::describePath);
+            openApi.getPaths().forEach((path, pathItem) -> pathItem.readOperationsMap()
+                    .forEach((method, operation) -> describeOperation(path, method, operation)));
         }
     }
 
-    private void describePath(PathItem path) {
-        path.readOperations().forEach(this::describeOperation);
-    }
-
-    private void describeOperation(Operation operation) {
+    private void describeOperation(String path, PathItem.HttpMethod method, Operation operation) {
         List<Parameter> parameters = operation.getParameters();
         if (parameters != null) {
-            parameters.forEach(this::describeParameter);
+            parameters.forEach(parameter -> describeParameter(path, method, parameter));
         }
     }
 
-    private void describeParameter(Parameter parameter) {
-        if ("query".equals(parameter.getIn()) && "size".equals(parameter.getName())
-                && (parameter.getDescription() == null || parameter.getDescription().isBlank())) {
-            parameter.setDescription(PAGE_SIZE_DESCRIPTION);
+    private void describeParameter(String path, PathItem.HttpMethod method, Parameter parameter) {
+        if ("query".equals(parameter.getIn())) {
+            describePageParameter(parameter);
+            describeSizeParameter(parameter);
+            describeStudentLookupParameter(path, method, parameter);
+        }
+    }
+
+    private void describePageParameter(Parameter parameter) {
+        if ("page".equals(parameter.getName())) {
+            describeIfMissing(parameter, PAGE_INDEX_DESCRIPTION);
+        }
+    }
+
+    private void describeSizeParameter(Parameter parameter) {
+        if ("size".equals(parameter.getName())) {
+            describeIfMissing(parameter, PAGE_SIZE_DESCRIPTION);
+        }
+    }
+
+    private void describeStudentLookupParameter(String path, PathItem.HttpMethod method, Parameter parameter) {
+        if ("/api/users/students".equals(path) && PathItem.HttpMethod.GET == method
+                && "q".equals(parameter.getName())) {
+            describeIfMissing(parameter, STUDENT_LOOKUP_QUERY_DESCRIPTION);
+        }
+    }
+
+    private void describeIfMissing(Parameter parameter, String description) {
+        if (parameter.getDescription() == null || parameter.getDescription().isBlank()) {
+            parameter.setDescription(description);
         }
     }
 }

@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
@@ -929,6 +930,86 @@ class OpenApiContractTest {
 
         assertEquals(22, sizeParameters[0], "All collection size parameters should be covered.");
         assertTrue(failures.isEmpty(), () -> String.join(System.lineSeparator(), failures));
+    }
+
+    @Test
+    void everyCollectionPageParameterDocumentsZeroBasedIndex() throws Exception {
+        JsonNode paths = apiDocument().path("paths");
+        List<String> failures = new ArrayList<>();
+        int[] pageParameters = {0};
+
+        paths.properties().forEach(path -> {
+            for (String method : HTTP_METHODS) {
+                JsonNode operation = path.getValue().path(method);
+                if (!operation.isObject()) {
+                    continue;
+                }
+                for (JsonNode parameter : operation.path("parameters")) {
+                    if (!"query".equals(parameter.path("in").asText())
+                            || !"page".equals(parameter.path("name").asText())) {
+                        continue;
+                    }
+                    pageParameters[0]++;
+                    String location = method.toUpperCase(Locale.ROOT) + " " + path.getKey() + " page";
+                    JsonNode descriptionNode = parameter.get("description");
+                    String description = descriptionNode != null && descriptionNode.isTextual()
+                            ? descriptionNode.textValue() : "";
+                    if (description.isBlank()
+                            || !description.toLowerCase(Locale.ROOT).contains("zero-based")) {
+                        failures.add(location + " must have a nonblank description identifying a zero-based index");
+                    }
+                    JsonNode required = parameter.get("required");
+                    if (required == null || !required.isBoolean() || required.booleanValue()) {
+                        failures.add(location + " must remain optional");
+                    }
+                    JsonNode schema = parameter.path("schema");
+                    if (!"integer".equals(schema.path("type").asText())) {
+                        failures.add(location + " must retain an integer schema");
+                    }
+                    if (!"int32".equals(schema.path("format").asText())) {
+                        failures.add(location + " must retain an int32 schema");
+                    }
+                    JsonNode defaultValue = schema.get("default");
+                    if (defaultValue == null || !defaultValue.isIntegralNumber()
+                            || defaultValue.intValue() != 0) {
+                        failures.add(location + " must retain default 0");
+                    }
+                }
+            }
+        });
+
+        assertEquals(22, pageParameters[0], "All 22 baseline collection page parameters should be covered.");
+        assertTrue(failures.isEmpty(), () -> String.join(System.lineSeparator(), failures));
+    }
+
+    @Test
+    void studentLookupQDocumentsOptionalDisplayNameSubstringFilter() throws Exception {
+        JsonNode parameters = apiDocument().path("paths").path("/api/users/students").path("get")
+                .path("parameters");
+        JsonNode query = null;
+        for (JsonNode parameter : parameters) {
+            if ("query".equals(parameter.path("in").asText())
+                    && "q".equals(parameter.path("name").asText())) {
+                query = parameter;
+                break;
+            }
+        }
+
+        assertNotNull(query, "GET /api/users/students must retain its q query parameter");
+        assertFalse(query.path("required").asBoolean(true), "q must remain optional");
+        assertEquals("string", query.path("schema").path("type").asText());
+        String description = query.path("description").asText();
+        String lowerDescription = description.toLowerCase(Locale.ROOT);
+        assertFalse(description.isBlank(), "q must have a nonblank description");
+        assertTrue(lowerDescription.contains("optional"), "q description must identify the filter as optional");
+        assertTrue(lowerDescription.contains("display-name") && lowerDescription.contains("substring"),
+                "q description must identify a display-name substring filter");
+        assertTrue(lowerDescription.contains("case-insensitive"),
+                "q description must identify case-insensitive matching");
+        assertTrue(lowerDescription.contains("blank") && lowerDescription.contains("ignored"),
+                "q description must state blank input is ignored");
+        assertTrue(lowerDescription.contains("literal") && description.contains("%") && description.contains("_"),
+                "q description must state that % and _ are treated literally");
     }
 
     @Test

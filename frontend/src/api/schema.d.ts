@@ -4483,6 +4483,7 @@ export interface operations {
     classes: {
         parameters: {
             query?: {
+                /** @description Zero-based page index; negative values are normalized to zero. */
                 page?: number;
                 /** @description Page size; values are normalized to the inclusive range 1–100. */
                 size?: number;
@@ -5078,6 +5079,7 @@ export interface operations {
     get_1: {
         parameters: {
             query?: {
+                /** @description Zero-based page index; negative values are normalized to zero. */
                 page?: number;
                 /** @description Page size; values are normalized to the inclusive range 1–100. */
                 size?: number;
@@ -5278,6 +5280,7 @@ export interface operations {
     list: {
         parameters: {
             query?: {
+                /** @description Zero-based page index; negative values are normalized to zero. */
                 page?: number;
                 /** @description Page size; values are normalized to the inclusive range 1–100. */
                 size?: number;
@@ -5417,6 +5420,7 @@ export interface operations {
                 schoolYear?: string;
                 /** @description Owner UUID; matches the creator or any collaborator. */
                 ownerId?: string;
+                /** @description Zero-based page index; negative values are normalized to zero. */
                 page?: number;
                 /** @description Page size; values are normalized to the inclusive range 1–100. */
                 size?: number;
@@ -6165,6 +6169,7 @@ export interface operations {
     subjects: {
         parameters: {
             query?: {
+                /** @description Zero-based page index; negative values are normalized to zero. */
                 page?: number;
                 /** @description Page size; values are normalized to the inclusive range 1–100. */
                 size?: number;
@@ -6431,6 +6436,7 @@ export interface operations {
     listPeriods: {
         parameters: {
             query?: {
+                /** @description Zero-based page index; negative values are normalized to zero. */
                 page?: number;
                 /** @description Page size; values are normalized to the inclusive range 1–100. */
                 size?: number;
@@ -6524,6 +6530,7 @@ export interface operations {
     listApplyingGroups: {
         parameters: {
             query?: {
+                /** @description Zero-based page index; negative values are normalized to zero. */
                 page?: number;
                 /** @description Page size; values are normalized to the inclusive range 1–100. */
                 size?: number;
@@ -6717,6 +6724,7 @@ export interface operations {
     list_3: {
         parameters: {
             query?: {
+                /** @description Zero-based page index; negative values are normalized to zero. */
                 page?: number;
                 /** @description Page size; values are normalized to the inclusive range 1–100. */
                 size?: number;
@@ -6850,6 +6858,7 @@ export interface operations {
     list_4: {
         parameters: {
             query?: {
+                /** @description Zero-based page index; negative values are normalized to zero. */
                 page?: number;
                 /** @description Page size; values are normalized to the inclusive range 1–100. */
                 size?: number;
@@ -7383,6 +7392,7 @@ export interface operations {
     list_5: {
         parameters: {
             query?: {
+                /** @description Zero-based page index; negative values are normalized to zero. */
                 page?: number;
                 /** @description Page size; values are normalized to the inclusive range 1–100. */
                 size?: number;
@@ -7436,9 +7446,11 @@ export interface operations {
     lookupStudents: {
         parameters: {
             query?: {
+                /** @description Zero-based page index; negative values are normalized to zero. */
                 page?: number;
                 /** @description Page size; values are normalized to the inclusive range 1–100. */
                 size?: number;
+                /** @description Optional, case-insensitive display-name substring filter. Blank or whitespace-only input is ignored; '%' and '_' are treated literally. */
                 q?: string;
             };
             header?: never;
@@ -7488,6 +7500,7 @@ export interface operations {
     schoolYears: {
         parameters: {
             query?: {
+                /** @description Zero-based page index; negative values are normalized to zero. */
                 page?: number;
                 /** @description Page size; values are normalized to the inclusive range 1–100. */
                 size?: number;
@@ -7530,6 +7543,7 @@ export interface operations {
     archive: {
         parameters: {
             query?: {
+                /** @description Zero-based page index; negative values are normalized to zero. */
                 page?: number;
                 /** @description Page size; values are normalized to the inclusive range 1–100. */
                 size?: number;
@@ -7808,6 +7822,7 @@ export interface operations {
     list_7: {
         parameters: {
             query?: {
+                /** @description Zero-based page index; negative values are normalized to zero. */
                 page?: number;
                 /** @description Page size; values are normalized to the inclusive range 1–100. */
                 size?: number;
@@ -7859,6 +7874,7 @@ export interface operations {
     forEntity: {
         parameters: {
             query?: {
+                /** @description Zero-based page index; negative values are normalized to zero. */
                 page?: number;
                 /** @description Page size; values are normalized to the inclusive range 1–100. */
                 size?: number;
@@ -8212,6 +8228,7 @@ export interface operations {
     listApplyingGroupInvitations: {
         parameters: {
             query?: {
+                /** @description Zero-based page index; negative values are normalized to zero. */
                 page?: number;
                 /** @description Page size; values are normalized to the inclusive range 1–100. */
                 size?: number;
@@ -8333,6 +8350,7 @@ export interface operations {
     list_8: {
         parameters: {
             query?: {
+                /** @description Zero-based page index; negative values are normalized to zero. */
                 page?: number;
                 /** @description Page size; values are normalized to the inclusive range 1–100. */
                 size?: number;
