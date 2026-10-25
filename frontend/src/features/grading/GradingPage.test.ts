@@ -56,7 +56,34 @@ describe("grading student identities", () => {
   })
 
   it("shows administrators read-only grading views and rubric publication but no grading mutation controls", async () => {
-    api.finalGrade.mockResolvedValue(null)
+    api.groupGrades.mockResolvedValue(pageResult([{
+      id: "admin-group-record",
+      criterionId: "teamwork",
+      grade: 4,
+      status: "ACTIVE",
+      assessedOn: "2026-10-12",
+      rubricVersion: "v1",
+      categoryId: "collaboration",
+      evidence: "Shared delivery",
+    }]))
+    api.metrics.mockResolvedValue(pageResult([{
+      id: "admin-metric-record",
+      metricId: "workshop-hours",
+      metricVersion: 2,
+      value: 12,
+      measuredAt: "2026-10-12T09:00:00Z",
+      rubricVersion: "v1",
+      note: "Workshop log",
+    }]))
+    api.finalGrade.mockResolvedValue({
+      current: {
+        id: "admin-project-final",
+        scope: "PROJECT",
+        grade: 4,
+        rationale: "Project evidence considered.",
+      },
+      history: [],
+    })
     const page = mount(GradingPage)
     await flushPromises()
     expect(page.find("#rubric-json").exists()).toBe(true)
@@ -72,9 +99,29 @@ describe("grading student identities", () => {
     await flushPromises()
     expect(page.findAll('[role="tab"]')).toHaveLength(4)
     expect(page.text()).toContain("Jordan Student")
+    expect(page.text()).toContain("knowledge · 4")
+    expect(page.text()).not.toContain("Record individual assessment")
+    expect(page.findAll("form")).toHaveLength(0)
+
+    await page.findAll('[role="tab"]').find((tab) => tab.text() === "Group assessments")!.trigger("click")
+    expect(page.text()).toContain("teamwork · 4")
+    expect(page.text()).toContain("Shared delivery")
+    expect(page.findAll("form")).toHaveLength(0)
+    expect(page.text()).not.toContain("Record group assessment")
+
+    await page.findAll('[role="tab"]').find((tab) => tab.text() === "Metric observations")!.trigger("click")
+    expect(page.text()).toContain("workshop-hours · 12")
+    expect(page.text()).toContain("Workshop log")
+    expect(page.findAll("form")).toHaveLength(0)
+    expect(page.text()).not.toContain("Record observation")
+
     await page.findAll('[role="tab"]').find((tab) => tab.text() === "Final grades")!.trigger("click")
     expect(page.findAll("form")).toHaveLength(0)
-    expect(page.text()).toContain("No final grade is recorded")
+    expect(page.text()).toContain("admin-project-final")
+    expect(page.text()).toContain("Project evidence considered.")
+    expect(page.text()).not.toContain("No final grade is recorded")
+    expect(page.text()).not.toContain("Record / confirm final project grade")
+    expect(page.text()).not.toContain("Record an individual final grade")
     page.unmount()
   })
 

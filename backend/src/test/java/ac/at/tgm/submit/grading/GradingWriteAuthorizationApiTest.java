@@ -1,6 +1,7 @@
 package ac.at.tgm.submit.grading;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -43,6 +44,7 @@ class GradingWriteAuthorizationApiTest {
 
     private String adminToken;
     private String teacherToken;
+    private String teacherId;
     private UUID projectId;
     private String studentId;
     private UUID rubricId;
@@ -50,7 +52,9 @@ class GradingWriteAuthorizationApiTest {
     @BeforeEach
     void setUp() throws Exception {
         adminToken = login("admin01").token();
-        teacherToken = login("teacher01").token();
+        AuthTokens teacher = login("teacher01");
+        teacherToken = teacher.token();
+        teacherId = teacher.userId();
         studentId = login("student01").userId();
         projectId = UUID.randomUUID();
         var group = store.object().put("projectId", projectId.toString());
@@ -73,21 +77,24 @@ class GradingWriteAuthorizationApiTest {
         Map<String, Object> revision = Map.of("reason", "Correction", "grade", 3);
         request(post("/api/projects/{projectId}/student-grades/{gradeId}/revisions", projectId, gradeId),
                 adminToken, revision).andExpect(status().isForbidden());
-        request(post("/api/projects/{projectId}/student-grades/{gradeId}/revisions", projectId, gradeId),
-                teacherToken, revision).andExpect(status().isCreated());
+        JsonNode revisionResponse = body(request(
+                post("/api/projects/{projectId}/student-grades/{gradeId}/revisions", projectId, gradeId),
+                teacherToken, revision).andExpect(status().isCreated()).andReturn());
+        String revisionId = text(revisionResponse, "id");
 
         Map<String, Object> groupGrade = Map.of("rubricId", rubricId, "criterionId", "team",
-                "grade", 4, "evidence", "Completed project evidence");
+                "grade", 4, "evidence", "Completed project evidence", "comments", "Group review");
         request(post("/api/projects/{projectId}/group-grades", projectId), adminToken, groupGrade)
                 .andExpect(status().isForbidden());
-        request(post("/api/projects/{projectId}/group-grades", projectId), teacherToken, groupGrade)
-                .andExpect(status().isCreated());
+        JsonNode groupResponse = body(request(post("/api/projects/{projectId}/group-grades", projectId),
+                teacherToken, groupGrade).andExpect(status().isCreated()).andReturn());
 
-        Map<String, Object> metric = Map.of("rubricId", rubricId, "metricId", "hours", "value", 12);
+        Map<String, Object> metric = Map.of("rubricId", rubricId, "metricId", "hours",
+                "value", 12, "note", "Recorded workshop hours");
         request(post("/api/projects/{projectId}/metrics", projectId), adminToken, metric)
                 .andExpect(status().isForbidden());
-        request(post("/api/projects/{projectId}/metrics", projectId), teacherToken, metric)
-                .andExpect(status().isCreated());
+        JsonNode metricResponse = body(request(post("/api/projects/{projectId}/metrics", projectId),
+                teacherToken, metric).andExpect(status().isCreated()).andReturn());
 
         Map<String, Object> finalGrades = Map.of(
                 "rubricId", rubricId,
@@ -96,22 +103,119 @@ class GradingWriteAuthorizationApiTest {
                         "rationale", "Individual assessments considered.")));
         request(put("/api/projects/{projectId}/final-grade", projectId), adminToken, finalGrades)
                 .andExpect(status().isForbidden());
-        request(put("/api/projects/{projectId}/final-grade", projectId), teacherToken, finalGrades)
-                .andExpect(status().isOk());
+        JsonNode finalGradeResponse = body(mockMvc.perform(bearer(
+                put("/api/projects/{projectId}/final-grade", projectId), teacherToken)
+                .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsBytes(finalGrades)))
+                .andExpect(status().isOk()).andReturn());
+        JsonNode projectFinalWrite = object(finalGradeResponse, "project");
+        JsonNode studentFinalWrite = array(finalGradeResponse, "students").get(0);
 
-        mockMvc.perform(bearer(get("/api/projects/{projectId}/student-grades", projectId), adminToken))
-                .andExpect(status().isOk());
-        mockMvc.perform(bearer(get("/api/projects/{projectId}/group-grades", projectId), adminToken))
-                .andExpect(status().isOk());
-        mockMvc.perform(bearer(get("/api/projects/{projectId}/metrics", projectId), adminToken))
-                .andExpect(status().isOk());
-        mockMvc.perform(bearer(get("/api/projects/{projectId}/final-grade", projectId), adminToken))
-                .andExpect(status().isOk());
-        mockMvc.perform(bearer(get("/api/projects/{projectId}/students/{studentId}/final-grade",
-                projectId, studentId), adminToken)).andExpect(status().isOk());
+        JsonNode adminIndividual = body(mockMvc.perform(bearer(
+                get("/api/projects/{projectId}/student-grades", projectId), adminToken))
+                .andExpect(status().isOk()).andReturn());
+        JsonNode individualContent = array(adminIndividual, "content");
+        assertTrue(individualContent.size() >= 2);
+        JsonNode activeGrade = findById(individualContent, revisionId);
+        JsonNode previousGrade = findById(individualContent, gradeId);
+        assertNumber(activeGrade, "grade", 3);
+        assertEquals("ACTIVE", text(activeGrade, "status"));
+        assertEquals(gradeId, text(activeGrade, "supersedesId"));
+        assertEquals("Correction", text(activeGrade, "reason"));
+        assertNumber(previousGrade, "grade", 4);
+        assertEquals("SUPERSEDED", text(previousGrade, "status"));
+        assertEquals(revisionId, text(previousGrade, "supersededById"));
+
+        JsonNode adminGroups = body(mockMvc.perform(bearer(
+                get("/api/projects/{projectId}/group-grades", projectId), adminToken))
+                .andExpect(status().isOk()).andReturn());
+        JsonNode groupRecord = findById(array(adminGroups, "content"), text(groupResponse, "id"));
+        assertEquals("team", text(groupRecord, "criterionId"));
+        assertNumber(groupRecord, "grade", 4);
+        assertEquals("Completed project evidence", text(groupRecord, "evidence"));
+        assertEquals("Group review", text(groupRecord, "comments"));
+
+        JsonNode adminMetrics = body(mockMvc.perform(bearer(
+                get("/api/projects/{projectId}/metrics", projectId), adminToken))
+                .andExpect(status().isOk()).andReturn());
+        JsonNode metricRecord = findById(array(adminMetrics, "content"), text(metricResponse, "id"));
+        assertEquals("hours", text(metricRecord, "metricId"));
+        assertNumber(metricRecord, "value", 12);
+        assertEquals("Recorded workshop hours", text(metricRecord, "note"));
+
+        JsonNode adminProjectFinal = body(mockMvc.perform(bearer(
+                get("/api/projects/{projectId}/final-grade", projectId), adminToken))
+                .andExpect(status().isOk()).andReturn());
+        assertFinalGrade(adminProjectFinal, projectFinalWrite, 4, "Project rubric and metric inputs considered.");
+        JsonNode adminStudentFinal = body(mockMvc.perform(bearer(get(
+                "/api/projects/{projectId}/students/{studentId}/final-grade",
+                projectId, studentId), adminToken)).andExpect(status().isOk()).andReturn());
+        assertFinalGrade(adminStudentFinal, studentFinalWrite, 3, "Individual assessments considered.");
+
+        assertAudit("student_grade", gradeId, "STUDENT_GRADE_RECORDED");
+        assertAudit("student_grade", revisionId, "STUDENT_GRADE_REVISED");
+        assertAudit("group_grade", text(groupResponse, "id"), "GROUP_GRADE_RECORDED");
+        assertAudit("project_metric", text(metricResponse, "id"), "METRIC_RECORDED");
+        assertAudit("final_grade", text(projectFinalWrite, "id"), "FINAL_GRADE_RECORDED");
+        assertAudit("final_grade", text(studentFinalWrite, "id"), "FINAL_GRADE_RECORDED");
+
         mockMvc.perform(bearer(get("/api/grading-rubrics/{rubricId}", rubricId), adminToken))
                 .andExpect(status().isOk());
         assertTrue(publishRubric("admin-publication-" + UUID.randomUUID()) != null);
+    }
+
+    private void assertAudit(String entityType, String entityId, String action) throws Exception {
+        JsonNode page = body(mockMvc.perform(bearer(
+                get("/api/audit/{entityType}/{entityId}", entityType, entityId), teacherToken))
+                .andExpect(status().isOk()).andReturn());
+        JsonNode events = array(page, "content");
+        assertTrue(events.size() >= 1, "Expected audit event " + action + " for " + entityId);
+        JsonNode event = events.get(0);
+        assertEquals(action, text(event, "action"));
+        assertEquals(entityType, text(event, "entityType"));
+        assertEquals(entityId, text(event, "entityId"));
+        assertEquals(teacherId, text(event, "actorId"));
+        assertEquals("teacher01", text(event, "actorUsername"));
+    }
+
+    private void assertFinalGrade(JsonNode history, JsonNode written, int grade, String rationale) {
+        JsonNode current = object(history, "current");
+        assertEquals(text(written, "id"), text(current, "id"));
+        assertEquals(text(written, "scope"), text(current, "scope"));
+        assertNumber(current, "grade", grade);
+        assertEquals(rationale, text(current, "rationale"));
+        JsonNode prior = array(history, "history");
+        assertTrue(prior.isArray());
+    }
+
+    private JsonNode findById(JsonNode records, String id) {
+        assertTrue(records.isArray(), "Expected response content array");
+        for (JsonNode record : records) {
+            if (record.isObject() && id.equals(record.path("id").asText())) {
+                return record;
+            }
+        }
+        throw new AssertionError("Missing response record with id " + id);
+    }
+
+    private JsonNode object(JsonNode parent, String field) {
+        JsonNode value = parent.get(field);
+        assertNotNull(value, field + " must be present");
+        assertTrue(value.isObject(), field + " must be an object");
+        return value;
+    }
+
+    private JsonNode array(JsonNode parent, String field) {
+        JsonNode value = parent.get(field);
+        assertNotNull(value, field + " must be present");
+        assertTrue(value.isArray(), field + " must be an array");
+        return value;
+    }
+
+    private void assertNumber(JsonNode parent, String field, int expected) {
+        JsonNode value = parent.get(field);
+        assertNotNull(value, field + " must be present");
+        assertTrue(value.isNumber(), field + " must be numeric");
+        assertEquals(expected, value.intValue());
     }
 
     private Map<String, Object> studentGrade() {
