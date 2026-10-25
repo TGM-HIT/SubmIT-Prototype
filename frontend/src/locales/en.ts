@@ -540,6 +540,7 @@ const en = {
         APPLICATION_SUBMITTED: 'Project preference submitted',
         APPLICATION_UPDATED: 'Project preference updated',
         APPLICATION_WITHDRAWN: 'Project preference withdrawn',
+        APPLYING_GROUP_CREATED: 'Applying group created',
         APPLYING_GROUP_INVITE: 'Group invitation sent',
         APPLYING_GROUP_REVOKE: 'Group invitation revoked',
         APPLYING_GROUP_ACCEPT: 'Group invitation accepted',

@@ -540,6 +540,7 @@ const de = {
         APPLICATION_SUBMITTED: 'Projektwunsch eingereicht',
         APPLICATION_UPDATED: 'Projektwunsch geändert',
         APPLICATION_WITHDRAWN: 'Projektwunsch zurückgezogen',
+        APPLYING_GROUP_CREATED: 'Bewerbungsgruppe erstellt',
         APPLYING_GROUP_INVITE: 'Gruppeneinladung versendet',
         APPLYING_GROUP_REVOKE: 'Gruppeneinladung zurückgezogen',
         APPLYING_GROUP_ACCEPT: 'Gruppeneinladung angenommen',
