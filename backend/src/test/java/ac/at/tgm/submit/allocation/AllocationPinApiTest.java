@@ -299,10 +299,18 @@ class AllocationPinApiTest {
                 firstPin.toString(), org.springframework.data.domain.PageRequest.of(0, 20)).getContent());
         auditRows.addAll(store.repository().findByTypeAndReferenceTypeAndParentId("audit", "allocation_pin",
                 replacementPin.toString(), org.springframework.data.domain.PageRequest.of(0, 20)).getContent());
-        var actions = auditRows.stream().map(store::parse).map(payload -> payload.path("action").asText()).toList();
-        assertTrue(actions.contains("ALLOCATION_PIN_CREATED"));
-        assertTrue(actions.contains("ALLOCATION_PIN_REPLACED"));
-        assertTrue(actions.contains("ALLOCATION_PIN_REMOVED"));
+        var events = auditRows.stream().map(store::parse).toList();
+        var created = events.stream().filter(payload -> "ALLOCATION_PIN_CREATED".equals(
+                payload.path("action").asText())).findFirst().orElseThrow();
+        var replaced = events.stream().filter(payload -> "ALLOCATION_PIN_REPLACED".equals(
+                payload.path("action").asText())).findFirst().orElseThrow();
+        var removed = events.stream().filter(payload -> "ALLOCATION_PIN_REMOVED".equals(
+                payload.path("action").asText())).findFirst().orElseThrow();
+        assertEquals(store.parse(store.get("idea", projects.get(0))).path("title").asText(),
+                created.path("resourceLabel").asText());
+        assertEquals(store.parse(store.get("idea", projects.get(1))).path("title").asText(),
+                replaced.path("resourceLabel").asText());
+        assertEquals(replaced.path("resourceLabel").asText(), removed.path("resourceLabel").asText());
     }
 
     private JsonNode assignment(JsonNode run, UUID studentId) {

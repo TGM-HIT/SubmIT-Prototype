@@ -68,8 +68,8 @@ public class AllocationPinService {
                 .findByTypeAndParentIdAndOwnerId(PIN, periodId.toString(), studentId.toString())
                 .orElseThrow(() -> new EntityNotFoundException("Allocation pin was not found."));
         UUID pinId = pin.getId();
-        store.delete(pin);
         audit.record(caller, "ALLOCATION_PIN_REMOVED", PIN, pinId);
+        store.delete(pin);
     }
 
     @Transactional(readOnly = true)

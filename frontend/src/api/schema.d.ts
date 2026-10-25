@@ -3225,6 +3225,25 @@ export interface components {
              * @description Time when the audit event was recorded.
              */
             occurredAt: string;
+            /** @description Actor display name captured at event time or resolved from current data; omitted when unavailable or for system events. */
+            actorDisplayName?: string;
+            /**
+             * @description Actor role captured at event time or resolved from current data; omitted when unavailable or for system events.
+             * @enum {string}
+             */
+            actorRole?: "STUDENT" | "TEACHER" | "ADMIN";
+            /** @description Resource name or safe identifying context captured at event time or resolved from current data; omitted when unavailable. */
+            resourceLabel?: string;
+            /**
+             * @description Provenance of actor details: EVENT_TIME, CURRENT, UNAVAILABLE, or SYSTEM.
+             * @enum {string}
+             */
+            actorDetailsSource: "EVENT_TIME" | "CURRENT" | "UNAVAILABLE" | "SYSTEM";
+            /**
+             * @description Provenance of resource label: EVENT_TIME, CURRENT, or UNAVAILABLE.
+             * @enum {string}
+             */
+            resourceLabelSource: "EVENT_TIME" | "CURRENT" | "UNAVAILABLE";
         };
         PageResponseAuditEntryResponse: {
             /** @description Items returned in this page. */

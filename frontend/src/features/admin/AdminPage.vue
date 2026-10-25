@@ -3,8 +3,8 @@
     <p class="page-intro">{{ $t('admin.intro') }}</p>
     <div class="tab-list" role="tablist" :aria-label="$t('admin.tablist')">
       <button class="tab-button" role="tab" :aria-selected="activeTab === 'users'" @click="activeTab = 'users'">{{ $t('admin.tabs.users') }}</button>
-      <button class="tab-button" role="tab" :aria-selected="activeTab === 'catalogues'" @click="activeTab = 'catalogues'; void loadCatalogues()">{{ $t('admin.tabs.catalogues') }}</button>
-      <button class="tab-button" role="tab" :aria-selected="activeTab === 'audit'" @click="activeTab = 'audit'">{{ $t('admin.tabs.audit') }}</button>
+      <button id="admin-tab-catalogues" class="tab-button" role="tab" :aria-selected="activeTab === 'catalogues'" @click="activeTab = 'catalogues'; void loadCatalogues()">{{ $t('admin.tabs.catalogues') }}</button>
+      <button id="admin-tab-audit" class="tab-button" role="tab" :aria-selected="activeTab === 'audit'" @click="activeTab = 'audit'">{{ $t('admin.tabs.audit') }}</button>
     </div>
     <section v-if="activeTab === 'users'" class="panel">
       <div class="page-heading"><div><h2 id="accounts-heading" ref="accountsHeading" class="section-title">{{ $t('admin.accounts') }}</h2><p class="muted">{{ $t('admin.registration') }}</p></div><button class="button button-secondary" @click="loadUsers(0)">{{ $t('admin.refresh') }}</button></div>
@@ -45,8 +45,8 @@
             <p v-if="!classes.length" class="empty">{{ $t('admin.noClasses') }}</p>
           </section>
           <section class="panel"><h3 class="section-title">{{ $t('admin.subjectsHeading') }}</h3>
-            <form class="toolbar" @submit.prevent="createCatalogue('subject')"><label class="sr-only" for="new-subject">{{ $t('admin.newSubject') }}</label><input id="new-subject" v-model="newSubjectName" class="input" maxlength="100" :placeholder="$t('admin.newSubject')" required><button class="button button-small" type="submit" :disabled="catalogueSaving">{{ $t('admin.addSubject') }}</button></form>
-            <div v-for="entry in subjects" :key="entry.id" class="data-row"><template v-if="editingCatalogue?.kind === 'subject' && editingCatalogue.id === entry.id"><input v-model="catalogueDraft" class="input" maxlength="100" :aria-label="$t('admin.renameSubject', { name: entry.name })"><button class="button button-small" type="button" @click="saveCatalogue">{{ $t('admin.save') }}</button><button class="button button-secondary button-small" type="button" @click="editingCatalogue = null">{{ $t('admin.cancel') }}</button></template><template v-else><span>{{ entry.name }}</span><button class="button button-secondary button-small" type="button" @click="editCatalogue('subject', entry.id ?? 'unknown', entry.name ?? '')">{{ $t('admin.rename') }}</button></template></div>
+            <form id="create-subject-form" class="toolbar" @submit.prevent="createCatalogue('subject')"><label class="sr-only" for="new-subject">{{ $t('admin.newSubject') }}</label><input id="new-subject" v-model="newSubjectName" class="input" maxlength="100" :placeholder="$t('admin.newSubject')" required><button id="add-subject-button" class="button button-small" type="submit" :disabled="catalogueSaving">{{ $t('admin.addSubject') }}</button></form>
+            <div v-for="entry in subjects" :key="entry.id" class="data-row"><template v-if="editingCatalogue?.kind === 'subject' && editingCatalogue.id === entry.id"><input id="subject-rename-draft" v-model="catalogueDraft" class="input" maxlength="100" :aria-label="$t('admin.renameSubject', { name: entry.name })"><button id="save-subject-rename" class="button button-small" type="button" @click="saveCatalogue">{{ $t('admin.save') }}</button><button class="button button-secondary button-small" type="button" @click="editingCatalogue = null">{{ $t('admin.cancel') }}</button></template><template v-else><span>{{ entry.name }}</span><button class="button button-secondary button-small" type="button" :aria-label="$t('admin.renameSubject', { name: entry.name })" @click="editCatalogue('subject', entry.id ?? 'unknown', entry.name ?? '')">{{ $t('admin.rename') }}</button></template></div>
             <p v-if="!subjects.length" class="empty">{{ $t('admin.noSubjects') }}</p>
           </section>
         </div>
@@ -54,11 +54,22 @@
       </AsyncPanel>
     </section>
     <section v-else class="panel">
-      <div class="page-heading"><div><h2 class="section-title">{{ $t('admin.auditHeading') }}</h2><p class="muted">{{ $t('admin.auditHelp') }}</p></div><button class="button button-secondary" @click="loadAudit(0)">{{ $t('admin.refresh') }}</button></div>
-      <AsyncPanel :loading="task.loading.value" :error="task.error.value" @retry="loadAudit(audit.page)">
+      <div class="page-heading"><div><h2 class="section-title">{{ $t('admin.auditHeading') }}</h2><p class="muted">{{ $t('admin.auditHelp') }}</p></div><button id="audit-refresh" class="button button-secondary" type="button" @click="loadAudit(0)">{{ $t('admin.refresh') }}</button></div>
+      <AsyncPanel retry-id="audit-retry" :loading="task.loading.value" :error="task.error.value" @retry="loadAudit(requestedAuditPage)">
         <div v-if="audit.content.length" class="data-list">
           <article v-for="entry in audit.content" :key="`${entry.occurredAt}:${entry.entityType}:${entry.entityId}:${entry.action}`" class="data-row">
-            <div class="row-main"><h3>{{ entry.action }}</h3><p>{{ timestamp(entry.occurredAt) }}</p><p>{{ entry.entityType }} {{ entry.entityId }} · {{ $t('admin.actor') }} {{ entry.actorId ?? $t('admin.actorNotSupplied') }}</p></div><span class="status-badge">{{ $t('admin.recorded') }}</span>
+            <div class="row-main">
+              <h3>{{ actionLabel(entry.action) }}</h3>
+              <p>{{ timestamp(entry.occurredAt) }}</p>
+              <p><strong>{{ $t('admin.resource') }}:</strong> {{ resourceType(entry.entityType) }} · {{ entry.resourceLabel ?? $t('admin.historicalUnavailable') }}</p>
+              <p v-if="entry.resourceLabelSource === 'CURRENT'" class="muted">{{ $t('admin.currentData') }}</p>
+              <p v-else-if="entry.resourceLabelSource === 'UNAVAILABLE'" class="muted">{{ $t('admin.historicalUnavailable') }}</p>
+              <p class="muted">{{ entry.entityId }}</p>
+              <p><strong>{{ $t('admin.actor') }}:</strong> {{ entry.actorDetailsSource === 'SYSTEM' ? $t('admin.systemActor') : entry.actorDisplayName ?? $t('admin.historicalUnavailable') }}</p>
+              <p v-if="entry.actorDetailsSource !== 'SYSTEM'">{{ $t('admin.actorUsername') }}: {{ entry.actorUsername }} · {{ $t('admin.actorRole') }}: {{ entry.actorRole ? $t(`admin.userRoles.${entry.actorRole}`) : $t('admin.historicalUnavailable') }}</p>
+              <p v-if="entry.actorDetailsSource === 'CURRENT'" class="muted">{{ $t('admin.currentData') }}</p>
+              <p v-else-if="entry.actorDetailsSource === 'UNAVAILABLE'" class="muted">{{ $t('admin.historicalUnavailable') }}</p>
+            </div><span class="status-badge">{{ $t('admin.recorded') }}</span>
           </article>
         </div>
         <p v-else class="empty">{{ $t('admin.noAudit') }}</p>
@@ -106,7 +117,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { components } from '../../api/schema'
 import type { Page } from '../../api/client'
 import { adminApi, studentDetailsApi, userApi } from '../../api/services'
@@ -125,6 +136,7 @@ const task = useTask()
 const activeTab = ref<'users' | 'catalogues' | 'audit'>('users')
 const users = ref<Page<User>>(emptyPage())
 const audit = ref<Page<AuditEntry>>(emptyPage())
+const requestedAuditPage = ref(0)
 const roleFilter = ref<AccountRole | ''>('')
 const searchInput = ref('')
 const activeSearch = ref('')
@@ -165,6 +177,14 @@ function timestamp(value: string): string {
     ? value
     : formatTimestamp(date)
 }
+function actionLabel(code: string): string {
+  const key = `admin.auditActions.${code}`
+  return i18n.global.te(key) ? String(i18n.global.t(key)) : String(i18n.global.t('admin.unknownAction', { code }))
+}
+function resourceType(code: string): string {
+  const key = `admin.auditResources.${code}`
+  return i18n.global.te(key) ? String(i18n.global.t(key)) : String(i18n.global.t('admin.unknownResource', { code }))
+}
 function clearSearchDebounce(): void {
   if (searchDebounce !== undefined) clearTimeout(searchDebounce)
   searchDebounce = undefined
@@ -195,7 +215,21 @@ async function loadUsers(page = 0): Promise<void> {
   })
 }
 async function loadAudit(page = 0): Promise<void> {
+  const activeId = document.activeElement instanceof HTMLElement ? document.activeElement.id : ''
+  requestedAuditPage.value = page
   await task.run(async () => { audit.value = await adminApi.audit(page) })
+  if (activeId === 'pager-next' || activeId === 'pager-previous') {
+    await nextTick()
+    const initiator = document.getElementById(activeId)
+    const focusTarget = initiator?.hasAttribute('disabled')
+      ? activeId === 'pager-next' ? 'pager-previous' : 'pager-next'
+      : activeId
+    const target = focusTarget ? document.getElementById(focusTarget) : null
+    if (target instanceof HTMLButtonElement && !target.disabled) target.focus()
+  } else if (activeId === 'audit-retry') {
+    await nextTick()
+    document.getElementById(activeId)?.focus()
+  }
 }
 async function openEditor(user: User, event: MouseEvent): Promise<void> {
   editingUser.value = user

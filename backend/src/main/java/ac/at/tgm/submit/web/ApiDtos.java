@@ -616,7 +616,8 @@ public final class ApiDtos {
             String cooperationPartner) {
     }
 
-    @Schema(requiredProperties = {"actorUsername", "action", "entityType", "entityId", "occurredAt"})
+    @Schema(requiredProperties = {"actorUsername", "action", "entityType", "entityId", "occurredAt",
+            "actorDetailsSource", "resourceLabelSource"})
     public record AuditEntryResponse(
             @NotNull @Schema(description = "UUID of the user who recorded this event; omitted for system-recorded entries.",
                     format = "uuid", requiredMode = Schema.RequiredMode.NOT_REQUIRED)
@@ -630,7 +631,22 @@ public final class ApiDtos {
             @NotNull @Schema(description = "UUID of the affected entity.",
                     format = "uuid", requiredMode = Schema.RequiredMode.REQUIRED) String entityId,
             @NotNull @Schema(description = "Time when the audit event was recorded.",
-                    format = "date-time", requiredMode = Schema.RequiredMode.REQUIRED) String occurredAt) {
+                    format = "date-time", requiredMode = Schema.RequiredMode.REQUIRED) String occurredAt,
+            @Schema(description = "Actor display name captured at event time or resolved from current data; omitted when unavailable or for system events.",
+                    requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            @JsonInclude(JsonInclude.Include.NON_NULL) String actorDisplayName,
+            @Schema(description = "Actor role captured at event time or resolved from current data; omitted when unavailable or for system events.",
+                    requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            @JsonInclude(JsonInclude.Include.NON_NULL) Role actorRole,
+            @Schema(description = "Resource name or safe identifying context captured at event time or resolved from current data; omitted when unavailable.",
+                    requiredMode = Schema.RequiredMode.NOT_REQUIRED)
+            @JsonInclude(JsonInclude.Include.NON_NULL) String resourceLabel,
+            @NotNull @Schema(description = "Provenance of actor details: EVENT_TIME, CURRENT, UNAVAILABLE, or SYSTEM.",
+                    allowableValues = {"EVENT_TIME", "CURRENT", "UNAVAILABLE", "SYSTEM"},
+                    requiredMode = Schema.RequiredMode.REQUIRED) String actorDetailsSource,
+            @NotNull @Schema(description = "Provenance of resource label: EVENT_TIME, CURRENT, or UNAVAILABLE.",
+                    allowableValues = {"EVENT_TIME", "CURRENT", "UNAVAILABLE"},
+                    requiredMode = Schema.RequiredMode.REQUIRED) String resourceLabelSource) {
     }
 
     @Schema(requiredProperties = {"content", "page", "size", "totalElements", "totalPages"})

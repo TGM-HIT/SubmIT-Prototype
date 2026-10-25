@@ -8,6 +8,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import ac.at.tgm.submit.security.Role;
+import ac.at.tgm.submit.web.ApiDtos.AuditEntryResponse;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -165,8 +167,9 @@ class OpenApiContractTest {
             Map.entry("StudentAssignmentResponse", contract(
                     "state,projectTitle,preferenceRank,groupMembers", "assignedWithoutPreferences",
                     "projectTitle,preferenceRank")),
-            Map.entry("AuditEntryResponse", contract("actorUsername,action,entityType,entityId,occurredAt",
-                    "actorId", "")),
+            Map.entry("AuditEntryResponse", contract(
+                    "actorUsername,action,entityType,entityId,occurredAt,actorDetailsSource,resourceLabelSource",
+                    "actorId,actorDisplayName,actorRole,resourceLabel", "")),
             Map.entry("StudentGroupMemberResponse",
                     contract("displayName,self,originLabel,ownCohort", "", "")),
             Map.entry("ApplyingUnitSnapshot", contract("groupId,revision,studentIds,projectIds", "", "")),
@@ -258,9 +261,11 @@ class OpenApiContractTest {
         assertEquals("#/components/schemas/AuditEntryResponse",
                 page.path("properties").path("content").path("items").path("$ref").asText());
         JsonNode auditEntry = schemas.path("AuditEntryResponse");
-        assertEquals(names("actorId,actorUsername,action,entityType,entityId,occurredAt"),
+        assertEquals(names("actorId,actorUsername,action,entityType,entityId,occurredAt,actorDisplayName,actorRole,"
+                + "resourceLabel,actorDetailsSource,resourceLabelSource"),
                 fieldNames(auditEntry.path("properties")));
-        assertEquals(names("actorUsername,action,entityType,entityId,occurredAt"),
+        assertEquals(names("actorUsername,action,entityType,entityId,occurredAt,actorDetailsSource,"
+                + "resourceLabelSource"),
                 textualMembers(auditEntry.path("required")));
         for (String property : fieldNames(auditEntry.path("properties"))) {
             JsonNode schema = auditEntry.path("properties").path(property);
@@ -272,8 +277,77 @@ class OpenApiContractTest {
         assertEquals("uuid", auditEntry.path("properties").path("actorId").path("format").asText());
         assertEquals("uuid", auditEntry.path("properties").path("entityId").path("format").asText());
         assertEquals("date-time", auditEntry.path("properties").path("occurredAt").path("format").asText());
+        assertEquals(names("EVENT_TIME,CURRENT,UNAVAILABLE,SYSTEM"),
+                textualMembers(auditEntry.path("properties").path("actorDetailsSource").path("enum")));
+        assertEquals(names("EVENT_TIME,CURRENT,UNAVAILABLE"),
+                textualMembers(auditEntry.path("properties").path("resourceLabelSource").path("enum")));
+        assertEquals(names("STUDENT,TEACHER,ADMIN"),
+                textualMembers(auditEntry.path("properties").path("actorRole").path("enum")));
         assertTrue(auditEntry.path("properties").path("actorId").path("description").asText()
                 .contains("omitted for system-recorded entries"));
+    }
+
+    @Test
+    void auditEntrySerializationPreservesContextSourcesAndOmissionSemantics() {
+        List<AuditEntryResponse> entries = List.of(
+                new AuditEntryResponse("11111111-1111-4111-8111-111111111111", "admin01",
+                        "ELECTIVE_SUBJECT_CREATED", "elective_subject", "22222222-2222-4222-8222-222222222222",
+                        "2026-10-24T10:00:00Z", "Grace Morgan", Role.ADMIN, "Robotics",
+                        "EVENT_TIME", "EVENT_TIME"),
+                new AuditEntryResponse("33333333-3333-4333-8333-333333333333", "teacher01",
+                        "USER_ROLE_CHANGED", "user", "44444444-4444-4444-8444-444444444444",
+                        "2026-10-24T10:01:00Z", "Current Teacher", Role.TEACHER, "Current account",
+                        "CURRENT", "CURRENT"),
+                new AuditEntryResponse("55555555-5555-4555-8555-555555555555", "retired-user",
+                        "LEGACY_MIXED", "idea", "66666666-6666-4666-8666-666666666666",
+                        "2026-10-24T10:02:00Z", null, null, "Historical subject",
+                        "UNAVAILABLE", "EVENT_TIME"),
+                new AuditEntryResponse("77777777-7777-4777-8777-777777777777", "legacy-user",
+                        "LEGACY_CURRENT_RESOURCE", "elective_subject",
+                        "88888888-8888-4888-8888-888888888888", "2026-10-24T10:03:00Z",
+                        "Current User", Role.ADMIN, "Current subject", "CURRENT", "CURRENT"),
+                new AuditEntryResponse("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "retired-user",
+                        "LEGACY_UNAVAILABLE", "missing_resource", "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+                        "2026-10-24T10:04:00Z", null, null, null, "UNAVAILABLE", "UNAVAILABLE"),
+                new AuditEntryResponse(null, "SYSTEM", "ALLOCATION_RUN_STARTED", "allocation_run",
+                        "99999999-9999-4999-8999-999999999999", "2026-10-24T10:05:00Z",
+                        null, null, null, "SYSTEM", "UNAVAILABLE"));
+
+        JsonNode eventTime = objectMapper.valueToTree(entries.get(0));
+        assertEquals(names("actorId,actorUsername,action,entityType,entityId,occurredAt,actorDisplayName,"
+                + "actorRole,resourceLabel,actorDetailsSource,resourceLabelSource"), fieldNames(eventTime));
+        assertEquals("EVENT_TIME", eventTime.path("actorDetailsSource").textValue());
+        assertEquals("EVENT_TIME", eventTime.path("resourceLabelSource").textValue());
+
+        JsonNode current = objectMapper.valueToTree(entries.get(1));
+        assertEquals("CURRENT", current.path("actorDetailsSource").textValue());
+        assertEquals("CURRENT", current.path("resourceLabelSource").textValue());
+        assertTrue(current.path("actorDisplayName").isTextual());
+        assertTrue(current.path("actorRole").isTextual());
+        assertTrue(current.path("resourceLabel").isTextual());
+
+        JsonNode mixed = objectMapper.valueToTree(entries.get(2));
+        assertEquals("UNAVAILABLE", mixed.path("actorDetailsSource").textValue());
+        assertEquals("EVENT_TIME", mixed.path("resourceLabelSource").textValue());
+        assertFalse(mixed.has("actorDisplayName"));
+        assertFalse(mixed.has("actorRole"));
+        assertTrue(mixed.path("resourceLabel").isTextual());
+
+        JsonNode unavailable = objectMapper.valueToTree(entries.get(4));
+        assertEquals("UNAVAILABLE", unavailable.path("actorDetailsSource").textValue());
+        assertEquals("UNAVAILABLE", unavailable.path("resourceLabelSource").textValue());
+        assertFalse(unavailable.has("actorDisplayName"));
+        assertFalse(unavailable.has("actorRole"));
+        assertFalse(unavailable.has("resourceLabel"));
+
+        JsonNode system = objectMapper.valueToTree(entries.get(5));
+        assertEquals("SYSTEM", system.path("actorDetailsSource").textValue());
+        assertEquals("UNAVAILABLE", system.path("resourceLabelSource").textValue());
+        assertEquals("SYSTEM", system.path("actorUsername").textValue());
+        assertFalse(system.has("actorId"));
+        assertFalse(system.has("actorDisplayName"));
+        assertFalse(system.has("actorRole"));
+        assertFalse(system.has("resourceLabel"));
     }
 
     @Test

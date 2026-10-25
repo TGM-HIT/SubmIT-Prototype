@@ -62,6 +62,31 @@ function templateText(source: string): string[] {
 }
 
 describe('locale resolution and catalogs', () => {
+  const emittedAuditActions = [
+    'USER_REGISTERED', 'USER_ROLE_CHANGED', 'USER_DISPLAY_NAME_CHANGED', 'STUDENT_CLASS_CREATED',
+    'STUDENT_CLASS_RENAMED', 'ELECTIVE_SUBJECT_CREATED', 'ELECTIVE_SUBJECT_RENAMED',
+    'STUDENT_DETAILS_ASSIGNED', 'IDEA_CREATED', 'IDEA_OWNER_ADDED', 'IDEA_OWNER_REMOVED', 'IDEA_OWNER_LEFT',
+    'IDEA_UPDATED', 'IDEA_SUBMITTED', 'IDEA_REVIEW_RECORDED', 'IDEA_WITHDRAWN',
+    'SPECIFICATION_UPDATED', 'SPECIFICATION_SUBMITTED',
+    'SUPERVISION_PREFERENCE_CHANGED', 'SUPERVISOR_ASSIGNED', 'APPLICATION_PERIOD_CREATED',
+    'APPLICATION_PERIOD_UPDATED', 'APPLICATION_SUBMITTED', 'APPLICATION_UPDATED', 'APPLICATION_WITHDRAWN',
+    'APPLYING_GROUP_INVITE', 'APPLYING_GROUP_REVOKE', 'APPLYING_GROUP_ACCEPT', 'APPLYING_GROUP_DECLINE',
+    'APPLYING_GROUP_APPROVE', 'APPLYING_GROUP_RANK', 'APPLYING_GROUP_SUBMIT', 'APPLYING_GROUP_WITHDRAW',
+    'APPLYING_GROUP_LEAVE', 'APPLYING_GROUP_TRANSFER', 'APPLYING_GROUP_DISSOLVE',
+    'APPLICATION_REPLACED_BY_SHARED', 'ALLOCATION_PIN_CREATED', 'ALLOCATION_PIN_REPLACED',
+    'ALLOCATION_PIN_REMOVED', 'ALLOCATION_RUN_STARTED', 'ALLOCATION_FINALIZED', 'FORMAL_APPLICATION_CREATED',
+    'FORMAL_APPLICATION_UPDATED', 'FORMAL_APPLICATION_SUBMITTED', 'FORMAL_APPLICATION_REVIEWED',
+    'RUBRIC_PUBLISHED', 'RUBRIC_BOUND', 'RUBRIC_VERSION_TRANSITION', 'STUDENT_GRADE_RECORDED',
+    'STUDENT_GRADE_REVISED', 'GROUP_GRADE_RECORDED', 'FINAL_GRADE_RECORDED', 'METRIC_RECORDED',
+    'ARTIFACT_UPLOADED', 'ARTIFACT_REMOVED', 'ARTIFACT_PUBLICATION_SUBMIT', 'ARTIFACT_PUBLICATION_APPROVE',
+    'ARTIFACT_PUBLICATION_REJECT', 'ARTIFACT_PUBLICATION_UNPUBLISH', 'PROJECT_COMPLETED',
+  ]
+  const auditResources = [
+    'idea', 'specification', 'review', 'user', 'student_class', 'elective_subject', 'application_period',
+    'student_application', 'applying_group', 'allocation_pin', 'allocation_run', 'formal_application',
+    'artifact', 'project', 'rubric', 'rubric_binding', 'student_grade', 'group_grade', 'final_grade', 'metric',
+  ]
+
   it.each([
     ['de', 'de'],
     ['de-DE', 'de'],
@@ -85,6 +110,27 @@ describe('locale resolution and catalogs', () => {
     expect(keys(en).length).toBeGreaterThan(0)
     expect(i18n.global.fallbackLocale.value).toBe(false)
     expect(i18n.global.missingWarn).toBe(true)
+  })
+
+  it('localizes every emitted audit action and resource label in English and German', () => {
+    for (const language of ['en', 'de'] as const) {
+      const actionCatalog = language === 'en' ? en.admin.auditActions : de.admin.auditActions
+      const resourceCatalog = language === 'en' ? en.admin.auditResources : de.admin.auditResources
+      expect(Object.keys(actionCatalog).sort()).toEqual([...emittedAuditActions].sort())
+      expect(Object.keys(resourceCatalog).sort()).toEqual([...auditResources].sort())
+      for (const code of emittedAuditActions) {
+        const key = `admin.auditActions.${code}`
+        expect(i18n.global.te(key, language)).toBe(true)
+        const label = String(i18n.global.t(key, {}, { locale: language }))
+        expect(label.length).toBeGreaterThan(4)
+        expect(label).not.toBe(code)
+      }
+      for (const type of auditResources) {
+        const key = `admin.auditResources.${type}`
+        expect(i18n.global.te(key, language)).toBe(true)
+        expect(String(i18n.global.t(key, {}, { locale: language }))).not.toBe(type)
+      }
+    }
   })
 
   it('covers route/shared Vue source keys, accessible attributes, and script-owned message keys', () => {

@@ -1,5 +1,6 @@
 import type { components, operations } from './schema'
-import { pageQuery, request } from './client'
+import { ApiError, pageQuery, request } from './client'
+import { i18n } from '../i18n'
 
 type IdeaRequest = components['schemas']['IdeaRequest']
 type IdeaResponse = components['schemas']['IdeaResponse']
@@ -272,8 +273,43 @@ export const adminApi = {
   role(id: string, role: UserResponse['role']): Promise<UserResponse> {
     return json(`/api/users/${encodeURIComponent(id)}/role`, 'PATCH', { role })
   },
-  audit(page = 0): Promise<Page<components['schemas']['PageResponseAuditEntryResponse']>> {
-    return json(`/api/audit?${pageQuery(page)}`)
+  async audit(page = 0): Promise<Page<components['schemas']['PageResponseAuditEntryResponse']>> {
+    const result = await json<components['schemas']['PageResponseAuditEntryResponse']>(
+      `/api/audit?${pageQuery(page)}`)
+    const validSources = ['EVENT_TIME', 'CURRENT', 'UNAVAILABLE']
+    const validActorSources = [...validSources, 'SYSTEM']
+    const valid = result && Array.isArray(result.content)
+      && Number.isInteger(result.page) && result.page >= 0
+      && Number.isInteger(result.size) && result.size > 0
+      && Number.isInteger(result.totalElements) && result.totalElements >= 0
+      && Number.isInteger(result.totalPages) && result.totalPages >= 0
+      && result.content.every((entry) => entry !== null
+        && typeof entry.actorUsername === 'string'
+        && entry.actorUsername.length > 0
+        && typeof entry.action === 'string' && entry.action.length > 0
+        && typeof entry.entityType === 'string' && entry.entityType.length > 0
+        && typeof entry.entityId === 'string' && entry.entityId.length > 0
+        && typeof entry.occurredAt === 'string' && !Number.isNaN(Date.parse(entry.occurredAt))
+        && validActorSources.includes(entry.actorDetailsSource)
+        && validSources.includes(entry.resourceLabelSource)
+        && (entry.actorId === undefined || typeof entry.actorId === 'string')
+        && (entry.actorDisplayName === undefined
+          || (typeof entry.actorDisplayName === 'string' && entry.actorDisplayName.length > 0))
+        && (entry.actorRole === undefined || ['STUDENT', 'TEACHER', 'ADMIN'].includes(entry.actorRole))
+        && (entry.resourceLabel === undefined
+          || (typeof entry.resourceLabel === 'string' && entry.resourceLabel.length > 0))
+        && ((entry.actorDetailsSource === 'EVENT_TIME' || entry.actorDetailsSource === 'CURRENT')
+          ? (entry.actorDisplayName !== undefined && entry.actorRole !== undefined)
+          : (entry.actorDisplayName === undefined && entry.actorRole === undefined))
+        && (entry.actorDetailsSource !== 'SYSTEM'
+          || (entry.actorUsername === 'SYSTEM' && entry.actorId === undefined))
+        && (entry.actorDetailsSource === 'SYSTEM' || entry.actorUsername !== 'SYSTEM')
+        && ((entry.resourceLabelSource === 'EVENT_TIME' || entry.resourceLabelSource === 'CURRENT')
+          ? entry.resourceLabel !== undefined : entry.resourceLabel === undefined))
+    if (!valid) {
+      throw new ApiError(String(i18n.global.t('admin.auditMalformed')), 200, undefined, 'backend')
+    }
+    return result as Page<components['schemas']['PageResponseAuditEntryResponse']>
   },
 }
 

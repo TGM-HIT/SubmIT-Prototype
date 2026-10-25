@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -13,13 +14,19 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import ac.at.tgm.submit.allocation.AllocationDeadlineScheduler;
 import ac.at.tgm.submit.data.RecordStore;
 import ac.at.tgm.submit.data.StoredRecord;
+import ac.at.tgm.submit.audit.AuditContextResolver;
 import ac.at.tgm.submit.security.AuthenticatedUser;
 import ac.at.tgm.submit.security.JwtService;
 import ac.at.tgm.submit.security.Role;
 import ac.at.tgm.submit.user.UserAccount;
 import ac.at.tgm.submit.user.UserAccountRepository;
+import ac.at.tgm.submit.user.ElectiveSubjectRepository;
+import ac.at.tgm.submit.user.StudentClassRepository;
 import java.time.Instant;
 import java.util.List;
+import java.util.HashSet;
+import java.util.ArrayList;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
@@ -32,15 +39,19 @@ import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
+import jakarta.persistence.EntityManagerFactory;
+import org.hibernate.SessionFactory;
+import org.hibernate.stat.Statistics;
 
 @SpringBootTest(properties = "spring.datasource.url=jdbc:h2:mem:auditapi;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE")
 @ActiveProfiles("testing")
 @AutoConfigureMockMvc
 class AuditApiTest {
-    private static final Set<String> USER_FIELDS =
-            Set.of("actorId", "actorUsername", "action", "entityType", "entityId", "occurredAt");
-    private static final Set<String> SYSTEM_FIELDS =
-            Set.of("actorUsername", "action", "entityType", "entityId", "occurredAt");
+    private static final Set<String> USER_FIELDS = Set.of("actorId", "actorUsername", "action", "entityType",
+            "entityId", "occurredAt", "actorDisplayName", "actorRole", "resourceLabel",
+            "actorDetailsSource", "resourceLabelSource");
+    private static final Set<String> SYSTEM_FIELDS = Set.of("actorUsername", "action", "entityType", "entityId",
+            "occurredAt", "resourceLabel", "actorDetailsSource", "resourceLabelSource");
 
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper mapper;
@@ -48,6 +59,10 @@ class AuditApiTest {
     @Autowired private UserAccountRepository users;
     @Autowired private JwtService jwt;
     @Autowired private AllocationDeadlineScheduler scheduler;
+    @Autowired private AuditContextResolver contextResolver;
+    @Autowired private ElectiveSubjectRepository subjects;
+    @Autowired private StudentClassRepository classes;
+    @Autowired private EntityManagerFactory entityManagerFactory;
 
     private UserAccount admin;
     private UserAccount teacher;
@@ -67,12 +82,19 @@ class AuditApiTest {
     }
 
     @Test
-    void auditEndpointsReturnUserAndSystemEntriesToStaff() throws Exception {
-        UUID subjectId = createUserAuditEvent();
+    void realUserAndSystemEventsHaveUsableHttpFields() throws Exception {
+        Instant beforeUserOperation = Instant.now();
+        String subjectName = "Bug 29 audit " + UUID.randomUUID();
+        UUID subjectId = createSubject(subjectName);
+        Instant afterUserOperation = Instant.now();
+        Instant beforeSystemOperation = Instant.now();
         UUID runId = createSystemAuditEvent();
+        Instant afterSystemOperation = Instant.now();
         List<AuditEvent> events = List.of(
-                new AuditEvent("ELECTIVE_SUBJECT_CREATED", "elective_subject", subjectId, admin.getId(), admin.getUsername()),
-                new AuditEvent("ALLOCATION_RUN_STARTED", "allocation_run", runId, null, "SYSTEM"));
+                new AuditEvent("ELECTIVE_SUBJECT_CREATED", "elective_subject", subjectId, admin.getId(),
+                        admin.getUsername(), subjectName, beforeUserOperation, afterUserOperation),
+                new AuditEvent("ALLOCATION_RUN_STARTED", "allocation_run", runId, null, "SYSTEM",
+                        "Audit API deadline test", beforeSystemOperation, afterSystemOperation));
 
         for (String staffToken : List.of(teacherToken, adminToken)) {
             for (AuditEvent event : events) {
@@ -90,7 +112,200 @@ class AuditApiTest {
     }
 
     @Test
-    void studentsAreForbiddenFromBothAuditRoutes() throws Exception {
+    void eventTimeContextSurvivesLaterChanges() throws Exception {
+        String originalName = "Audit context original " + UUID.randomUUID();
+        String renamed = "Audit context renamed " + UUID.randomUUID();
+        Instant beforeCreate = Instant.now();
+        UUID subjectId = createSubject(originalName);
+        Instant afterCreate = Instant.now();
+        AuditEvent created = new AuditEvent("ELECTIVE_SUBJECT_CREATED", "elective_subject", subjectId,
+                admin.getId(), admin.getUsername(), originalName, beforeCreate, afterCreate);
+
+        for (String staffToken : List.of(teacherToken, adminToken)) {
+            JsonNode entry = findEntryAcrossPages(staffToken, created);
+            assertEquals(originalName, entry.path("resourceLabel").textValue());
+            assertEquals("EVENT_TIME", entry.path("resourceLabelSource").textValue());
+            assertEquals(admin.getDisplayName(), entry.path("actorDisplayName").textValue());
+            assertEquals("ADMIN", entry.path("actorRole").textValue());
+            Instant occurredAt = Instant.parse(entry.path("occurredAt").textValue());
+            assertFalse(occurredAt.isBefore(beforeCreate));
+            assertFalse(occurredAt.isAfter(afterCreate));
+        }
+
+        mockMvc.perform(patch("/api/elective-subjects/" + subjectId)
+                        .header("Authorization", bearer(adminToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(java.util.Map.of("name", renamed))))
+                .andExpect(status().isOk());
+        for (String staffToken : List.of(teacherToken, adminToken)) {
+            JsonNode listEntry = findEntryAcrossPages(staffToken, created);
+            assertEquals(originalName, listEntry.path("resourceLabel").textValue());
+            AuditEvent renamedEvent = new AuditEvent("ELECTIVE_SUBJECT_RENAMED", "elective_subject", subjectId,
+                    admin.getId(), admin.getUsername(), renamed, Instant.MIN, Instant.MAX);
+            JsonNode renamedEntry = findEntryAcrossPages(staffToken, renamedEvent);
+            assertEquals(renamed, renamedEntry.path("resourceLabel").textValue());
+            assertEquals("EVENT_TIME", renamedEntry.path("resourceLabelSource").textValue());
+            JsonNode entityPage = request("/api/audit/elective_subject/" + subjectId, staffToken);
+            JsonNode entityCreated = findEntry(entityPage.path("content"), created.action(), subjectId);
+            assertTrue(entityCreated != null);
+            assertEquals(originalName, entityCreated.path("resourceLabel").textValue());
+        }
+
+        UserAccount roleChangingActor = users.save(new UserAccount(UUID.randomUUID(),
+                "audit-role-actor-" + UUID.randomUUID(), "Role-changing actor", "unused-password-hash", Role.ADMIN));
+        String roleChangingToken = token(roleChangingActor, Role.ADMIN);
+        Instant beforeRoleChange = Instant.now();
+        mockMvc.perform(patch("/api/users/{id}/role", roleChangingActor.getId())
+                        .header("Authorization", bearer(roleChangingToken))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"role\":\"TEACHER\"}"))
+                .andExpect(status().isOk());
+        Instant afterRoleChange = Instant.now();
+        AuditEvent roleChange = new AuditEvent("USER_ROLE_CHANGED", "user", roleChangingActor.getId(),
+                roleChangingActor.getId(), roleChangingActor.getUsername(), roleChangingActor.getDisplayName(),
+                beforeRoleChange, afterRoleChange);
+        assertEquals(Role.TEACHER, users.findById(roleChangingActor.getId()).orElseThrow().getRole());
+        for (String staffToken : List.of(teacherToken, adminToken)) {
+            JsonNode entry = findEntryAcrossPages(staffToken, roleChange);
+            assertEquals("EVENT_TIME", entry.path("actorDetailsSource").textValue());
+            assertEquals("Role-changing actor", entry.path("actorDisplayName").textValue());
+            assertEquals("ADMIN", entry.path("actorRole").textValue());
+            assertEquals("EVENT_TIME", entry.path("resourceLabelSource").textValue());
+            JsonNode entityPage = request("/api/audit/user/" + roleChangingActor.getId(), staffToken);
+            JsonNode entityEntry = findEntry(entityPage.path("content"), roleChange.action(), roleChange.entityId());
+            assertTrue(entityEntry != null);
+            assertEquals("ADMIN", entityEntry.path("actorRole").textValue());
+        }
+    }
+
+    @Test
+    void eventTimeResourceContextMapsEveryAuditedResourceType() {
+        StoredRecord project = store.create("idea", null, null, "ACCEPTED_FOR_APPLICATIONS",
+                store.object().put("title", "Context project"));
+        StoredRecord period = store.create("application_period", admin.getId().toString(), null, "OPEN",
+                store.object().put("label", "Context period"));
+        Map<String, UUID> resourceIds = new java.util.LinkedHashMap<>();
+        resourceIds.put("idea", project.getId());
+        resourceIds.put("project", project.getId());
+        resourceIds.put("application_period", period.getId());
+        resourceIds.put("user", admin.getId());
+        resourceIds.put("student_class", classes.findAll().stream().findFirst().orElseThrow().getId());
+        resourceIds.put("elective_subject", subjects.findAll().stream().findFirst().orElseThrow().getId());
+        resourceIds.put("rubric", store.create("rubric", admin.getId().toString(), null, "DRAFT",
+                store.object().put("name", "Context rubric")).getId());
+        resourceIds.put("student_application", createContextResource("student_application", period.getId()));
+        resourceIds.put("applying_group", createContextResource("applying_group", period.getId()));
+        resourceIds.put("allocation_pin", createContextResource("allocation_pin", period.getId()));
+        resourceIds.put("allocation_run", createContextResource("allocation_run", period.getId()));
+        for (String type : List.of("formal_application", "artifact", "rubric_binding", "student_grade",
+                "group_grade", "final_grade", "metric", "specification", "review")) {
+            resourceIds.put(type, createContextResource(type, project.getId()));
+        }
+
+        Set<String> expectedTypes = Set.of("idea", "project", "application_period", "user", "student_class",
+                "elective_subject", "rubric", "student_application", "applying_group", "allocation_pin",
+                "allocation_run", "formal_application", "artifact", "rubric_binding", "student_grade",
+                "group_grade", "final_grade", "metric", "specification", "review");
+        assertEquals(expectedTypes, resourceIds.keySet());
+        for (Map.Entry<String, UUID> resource : resourceIds.entrySet()) {
+            String expectedLabel = switch (resource.getKey()) {
+                case "idea", "project", "formal_application", "artifact", "rubric_binding", "student_grade",
+                        "group_grade", "final_grade", "metric", "specification", "review" -> "Context project";
+                case "application_period", "student_application", "applying_group", "allocation_pin",
+                        "allocation_run" -> "Context period";
+                case "user" -> admin.getDisplayName();
+                case "student_class" -> classes.findById(resource.getValue()).orElseThrow().getName();
+                case "elective_subject" -> subjects.findById(resource.getValue()).orElseThrow().getName();
+                case "rubric" -> "Context rubric";
+                default -> throw new AssertionError("Unlisted audit resource type " + resource.getKey());
+            };
+            assertEquals(expectedLabel, contextResolver.snapshotResource(resource.getKey(), resource.getValue()),
+                    "Resource label mapping for " + resource.getKey());
+        }
+    }
+
+    private UUID createContextResource(String type, UUID parentId) {
+        return store.create(type, null, parentId.toString(), "CONTEXT_TEST", store.object()).getId();
+    }
+
+    @Test
+    void legacyContextIsCurrentOrExplicitlyUnavailable() throws Exception {
+        UUID subjectId = createSubject("Legacy audit resource " + UUID.randomUUID());
+        String renamedResource = "Current renamed legacy resource " + UUID.randomUUID();
+        UserAccount currentTeacher = users.save(new UserAccount(UUID.randomUUID(),
+                "legacy-current-teacher-" + UUID.randomUUID(), "Legacy current teacher", "unused-password-hash",
+                Role.TEACHER));
+        UUID missingActor = UUID.randomUUID();
+        UUID missingSubject = UUID.randomUUID();
+        StoredRecord period = store.create("application_period", admin.getId().toString(), null, "OPEN",
+                store.object().put("label", "Legacy context period"));
+        UUID contextualRun = createContextResource("allocation_run", period.getId());
+        List<LegacyAudit> fixtures = List.of(
+                legacy("LEGACY_BOTH_CURRENT", admin.getId(), admin.getUsername(), "elective_subject", subjectId),
+                legacy("LEGACY_MIXED", admin.getId(), admin.getUsername(), "elective_subject", subjectId),
+                legacy("LEGACY_CURRENT_ROLE", currentTeacher.getId(), currentTeacher.getUsername(),
+                        "elective_subject", subjectId),
+                legacy("LEGACY_ACTOR_MISSING", missingActor, "retired-user", "elective_subject", subjectId),
+                legacy("LEGACY_RESOURCE_MISSING", admin.getId(), admin.getUsername(), "elective_subject", missingSubject),
+                legacy("LEGACY_SYSTEM", null, "SYSTEM", "elective_subject", subjectId),
+                legacy("LEGACY_PERIOD_CONTEXT", admin.getId(), admin.getUsername(), "allocation_run", contextualRun));
+        mockMvc.perform(patch("/api/elective-subjects/{id}", subjectId)
+                        .header("Authorization", bearer(adminToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(java.util.Map.of("name", renamedResource))))
+                .andExpect(status().isOk());
+
+        for (String staffToken : List.of(teacherToken, adminToken)) {
+            for (LegacyAudit fixture : fixtures) {
+                for (String path : List.of("list", "/api/audit/" + fixture.entityType() + "/" + fixture.entityId())) {
+                    JsonNode entry = "list".equals(path)
+                            ? findEntryAcrossPages(staffToken, new AuditEvent(fixture.action(), fixture.entityType(),
+                                    fixture.entityId(), null, "SYSTEM", null, Instant.MIN, Instant.MAX))
+                            : findEntry(request(path, staffToken).path("content"), fixture.action(),
+                                    fixture.entityId());
+                    assertTrue(entry != null, "Legacy audit entry must remain visible.");
+                    assertEquals(fixture.payload(), store.repository().findById(fixture.recordId())
+                            .orElseThrow().getPayload(), "Reading legacy history must not mutate its JSON.");
+                    if (fixture.action().equals("LEGACY_BOTH_CURRENT")) {
+                        assertEquals("CURRENT", entry.path("actorDetailsSource").textValue());
+                        assertEquals("CURRENT", entry.path("resourceLabelSource").textValue());
+                        assertEquals(admin.getDisplayName(), entry.path("actorDisplayName").textValue());
+                        assertEquals("ADMIN", entry.path("actorRole").textValue());
+                        assertEquals(renamedResource, entry.path("resourceLabel").textValue());
+                    } else if (fixture.action().equals("LEGACY_CURRENT_ROLE")) {
+                        assertEquals("CURRENT", entry.path("actorDetailsSource").textValue());
+                        assertEquals("Legacy current teacher", entry.path("actorDisplayName").textValue());
+                        assertEquals("TEACHER", entry.path("actorRole").textValue());
+                        assertEquals("CURRENT", entry.path("resourceLabelSource").textValue());
+                        assertEquals(renamedResource, entry.path("resourceLabel").textValue());
+                    } else if (fixture.action().equals("LEGACY_MIXED")) {
+                        assertEquals("CURRENT", entry.path("actorDetailsSource").textValue());
+                        assertEquals("EVENT_TIME", entry.path("resourceLabelSource").textValue());
+                        assertEquals("A preserved historical label", entry.path("resourceLabel").textValue());
+                    } else if (fixture.action().equals("LEGACY_ACTOR_MISSING")) {
+                        assertEquals("UNAVAILABLE", entry.path("actorDetailsSource").textValue());
+                        assertFalse(entry.has("actorDisplayName"));
+                        assertFalse(entry.has("actorRole"));
+                        assertEquals("CURRENT", entry.path("resourceLabelSource").textValue());
+                    } else if (fixture.action().equals("LEGACY_RESOURCE_MISSING")) {
+                        assertEquals("CURRENT", entry.path("actorDetailsSource").textValue());
+                        assertEquals("UNAVAILABLE", entry.path("resourceLabelSource").textValue());
+                        assertFalse(entry.has("resourceLabel"));
+                    } else if (fixture.action().equals("LEGACY_PERIOD_CONTEXT")) {
+                        assertEquals("CURRENT", entry.path("resourceLabelSource").textValue());
+                        assertEquals("Legacy context period", entry.path("resourceLabel").textValue());
+                    } else {
+                        assertEquals("SYSTEM", entry.path("actorDetailsSource").textValue());
+                        assertFalse(entry.has("actorId"));
+                        assertFalse(entry.has("actorDisplayName"));
+                        assertFalse(entry.has("actorRole"));
+                    }
+                }
+            }
+        }
+    }
+
+    @Test
+    void auditAccessRemainsRestricted() throws Exception {
         for (String path : List.of("/api/audit", "/api/audit/project/" + UUID.randomUUID())) {
             MvcResult result = mockMvc.perform(get(path).header("Authorization", bearer(studentToken)))
                     .andExpect(status().isForbidden()).andReturn();
@@ -101,16 +316,117 @@ class AuditApiTest {
             assertTrue(body.path("error").isTextual());
             assertTrue(body.path("message").isTextual());
         }
+        for (String path : List.of("/api/audit", "/api/audit/project/" + UUID.randomUUID())) {
+            mockMvc.perform(get(path)).andExpect(status().isUnauthorized());
+        }
     }
 
-    private UUID createUserAuditEvent() throws Exception {
-        String name = "Bug 29 audit " + UUID.randomUUID();
+    @Test
+    void contextEnrichmentIsBoundedAndPrivate() throws Exception {
+        String firstName = "Bounded context first " + UUID.randomUUID();
+        String secondName = "Bounded context second " + UUID.randomUUID();
+        String entityName = "Bounded context entity " + UUID.randomUUID();
+        UUID firstSubject = createSubject(firstName);
+        UUID secondSubject = createSubject(secondName);
+        UUID entitySubject = createSubject(entityName);
+        Map<UUID, String> labels = Map.of(firstSubject, firstName, secondSubject, secondName,
+                entitySubject, entityName);
+        List<String> actions = new ArrayList<>();
+        for (int index = 0; index < 22; index++) {
+            UUID subject = index % 2 == 0 ? firstSubject : secondSubject;
+            UUID actorId = index % 2 == 0 ? admin.getId() : teacher.getId();
+            String username = index % 2 == 0 ? admin.getUsername() : teacher.getUsername();
+            String action = "LEGACY_BOUNDED_" + index;
+            legacy(action, actorId, username, "elective_subject", subject);
+            actions.add(action);
+        }
+        for (int index = 0; index < 22; index++) {
+            legacy("LEGACY_ENTITY_BOUNDED_" + index, admin.getId(), admin.getUsername(),
+                    "elective_subject", entitySubject);
+        }
+
+        Statistics statistics = entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
+        statistics.setStatisticsEnabled(true);
+        Set<String> foundActions = new HashSet<>();
+        int pageNumber = 0;
+        int totalPages;
+        do {
+            statistics.clear();
+            JsonNode page = request("/api/audit?page=" + pageNumber + "&size=20", teacherToken);
+            assertPageMetadata(page, "bounded global audit", pageNumber, 20);
+            JsonNode entries = page.path("content");
+            assertTrue(entries.size() <= 20);
+            assertTrue(statistics.getPrepareStatementCount() < 20,
+                    "Context resolution should use bounded batch lookups, not a query per event.");
+            for (JsonNode entry : entries) {
+                if (actions.contains(entry.path("action").asText())) {
+                    assertCurrentEntry(entry, labels);
+                    foundActions.add(entry.path("action").asText());
+                }
+            }
+            totalPages = page.path("totalPages").intValue();
+            pageNumber++;
+        } while (pageNumber < totalPages && foundActions.size() < actions.size());
+        assertEquals(new HashSet<>(actions), foundActions);
+
+        statistics.clear();
+        JsonNode entityPage = request("/api/audit/elective_subject/" + entitySubject + "?page=0&size=20",
+                teacherToken);
+        assertPageMetadata(entityPage, "bounded entity-specific audit", 0, 20);
+        assertEquals(20, entityPage.path("content").size());
+        assertTrue(statistics.getPrepareStatementCount() < 20,
+                "Entity-specific enrichment should use bounded batch lookups.");
+        entityPage.path("content").forEach(entry -> assertBoundedEntityEntry(entry, labels));
+        JsonNode nextEntityPage = request("/api/audit/elective_subject/" + entitySubject + "?page=1&size=20",
+                teacherToken);
+        assertPageMetadata(nextEntityPage, "bounded entity-specific audit", 1, 20);
+        assertEquals(3, nextEntityPage.path("content").size());
+        nextEntityPage.path("content").forEach(entry -> assertBoundedEntityEntry(entry, labels));
+    }
+
+    private void assertBoundedEntityEntry(JsonNode entry, Map<UUID, String> labels) {
+        if (entry.path("action").asText().startsWith("LEGACY_ENTITY_BOUNDED_")) {
+            assertCurrentEntry(entry, labels);
+        } else {
+            assertEquals("EVENT_TIME", entry.path("actorDetailsSource").textValue());
+            assertEquals("EVENT_TIME", entry.path("resourceLabelSource").textValue());
+        }
+    }
+
+    private void assertCurrentEntry(JsonNode entry, Map<UUID, String> labels) {
+        assertEquals(USER_FIELDS, fieldNames(entry));
+        assertEquals("CURRENT", entry.path("actorDetailsSource").textValue());
+        assertEquals("CURRENT", entry.path("resourceLabelSource").textValue());
+        assertTrue(entry.path("actorDisplayName").isTextual());
+        assertTrue(Set.of(admin.getDisplayName(), teacher.getDisplayName()).contains(
+                entry.path("actorDisplayName").textValue()));
+        assertTrue(Set.of(Role.ADMIN.name(), Role.TEACHER.name()).contains(entry.path("actorRole").textValue()));
+        assertEquals(labels.get(UUID.fromString(entry.path("entityId").asText())),
+                entry.path("resourceLabel").textValue());
+    }
+
+    private UUID createSubject(String name) throws Exception {
         MvcResult result = mockMvc.perform(post("/api/elective-subjects")
                         .header("Authorization", bearer(adminToken))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(java.util.Map.of("name", name))))
                 .andExpect(status().isCreated()).andReturn();
         return UUID.fromString(mapper.readTree(result.getResponse().getContentAsByteArray()).path("id").asText());
+    }
+
+    private LegacyAudit legacy(String action, UUID actorId, String username, String entityType, UUID entityId) {
+        ObjectNode payload = store.object().put("actorUsername", username).put("action", action)
+                .put("entityType", entityType).put("entityId", entityId.toString())
+                .put("occurredAt", Instant.now().toString());
+        if (actorId != null) {
+            payload.put("actorId", actorId.toString());
+        }
+        if ("LEGACY_MIXED".equals(action)) {
+            payload.put("resourceLabel", "A preserved historical label");
+        }
+        StoredRecord record = store.createAudit(actorId == null ? null : actorId.toString(), entityId.toString(),
+                action, payload, entityType);
+        return new LegacyAudit(record.getId(), record.getPayload(), action, entityType, entityId);
     }
 
     private UUID createSystemAuditEvent() {
@@ -198,13 +514,22 @@ class AuditApiTest {
         assertEquals(expected.entityId(), UUID.fromString(entry.path("entityId").textValue()));
         assertTrue(entry.path("occurredAt").isTextual());
         assertFalse(entry.path("occurredAt").textValue().isBlank());
-        Instant.parse(entry.path("occurredAt").textValue());
+        Instant occurredAt = Instant.parse(entry.path("occurredAt").textValue());
+        assertFalse(occurredAt.isBefore(expected.before()));
+        assertFalse(occurredAt.isAfter(expected.after()));
         if (expected.actorId() != null) {
             assertTrue(entry.path("actorId").isTextual());
             assertEquals(expected.actorId(), UUID.fromString(entry.path("actorId").textValue()));
+            assertEquals("EVENT_TIME", entry.path("actorDetailsSource").textValue());
+            assertEquals(admin.getDisplayName(), entry.path("actorDisplayName").textValue());
+            assertEquals(Role.ADMIN.name(), entry.path("actorRole").textValue());
         } else {
             assertFalse(entry.has("actorId"), "System actorId is omitted, not null.");
+            assertEquals("SYSTEM", entry.path("actorDetailsSource").textValue());
         }
+        assertTrue(entry.path("resourceLabel").isTextual());
+        assertEquals("EVENT_TIME", entry.path("resourceLabelSource").textValue());
+        assertEquals(expected.resourceLabel(), entry.path("resourceLabel").textValue());
     }
 
     private Set<String> fieldNames(JsonNode object) {
@@ -222,6 +547,10 @@ class AuditApiTest {
         return "Bearer " + token;
     }
 
-    private record AuditEvent(String action, String entityType, UUID entityId, UUID actorId, String actorUsername) {
+    private record AuditEvent(String action, String entityType, UUID entityId, UUID actorId, String actorUsername,
+            String resourceLabel, Instant before, Instant after) {
+    }
+
+    private record LegacyAudit(UUID recordId, String payload, String action, String entityType, UUID entityId) {
     }
 }

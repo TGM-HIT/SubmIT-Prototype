@@ -1,11 +1,109 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { configureApi } from './client'
-import { ideasApi, userApi } from './services'
+import { adminApi, ideasApi, userApi } from './services'
 
 describe('ideas API service', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     configureApi({ getToken: () => null, onUnauthorized: () => undefined })
+  })
+
+  describe('audit API service', () => {
+    afterEach(() => {
+      vi.unstubAllGlobals()
+      configureApi({ getToken: () => null, onUnauthorized: () => undefined })
+    })
+
+    it('fetches and validates canonical audit response fields, including a system entry without actorId', async () => {
+      const response = {
+        content: [{
+          actorId: '11111111-1111-4111-8111-111111111111',
+          actorUsername: 'admin01',
+          action: 'ELECTIVE_SUBJECT_CREATED',
+          entityType: 'elective_subject',
+          entityId: '22222222-2222-4222-8222-222222222222',
+          occurredAt: '2026-10-24T10:00:00Z',
+          actorDisplayName: 'Grace Morgan',
+          actorRole: 'ADMIN',
+          resourceLabel: 'Robotics',
+          actorDetailsSource: 'EVENT_TIME',
+          resourceLabelSource: 'EVENT_TIME',
+        }, {
+          actorUsername: 'SYSTEM',
+          action: 'ALLOCATION_RUN_STARTED',
+          entityType: 'allocation_run',
+          entityId: '33333333-3333-4333-8333-333333333333',
+          occurredAt: '2026-10-24T10:01:00Z',
+          actorDetailsSource: 'SYSTEM',
+          resourceLabelSource: 'UNAVAILABLE',
+        }],
+        page: 0,
+        size: 20,
+        totalElements: 2,
+        totalPages: 1,
+      }
+      const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(response), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      }))
+      vi.stubGlobal('fetch', fetchMock)
+
+      await expect(adminApi.audit(0)).resolves.toMatchObject({ content: response.content })
+      expect(fetchMock).toHaveBeenCalledExactlyOnceWith('/api/audit?page=0&size=20', expect.anything())
+    })
+
+    it('rejects successful but malformed audit payloads', async () => {
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({
+        content: [{ action: 'IDEA_CREATED' }],
+        page: 0, size: 20, totalElements: 1, totalPages: 1,
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } })))
+
+      await expect(adminApi.audit()).rejects.toThrow('The audit response is incomplete or invalid.')
+    })
+
+    it.each([
+      ['event-time actor without its name and role', {
+        actorDisplayName: null, actorRole: null, actorDetailsSource: 'EVENT_TIME',
+        resourceLabelSource: 'EVENT_TIME',
+      }],
+      ['current resource without its label', {
+        actorDisplayName: 'Grace Morgan', actorRole: 'ADMIN', actorDetailsSource: 'CURRENT',
+        resourceLabel: null, resourceLabelSource: 'CURRENT',
+      }],
+      ['unavailable actor with invented display details', {
+        actorDisplayName: 'Grace Morgan', actorRole: 'ADMIN', actorDetailsSource: 'UNAVAILABLE',
+        resourceLabel: null, resourceLabelSource: 'UNAVAILABLE',
+      }],
+      ['system actor with a user identifier', {
+        actorUsername: 'SYSTEM', actorId: '11111111-1111-4111-8111-111111111111',
+        actorDisplayName: null, actorRole: null, actorDetailsSource: 'SYSTEM',
+        resourceLabel: null, resourceLabelSource: 'UNAVAILABLE',
+      }],
+    ])('rejects inconsistent successful audit provenance: %s', async (_description, context) => {
+      const response = {
+        content: [Object.assign({
+          actorId: '11111111-1111-4111-8111-111111111111',
+          actorUsername: 'admin01',
+          action: 'ELECTIVE_SUBJECT_CREATED',
+          entityType: 'elective_subject',
+          entityId: '22222222-2222-4222-8222-222222222222',
+          occurredAt: '2026-10-24T10:00:00Z',
+          actorDisplayName: 'Grace Morgan',
+          actorRole: 'ADMIN',
+          resourceLabel: 'Subject',
+          actorDetailsSource: 'EVENT_TIME',
+          resourceLabelSource: 'EVENT_TIME',
+        }, context)],
+        page: 0,
+        size: 20,
+        totalElements: 1,
+        totalPages: 1,
+      }
+      vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify(response), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      })))
+
+      await expect(adminApi.audit()).rejects.toThrow('The audit response is incomplete or invalid.')
+    })
   })
 
   describe('account language API service', () => {

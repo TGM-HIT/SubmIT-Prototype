@@ -41,25 +41,47 @@ const account = {
 
 let wrapper: VueWrapper | undefined
 
-function pageWith() {
+function pageWith(stubPanels = true) {
   wrapper = mount(AdminPage, {
     attachTo: document.body,
     global: {
-      stubs: {
+      stubs: stubPanels ? {
         AsyncPanel: { template: '<div><slot /></div>' },
         Pager: {
           props: ['page'],
           emits: ['page'],
           template: `<button type="button" @click="$emit('page', 1)">Next page</button>`,
         },
-      },
+      } : {},
     },
   })
   return wrapper
 }
 
-function pageResult<T = typeof account>(content: T[] = [] as T[], page = 0) {
-  return { content, page, size: 20, totalElements: content.length, totalPages: content.length ? 1 : 0 }
+function focus(page: VueWrapper, selector: string) {
+  const element = page.get(selector).element as HTMLElement
+  element.focus()
+}
+
+function pageResult<T = typeof account>(content: T[] = [] as T[], page = 0, totalElements = content.length,
+  totalPages = content.length ? 1 : 0) {
+  return { content, page, size: 20, totalElements, totalPages }
+}
+
+function auditEvent(action: string, entityType: string, id: number): components['schemas']['AuditEntryResponse'] {
+  return {
+    actorId: `11111111-1111-4111-8111-${String(id).padStart(12, '0')}`,
+    actorUsername: 'admin01',
+    action,
+    entityType,
+    entityId: `22222222-2222-4222-8222-${String(id).padStart(12, '0')}`,
+    occurredAt: `2026-10-24T10:${String(id % 60).padStart(2, '0')}:00Z`,
+    actorDisplayName: 'Grace Morgan',
+    actorRole: 'ADMIN',
+    resourceLabel: `Audit resource ${id}`,
+    actorDetailsSource: 'EVENT_TIME',
+    resourceLabelSource: 'EVENT_TIME',
+  }
 }
 
 async function openEditor(page: VueWrapper = wrapper!) {
@@ -158,13 +180,21 @@ describe('administrator account management', () => {
       entityType: 'elective_subject',
       entityId: '22222222-2222-4222-8222-222222222222',
       occurredAt,
+      actorDisplayName: 'Grace Morgan',
+      actorRole: 'ADMIN',
+      resourceLabel: 'Audit sample subject',
+      actorDetailsSource: 'EVENT_TIME',
+      resourceLabelSource: 'EVENT_TIME',
     }
     const systemEvent: components['schemas']['AuditEntryResponse'] = {
       actorUsername: 'SYSTEM',
       action: 'ALLOCATION_RUN_STARTED',
       entityType: 'allocation_run',
       entityId: '33333333-3333-4333-8333-333333333333',
-      occurredAt: '2024-02-04T16:05:00Z',
+      occurredAt: '2024-02-03T16:05:00Z',
+      resourceLabel: 'Audit API deadline test',
+      actorDetailsSource: 'SYSTEM',
+      resourceLabelSource: 'EVENT_TIME',
     }
     const auditEvents = [userEvent, systemEvent]
     api.audit.mockResolvedValue(pageResult(auditEvents))
@@ -179,19 +209,32 @@ describe('administrator account management', () => {
       expect(page.text()).toContain(formatTimestamp(instant))
       expect(page.text()).not.toContain(instant)
     }
-    expect(page.text()).toContain('ELECTIVE_SUBJECT_CREATED')
-    expect(page.text()).toContain('ALLOCATION_RUN_STARTED')
-    expect(page.text()).toContain('elective_subject')
+    expect(formatTimestamp(occurredAt)).not.toBe(formatTimestamp(systemEvent.occurredAt))
+    expect(page.text()).toContain('Elective subject created')
+    expect(page.text()).toContain('Allocation run started')
+    expect(page.text()).toContain('Elective subject')
+    expect(page.text()).toContain('Audit sample subject')
+    expect(page.text()).toContain('Grace Morgan')
+    expect(page.text()).toContain('admin01')
+    expect(page.text()).toContain('Administrator')
     expect(page.text()).toContain(userEvent.entityId)
-    expect(page.text()).toContain(userEvent.actorId)
-    expect(page.text()).toContain('allocation_run')
+    expect(page.text()).toContain('Audit API deadline test')
     expect(page.text()).toContain(systemEvent.entityId)
-    expect(page.text()).toContain('not supplied')
+    expect(page.text()).toContain('System')
     expect(page.findAll('.status-badge').some((badge) => badge.text() === 'Recorded')).toBe(true)
 
     setLanguage('de')
     await flushPromises()
     for (const instant of [occurredAt, systemEvent.occurredAt]) expect(page.text()).toContain(formatTimestamp(instant))
+    expect(page.text()).toContain('Wahlfach erstellt')
+    expect(page.text()).toContain('Audit sample subject')
+    expect(page.text()).toContain('Audit API deadline test')
+    expect(page.text()).toContain('Grace Morgan')
+    expect(page.text()).toContain('admin01')
+    expect(page.text()).toContain('Administration')
+    expect(page.text()).toContain(userEvent.entityId)
+    expect(page.text()).toContain(systemEvent.entityId)
+    expect(page.text()).toContain('System')
     setLanguage('en')
     await flushPromises()
     for (const instant of [occurredAt, systemEvent.occurredAt]) {
@@ -199,6 +242,124 @@ describe('administrator account management', () => {
       expect(page.text()).not.toContain(instant)
     }
     expect(auditEvents[0].occurredAt).toBe(occurredAt)
+  })
+
+  it('labels current and unavailable provenance independently and preserves unknown codes in both locales', async () => {
+    const current: components['schemas']['AuditEntryResponse'] = {
+      ...auditEvent('USER_ROLE_CHANGED', 'user', 41),
+      actorDisplayName: 'Grace Morgan',
+      actorRole: 'ADMIN',
+      resourceLabel: 'Current account name',
+      actorDetailsSource: 'CURRENT',
+      resourceLabelSource: 'CURRENT',
+    }
+    const unavailable: components['schemas']['AuditEntryResponse'] = {
+      actorUsername: 'legacy-user',
+      action: 'FUTURE_ACTION_CODE',
+      entityType: 'future_resource_code',
+      entityId: '44444444-4444-4444-8444-444444444444',
+      occurredAt: '2026-10-24T10:03:00Z',
+      actorDetailsSource: 'UNAVAILABLE',
+      resourceLabelSource: 'UNAVAILABLE',
+    }
+    const mixed: components['schemas']['AuditEntryResponse'] = {
+      ...auditEvent('IDEA_CREATED', 'idea', 42),
+      actorDisplayName: 'Current actor name',
+      actorRole: 'TEACHER',
+      actorDetailsSource: 'CURRENT',
+      resourceLabelSource: 'UNAVAILABLE',
+    }
+    api.audit.mockResolvedValue(pageResult([current, mixed, unavailable]))
+    const page = pageWith()
+    await flushPromises()
+    await page.get('#admin-tab-audit').trigger('click')
+    await page.get('#audit-refresh').trigger('click')
+    await flushPromises()
+    expect(page.text()).toContain('Current account name')
+    expect(page.text()).toContain('Current data; historical value unavailable')
+    expect(page.text()).toContain('Historical details unavailable')
+    expect(page.text()).toContain('Current actor name')
+    expect(page.text()).toContain('Unknown action: FUTURE_ACTION_CODE')
+    expect(page.text()).toContain('Unknown resource: future_resource_code')
+    expect(page.text()).toContain('legacy-user')
+    expect(page.text()).toContain(unavailable.entityId)
+    expect(page.text()).not.toContain('Recorded event')
+    expect(page.text()).not.toContain('44444444-4444-4444-8444-444444444444 · actor')
+
+    setLanguage('de')
+    await flushPromises()
+    expect(page.text()).toContain('Unbekannte Aktion: FUTURE_ACTION_CODE')
+    expect(page.text()).toContain('Unbekannte Ressource: future_resource_code')
+    expect(page.text()).toContain('Aktuelle Daten; historischer Wert nicht verfügbar')
+    expect(page.text()).toContain('Historische Details nicht verfügbar')
+    expect(page.text()).toContain('Current account name')
+    expect(page.text()).toContain('Current actor name')
+    expect(page.text()).toContain(unavailable.entityId)
+    expect(page.text()).toContain('Grace Morgan')
+  })
+
+  it('paginates past twenty events, refreshes page zero, retries the failed page, and retains available focus', async () => {
+    const firstPage = Array.from({ length: 20 }, (_, index) =>
+      auditEvent('ELECTIVE_SUBJECT_CREATED', 'elective_subject', index + 1))
+    const laterEvent = auditEvent('USER_ROLE_CHANGED', 'user', 21)
+    let failedPageOneAttempts = 2
+    api.audit.mockImplementation(async (page = 0) => {
+      if (page === 1 && failedPageOneAttempts > 0) {
+        failedPageOneAttempts -= 1
+        throw new Error('temporary page failure')
+      }
+      return pageResult(page === 0 ? firstPage : [laterEvent], page, 21, 2)
+    })
+    const page = pageWith(false)
+    await flushPromises()
+    focus(page, '#admin-tab-audit')
+    await page.get('#admin-tab-audit').trigger('click')
+    expect(document.activeElement?.id).toBe('admin-tab-audit')
+    focus(page, '#audit-refresh')
+    await page.get('#audit-refresh').trigger('click')
+    await flushPromises()
+    expect(api.audit).toHaveBeenLastCalledWith(0)
+    expect(document.activeElement?.id).toBe('audit-refresh')
+    expect(page.text()).toContain('Page 1 of 2')
+    expect(page.text()).not.toContain('USER_ROLE_CHANGED')
+
+    focus(page, '#pager-next')
+    await page.get('#pager-next').trigger('click')
+    await flushPromises()
+    expect(api.audit).toHaveBeenLastCalledWith(1)
+    expect(page.text()).toContain('Try again')
+    focus(page, '#audit-retry')
+    await page.get('#audit-retry').trigger('click')
+    await flushPromises()
+    expect(api.audit).toHaveBeenLastCalledWith(1)
+    expect(page.text()).toContain('Try again')
+    expect(document.activeElement?.id).toBe('audit-retry')
+    focus(page, '#audit-retry')
+    await page.get('#audit-retry').trigger('click')
+    await flushPromises()
+    expect(api.audit).toHaveBeenLastCalledWith(1)
+    expect(page.text()).toContain('User role changed')
+    expect(page.text()).toContain('Page 2 of 2')
+
+    await page.get('#audit-refresh').trigger('click')
+    await flushPromises()
+    expect(api.audit).toHaveBeenLastCalledWith(0)
+    expect(page.text()).toContain('Page 1 of 2')
+    focus(page, '#pager-next')
+    await page.get('#pager-next').trigger('click')
+    await flushPromises()
+    expect(api.audit).toHaveBeenLastCalledWith(1)
+    expect(document.activeElement?.id).toBe('pager-previous')
+    focus(page, '#pager-previous')
+    await page.get('#pager-previous').trigger('click')
+    await flushPromises()
+    expect(api.audit).toHaveBeenLastCalledWith(0)
+    expect(document.activeElement?.id).toBe('pager-next')
+    api.audit.mockResolvedValue(pageResult([]))
+    await page.get('#audit-refresh').trigger('click')
+    await flushPromises()
+    expect(page.text()).toContain('No audit events are available on this page.')
+    expect(page.text()).not.toContain('Try again')
   })
 
   it('uses one Edit button per row and opens an accessible prefilled modal with unchanged Save disabled', async () => {
