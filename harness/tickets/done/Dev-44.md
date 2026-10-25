@@ -8,7 +8,7 @@ Several frontend API service methods expose `Data` or `unknown` request/response
 
 Source: Compliance-03-20261022-0744, report finding 5; `frontend/SPEC.md` section 4; `frontend/DEV-GUIDELINES.md` section "API and State"; `frontend/src/api/services.ts`; `frontend/src/api/client.ts`.
 
-Product-owner decision, 2026-10-25: the completed [human decision record](../runs/Dev-44-20261025-1637/human-acceptance.md) authorizes removing the rubric `status` rendering and allocation `startedAt` fallback (Part B row 2, option B). For review models the owner wrote, "The schemas for identical requests should be identical. Please provide a new Ticket.", then clarified, "Please consolidate identlical request schemas." Consolidation is tracked separately by [Dev-54](Dev-54.md); it is not a prerequisite to generated structural typing here. Route-specific generated request checking does not require nominal rejection of structurally identical schemas. No branding or generated-schema changes are authorized in this ticket.
+Product-owner decision, 2026-10-25: the completed [human decision record](../../runs/Dev-44-20261025-1637/human-acceptance.md) authorizes removing the rubric `status` rendering and allocation `startedAt` fallback (Part B row 2, option B). For review models the owner wrote, "The schemas for identical requests should be identical. Please provide a new Ticket.", then clarified, "Please consolidate identlical request schemas." Consolidation is tracked separately by [Dev-54](../Dev-54.md); it is not a prerequisite to generated structural typing here. Route-specific generated request checking does not require nominal rejection of structurally identical schemas. No branding or generated-schema changes are authorized in this ticket.
 
 ## Scope and contract
 
