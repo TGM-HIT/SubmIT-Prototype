@@ -6,7 +6,7 @@ Draft from Compliance-02-20261021-2331: refined for implementation and evaluatio
 
 Several backend and shared rules have implementation paths but lack durable automated coverage for their stated lifecycle boundaries, persisted state, pagination limits, and audit records. This ticket adds backend API regression tests for the missing cases in idea decisions, solo application deadlines, applying-group pagination, automatic enrollment, publication review and artifact auditing, and formal-application lifecycle authorization.
 
-Source: Compliance-02-20261021-2331, report finding 6, topic 9. Rule (g), the controller-to-service architecture invariant, has been removed from this ticket and moved to [Dev-51](Dev-51.md). Rule (h), school privacy and retention, is a policy statement without a defined testable rule; the user confirmed that it should not receive an automated test in this ticket.
+Source: Compliance-02-20261021-2331, report finding 6, topic 9. Rule (g), the controller-to-service architecture invariant, has been removed from this ticket and moved to [Dev-51](../Dev-51.md). Rule (h), school privacy and retention, is a policy statement without a defined testable rule; the user confirmed that it should not receive an automated test in this ticket.
 
 ## Scope and contract
 
