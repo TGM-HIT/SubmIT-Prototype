@@ -441,33 +441,54 @@ class IdeaReviewControllerTest {
         assertEquals(beforeIdeaDecision, decisionState(ideaId),
                 "An idea decision outside IDEA_SUBMITTED must not change the idea, reviews, or audit history.");
 
-        List<String> beforeSpecificationDecision = decisionState(ideaId);
-        mockMvc.perform(post("/api/ideas/{id}/specification/reviews", ideaId)
+        String missingFullSpecificationIdea = submitIdea("Missing submitted specification");
+        review(missingFullSpecificationIdea,
+                Map.of("decision", "APPROVE_FOR_SPECIFICATION", "feedback", "Proceed."),
+                teacherToken).andExpect(status().isCreated());
+        mockMvc.perform(put("/api/ideas/{id}/specification", missingFullSpecificationIdea)
+                        .header("Authorization", "Bearer " + studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(specificationRequest("Submitted scope"))))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/ideas/{id}/specification/submit", missingFullSpecificationIdea)
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk());
+        assertEquals("SPECIFICATION_SUBMITTED", store.repository()
+                .findById(UUID.fromString(missingFullSpecificationIdea)).orElseThrow().getStatus());
+        store.repository().findFirstByTypeAndParentIdOrderByCreatedAtDesc(
+                "specification", missingFullSpecificationIdea).ifPresent(store::delete);
+        org.junit.jupiter.api.Assertions.assertTrue(
+                store.repository().findByTypeAndParentId("specification", missingFullSpecificationIdea).isEmpty(),
+                "The isolated fixture must have no full specification at the expected review stage.");
+
+        List<String> beforeSpecificationDecision = decisionState(missingFullSpecificationIdea);
+        mockMvc.perform(post("/api/ideas/{id}/specification/reviews", missingFullSpecificationIdea)
                         .header("Authorization", "Bearer " + teacherToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
                                 specificationReviewRequest("ACCEPT_FOR_APPLICATIONS", "Not submitted."))))
                 .andExpect(status().isConflict());
-        assertEquals(beforeSpecificationDecision, decisionState(ideaId),
-                "Acceptance without a submitted full specification must preserve idea and review history.");
-        getIdea(ideaId, teacherToken).andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("IDEA_APPROVED_FOR_SPECIFICATION"))
+        assertEquals(beforeSpecificationDecision, decisionState(missingFullSpecificationIdea),
+                "Acceptance without a submitted full specification must preserve idea, specification revisions, "
+                        + "reviews, and all audit history.");
+        getIdea(missingFullSpecificationIdea, teacherToken).andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("SPECIFICATION_SUBMITTED"))
                 .andExpect(jsonPath("$.specification").doesNotExist())
                 .andExpect(jsonPath("$.reviews.length()").value(1));
     }
 
     private List<String> decisionState(String ideaId) {
         UUID id = UUID.fromString(ideaId);
-        List<String> state = new java.util.ArrayList<>();
-        store.repository().findById(id).ifPresent(record -> state.add("idea|" + record.getStatus()
-                + "|" + record.getPayload()));
-        for (String type : List.of("review", "audit")) {
-            store.repository().findByTypeAndParentId(type, ideaId).stream()
-                    .map(record -> type + "|" + record.getId() + "|" + record.getStatus() + "|"
-                            + record.getPayload())
-                    .sorted().forEach(state::add);
-        }
-        return List.copyOf(state);
+        return store.repository().findAll().stream()
+                .filter(record -> ("idea".equals(record.getType()) && id.equals(record.getId()))
+                        || (List.of("specification", "specification_revision", "review")
+                                .contains(record.getType()) && ideaId.equals(record.getParentId()))
+                        || "audit".equals(record.getType()))
+                .map(record -> record.getType() + "|" + record.getId() + "|" + record.getOwnerId() + "|"
+                        + record.getParentId() + "|" + record.getStatus() + "|" + record.getPayload() + "|"
+                        + record.getCreatedAt())
+                .sorted()
+                .toList();
     }
 
     @Test

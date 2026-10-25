@@ -76,20 +76,30 @@ class FormalApplicationValidationApiTest {
         MvcResult created = submitCreate(projectId, request, studentToken).andExpect(status().isCreated()).andReturn();
         UUID applicationId = UUID.fromString(
                 objectMapper.readTree(created.getResponse().getContentAsString()).path("id").asText());
-        List<RecordSnapshot> beforeNonMemberWrites = persistedState(projectId, applicationId);
-        List<RecordSnapshot> auditBeforeNonMemberWrites = allAuditSnapshots();
+        List<RecordSnapshot> beforeNonMemberUpdate = persistedState(projectId, applicationId);
+        List<RecordSnapshot> auditBeforeNonMemberUpdate = allAuditSnapshots();
         mockMvc.perform(put("/api/formal-applications/{id}", applicationId)
                         .header("Authorization", bearer(outsiderToken))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isForbidden());
+        assertEquals(beforeNonMemberUpdate, persistedState(projectId, applicationId),
+                "A non-member update must preserve application, revision, review, and audit-linked state.");
+        assertEquals(auditBeforeNonMemberUpdate, allAuditSnapshots(),
+                "A rejected non-member update must not emit an audit event.");
+
+        List<RecordSnapshot> beforeNonMemberSubmit = persistedState(projectId, applicationId);
+        List<RecordSnapshot> auditBeforeNonMemberSubmit = allAuditSnapshots();
         mockMvc.perform(post("/api/formal-applications/{id}/submit", applicationId)
                         .header("Authorization", bearer(outsiderToken)))
                 .andExpect(status().isForbidden());
-        assertEquals(beforeNonMemberWrites, persistedState(projectId, applicationId),
-                "Non-member update and submit must not mutate the application, revisions, reviews, or audit records.");
-        assertEquals(auditBeforeNonMemberWrites, allAuditSnapshots());
+        assertEquals(beforeNonMemberSubmit, persistedState(projectId, applicationId),
+                "A non-member submit must preserve application, revision, review, and audit-linked state.");
+        assertEquals(auditBeforeNonMemberSubmit, allAuditSnapshots(),
+                "A rejected non-member submit must not emit an audit event.");
 
+        List<RecordSnapshot> beforeDraftReview = persistedState(projectId, applicationId);
+        List<RecordSnapshot> auditBeforeDraftReview = allAuditSnapshots();
         MvcResult draftReview = mockMvc.perform(post("/api/formal-applications/{id}/reviews", applicationId)
                         .header("Authorization", bearer(teacherToken))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -97,8 +107,10 @@ class FormalApplicationValidationApiTest {
                                 "decision", "APPROVE", "feedback", "Not submitted."))))
                 .andExpect(status().isConflict()).andReturn();
         assertEquals(409, draftReview.getResponse().getStatus());
-        assertEquals(beforeNonMemberWrites, persistedState(projectId, applicationId),
+        assertEquals(beforeDraftReview, persistedState(projectId, applicationId),
                 "A draft application cannot be reviewed and rejection must leave all persisted state unchanged.");
+        assertEquals(auditBeforeDraftReview, allAuditSnapshots(),
+                "A rejected draft review must not create a review-linked audit event.");
 
         mockMvc.perform(put("/api/formal-applications/{id}", applicationId)
                         .header("Authorization", bearer(studentToken))
@@ -109,6 +121,7 @@ class FormalApplicationValidationApiTest {
                         .header("Authorization", bearer(studentToken)))
                 .andExpect(status().isOk());
         List<RecordSnapshot> submitted = persistedState(projectId, applicationId);
+        List<RecordSnapshot> submittedAudit = allAuditSnapshots();
         mockMvc.perform(put("/api/formal-applications/{id}", applicationId)
                         .header("Authorization", bearer(studentToken))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -116,6 +129,8 @@ class FormalApplicationValidationApiTest {
                 .andExpect(status().isConflict());
         assertEquals(submitted, persistedState(projectId, applicationId),
                 "Submitted applications cannot be edited until returned for revision.");
+        assertEquals(submittedAudit, allAuditSnapshots(),
+                "A rejected submitted-application update must not emit an audit event.");
 
         mockMvc.perform(post("/api/formal-applications/{id}/reviews", applicationId)
                         .header("Authorization", bearer(teacherToken))
@@ -123,6 +138,8 @@ class FormalApplicationValidationApiTest {
                         .content(objectMapper.writeValueAsString(Map.of(
                                 "decision", "REQUEST_REVISION", "feedback", "Please revise the objective."))))
                 .andExpect(status().isCreated());
+        assertEquals("NEEDS_REVISION", records.findById(applicationId).orElseThrow().getStatus(),
+                "A successful REQUEST_REVISION must persist NEEDS_REVISION before member editing.");
         mockMvc.perform(put("/api/formal-applications/{id}", applicationId)
                         .header("Authorization", bearer(studentToken))
                         .contentType(MediaType.APPLICATION_JSON)
@@ -285,10 +302,16 @@ class FormalApplicationValidationApiTest {
         ObjectNode invalidPayload = validRequest();
         invalidRequest.mutate().accept(invalidPayload);
 
+        List<RecordSnapshot> beforeCreate = persistedState(projectId, UUID.randomUUID());
+        List<RecordSnapshot> auditsBeforeCreate = allAuditSnapshots();
         submitCreate(projectId, invalidPayload)
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.status").value(400))
                 .andExpect(jsonPath("$.error").value("Bad Request"));
+        assertEquals(beforeCreate, persistedState(projectId, UUID.randomUUID()),
+                invalidRequest.name() + " must not create an application, revision, or review.");
+        assertEquals(auditsBeforeCreate, allAuditSnapshots(),
+                invalidRequest.name() + " must not emit an audit event.");
         assertTrue(records.findByTypeAndParentId("formal_application", projectId.toString()).isEmpty(),
                 invalidRequest.name() + " must not create an application");
 
@@ -296,6 +319,7 @@ class FormalApplicationValidationApiTest {
         UUID applicationId = UUID.fromString(
                 objectMapper.readTree(created.getResponse().getContentAsString()).path("id").asText());
         List<RecordSnapshot> persistedBefore = persistedState(projectId, applicationId);
+        List<RecordSnapshot> auditsBeforeUpdate = allAuditSnapshots();
 
         mockMvc.perform(put("/api/formal-applications/{id}", applicationId)
                         .header("Authorization", bearer(studentToken))
@@ -307,13 +331,23 @@ class FormalApplicationValidationApiTest {
 
         assertEquals(persistedBefore, persistedState(projectId, applicationId),
                 invalidRequest.name() + " must not mutate the persisted application, version history, or audit history");
+        assertEquals(auditsBeforeUpdate, allAuditSnapshots(),
+                invalidRequest.name() + " must not emit an audit event.");
     }
 
     private List<RecordSnapshot> persistedState(UUID projectId, UUID applicationId) {
         List<StoredRecord> relevant = new ArrayList<>();
-        relevant.addAll(records.findByTypeAndParentId("formal_application", projectId.toString()));
-        relevant.addAll(records.findByTypeAndParentId("formal_application_revision", applicationId.toString()));
-        relevant.addAll(records.findByTypeAndParentId("audit", applicationId.toString()));
+        List<StoredRecord> applications =
+                records.findByTypeAndParentId("formal_application", projectId.toString());
+        relevant.addAll(applications);
+        List<String> applicationIds = new ArrayList<>();
+        applicationIds.add(applicationId.toString());
+        applications.stream().map(record -> record.getId().toString()).forEach(applicationIds::add);
+        for (String id : applicationIds) {
+            relevant.addAll(records.findByTypeAndParentId("formal_application_revision", id));
+            relevant.addAll(records.findByTypeAndParentId("formal_application_review", id));
+            relevant.addAll(records.findByTypeAndParentId("audit", id));
+        }
         return relevant.stream()
                 .map(record -> new RecordSnapshot(record.getId(), record.getType(), record.getOwnerId(),
                         record.getParentId(), record.getStatus(), record.getPayload(), record.getCreatedAt()))

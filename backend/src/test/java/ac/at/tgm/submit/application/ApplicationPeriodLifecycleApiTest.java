@@ -241,7 +241,7 @@ class ApplicationPeriodLifecycleApiTest {
         StoredRecord period = store.repository().findById(periodId).orElseThrow();
         store.update(period, "DRAFT", store.parse(period));
         List<String> beforeNotOpen = soloMutationSnapshot();
-        rejectSoloMutations(student04, soloId);
+        rejectSoloMutations(student02, soloId);
         assertEquals(beforeNotOpen, soloMutationSnapshot(),
                 "Non-OPEN-period rejections must not create applications or alter application, revision, or audit data.");
     }

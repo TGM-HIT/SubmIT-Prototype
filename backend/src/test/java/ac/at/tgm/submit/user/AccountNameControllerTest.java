@@ -5,6 +5,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import ac.at.tgm.submit.data.StoredRecord;
 import ac.at.tgm.submit.data.StoredRecordRepository;
@@ -113,7 +114,7 @@ class AccountNameControllerTest {
         assertNoAutomaticEnrollment(persisted.getId());
     }
 
-    private void assertNoAutomaticEnrollment(UUID studentId) {
+    private void assertNoAutomaticEnrollment(UUID studentId) throws Exception {
         String id = studentId.toString();
         List<StoredRecord> allRecords = records.findAll();
         org.junit.jupiter.api.Assertions.assertFalse(allRecords.stream()
@@ -128,6 +129,31 @@ class AccountNameControllerTest {
                         .anyMatch(record -> "allocation_assignment".equals(record.getType())
                                 && (id.equals(record.getOwnerId()) || record.getPayload().contains(id))),
                 "Registration must not create an allocation assignment.");
+        for (StoredRecord group : allRecords.stream()
+                .filter(record -> "applying_group".equals(record.getType())).toList()) {
+            JsonNode members = objectMapper.readTree(group.getPayload()).get("members");
+            org.junit.jupiter.api.Assertions.assertTrue(members != null && members.isArray(),
+                    "Applying-group membership must be read from its persisted members array.");
+            for (JsonNode member : members) {
+                org.junit.jupiter.api.Assertions.assertTrue(member.isTextual(),
+                        "Applying-group members must be persisted as student ID strings.");
+                org.junit.jupiter.api.Assertions.assertNotEquals(id, member.textValue(),
+                        "Registration must not add the account to applying_group.members.");
+            }
+        }
+        for (StoredRecord run : allRecords.stream()
+                .filter(record -> "allocation_run".equals(record.getType())).toList()) {
+            JsonNode assignments = objectMapper.readTree(run.getPayload()).path("result").path("assignments");
+            org.junit.jupiter.api.Assertions.assertTrue(assignments.isArray(),
+                    "Allocation assignments must be inspected at allocation_run.result.assignments.");
+            for (JsonNode assignment : assignments) {
+                org.junit.jupiter.api.Assertions.assertTrue(assignment.isObject()
+                                && assignment.has("studentId") && assignment.get("studentId").isTextual(),
+                        "Each persisted allocation assignment must have a string studentId.");
+                org.junit.jupiter.api.Assertions.assertNotEquals(id, assignment.get("studentId").textValue(),
+                        "Registration must not create an allocation assignment for the account.");
+            }
+        }
     }
 
     @Test

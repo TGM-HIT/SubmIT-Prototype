@@ -346,7 +346,7 @@ class StudentDetailsControllerTest {
                 .andExpect(status().isOk()).andExpect(jsonPath("$.classId").value(assignedClass.getId().toString()));
     }
 
-    private void assertNoAutomaticEnrollment(UUID studentId) {
+    private void assertNoAutomaticEnrollment(UUID studentId) throws Exception {
         String id = studentId.toString();
         List<StoredRecord> allRecords = records.findAll();
         assertFalse(allRecords.stream()
@@ -361,6 +361,30 @@ class StudentDetailsControllerTest {
                         .anyMatch(record -> "allocation_assignment".equals(record.getType())
                                 && (id.equals(record.getOwnerId()) || record.getPayload().contains(id))),
                 "Changing a teacher to STUDENT must not create an allocation assignment.");
+        for (StoredRecord group : allRecords.stream()
+                .filter(record -> "applying_group".equals(record.getType())).toList()) {
+            JsonNode members = mapper.readTree(group.getPayload()).get("members");
+            assertTrue(members != null && members.isArray(),
+                    "Applying-group membership must be read from its persisted members array.");
+            for (JsonNode member : members) {
+                assertTrue(member.isTextual(), "Applying-group members must be persisted as student ID strings.");
+                assertFalse(id.equals(member.textValue()),
+                        "Changing a teacher to STUDENT must not add the account to applying_group.members.");
+            }
+        }
+        for (StoredRecord run : allRecords.stream()
+                .filter(record -> "allocation_run".equals(record.getType())).toList()) {
+            JsonNode assignments = mapper.readTree(run.getPayload()).path("result").path("assignments");
+            assertTrue(assignments.isArray(),
+                    "Allocation assignments must be inspected at allocation_run.result.assignments.");
+            for (JsonNode assignment : assignments) {
+                assertTrue(assignment.isObject()
+                                && assignment.has("studentId") && assignment.get("studentId").isTextual(),
+                        "Each persisted allocation assignment must have a string studentId.");
+                assertFalse(id.equals(assignment.get("studentId").textValue()),
+                        "Changing a teacher to STUDENT must not create an allocation assignment for the account.");
+            }
+        }
         assertEquals(Role.STUDENT, users.findById(teacher.getId()).orElseThrow().getRole());
     }
 
