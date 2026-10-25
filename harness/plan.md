@@ -153,7 +153,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 
 ## Compliance checks
 
-Recurring documentation and contract checks, run by the [Auditor role](roles/auditor.md) on request (for example "run Compliance-02"). A check has no `to-do`/`done` status: it is run repeatedly, and this ledger records when it last ran. Check definitions live in `checks/<check-id>.md` and are created from [`templates/check.md`](templates/check.md). The Auditor updates only the `Last run`, `Result`, and `Run` cells of a row after each run, and opens ordinary Bug, Dev, or Feature tickets for findings. `Cadence` is a suggestion; nothing starts a run automatically.
+Recurring documentation and contract checks, run by the [Auditor role](roles/auditor.md) on request (for example "run Compliance-02"). A check has no `to-do`/`done` status: it is run repeatedly, and this ledger records when it last ran. Check definitions live in `checks/<check-id>.md` and are created from [`templates/check.md`](templates/check.md). The Auditor updates only the `Last run`, `Result`, and `Run` cells of a row after each run, and opens follow-up tickets for findings using the prefixes and plan groups permitted by the [Auditor contract](roles/auditor.md#follow-up-tickets). `Cadence` is a suggestion; nothing starts a run automatically.
 
 | Check | Cadence | Last run | Result | Run | Definition |
 | --- | --- | --- | --- | --- | --- |
