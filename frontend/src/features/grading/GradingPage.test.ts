@@ -4,6 +4,7 @@ import GradingPage from "./GradingPage.vue"
 import { formatDateOnly, formatTimestamp, i18n, setLanguage } from "../../i18n"
 
 const api = vi.hoisted(() => ({
+  role: "ADMIN",
   activeRubric: vi.fn(),
   rubrics: vi.fn(),
   grades: vi.fn(),
@@ -23,7 +24,7 @@ vi.mock("../../api/services", () => ({
   },
 }))
 
-vi.mock("../../stores/auth", () => ({ useAuthStore: () => ({ user: { role: "ADMIN" } }) }))
+vi.mock("../../stores/auth", () => ({ useAuthStore: () => ({ user: { role: api.role, id: "student-1" } }) }))
 
 function pageResult(content: Record<string, unknown>[] = []) {
   return { content, page: 0, size: 20, totalElements: content.length, totalPages: content.length ? 1 : 0 }
@@ -32,6 +33,7 @@ function pageResult(content: Record<string, unknown>[] = []) {
 describe("grading student identities", () => {
   beforeEach(() => {
     vi.resetAllMocks()
+    api.role = "ADMIN"
     setLanguage("en")
     api.activeRubric.mockResolvedValue({ name: "Current rubric", categories: [] })
     api.rubrics.mockResolvedValue(pageResult())
@@ -51,6 +53,55 @@ describe("grading student identities", () => {
     api.groupGrades.mockResolvedValue(pageResult())
     api.metrics.mockResolvedValue(pageResult())
     api.finalGrade.mockResolvedValue({})
+  })
+
+  it("shows administrators read-only grading views and rubric publication but no grading mutation controls", async () => {
+    api.finalGrade.mockResolvedValue(null)
+    const page = mount(GradingPage)
+    await flushPromises()
+    expect(page.find("#rubric-json").exists()).toBe(true)
+    expect(page.text()).toContain("Publish immutable version")
+
+    await page.get("#project-id").setValue("project-1")
+    expect(page.findAll("form")).toHaveLength(0)
+    expect(page.text()).not.toContain("Record individual assessment")
+    expect(page.text()).not.toContain("Record group assessment")
+    expect(page.text()).not.toContain("Record observation")
+
+    await page.findAll("button").find((button) => button.text() === "Load authorized project record")!.trigger("click")
+    await flushPromises()
+    expect(page.findAll('[role="tab"]')).toHaveLength(4)
+    expect(page.text()).toContain("Jordan Student")
+    await page.findAll('[role="tab"]').find((tab) => tab.text() === "Final grades")!.trigger("click")
+    expect(page.findAll("form")).toHaveLength(0)
+    expect(page.text()).toContain("No final grade is recorded")
+    page.unmount()
+  })
+
+  it.each(["TEACHER", "STUDENT"])("%s role controls grading form visibility", async (role) => {
+    api.role = role
+    const page = mount(GradingPage)
+    await flushPromises()
+    await page.get("#project-id").setValue("project-1")
+
+    if (role === "TEACHER") {
+      expect(page.text()).toContain("Record individual assessment")
+      expect(page.text()).toContain("Record group assessment")
+      expect(page.text()).toContain("Record a configured project metric")
+      expect(page.text()).toContain("Record / confirm final project grade")
+      expect(page.text()).toContain("Record an individual final grade")
+      expect(page.findAll("form")).toHaveLength(5)
+      await page.findAll("button").find((button) => button.text() === "Load authorized project record")!.trigger("click")
+      await flushPromises()
+      await page.findAll('[role="tab"]').find((tab) => tab.text() === "Final grades")!.trigger("click")
+      expect(page.findAll("form")).toHaveLength(5)
+    } else {
+      expect(page.findAll("form")).toHaveLength(0)
+      expect(page.text()).not.toContain("Record individual assessment")
+      expect(page.text()).not.toContain("Record group assessment")
+      expect(page.text()).not.toContain("Record a configured project metric")
+    }
+    page.unmount()
   })
 
   it("shows student name and current class and subject names instead of the identifier", async () => {
@@ -98,6 +149,7 @@ describe("grading student identities", () => {
   })
 
   it("formats active/listed rubric dates and individual/group assessments as stable calendar dates, and metric timestamps in the selected locale", async () => {
+    api.role = "TEACHER"
     const effectiveFrom = "2026-09-01"
     const assessedOn = "2026-10-10"
     const measuredAt = "2026-10-11T15:04:00Z"

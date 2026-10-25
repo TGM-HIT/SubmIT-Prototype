@@ -32,7 +32,7 @@
         <button class="button button-secondary" type="button" :disabled="!projectId || task.loading.value" @click="loadProject">{{ $t('grading.loadProject') }}</button>
       </div>
       <p class="notice">{{ $t('grading.privacyHelp') }}</p>
-      <div v-if="projectId && auth.user?.role !== 'STUDENT'" class="grid grid-2">
+      <div v-if="projectId && auth.user?.role === 'TEACHER'" class="grid grid-2">
         <form class="panel" @submit.prevent="recordGrade(false)">
           <h3 class="form-section-title">{{ $t('grading.individualAssessment') }}</h3>
           <div class="field"><label class="label" for="student-id">{{ $t('grading.groupMemberId') }}</label><input id="student-id" v-model.trim="gradeForm.studentId" class="input" required /></div>
@@ -47,7 +47,7 @@
           <button class="button stack" :disabled="task.loading.value || !selectedGroupCriterion">{{ $t('grading.recordGroupAssessment') }}</button>
         </form>
       </div>
-      <form v-if="projectId && auth.user?.role !== 'STUDENT'" class="panel stack" @submit.prevent="recordMetric">
+      <form v-if="projectId && auth.user?.role === 'TEACHER'" class="panel stack" @submit.prevent="recordMetric">
         <h3 class="form-section-title">{{ $t('grading.metricHeading') }}</h3>
         <div class="grid grid-2"><div class="field"><label class="label" for="metric-id">{{ $t('grading.metricDefinition') }}</label><select id="metric-id" v-model="metricForm.metricId" class="select" required><option value="">{{ $t('grading.selectMetric') }}</option><option v-for="metric in metricsDefinitions" :key="String(metric.id)" :value="metric.id">{{ metric.name }} · {{ metric.unit || $t('grading.unitUnspecified') }}</option></select></div><div class="field"><label class="label" for="metric-value">{{ $t('grading.observedValue') }}</label><input id="metric-value" v-model.number="metricForm.value" class="input" type="number" step="any" required /></div></div>
         <div class="field"><label class="label" for="metric-note">{{ $t('grading.contextNote') }}</label><input id="metric-note" v-model="metricForm.note" class="input" maxlength="2000" /></div>
@@ -69,8 +69,8 @@
         <article v-for="metric in metricEntries.content" :key="String(metric.id)" class="data-row"><div class="row-main"><h3>{{ metric.metricId }} · {{ displayNumber(metric.value) }} <span class="status-badge">v{{ metric.metricVersion }}</span></h3><p>{{ $t('grading.measured') }} {{ date(metric.measuredAt) }} · {{ $t('grading.rubric') }} {{ metric.rubricVersion }}</p><p>{{ metric.note }}</p></div></article>
         <p v-if="!metricEntries.content.length" class="empty">{{ $t('grading.noMetrics') }}</p>
       </div>
-      <div v-if="projectLoaded && activeTab === 'final'" class="stack">
-        <form v-if="auth.user?.role !== 'STUDENT'" class="panel" @submit.prevent="saveFinalGrade">
+      <div v-if="(projectLoaded && activeTab === 'final') || (projectId && auth.user?.role === 'TEACHER')" class="stack">
+        <form v-if="auth.user?.role === 'TEACHER'" class="panel" @submit.prevent="saveFinalGrade">
           <h3 class="form-section-title">{{ $t('grading.recordProjectFinal') }}</h3>
           <div class="grid grid-2"><div class="field"><label class="label" for="rule">{{ $t('grading.projectRule') }}</label><select id="rule" v-model="finalForm.ruleId" class="select"><option value="">{{ $t('grading.manualDecision') }}</option><option v-for="rule in projectRules" :key="String(rule.id)" :value="rule.id">{{ rule.id }} · v{{ rule.version }}</option></select></div><div class="field"><label class="label" for="final-grade">{{ $t('grading.individualGrade') }} {{ finalForm.ruleId ? $t('grading.optionalConfirmation') : '' }}</label><input id="final-grade" v-model.number="finalForm.grade" class="input" type="number" :min="number(scaleObject(activeRubric.finalGradeScale).min)" :max="number(scaleObject(activeRubric.finalGradeScale).max)" :step="number(scaleObject(activeRubric.finalGradeScale).step, 1)" :required="!finalForm.ruleId" /></div></div>
           <div class="field"><label class="label" for="rationale">{{ $t('grading.teacherRationale') }} {{ finalForm.ruleId ? $t('grading.optional') : $t('grading.requiredNoRule') }}</label><textarea id="rationale" v-model="finalForm.rationale" class="textarea" maxlength="4000" :required="!finalForm.ruleId" /></div>
@@ -78,7 +78,7 @@
           <div class="notice">{{ $t('grading.projectGradeHelp') }}</div>
           <button class="button">{{ $t('grading.saveProjectGrade') }}</button>
         </form>
-        <form v-if="auth.user?.role !== 'STUDENT'" class="panel stack" @submit.prevent="saveStudentFinalGrade">
+        <form v-if="auth.user?.role === 'TEACHER'" class="panel stack" @submit.prevent="saveStudentFinalGrade">
           <h3 class="form-section-title">{{ $t('grading.recordStudentFinal') }}</h3>
           <div class="field"><label class="label" for="final-student-id">{{ $t('grading.allocatedStudentId') }}</label><input id="final-student-id" v-model.trim="studentFinalForm.studentId" class="input" required /></div>
           <div class="grid grid-2"><div class="field"><label class="label" for="student-rule">{{ $t('grading.studentRule') }}</label><select id="student-rule" v-model="studentFinalForm.ruleId" class="select"><option value="">{{ $t('grading.manualDecision') }}</option><option v-for="rule in studentRules" :key="String(rule.id)" :value="rule.id">{{ rule.id }} · v{{ rule.version }}</option></select></div><div class="field"><label class="label" for="student-final-grade">{{ $t('grading.individualGrade') }}</label><input id="student-final-grade" v-model.number="studentFinalForm.grade" class="input" type="number" :min="number(scaleObject(activeRubric.finalGradeScale).min)" :max="number(scaleObject(activeRubric.finalGradeScale).max)" :step="number(scaleObject(activeRubric.finalGradeScale).step, 1)" :required="!studentFinalForm.ruleId" /></div></div>
@@ -87,7 +87,7 @@
           <button class="button">{{ $t('grading.saveStudentGrade') }}</button>
         </form>
         <pre v-if="finalGrade" class="json-view">{{ localizedFinalGrade() }}</pre>
-        <p v-else class="empty">{{ $t('grading.noFinalGrade') }}</p>
+        <p v-else-if="projectLoaded" class="empty">{{ $t('grading.noFinalGrade') }}</p>
       </div>
       <div v-if="task.error.value" class="error-box stack" role="alert">{{ task.error.value }} <button class="button button-secondary button-small" @click="loadProject">{{ $t('grading.retry') }}</button></div>
       <p v-if="task.success.value" class="success-note" role="status">{{ task.success.value }}</p>

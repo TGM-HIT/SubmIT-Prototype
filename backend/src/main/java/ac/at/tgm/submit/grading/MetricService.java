@@ -45,7 +45,7 @@ public class MetricService {
     }
 
     @Transactional
-    @PreAuthorize("hasAnyRole('TEACHER','ADMIN')")
+    @PreAuthorize("hasRole('TEACHER')")
     public MetricResponse record(AuthenticatedUser caller, UUID projectId, MetricRequest body) {
         access.requireTeacher(caller, projectId);
         JsonNode request = GradingSupport.toNode(body);

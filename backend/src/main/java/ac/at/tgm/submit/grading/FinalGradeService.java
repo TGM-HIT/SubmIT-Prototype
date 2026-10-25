@@ -55,7 +55,7 @@ public class FinalGradeService {
     }
 
     @Transactional
-    @PreAuthorize("hasAnyRole('TEACHER','ADMIN')")
+    @PreAuthorize("hasRole('TEACHER')")
     public FinalGradesResponse record(AuthenticatedUser caller, UUID projectId, FinalGradesRequest body) {
         List<String> members = access.requireTeacher(caller, projectId);
         JsonNode request = GradingSupport.toNode(body);

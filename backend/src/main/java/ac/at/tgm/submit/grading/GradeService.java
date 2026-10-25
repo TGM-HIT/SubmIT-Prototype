@@ -34,7 +34,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class GradeService {
     private static final String ANY_ROLE = "hasAnyRole('STUDENT','TEACHER','ADMIN')";
-    private static final String TEACHER_ROLE = "hasAnyRole('TEACHER','ADMIN')";
+    private static final String TEACHER_ROLE = "hasRole('TEACHER')";
 
     private final RecordStore store;
     private final AuditService audit;

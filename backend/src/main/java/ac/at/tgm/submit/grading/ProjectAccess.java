@@ -15,8 +15,7 @@ import org.springframework.stereotype.Component;
 
 /**
  * Project membership and role checks for grading. A project exists when it has an allocated group record.
- * TEACHER and ADMIN users are treated as teachers with access to every project, matching the other project
- * services; students must be members of the project's group.
+ * TEACHER and ADMIN users can read every project's grading data; students must be members of the project's group.
  */
 @Component
 class ProjectAccess {
