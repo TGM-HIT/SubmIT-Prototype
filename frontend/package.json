@@ -21,6 +21,11 @@
     "vue-i18n": "11.1.10",
     "vue-router": "^4.6.3"
   },
+  "overrides": {
+    "js-beautify": {
+      "glob": "13.0.6"
+    }
+  },
   "devDependencies": {
     "@intlify/devtools-types": "11.1.10",
     "@tailwindcss/vite": "^4.1.16",
