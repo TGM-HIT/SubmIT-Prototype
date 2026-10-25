@@ -394,12 +394,18 @@ class ApplicationPeriodSupervisorTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.label").value("Autumn intake"))
                 .andReturn();
+        JsonNode createdPeriod = objectMapper.readTree(created.getResponse().getContentAsString());
+        assertTextProperty(createdPeriod, "label", "Autumn intake");
+        assertTextProperty(createdPeriod, "schoolYear", "2026/2027");
         String periodId = objectMapper.readTree(created.getResponse().getContentAsString()).path("id").asText();
         var persisted = store.repository().findById(UUID.fromString(periodId)).orElseThrow();
         org.junit.jupiter.api.Assertions.assertEquals("Autumn intake", store.parse(persisted).path("label").asText());
-        mockMvc.perform(get("/api/application-periods/{id}", periodId)
+        MvcResult single = mockMvc.perform(get("/api/application-periods/{id}", periodId)
                         .header("Authorization", "Bearer " + adminToken))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.label").value("Autumn intake"));
+                .andExpect(status().isOk()).andExpect(jsonPath("$.label").value("Autumn intake")).andReturn();
+        JsonNode singlePeriod = objectMapper.readTree(single.getResponse().getContentAsString());
+        assertTextProperty(singlePeriod, "label", "Autumn intake");
+        assertTextProperty(singlePeriod, "schoolYear", "2026/2027");
 
         Map<String, Object> secondPayload = new java.util.HashMap<>(firstPayload);
         secondPayload.put("label", "Spring intake");
@@ -408,21 +414,70 @@ class ApplicationPeriodSupervisorTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(secondPayload)))
                 .andExpect(status().isCreated()).andExpect(jsonPath("$.label").value("Spring intake"));
-        mockMvc.perform(get("/api/application-periods")
+        MvcResult listed = mockMvc.perform(get("/api/application-periods")
                         .header("Authorization", "Bearer " + adminToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[?(@.label == 'Autumn intake')] ").exists())
-                .andExpect(jsonPath("$.content[?(@.label == 'Spring intake')] ").exists());
+                .andExpect(jsonPath("$.content[?(@.label == 'Spring intake')] ").exists())
+                .andReturn();
+        JsonNode listedPeriods = objectMapper.readTree(listed.getResponse().getContentAsString());
+        JsonNode autumn = listItemWithLabel(listedPeriods, "Autumn intake");
+        JsonNode spring = listItemWithLabel(listedPeriods, "Spring intake");
+        assertTextProperty(autumn, "schoolYear", "2026/2027");
+        assertTextProperty(spring, "schoolYear", "2026/2027");
 
         Map<String, Object> renamed = new java.util.HashMap<>(firstPayload);
         renamed.put("label", "  Renamed intake ");
-        mockMvc.perform(put("/api/application-periods/{id}", periodId)
+        MvcResult updated = mockMvc.perform(put("/api/application-periods/{id}", periodId)
                         .header("Authorization", "Bearer " + adminToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(renamed)))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.label").value("Renamed intake"));
+                .andExpect(status().isOk()).andExpect(jsonPath("$.label").value("Renamed intake")).andReturn();
+        JsonNode updatedPeriod = objectMapper.readTree(updated.getResponse().getContentAsString());
+        assertTextProperty(updatedPeriod, "label", "Renamed intake");
+        assertTextProperty(updatedPeriod, "schoolYear", "2026/2027");
         var reloaded = store.repository().findById(UUID.fromString(periodId)).orElseThrow();
         org.junit.jupiter.api.Assertions.assertEquals("Renamed intake", store.parse(reloaded).path("label").asText());
+    }
+
+    @Test
+    void labelsAtTrimmedLengthBoundariesAreAcceptedForCreateAndUpdate() throws Exception {
+        String opens = Instant.now().minusSeconds(60).toString();
+        String closes = Instant.now().plusSeconds(86_400).toString();
+        MvcResult updateTarget = mockMvc.perform(post("/api/application-periods")
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(period("2026/2027", opens, closes, projectIds))))
+                .andExpect(status().isCreated())
+                .andReturn();
+        String updateTargetId = objectMapper.readTree(updateTarget.getResponse().getContentAsString())
+                .path("id").asText();
+
+        for (Map.Entry<String, String> boundary : Map.of(
+                " x ", "x",
+                "x".repeat(100), "x".repeat(100)).entrySet()) {
+            Map<String, Object> payload = new java.util.HashMap<>(
+                    period("2026/2027", opens, closes, projectIds));
+            payload.put("label", boundary.getKey());
+
+            MvcResult created = mockMvc.perform(post("/api/application-periods")
+                            .header("Authorization", "Bearer " + adminToken)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(payload)))
+                    .andExpect(status().isCreated())
+                    .andReturn();
+            assertTextProperty(objectMapper.readTree(created.getResponse().getContentAsString()),
+                    "label", boundary.getValue());
+
+            MvcResult updated = mockMvc.perform(put("/api/application-periods/{id}", updateTargetId)
+                            .header("Authorization", "Bearer " + adminToken)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(payload)))
+                    .andExpect(status().isOk())
+                    .andReturn();
+            assertTextProperty(objectMapper.readTree(updated.getResponse().getContentAsString()),
+                    "label", boundary.getValue());
+        }
     }
 
     @Test
@@ -504,6 +559,35 @@ class ApplicationPeriodSupervisorTest {
         org.junit.jupiter.api.Assertions.assertEquals(array.size(), values.size(),
                 "UUID member arrays must not contain duplicates.");
         return values;
+    }
+
+    private void assertTextProperty(JsonNode object, String property, String expected) {
+        org.junit.jupiter.api.Assertions.assertTrue(object.isObject(), "Expected a JSON object.");
+        JsonNode value = object.get(property);
+        org.junit.jupiter.api.Assertions.assertNotNull(value, "Expected property '" + property + "'.");
+        org.junit.jupiter.api.Assertions.assertTrue(value.isTextual(),
+                "Expected property '" + property + "' to be a JSON string.");
+        org.junit.jupiter.api.Assertions.assertEquals(expected, value.textValue(),
+                "Unexpected value for property '" + property + "'.");
+    }
+
+    private JsonNode listItemWithLabel(JsonNode response, String label) {
+        org.junit.jupiter.api.Assertions.assertTrue(response.isObject(), "Expected a paginated JSON object.");
+        JsonNode content = response.get("content");
+        org.junit.jupiter.api.Assertions.assertNotNull(content, "Expected a content property.");
+        org.junit.jupiter.api.Assertions.assertTrue(content.isArray(), "Expected content to be a JSON array.");
+        for (JsonNode item : content) {
+            org.junit.jupiter.api.Assertions.assertTrue(item.isObject(), "Expected each period to be a JSON object.");
+            JsonNode itemLabel = item.get("label");
+            org.junit.jupiter.api.Assertions.assertNotNull(itemLabel, "Expected each period to have a label.");
+            org.junit.jupiter.api.Assertions.assertTrue(itemLabel.isTextual(),
+                    "Expected each period label to be a JSON string.");
+            if (label.equals(itemLabel.textValue())) {
+                return item;
+            }
+        }
+        org.junit.jupiter.api.Assertions.fail("Expected a period with label '" + label + "'.");
+        return null;
     }
 
     private String login(String username) throws Exception {
