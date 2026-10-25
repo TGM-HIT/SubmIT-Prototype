@@ -31,6 +31,30 @@ class CommitScope {
         "harness/tickets/done/Feature-05.md",
         "harness/tickets/done/Feature-07.md",
         "harness/tickets/done/Feature-08.md"
+        , "harness/tickets/Dev-40.md"
+        , "harness/tickets/Dev-41.md"
+        , "harness/tickets/Dev-43.md"
+        , "harness/tickets/Dev-44.md"
+        , "harness/tickets/Dev-51.md"
+        , "harness/tickets/Dev-53.md"
+        , "harness/tickets/done/Bug-21.md"
+        , "harness/tickets/done/Bug-22.md"
+        , "harness/tickets/done/Bug-23.md"
+        , "harness/tickets/done/Dev-21.md"
+        , "harness/tickets/done/Dev-24.md"
+        , "harness/tickets/done/Dev-25.md"
+        , "harness/tickets/done/Dev-26.md"
+        , "harness/tickets/done/Dev-27.md"
+        , "harness/tickets/done/Dev-29.md"
+        , "harness/tickets/done/Dev-30.md"
+        , "harness/tickets/done/Dev-32.md"
+        , "harness/tickets/done/Dev-33.md"
+        , "harness/tickets/done/Dev-38.md"
+        , "harness/tickets/done/Dev-39.md"
+        , "harness/tickets/done/Dev-42.md"
+        , "harness/tickets/done/Feature-19.md"
+        , "harness/tickets/done/Feature-21.md"
+        , "harness/tickets/done/Feature-22.md"
     };
     static final String[] SPEC_FILES = { "docs/SPEC.md", "backend/SPEC.md", "frontend/SPEC.md" };
 
