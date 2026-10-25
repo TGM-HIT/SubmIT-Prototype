@@ -90,7 +90,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-33](tickets/done/Dev-33.md) | done | Remove deprecated API usage and prevent regressions |
 | [Dev-34](tickets/done/Dev-34.md) | done | Exclude generated artifacts from Docker build contexts |
 | [Dev-35](tickets/done/Dev-35.md) | done | Resolve frontend dependency warnings and vulnerabilities |
-| [Dev-36](tickets/Dev-36.md) | to-do | Remove the remaining glob deprecation and use the Node LTS image |
+| [Dev-36](tickets/done/Dev-36.md) | done | Remove the remaining glob deprecation and use the Node LTS image |
 | [Dev-37](tickets/done/Dev-37.md) | done | Align the Users & roles default-class rule with the shared role-change rule |
 | [Dev-38](tickets/done/Dev-38.md) | done | Align the frontend README public-archive description with the snapshot-browser requirement |
 | [Dev-39](tickets/done/Dev-39.md) | done | Specify application-period labels and last-administrator protection |

@@ -6,7 +6,7 @@ Dev-35 resolved the targeted `whatwg-encoding` deprecation and dependency adviso
 
 ## Scope and contract
 
-- Follow up on [Dev-35](done/Dev-35.md): eliminate the `glob@10.5.0` deprecation warning reported by a clean frontend dependency installation. The current lockfile resolves `@vue/test-utils` through `js-beautify@1.15.4`, which depends on `glob@10.5.0`; inspect the current dependency chain before changing it.
+- Follow up on [Dev-35](Dev-35.md): eliminate the `glob@10.5.0` deprecation warning reported by a clean frontend dependency installation. The current lockfile resolves `@vue/test-utils` through `js-beautify@1.15.4`, which depends on `glob@10.5.0`; inspect the current dependency chain before changing it.
 - Update the frontend build stage in `frontend/Dockerfile` from `node:22-alpine` to the official `node:24-alpine` image tag, using Node.js 24.x (>=24.0.0) for the container build. Use `npm ci --engine-strict` in that stage so dependency engine incompatibilities fail the image build instead of proceeding with engine warnings.
 - Preserve the frontend's documented Node.js support range from Dev-35 (`^20.19.0 || ^22.12.0 || >=24.0.0`); this ticket changes the container build runtime, not the supported developer runtime range. Keep the final `nginx:1.27-alpine` runtime stage unchanged, and preserve the existing application behavior.
 - Do not suppress deprecation or audit output, add a dependency solely to silence a warning, conceal advisories, change application behavior, or make unrelated upgrades. Keep any dependency changes limited to what is necessary to remove the observed `glob@10.5.0` warning.
