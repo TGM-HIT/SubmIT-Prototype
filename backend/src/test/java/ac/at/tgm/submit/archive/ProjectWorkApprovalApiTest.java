@@ -259,12 +259,7 @@ class ProjectWorkApprovalApiTest {
     private void assertApproved(String operation) throws Exception {
         UUID project = project("IN_PROGRESS");
         Prepared prepared = prepare(operation, project);
-        if (operation.startsWith("review-")) {
-            approveFormalApplicationThroughTeacherReview(project);
-        } else {
-            store.create("formal_application", studentId.toString(), project.toString(), "APPROVED",
-                    store.object());
-        }
+        approveFormalApplicationThroughTeacherReview(project);
         var result = perform(operation, project, teacher, prepared);
         int expected = switch (operation) {
             case "upload", "grade", "revision", "group-grade", "metric" -> 201;
@@ -313,12 +308,15 @@ class ProjectWorkApprovalApiTest {
             return new Prepared(artifact.getId().toString(), "artifact");
         }
         if (operation.equals("revision")) {
-            store.create("formal_application", studentId.toString(), project.toString(), "APPROVED", store.object());
+            StoredRecord preparationApplication = store.create(
+                    "formal_application", studentId.toString(), project.toString(), "APPROVED", store.object());
             MvcResult grade = request(post("/api/projects/{id}/student-grades", project), teacher,
                     Map.of("rubricId", rubricId, "studentId", studentId, "criterionId", "individual", "grade", 4))
                     .andExpect(status().isCreated()).andReturn();
             String gradeId = mapper.readTree(grade.getResponse().getContentAsByteArray()).path("id").asText();
-            store.repository().delete(application(project));
+            store.repository().delete(preparationApplication);
+            assertTrue(store.repository().findById(preparationApplication.getId()).isEmpty(),
+                    "Remove the temporary preparation application before the public approval workflow.");
             return new Prepared(gradeId, "student_grade");
         }
         return new Prepared(null, switch (operation) {
