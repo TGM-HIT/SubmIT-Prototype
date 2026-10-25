@@ -38,6 +38,7 @@ public class AuditContextResolver {
     private static final String STUDENT_CLASS = "student_class";
     private static final String ELECTIVE_SUBJECT = "elective_subject";
     private static final String REVIEW = "review";
+    private static final String FORMAL_APPLICATION_REVIEW = "formal_application_review";
     private static final String PROJECT = "project";
     private static final String PROJECT_ID = "projectId";
     private static final String PREFERENCES = "preferences";
@@ -216,8 +217,8 @@ public class AuditContextResolver {
                 .contains(type)) {
             return labelFrom(store.parse(parent));
         }
-        if (Set.of(FORMAL_APPLICATION, "student_grade", "group_grade", "final_grade", "metric", "artifact",
-                "rubric_binding").contains(type)) {
+        if (Set.of(FORMAL_APPLICATION, FORMAL_APPLICATION_REVIEW, "student_grade", "group_grade", "final_grade",
+                "metric", "artifact", "rubric_binding").contains(type)) {
             return labelFromParentProject(parent, related);
         }
         if ("specification".equals(type) || REVIEW.equals(type)) {
@@ -343,6 +344,7 @@ public class AuditContextResolver {
                     labelFor(parentId, "application_period");
             case FORMAL_APPLICATION, "student_grade", "group_grade", "final_grade", "metric", "artifact",
                     "rubric_binding" -> projectLabel(parentId);
+            case FORMAL_APPLICATION_REVIEW -> formalApplicationProjectLabel(parentId);
             case "specification" -> labelFor(parentId, IDEA);
             case REVIEW -> reviewedResourceLabel(parentId);
             default -> null;
@@ -354,7 +356,16 @@ public class AuditContextResolver {
         if (review.isEmpty() || review.get().getParentId() == null) {
             return null;
         }
+
         return reviewedResourceLabel(UUID.fromString(review.get().getParentId()));
+    }
+
+    private String formalApplicationProjectLabel(UUID applicationId) {
+        return store.repository().findById(applicationId)
+                .filter(value -> FORMAL_APPLICATION.equals(value.getType()))
+                .filter(value -> value.getParentId() != null)
+                .map(value -> projectLabel(UUID.fromString(value.getParentId())))
+                .orElse(null);
     }
 
     private String reviewedResourceLabel(UUID parentId) {
@@ -414,11 +425,12 @@ public class AuditContextResolver {
     private String storedType(String entityType) {
         return switch (entityType) {
             case USER, STUDENT_CLASS, ELECTIVE_SUBJECT -> entityType;
-            case "project" -> IDEA;
+            case "project" -> PROJECT;
             case REVIEW -> REVIEW;
             case "student_application", "application_period", "allocation_run", FORMAL_APPLICATION,
                     "artifact", IDEA, "specification", "applying_group", "allocation_pin", "rubric",
-                    "rubric_binding", "student_grade", "group_grade", "final_grade", "metric" -> entityType;
+                    "rubric_binding", "student_grade", "group_grade", "final_grade", "metric",
+                    FORMAL_APPLICATION_REVIEW -> entityType;
             default -> null;
         };
     }

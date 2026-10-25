@@ -196,7 +196,15 @@ describe('administrator account management', () => {
       actorDetailsSource: 'SYSTEM',
       resourceLabelSource: 'EVENT_TIME',
     }
-    const auditEvents = [userEvent, systemEvent]
+    const completedProject: components['schemas']['AuditEntryResponse'] = {
+      ...auditEvent('PROJECT_COMPLETED', 'project', 3),
+      resourceLabel: 'Completed stored project',
+    }
+    const formalReview: components['schemas']['AuditEntryResponse'] = {
+      ...auditEvent('FORMAL_APPLICATION_REVIEWED', 'formal_application_review', 4),
+      resourceLabel: 'Reviewed project context',
+    }
+    const auditEvents = [userEvent, systemEvent, completedProject, formalReview]
     api.audit.mockResolvedValue(pageResult(auditEvents))
     const page = pageWith()
     await flushPromises()
@@ -219,6 +227,12 @@ describe('administrator account management', () => {
     expect(page.text()).toContain('Administrator')
     expect(page.text()).toContain(userEvent.entityId)
     expect(page.text()).toContain('Audit API deadline test')
+    expect(page.text()).toContain('Project completed')
+    expect(page.text()).toContain('Project')
+    expect(page.text()).toContain('Completed stored project')
+    expect(page.text()).toContain('Formal application reviewed')
+    expect(page.text()).toContain('Formal application review')
+    expect(page.text()).toContain('Reviewed project context')
     expect(page.text()).toContain(systemEvent.entityId)
     expect(page.text()).toContain('System')
     expect(page.findAll('.status-badge').some((badge) => badge.text() === 'Recorded')).toBe(true)
@@ -229,6 +243,10 @@ describe('administrator account management', () => {
     expect(page.text()).toContain('Wahlfach erstellt')
     expect(page.text()).toContain('Audit sample subject')
     expect(page.text()).toContain('Audit API deadline test')
+    expect(page.text()).toContain('Projekt abgeschlossen')
+    expect(page.text()).toContain('Formeller Projektantrag geprüft')
+    expect(page.text()).toContain('Begutachtung des formellen Projektantrags')
+    expect(page.text()).toContain('Reviewed project context')
     expect(page.text()).toContain('Grace Morgan')
     expect(page.text()).toContain('admin01')
     expect(page.text()).toContain('Administration')

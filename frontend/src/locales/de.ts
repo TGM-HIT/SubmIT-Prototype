@@ -590,6 +590,7 @@ const de = {
         allocation_pin: 'Zuteilungsvorgabe',
         allocation_run: 'Zuteilungslauf',
         formal_application: 'Formeller Projektantrag',
+        formal_application_review: 'Begutachtung des formellen Projektantrags',
         artifact: 'Projektartefakt',
         project: 'Projekt',
         rubric: 'Bewertungsraster',

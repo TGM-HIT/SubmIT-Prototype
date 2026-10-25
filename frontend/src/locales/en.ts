@@ -590,6 +590,7 @@ const en = {
         allocation_pin: 'Allocation pin',
         allocation_run: 'Allocation run',
         formal_application: 'Formal application',
+        formal_application_review: 'Formal application review',
         artifact: 'Project artefact',
         project: 'Project',
         rubric: 'Grading rubric',

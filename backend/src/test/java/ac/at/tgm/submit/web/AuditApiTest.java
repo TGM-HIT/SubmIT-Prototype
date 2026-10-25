@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -12,6 +13,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import ac.at.tgm.submit.allocation.AllocationDeadlineScheduler;
+import ac.at.tgm.submit.archive.ArtifactType;
 import ac.at.tgm.submit.data.RecordStore;
 import ac.at.tgm.submit.data.StoredRecord;
 import ac.at.tgm.submit.audit.AuditContextResolver;
@@ -36,6 +38,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -175,17 +178,53 @@ class AuditApiTest {
             assertTrue(entityEntry != null);
             assertEquals("ADMIN", entityEntry.path("actorRole").textValue());
         }
+
+        UserAccount removedActor = users.save(new UserAccount(UUID.randomUUID(),
+                "audit-removed-actor-" + UUID.randomUUID(), "Before event rename", "unused-password-hash",
+                Role.TEACHER));
+        String removedActorToken = token(removedActor, Role.TEACHER);
+        mockMvc.perform(patch("/api/users/{id}", removedActor.getId())
+                        .header("Authorization", bearer(removedActorToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(
+                                java.util.Map.of("displayName", "Event-time actor name"))))
+                .andExpect(status().isOk());
+        UserAccount changedAfterEvent = users.findById(removedActor.getId()).orElseThrow();
+        changedAfterEvent.setDisplayName("Later actor name");
+        changedAfterEvent.setRole(Role.ADMIN);
+        users.saveAndFlush(changedAfterEvent);
+        users.delete(changedAfterEvent);
+        users.flush();
+        assertFalse(users.existsById(removedActor.getId()), "The actor account is deleted after the audit event.");
+
+        AuditEvent actorNameChange = new AuditEvent("USER_DISPLAY_NAME_CHANGED", "user", removedActor.getId(),
+                removedActor.getId(), removedActor.getUsername(), "Event-time actor name", Instant.MIN, Instant.MAX);
+        for (String staffToken : List.of(teacherToken, adminToken)) {
+            JsonNode listEntry = findEntryAcrossPages(staffToken, actorNameChange);
+            assertEquals("EVENT_TIME", listEntry.path("actorDetailsSource").textValue());
+            assertEquals("Event-time actor name", listEntry.path("actorDisplayName").textValue());
+            assertEquals("TEACHER", listEntry.path("actorRole").textValue());
+            JsonNode entityPage = request("/api/audit/user/" + removedActor.getId(), staffToken);
+            JsonNode entityEntry = findEntry(entityPage.path("content"), actorNameChange.action(),
+                    actorNameChange.entityId());
+            assertTrue(entityEntry != null);
+            assertEquals("Event-time actor name", entityEntry.path("actorDisplayName").textValue());
+            assertEquals("TEACHER", entityEntry.path("actorRole").textValue());
+            assertEquals("EVENT_TIME", entityEntry.path("actorDetailsSource").textValue());
+        }
     }
 
     @Test
     void eventTimeResourceContextMapsEveryAuditedResourceType() {
         StoredRecord project = store.create("idea", null, null, "ACCEPTED_FOR_APPLICATIONS",
                 store.object().put("title", "Context project"));
+        StoredRecord storedProject = store.create("project", null, null, "IN_PROGRESS",
+                store.object().put("title", "Stored project title"));
         StoredRecord period = store.create("application_period", admin.getId().toString(), null, "OPEN",
                 store.object().put("label", "Context period"));
         Map<String, UUID> resourceIds = new java.util.LinkedHashMap<>();
         resourceIds.put("idea", project.getId());
-        resourceIds.put("project", project.getId());
+        resourceIds.put("project", storedProject.getId());
         resourceIds.put("application_period", period.getId());
         resourceIds.put("user", admin.getId());
         resourceIds.put("student_class", classes.findAll().stream().findFirst().orElseThrow().getId());
@@ -200,16 +239,23 @@ class AuditApiTest {
                 "group_grade", "final_grade", "metric", "specification", "review")) {
             resourceIds.put(type, createContextResource(type, project.getId()));
         }
+        StoredRecord formalApplication = store.create("formal_application", student.getId().toString(),
+                project.getId().toString(), "SUBMITTED", store.object().put("topic", "Private application topic"));
+        resourceIds.put("formal_application_review", store.create("formal_application_review",
+                teacher.getId().toString(), formalApplication.getId().toString(), "APPROVE",
+                store.object().put("feedback", "Private review feedback")).getId());
 
         Set<String> expectedTypes = Set.of("idea", "project", "application_period", "user", "student_class",
                 "elective_subject", "rubric", "student_application", "applying_group", "allocation_pin",
                 "allocation_run", "formal_application", "artifact", "rubric_binding", "student_grade",
-                "group_grade", "final_grade", "metric", "specification", "review");
+                "group_grade", "final_grade", "metric", "specification", "review", "formal_application_review");
         assertEquals(expectedTypes, resourceIds.keySet());
         for (Map.Entry<String, UUID> resource : resourceIds.entrySet()) {
             String expectedLabel = switch (resource.getKey()) {
-                case "idea", "project", "formal_application", "artifact", "rubric_binding", "student_grade",
+                case "idea", "formal_application", "artifact", "rubric_binding", "student_grade",
                         "group_grade", "final_grade", "metric", "specification", "review" -> "Context project";
+                case "project" -> "Stored project title";
+                case "formal_application_review" -> "Context project";
                 case "application_period", "student_application", "applying_group", "allocation_pin",
                         "allocation_run" -> "Context period";
                 case "user" -> admin.getDisplayName();
@@ -220,6 +266,88 @@ class AuditApiTest {
             };
             assertEquals(expectedLabel, contextResolver.snapshotResource(resource.getKey(), resource.getValue()),
                     "Resource label mapping for " + resource.getKey());
+        }
+    }
+
+    @Test
+    void formalApplicationReviewProducerSnapshotsItsProjectContext() throws Exception {
+        StoredRecord project = store.create("project", null, null, "IN_PROGRESS",
+                store.object().put("title", "Real formal review project " + UUID.randomUUID()));
+        StoredRecord application = store.create("formal_application", student.getId().toString(),
+                project.getId().toString(), "SUBMITTED", store.object().put("topic", "Private topic"));
+
+        MvcResult result = mockMvc.perform(post("/api/formal-applications/{id}/reviews", application.getId())
+                        .header("Authorization", bearer(teacherToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"decision\":\"APPROVE\",\"feedback\":\"Private review feedback\"}"))
+                .andExpect(status().isCreated()).andReturn();
+        JsonNode reviewResponse = mapper.readTree(result.getResponse().getContentAsByteArray());
+        assertTrue(reviewResponse.path("id").isTextual());
+        UUID reviewId = UUID.fromString(reviewResponse.path("id").textValue());
+        String projectTitle = store.parse(project).path("title").asText();
+        AuditEvent reviewEvent = new AuditEvent("FORMAL_APPLICATION_REVIEWED", "formal_application_review",
+                reviewId, teacher.getId(), teacher.getUsername(), projectTitle, Instant.MIN, Instant.MAX);
+
+        for (String staffToken : List.of(teacherToken, adminToken)) {
+            JsonNode listEntry = findEntryAcrossPages(staffToken, reviewEvent);
+            assertEquals(projectTitle, listEntry.path("resourceLabel").textValue());
+            assertEquals("EVENT_TIME", listEntry.path("resourceLabelSource").textValue());
+            JsonNode entityPage = request("/api/audit/formal_application_review/" + reviewId, staffToken);
+            JsonNode entityEntry = findEntry(entityPage.path("content"), reviewEvent.action(), reviewId);
+            assertTrue(entityEntry != null);
+            assertEquals(projectTitle, entityEntry.path("resourceLabel").textValue());
+            assertEquals("EVENT_TIME", entityEntry.path("resourceLabelSource").textValue());
+        }
+    }
+
+    @Test
+    void projectCompletionProducerSnapshotsTheStoredProjectTitleInBothAuditRoutes() throws Exception {
+        String projectTitle = "Stored project completion " + UUID.randomUUID();
+        StoredRecord project = store.create("project", null, null, "IN_PROGRESS",
+                store.object().put("title", projectTitle));
+        for (ArtifactType type : ArtifactType.values()) {
+            MvcResult uploadResult = mockMvc.perform(multipart("/api/projects/{projectId}/artifacts",
+                                    project.getId())
+                            .file(new MockMultipartFile("file", "../private-index.html", MediaType.TEXT_HTML_VALUE,
+                                    "safe artifact".getBytes(java.nio.charset.StandardCharsets.UTF_8)))
+                            .param("type", type.name())
+                            .param("title", type.name())
+                            .param("description", "Audit completion fixture")
+                            .param("publicationSubmissionMetadata", "Private review context")
+                            .header("Authorization", bearer(teacherToken)))
+                    .andExpect(status().isCreated()).andReturn();
+            UUID artifactId = UUID.fromString(mapper.readTree(
+                    uploadResult.getResponse().getContentAsByteArray()).path("id").asText());
+            for (String decision : List.of("SUBMIT", "APPROVE")) {
+                mockMvc.perform(post("/api/artifacts/{id}/publication-review", artifactId)
+                                .header("Authorization", bearer(teacherToken))
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content(mapper.writeValueAsString(java.util.Map.of("decision", decision))))
+                        .andExpect(status().isOk());
+            }
+        }
+        store.create("final_grade", teacher.getId().toString(), project.getId().toString(), "CURRENT",
+                store.object().put("projectId", project.getId().toString()).put("grade", "A"));
+
+        Instant beforeCompletion = Instant.now();
+        mockMvc.perform(post("/api/projects/{projectId}/complete", project.getId())
+                        .header("Authorization", bearer(teacherToken)))
+                .andExpect(status().isOk());
+        Instant afterCompletion = Instant.now();
+        AuditEvent completion = new AuditEvent("PROJECT_COMPLETED", "project", project.getId(), teacher.getId(),
+                teacher.getUsername(), projectTitle, beforeCompletion, afterCompletion);
+
+        for (String staffToken : List.of(teacherToken, adminToken)) {
+            JsonNode listEntry = findEntryAcrossPages(staffToken, completion);
+            assertEquals(projectTitle, listEntry.path("resourceLabel").textValue());
+            assertEquals("EVENT_TIME", listEntry.path("resourceLabelSource").textValue());
+            assertEquals(teacher.getDisplayName(), listEntry.path("actorDisplayName").textValue());
+            assertEquals("TEACHER", listEntry.path("actorRole").textValue());
+            JsonNode entityPage = request("/api/audit/project/" + project.getId(), staffToken);
+            JsonNode entityEntry = findEntry(entityPage.path("content"), completion.action(), project.getId());
+            assertTrue(entityEntry != null);
+            assertEquals(projectTitle, entityEntry.path("resourceLabel").textValue());
+            assertEquals("EVENT_TIME", entityEntry.path("resourceLabelSource").textValue());
         }
     }
 

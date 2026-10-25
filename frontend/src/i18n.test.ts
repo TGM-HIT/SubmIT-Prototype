@@ -84,7 +84,8 @@ describe('locale resolution and catalogs', () => {
   const auditResources = [
     'idea', 'specification', 'review', 'user', 'student_class', 'elective_subject', 'application_period',
     'student_application', 'applying_group', 'allocation_pin', 'allocation_run', 'formal_application',
-    'artifact', 'project', 'rubric', 'rubric_binding', 'student_grade', 'group_grade', 'final_grade', 'metric',
+    'formal_application_review', 'artifact', 'project', 'rubric', 'rubric_binding', 'student_grade',
+    'group_grade', 'final_grade', 'metric',
   ]
 
   it.each([

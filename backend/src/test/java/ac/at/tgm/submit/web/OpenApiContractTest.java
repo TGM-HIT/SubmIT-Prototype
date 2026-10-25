@@ -8,6 +8,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ArrayNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import ac.at.tgm.submit.security.Role;
 import ac.at.tgm.submit.web.ApiDtos.AuditEntryResponse;
 import java.time.Instant;
@@ -285,6 +287,116 @@ class OpenApiContractTest {
                 textualMembers(auditEntry.path("properties").path("actorRole").path("enum")));
         assertTrue(auditEntry.path("properties").path("actorId").path("description").asText()
                 .contains("omitted for system-recorded entries"));
+    }
+
+    @Test
+    void auditContextExtensionPreservesBaselineAndGroupMemberSchemasStructurally() throws Exception {
+        JsonNode schemas = apiDocument().path("components").path("schemas");
+        JsonNode audit = schemas.path("AuditEntryResponse");
+        JsonNode baselineAudit = objectMapper.readTree("""
+                {
+                  "type":"object",
+                  "properties":{
+                    "actorId":{"type":"string","format":"uuid","description":"UUID of the user who recorded this event; omitted for system-recorded entries."},
+                    "actorUsername":{"type":"string","description":"Username of the user or system that recorded this event."},
+                    "action":{"type":"string","description":"Action recorded for this audit event."},
+                    "entityType":{"type":"string","description":"Type of entity affected by this event."},
+                    "entityId":{"type":"string","format":"uuid","description":"UUID of the affected entity."},
+                    "occurredAt":{"type":"string","format":"date-time","description":"Time when the audit event was recorded."}
+                  },
+                  "required":["action","actorUsername","entityId","entityType","occurredAt"]
+                }
+                """);
+        ObjectNode legacyAudit = audit.deepCopy();
+        ObjectNode auditProperties = (ObjectNode) legacyAudit.path("properties");
+        ObjectNode contextProperties = objectMapper.createObjectNode();
+        for (String property : List.of("actorDisplayName", "actorRole", "resourceLabel",
+                "actorDetailsSource", "resourceLabelSource")) {
+            contextProperties.set(property, auditProperties.remove(property));
+        }
+        ArrayNode legacyRequired = objectMapper.createArrayNode();
+        audit.path("required").forEach(value -> {
+            if (!Set.of("actorDetailsSource", "resourceLabelSource").contains(value.asText())) {
+                legacyRequired.add(value);
+            }
+        });
+        legacyAudit.set("required", legacyRequired);
+        assertEquals(baselineAudit, legacyAudit,
+                "Only the authorized audit context fields may extend the baseline audit schema.");
+
+        JsonNode expectedContextProperties = objectMapper.readTree("""
+                {
+                  "actorDisplayName":{"type":"string","description":"Actor display name captured at event time or resolved from current data; omitted when unavailable or for system events."},
+                  "actorRole":{"type":"string","description":"Actor role captured at event time or resolved from current data; omitted when unavailable or for system events.","enum":["STUDENT","TEACHER","ADMIN"]},
+                  "resourceLabel":{"type":"string","description":"Resource name or safe identifying context captured at event time or resolved from current data; omitted when unavailable."},
+                  "actorDetailsSource":{"type":"string","description":"Provenance of actor details: EVENT_TIME, CURRENT, UNAVAILABLE, or SYSTEM.","enum":["EVENT_TIME","CURRENT","UNAVAILABLE","SYSTEM"]},
+                  "resourceLabelSource":{"type":"string","description":"Provenance of resource label: EVENT_TIME, CURRENT, or UNAVAILABLE.","enum":["EVENT_TIME","CURRENT","UNAVAILABLE"]}
+                }
+                """);
+        assertEquals(expectedContextProperties, contextProperties,
+                "Context extension descriptions, enum arrays, and values are structural contract.");
+        JsonNode expectedRequired = objectMapper.readTree("""
+                ["action","actorDetailsSource","actorUsername","entityId","entityType","occurredAt","resourceLabelSource"]
+                """);
+        assertEquals(expectedRequired, audit.path("required"),
+                "Requiredness and array order must be preserved exactly.");
+
+        JsonNode baselineGroup = objectMapper.readTree("""
+                {
+                  "type":"object",
+                  "properties":{
+                    "id":{"type":"string","format":"uuid","description":"Applying group identifier."},
+                    "periodId":{"type":"string","format":"uuid","description":"Owning application period identifier."},
+                    "status":{"type":"string","description":"Effective shared submission state.","enum":["DRAFT","SUBMITTED","DISSOLVED"]},
+                    "revision":{"type":"integer","format":"int64","description":"Current roster/ranking revision."},
+                    "locked":{"type":"boolean","description":"Deadline or period lifecycle prevents mutation."},
+                    "invited":{"type":"boolean","description":"Caller has a pending invitation."},
+                    "manager":{"type":"boolean","description":"Caller is the current creator."},
+                    "members":{"type":"array","description":"Accepted roster; submission requires 2–5, all approving this revision.","items":{"$ref":"#/components/schemas/MemberResponse"},"maxItems":5,"minItems":1},
+                    "preferences":{"type":"array","description":"Shared ordered project preferences.","items":{"$ref":"#/components/schemas/PreferenceResponse"}}
+                  },
+                  "required":["id","invited","locked","manager","members","periodId","preferences","revision","status"]
+                }
+                """);
+        JsonNode baselineMember = objectMapper.readTree("""
+                {
+                  "type":"object",
+                  "properties":{
+                    "studentId":{"type":"string","format":"uuid","description":"Student lookup identifier."},
+                    "displayName":{"type":"string","description":"Display name, not private account information."},
+                    "creator":{"type":"boolean","description":"Whether this member is the current creator."},
+                    "self":{"type":"boolean","description":"Whether this member is the caller."},
+                    "approved":{"type":"boolean","description":"Whether this member approved the current revision."}
+                  },
+                  "required":["approved","creator","displayName","self","studentId"]
+                }
+                """);
+        assertEquals(baselineGroup, schemas.path("GroupResponse"),
+                "The complete group response schema must remain unchanged.");
+        assertEquals(baselineMember, schemas.path("MemberResponse"),
+                "The complete group-member schema must remain unchanged.");
+        assertEquals(pageResponseBaseline("AuditEntryResponse"), schemas.path("PageResponseAuditEntryResponse"),
+                "The audit page schema itself is unchanged by the entry-context extension.");
+        assertEquals(pageResponseBaseline("GroupResponse"), schemas.path("PageResponseGroupResponse"),
+                "The group page schema must remain unchanged.");
+        assertEquals(pageResponseBaseline("MemberResponse"), schemas.path("PageResponseMemberResponse"),
+                "The group-member page schema must remain unchanged.");
+    }
+
+    private JsonNode pageResponseBaseline(String itemSchema) throws Exception {
+        return objectMapper.readTree("""
+                {
+                  "type":"object",
+                  "properties":{
+                    "content":{"type":"array","description":"Items returned in this page.","items":{"$ref":"#/components/schemas/%s"}},
+                    "page":{"type":"integer","format":"int32","description":"Zero-based index of this page."},
+                    "size":{"type":"integer","format":"int32","description":"Maximum number of items requested per page."},
+                    "totalElements":{"type":"integer","format":"int64","description":"Total number of matching items across all pages."},
+                    "totalPages":{"type":"integer","format":"int32","description":"Number of pages containing all matching items."}
+                  },
+                  "required":["content","page","size","totalElements","totalPages"]
+                }
+                """.formatted(itemSchema));
     }
 
     @Test
