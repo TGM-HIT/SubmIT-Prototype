@@ -6,7 +6,7 @@
 
 ## Source (when applicable)
 
-For any source-file citation with a line number or range, put the citation and its repository revision together in this note: `Source: <source context>; repository revision: <exact full SHA from git rev-parse HEAD>; <path>:<line-or-range>`. Capture the SHA immediately before authoring the new ticket and verify that each cited line identifies the intended content at that revision. Do not abbreviate or infer the SHA or substitute a run-start or later revision. A path-only reference does not require a revision. Omit this note when the ticket has no line-numbered source-file citations.
+For any source-file citation with a line number or range, put the citation and its repository revision together in this note: `Source: <source context>; repository revision: <exact full SHA from git rev-parse HEAD>; <path>:<line-or-range>`. Capture the SHA immediately before authoring the new ticket and verify that each cited line identifies the intended content at that revision. Do not abbreviate or infer the SHA or substitute a run-start or later revision. A path-only reference does not require a revision. When there are no line-numbered source-file citations, omit only this revision-and-citation metadata; retain any independently required source context (for example, an Auditor's run ID, report entry, and quoted evidence). Omit the Source note entirely only when neither line-numbered citations nor independently required source context applies.
 
 ## Scope and contract
 
