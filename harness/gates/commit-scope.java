@@ -12,6 +12,7 @@ class CommitScope {
         ".gitignore",
         ".env.example",
         "Makefile",
+        "harness/plan.md",
         "frontend/index.html",
         "frontend/package.json",
         "frontend/DEV-GUIDELINES.md",
