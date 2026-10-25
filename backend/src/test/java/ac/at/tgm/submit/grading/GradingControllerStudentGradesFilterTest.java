@@ -57,6 +57,8 @@ class GradingControllerStudentGradesFilterTest {
         var group = objectMapper.createObjectNode();
         group.putArray("studentIds").add(firstMemberId.toString()).add(secondMemberId.toString());
         store.create("project_group", null, projectId.toString(), "ALLOCATED", group);
+        store.create("formal_application", firstMemberId.toString(), projectId.toString(), "APPROVED",
+                objectMapper.createObjectNode());
 
         UUID rubricId = publishRubric();
         recordGrade(rubricId, firstMemberId);

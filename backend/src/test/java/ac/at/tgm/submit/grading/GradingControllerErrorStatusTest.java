@@ -54,6 +54,8 @@ class GradingControllerErrorStatusTest {
         var group = objectMapper.createObjectNode();
         group.putArray("studentIds").add(memberId.toString());
         store.create("project_group", null, projectId.toString(), "ALLOCATED", group);
+        store.create("formal_application", memberId.toString(), projectId.toString(), "APPROVED",
+                objectMapper.createObjectNode());
     }
 
     @Test

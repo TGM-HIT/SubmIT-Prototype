@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import ac.at.tgm.submit.audit.AuditService;
 import ac.at.tgm.submit.data.RecordStore;
 import ac.at.tgm.submit.data.StoredRecord;
+import ac.at.tgm.submit.formal.FormalApprovalGate;
 import ac.at.tgm.submit.security.AuthenticatedUser;
 import ac.at.tgm.submit.security.Role;
 import ac.at.tgm.submit.web.ApiDtos.PageResponse;
@@ -64,6 +65,7 @@ public class ArtifactService {
         requireActiveProject(project);
         projectAccess.requireProjectAccess(caller, projectId);
         mapper.validateUpload(request);
+        FormalApprovalGate.requireApproved(store, projectId);
         ObjectNode payload = mapper.uploadPayload(request);
         StoredRecord artifact = store.create(ARTIFACT, caller.id().toString(), projectId.toString(), PRIVATE, payload);
         audit.record(caller, "ARTIFACT_UPLOADED", ARTIFACT, artifact.getId());
@@ -104,6 +106,7 @@ public class ArtifactService {
         if (APPROVED.equals(artifactStatus(artifact))) {
             throw ArtifactErrors.conflict("Unpublish the artefact before removing it.");
         }
+        FormalApprovalGate.requireApproved(store, projectId);
         audit.record(caller, "ARTIFACT_REMOVED", ARTIFACT, artifactId);
         store.delete(artifact);
     }
@@ -121,6 +124,7 @@ public class ArtifactService {
             requireTeacher(caller);
         }
         String nextStatus = reviewStatus(artifactStatus(artifact), decision);
+        FormalApprovalGate.requireApproved(store, projectId);
         ObjectNode payload = store.parse(artifact);
         payload.put("publicationStatus", nextStatus);
         payload.put("reviewedAt", Instant.now().toString());
@@ -187,6 +191,7 @@ public class ArtifactService {
             throw ArtifactErrors.conflict(
                     "A website archive, poster, and source data artefact are required before completion.");
         }
+        FormalApprovalGate.requireApproved(store, projectId);
         ObjectNode payload = store.parse(project);
         payload.put("completedAt", Instant.now().toString());
         store.update(project, PROJECT_COMPLETED, payload);

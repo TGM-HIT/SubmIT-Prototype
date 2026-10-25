@@ -60,6 +60,7 @@ class GradingWriteAuthorizationApiTest {
         var group = store.object().put("projectId", projectId.toString());
         group.putArray("studentIds").add(studentId.toString());
         store.create("project_group", null, projectId.toString(), "COMPLETED", group);
+        store.create("formal_application", studentId, projectId.toString(), "APPROVED", store.object());
         rubricId = publishRubric("authorization-rubric-" + UUID.randomUUID());
     }
 

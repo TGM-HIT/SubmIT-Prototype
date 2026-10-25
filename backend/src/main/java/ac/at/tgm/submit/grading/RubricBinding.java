@@ -41,16 +41,13 @@ class RubricBinding {
     }
 
     RubricRef bind(AuthenticatedUser caller, UUID projectId, JsonNode request) {
+        RubricRef rubric = validate(projectId, request);
         UUID rubricId = GradingSupport.uuid(GradingSupport.text(request, RUBRIC_ID), RUBRIC_ID);
-        RubricRef rubric = load(rubricId);
         Optional<StoredRecord> latest = store.repository()
                 .findFirstByTypeAndParentIdOrderByCreatedAtDesc(BINDING, projectId.toString());
         String previous = latest.map(record -> store.parse(record).path(RUBRIC_ID).asText()).orElse(null);
         if (rubricId.toString().equals(previous)) {
             return rubric;
-        }
-        if (!rubrics.isEffective(rubric.payload(), LocalDate.now())) {
-            throw GradingSupport.conflict("The rubric version is not effective today.");
         }
         String reason = previous == null ? "Initial binding" : transitionReason(request, previous);
         ObjectNode payload = store.object().put(RUBRIC_ID, rubricId.toString()).put(REASON, reason)
@@ -60,6 +57,23 @@ class RubricBinding {
         }
         StoredRecord record = store.create(BINDING, caller.id().toString(), projectId.toString(), "BOUND", payload);
         audit.record(caller, previous == null ? "RUBRIC_BOUND" : "RUBRIC_VERSION_TRANSITION", BINDING, record.getId());
+        return rubric;
+    }
+
+    RubricRef validate(UUID projectId, JsonNode request) {
+        UUID rubricId = GradingSupport.uuid(GradingSupport.text(request, RUBRIC_ID), RUBRIC_ID);
+        RubricRef rubric = load(rubricId);
+        Optional<StoredRecord> latest = store.repository()
+                .findFirstByTypeAndParentIdOrderByCreatedAtDesc(BINDING, projectId.toString());
+        String previous = latest.map(record -> store.parse(record).path(RUBRIC_ID).asText()).orElse(null);
+        if (!rubricId.toString().equals(previous)) {
+            if (!rubrics.isEffective(rubric.payload(), LocalDate.now())) {
+                throw GradingSupport.conflict("The rubric version is not effective today.");
+            }
+            if (previous != null) {
+                transitionReason(request, previous);
+            }
+        }
         return rubric;
     }
 

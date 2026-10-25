@@ -18,6 +18,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import ac.at.tgm.submit.audit.AuditService;
 import ac.at.tgm.submit.data.RecordStore;
 import ac.at.tgm.submit.data.StoredRecord;
+import ac.at.tgm.submit.formal.FormalApprovalGate;
 import ac.at.tgm.submit.grading.GradeDtos.GradeResponse;
 import ac.at.tgm.submit.grading.GradeDtos.GradeRevisionRequest;
 import ac.at.tgm.submit.grading.GradeDtos.GroupGradeRequest;
@@ -60,9 +61,11 @@ public class GradeService {
         if (!members.contains(studentId)) {
             throw GradingSupport.bad("The student is not a member of this project's group.");
         }
-        RubricRef rubric = binding.bind(caller, projectId, request);
+        RubricRef rubric = binding.validate(projectId, request);
         ObjectNode payload = entries.build(caller, request, SUBJECT_STUDENT, rubric);
         payload.put(STUDENT_ID, studentId);
+        FormalApprovalGate.requireApproved(store, projectId);
+        binding.bind(caller, projectId, request);
         StoredRecord record = store.create(STUDENT_GRADE, studentId, projectId.toString(), ACTIVE, payload);
         audit.record(caller, "STUDENT_GRADE_RECORDED", STUDENT_GRADE, record.getId());
         return entries.withStudentDetails(caller, GradingSupport.viewAs(store, record, GradeResponse.class));
@@ -90,6 +93,7 @@ public class GradeService {
         payload.put(STUDENT_ID, original.getOwnerId());
         payload.put(SUPERSEDES_ID, original.getId().toString());
         payload.put(REASON, reason);
+        FormalApprovalGate.requireApproved(store, projectId);
         StoredRecord revision = store.create(STUDENT_GRADE, original.getOwnerId(), projectId.toString(), ACTIVE, payload);
         originalPayload.put(SUPERSEDED_BY_ID, revision.getId().toString());
         store.update(original, SUPERSEDED, originalPayload);
@@ -120,8 +124,10 @@ public class GradeService {
     public GradeResponse recordGroupGrade(AuthenticatedUser caller, UUID projectId, GroupGradeRequest body) {
         access.requireTeacher(caller, projectId);
         JsonNode request = GradingSupport.toNode(body);
-        RubricRef rubric = binding.bind(caller, projectId, request);
+        RubricRef rubric = binding.validate(projectId, request);
         ObjectNode payload = entries.build(caller, request, SUBJECT_GROUP, rubric);
+        FormalApprovalGate.requireApproved(store, projectId);
+        binding.bind(caller, projectId, request);
         StoredRecord record = store.create(GROUP_GRADE, null, projectId.toString(), ACTIVE, payload);
         audit.record(caller, "GROUP_GRADE_RECORDED", GROUP_GRADE, record.getId());
         return GradingSupport.viewAs(store, record, GradeResponse.class);

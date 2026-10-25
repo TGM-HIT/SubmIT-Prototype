@@ -64,18 +64,33 @@ public class FinalGradeService {
             throw GradingSupport.bad("Provide a 'project' entry and/or a 'students' array.");
         }
         GradingSupport.requireDistinctMembers(studentEntries, members);
-        RubricRef rubric = binding.bind(caller, projectId, request);
+        RubricRef rubric = binding.validate(projectId, request);
+        DecisionPlan[] plans = plans(caller, projectId, rubric, request, studentEntries);
+        GradingSupport.requireProjectWorkApproval(store, projectId);
+        binding.bind(caller, projectId, request);
         ObjectNode result = store.object();
+        int planIndex = 0;
         if (request.has(PROJECT)) {
-            result.set(PROJECT, GradingSupport.view(store,
-                    decide(caller, projectId, rubric, request.path(PROJECT), null)));
+            result.set(PROJECT, GradingSupport.view(store, persist(caller, projectId, plans[planIndex++])));
         }
         ArrayNode students = result.putArray(STUDENTS);
-        for (JsonNode entry : studentEntries) {
-            students.add(GradingSupport.view(store,
-                    decide(caller, projectId, rubric, entry, entry.path(STUDENT_ID).asText())));
+        while (planIndex < plans.length && plans[planIndex] != null) {
+            students.add(GradingSupport.view(store, persist(caller, projectId, plans[planIndex++])));
         }
         return GradingSupport.convert(result, FinalGradesResponse.class);
+    }
+
+    private DecisionPlan[] plans(AuthenticatedUser caller, UUID projectId, RubricRef rubric,
+            JsonNode request, JsonNode studentEntries) {
+        DecisionPlan[] plans = new DecisionPlan[1 + studentEntries.size()];
+        int nextPlan = 0;
+        if (request.has(PROJECT)) {
+            plans[nextPlan++] = plan(caller, projectId, rubric, request.path(PROJECT), null);
+        }
+        for (JsonNode entry : studentEntries) {
+            plans[nextPlan++] = plan(caller, projectId, rubric, entry, entry.path(STUDENT_ID).asText());
+        }
+        return plans;
     }
 
     @Transactional(readOnly = true)
@@ -96,7 +111,7 @@ public class FinalGradeService {
         return history(projectId, studentId.toString());
     }
 
-    private StoredRecord decide(AuthenticatedUser caller, UUID projectId, RubricRef rubric, JsonNode entry,
+    private DecisionPlan plan(AuthenticatedUser caller, UUID projectId, RubricRef rubric, JsonNode entry,
             String studentId) {
         GradingSupport.requireObject(entry);
         ObjectNode considered = inputs.collect(projectId, studentId, rubric.id());
@@ -114,13 +129,20 @@ public class FinalGradeService {
             FinalGradeMethods.rule(payload, entry, rubric, ruleId, considered);
         }
         payload.set(INPUTS, considered);
-        payload.put(DECIDED_BY, caller.id().toString());
-        payload.put(DECIDED_AT, GradingSupport.nowText());
-        String owner = studentId == null ? PROJECT_OWNER : studentId;
+        return new DecisionPlan(studentId == null ? PROJECT_OWNER : studentId, payload);
+    }
+
+    private StoredRecord persist(AuthenticatedUser caller, UUID projectId, DecisionPlan plan) {
+        plan.payload().put(DECIDED_BY, caller.id().toString());
+        plan.payload().put(DECIDED_AT, GradingSupport.nowText());
+        String owner = plan.owner();
         supersedeCurrent(projectId, owner);
-        StoredRecord record = store.create(FINAL_GRADE, owner, projectId.toString(), CURRENT, payload);
+        StoredRecord record = store.create(FINAL_GRADE, owner, projectId.toString(), CURRENT, plan.payload());
         audit.record(caller, "FINAL_GRADE_RECORDED", FINAL_GRADE, record.getId());
         return record;
+    }
+
+    private record DecisionPlan(String owner, ObjectNode payload) {
     }
 
     private void supersedeCurrent(UUID projectId, String owner) {

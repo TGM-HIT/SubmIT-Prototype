@@ -95,6 +95,7 @@ class GradingServiceTest {
         ObjectNode group = store.object();
         group.putArray("studentIds").add(alice.id().toString()).add(bob.id().toString());
         store.create("project_group", null, projectId.toString(), "ALLOCATED", group);
+        store.create("formal_application", alice.id().toString(), projectId.toString(), "APPROVED", store.object());
         login(admin);
         rubricId = rubrics.publish(admin, rubricRequest(UUID.randomUUID().toString())).id();
     }

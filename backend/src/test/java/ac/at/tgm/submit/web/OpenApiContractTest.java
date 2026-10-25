@@ -1483,32 +1483,32 @@ class OpenApiContractTest {
                 put|/api/projects/{projectId}/final-grade|400|project UUID;nonmember;duplicate;undefined;wrong-scope
                 put|/api/projects/{projectId}/final-grade|403|teacher or administrator
                 put|/api/projects/{projectId}/final-grade|404|project or rubric resource
-                put|/api/projects/{projectId}/final-grade|409|configured rule;selected rubric is ineffective;transition lacks a reason
+                put|/api/projects/{projectId}/final-grade|409|formal application is not approved;configured rule;selected rubric is ineffective;transition lacks a reason
                 get|/api/projects/{projectId}/student-grades|400|project UUID;pagination
                 get|/api/projects/{projectId}/student-grades|403|required role or project access
                 get|/api/projects/{projectId}/student-grades|404|project does not exist
                 post|/api/projects/{projectId}/student-grades|400|project UUID;student ID outside the project group;criterion scale
                 post|/api/projects/{projectId}/student-grades|403|role or project access
                 post|/api/projects/{projectId}/student-grades|404|project or requested rubric resource
-                post|/api/projects/{projectId}/student-grades|409|rubric version differs;bound version
+                post|/api/projects/{projectId}/student-grades|409|formal application is not approved;rubric version differs;bound version
                 post|/api/projects/{projectId}/student-grades/{gradeId}/revisions|400|project UUID;grade UUID;revision request
                 post|/api/projects/{projectId}/student-grades/{gradeId}/revisions|403|teacher or administrator
                 post|/api/projects/{projectId}/student-grades/{gradeId}/revisions|404|project or source grade
-                post|/api/projects/{projectId}/student-grades/{gradeId}/revisions|409|source grade;superseded
+                post|/api/projects/{projectId}/student-grades/{gradeId}/revisions|409|formal application is not approved;source grade;superseded
                 get|/api/projects/{projectId}/metrics|400|project UUID;pagination
                 get|/api/projects/{projectId}/metrics|403|required role or project access
                 get|/api/projects/{projectId}/metrics|404|project does not exist
                 post|/api/projects/{projectId}/metrics|400|project UUID;undefined metric ID;invalid input
                 post|/api/projects/{projectId}/metrics|403|required role or project access
                 post|/api/projects/{projectId}/metrics|404|project or rubric resource
-                post|/api/projects/{projectId}/metrics|409|rubric binding is ineffective;transition;required reason
+                post|/api/projects/{projectId}/metrics|409|formal application is not approved;rubric binding is ineffective;transition;required reason
                 get|/api/projects/{projectId}/group-grades|400|project UUID;pagination
                 get|/api/projects/{projectId}/group-grades|403|required role or project access
                 get|/api/projects/{projectId}/group-grades|404|project does not exist
                 post|/api/projects/{projectId}/group-grades|400|project UUID;group-grade request
                 post|/api/projects/{projectId}/group-grades|403|required role or project access
                 post|/api/projects/{projectId}/group-grades|404|project, group, or requested rubric
-                post|/api/projects/{projectId}/group-grades|409|rubric binding is ineffective;transition;required reason
+                post|/api/projects/{projectId}/group-grades|409|formal application is not approved;rubric binding is ineffective;transition;required reason
                 get|/api/formal-applications/eligible-projects|403|student role required
                 get|/api/projects/{projectId}/formal-applications|400|project ID;UUID
                 get|/api/projects/{projectId}/formal-applications|403|role or project access
@@ -1520,14 +1520,14 @@ class OpenApiContractTest {
                 post|/api/projects/{projectId}/complete|400|project ID;UUID
                 post|/api/projects/{projectId}/complete|403|authorized to complete this project
                 post|/api/projects/{projectId}/complete|404|project does not exist
-                post|/api/projects/{projectId}/complete|409|completion prerequisites are unmet;project lifecycle state
+                post|/api/projects/{projectId}/complete|409|formal application is not approved;completion prerequisites are unmet;project lifecycle state
                 get|/api/projects/{projectId}/artifacts|400|project UUID;pagination
                 get|/api/projects/{projectId}/artifacts|403|role or project access;list artifacts
                 get|/api/projects/{projectId}/artifacts|404|project does not exist
                 post|/api/projects/{projectId}/artifacts|400|project UUID;artifact metadata;content
                 post|/api/projects/{projectId}/artifacts|403|authorized to upload an artifact
                 post|/api/projects/{projectId}/artifacts|404|project does not exist
-                post|/api/projects/{projectId}/artifacts|409|lifecycle state;artifact upload
+                post|/api/projects/{projectId}/artifacts|409|formal application is not approved;lifecycle state;artifact upload
                 get|/api/ideas/{id}|400|idea ID;UUID
                 get|/api/ideas/{id}|403|not permitted to view this idea
                 get|/api/ideas/{id}|404|idea does not exist
@@ -1625,7 +1625,7 @@ class OpenApiContractTest {
                 post|/api/artifacts/{artifactId}/publication-review|400|artifact ID;publication review
                 post|/api/artifacts/{artifactId}/publication-review|403|role required to review publication
                 post|/api/artifacts/{artifactId}/publication-review|404|artifact does not exist
-                post|/api/artifacts/{artifactId}/publication-review|409|publication or lifecycle state
+                post|/api/artifacts/{artifactId}/publication-review|409|formal application is not approved;publication or lifecycle state
                 get|/api/application-periods|400|pagination query parameter
                 post|/api/application-periods|400|period configuration;catalogue
                 post|/api/application-periods|403|role required to create application periods
@@ -1690,7 +1690,7 @@ class OpenApiContractTest {
                 delete|/api/artifacts/{artifactId}|400|artifact ID;UUID
                 delete|/api/artifacts/{artifactId}|403|role or project access;delete this artifact
                 delete|/api/artifacts/{artifactId}|404|artifact does not exist
-                delete|/api/artifacts/{artifactId}|409|artifact's lifecycle state;deletion
+                delete|/api/artifacts/{artifactId}|409|formal application is not approved;artifact's lifecycle state;deletion
                 get|/api/artifacts/{artifactId}/content|400|artifact ID;UUID
                 get|/api/artifacts/{artifactId}/content|403|project access;download this artifact
                 get|/api/artifacts/{artifactId}/content|404|artifact or its project;empty body
@@ -1738,8 +1738,8 @@ class OpenApiContractTest {
                 baselineError("put", "/api/projects/{projectId}/final-grade", "403",
                         "Caller is not a teacher or administrator."),
                 baselineError("put", "/api/projects/{projectId}/final-grade", "409",
-                        "A configured rule lacks required inputs, the selected rubric is ineffective, or a "
-                                + "rubric-binding transition lacks a reason."),
+                        "The formal application is not approved. A configured rule lacks required inputs, the "
+                                + "selected rubric is ineffective, or a rubric-binding transition lacks a reason."),
                 baselineError("put", "/api/ideas/{id}/supervisor", "409",
                         "The selected teacher has a recorded preference of NOT_WILLING_TO_SUPERVISE or "
                                 + "NOT_AVAILABLE and acknowledgeRefusal is omitted or false."),
@@ -1773,9 +1773,11 @@ class OpenApiContractTest {
                 baselineError("post", "/api/projects/{projectId}/student-grades", "403",
                         "Caller lacks the required role or project access."),
                 baselineError("post", "/api/projects/{projectId}/student-grades", "409",
-                        "Rubric version differs from the project's bound version."),
+                        "The formal application is not approved. Rubric version differs from the project's "
+                                + "bound version."),
                 baselineError("post", "/api/projects/{projectId}/student-grades/{gradeId}/revisions", "409",
-                        "The source grade has already been superseded."),
+                        "The project's formal application is not approved, or the source grade has already been "
+                                + "superseded."),
                 baselineError("get", "/api/projects/{projectId}/metrics", "403",
                         "Caller lacks the required role or project access."),
                 baselineError("post", "/api/projects/{projectId}/metrics", "403",

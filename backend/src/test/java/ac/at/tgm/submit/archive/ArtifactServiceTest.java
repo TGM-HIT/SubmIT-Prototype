@@ -122,6 +122,7 @@ class ArtifactServiceTest {
 
     private UUID createProject(String status) {
         StoredRecord project = store.create("project", null, null, status, store.object().put("title", "Demo"));
+        store.create("formal_application", null, project.getId().toString(), "APPROVED", store.object());
         return project.getId();
     }
 

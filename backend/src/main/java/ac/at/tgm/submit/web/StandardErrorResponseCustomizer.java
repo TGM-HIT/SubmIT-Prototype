@@ -38,6 +38,8 @@ public class StandardErrorResponseCustomizer implements OpenApiCustomizer {
     private static final String USER_STUDENT_DETAILS = "/api/users/{id}/student-details";
     private static final String PROJECT_FINAL_GRADE = "/api/projects/{projectId}/final-grade";
     private static final String PROJECT_STUDENT_GRADES = "/api/projects/{projectId}/student-grades";
+    private static final String PROJECT_METRICS = "/api/projects/{projectId}/metrics";
+    private static final String FORMAL_APPROVAL_REQUIRED = "The formal application is not approved";
     private static final String ALLOCATION_PIN_ROUTE =
             "/api/application-periods/{periodId}/allocation-pins/{studentId}";
     private static final String PROJECT_FORMAL_APPLICATIONS = "/api/projects/{projectId}/formal-applications";
@@ -64,7 +66,8 @@ public class StandardErrorResponseCustomizer implements OpenApiCustomizer {
                             + "outside the project group or a grade outside the criterion scale.")),
             Map.entry(new Route(POST, "/api/projects/{projectId}/student-grades/{gradeId}/revisions"),
                     Map.of(NOT_FOUND, "The project or source grade does not exist.",
-                            CONFLICT, "The source grade has already been superseded.")),
+                            CONFLICT, "The project's formal application is not approved, or the source grade has "
+                                    + "already been superseded.")),
             Map.entry(new Route(PUT, ALLOCATION_PIN_ROUTE),
                     Map.of(NOT_FOUND, "Period or student not found.")),
             Map.entry(new Route(PUT, "/api/ideas/{id}/supervisor"),
@@ -84,7 +87,7 @@ public class StandardErrorResponseCustomizer implements OpenApiCustomizer {
                     Map.of(BAD_REQUEST, "The period UUID or submitted project preferences are invalid, including "
                             + "project IDs outside the period catalogue.",
                             NOT_FOUND, PERIOD_NOT_FOUND)),
-            Map.entry(new Route(POST, "/api/projects/{projectId}/metrics"),
+            Map.entry(new Route(POST, PROJECT_METRICS),
                     Map.of(BAD_REQUEST, "The project UUID or metric observation is invalid; an undefined metric ID "
                             + "is rejected as invalid input.",
                             NOT_FOUND, PROJECT_OR_RUBRIC_NOT_FOUND)),
@@ -100,8 +103,8 @@ public class StandardErrorResponseCustomizer implements OpenApiCustomizer {
                             NOT_FOUND, PERIOD_NOT_FOUND)),
             Map.entry(new Route(POST, "/api/projects/{projectId}/complete"),
                     Map.of(BAD_REQUEST, PROJECT_ID_INVALID,
-                            CONFLICT, "Required completion prerequisites are unmet or the project lifecycle state "
-                                    + "does not permit completion.")),
+                            CONFLICT, "The formal application is not approved, required completion prerequisites "
+                                    + "are unmet, or the project lifecycle state does not permit completion.")),
             Map.entry(new Route(POST, PROJECT_FORMAL_APPLICATIONS),
                     Map.of(CONFLICT, "The allocated project group is missing or invalid, or the application "
                             + "lifecycle state conflicts with creation.")),
@@ -110,6 +113,22 @@ public class StandardErrorResponseCustomizer implements OpenApiCustomizer {
             Map.entry(new Route(GET, "/api/public/projects/{projectId}/archive"),
                     Map.of(NOT_FOUND, "The project does not exist or is not completed.")));
     private static final Map<Route, Map<String, String>> REQUIRED_MERGES = Map.ofEntries(
+            Map.entry(new Route(PUT, PROJECT_FINAL_GRADE),
+                    Map.of(CONFLICT, FORMAL_APPROVAL_REQUIRED)),
+            Map.entry(new Route(POST, PROJECT_STUDENT_GRADES),
+                    Map.of(CONFLICT, FORMAL_APPROVAL_REQUIRED)),
+            Map.entry(new Route(POST, PROJECT_METRICS),
+                    Map.of(CONFLICT, FORMAL_APPROVAL_REQUIRED)),
+            Map.entry(new Route(POST, "/api/projects/{projectId}/group-grades"),
+                    Map.of(CONFLICT, FORMAL_APPROVAL_REQUIRED)),
+            Map.entry(new Route(POST, "/api/projects/{projectId}/complete"),
+                    Map.of(CONFLICT, FORMAL_APPROVAL_REQUIRED)),
+            Map.entry(new Route(POST, "/api/projects/{projectId}/artifacts"),
+                    Map.of(CONFLICT, FORMAL_APPROVAL_REQUIRED)),
+            Map.entry(new Route(DELETE, "/api/artifacts/{artifactId}"),
+                    Map.of(CONFLICT, FORMAL_APPROVAL_REQUIRED)),
+            Map.entry(new Route(POST, "/api/artifacts/{artifactId}/publication-review"),
+                    Map.of(CONFLICT, FORMAL_APPROVAL_REQUIRED)),
             Map.entry(new Route(PUT, ALLOCATION_PIN_ROUTE),
                     Map.of(BAD_REQUEST, "The period or student path UUID is invalid.")),
             Map.entry(new Route(PUT, APPLICATION_PERIOD_ID),
@@ -254,11 +273,11 @@ public class StandardErrorResponseCustomizer implements OpenApiCustomizer {
                 FORBIDDEN, TEACHER_OR_ADMIN,
                 NOT_FOUND, "The project or source grade does not exist.",
                 CONFLICT, "The source grade has already been superseded.");
-        add(result, GET, "/api/projects/{projectId}/metrics",
+        add(result, GET, PROJECT_METRICS,
                 BAD_REQUEST, PROJECT_UUID_AND_PAGE_INVALID,
                 FORBIDDEN, "The caller lacks the required role or project access to view metrics.",
                 NOT_FOUND, PROJECT_NOT_FOUND);
-        add(result, POST, "/api/projects/{projectId}/metrics",
+        add(result, POST, PROJECT_METRICS,
                 BAD_REQUEST, "The project UUID or metric observation is invalid; an undefined metric ID is rejected as invalid input.",
                 FORBIDDEN, TEACHER_OR_ADMIN,
                 NOT_FOUND, PROJECT_OR_RUBRIC_NOT_FOUND,

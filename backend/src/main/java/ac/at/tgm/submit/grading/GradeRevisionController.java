@@ -33,7 +33,11 @@ public class GradeRevisionController {
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Record a correction or reassessment; the prior entry is retained as superseded.")
-    @ApiResponse(responseCode = "409", description = "The entry has already been superseded.")
+    @ApiResponse(responseCode = "409", description = "The project formal application is not approved. The entry "
+            + "has already been superseded.",
+            content = @io.swagger.v3.oas.annotations.media.Content(
+                    schema = @io.swagger.v3.oas.annotations.media.Schema(
+                            implementation = ac.at.tgm.submit.web.ApiDtos.ApiErrorResponse.class)))
     public GradeResponse reviseStudentGrade(@AuthenticationPrincipal AuthenticatedUser caller,
             @Parameter(description = PROJECT_DESCRIPTION) @PathVariable UUID projectId,
             @Parameter(description = "Grade entry to revise.") @PathVariable UUID gradeId,

@@ -38,7 +38,9 @@ public final class GradingApiResponses {
             @ApiResponse(responseCode = "400", description = "Grade outside the criterion scale or invalid input."),
             @ApiResponse(responseCode = "403", description = "Caller lacks the required role or project access."),
             @ApiResponse(responseCode = "409",
-                    description = "Rubric version differs from the project's bound version.")
+                    description = "The formal application is not approved. Rubric version differs from the "
+                            + "project's bound version.",
+                    content = @Content(schema = @Schema(implementation = ac.at.tgm.submit.web.ApiDtos.ApiErrorResponse.class)))
     })
     public @interface RecordStudentGrade {
     }

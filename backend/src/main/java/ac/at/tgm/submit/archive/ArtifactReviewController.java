@@ -28,12 +28,14 @@ public class ArtifactReviewController {
     @DeleteMapping
     @ResponseStatus(HttpStatus.NO_CONTENT)
     @Operation(summary = "Remove an artefact before project completion.")
+    @ArtifactApiResponses.Delete
     public void delete(@AuthenticationPrincipal AuthenticatedUser caller, @PathVariable UUID artifactId) {
         service.delete(caller, artifactId);
     }
 
     @PostMapping("/publication-review")
     @Operation(summary = "Submit an artefact for publication review or record a teacher decision.")
+    @ArtifactApiResponses.PublicationReview
     public ArtifactResponse review(@AuthenticationPrincipal AuthenticatedUser caller,
             @PathVariable UUID artifactId, @Valid @RequestBody PublicationReviewRequest request) {
         return service.review(caller, artifactId, request);

@@ -48,6 +48,12 @@ public class GroupGradeController {
     @ResponseStatus(HttpStatus.CREATED)
     @Operation(summary = "Record a teacher's assessment for a group-level rubric criterion.")
     @GradingApiResponses.ForbiddenWithoutSchema
+    @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409",
+            description = "The formal application is not approved, the rubric binding is ineffective, "
+                    + "or a version transition lacks a required reason.",
+            content = @io.swagger.v3.oas.annotations.media.Content(schema =
+                    @io.swagger.v3.oas.annotations.media.Schema(
+                            implementation = ac.at.tgm.submit.web.ApiDtos.ApiErrorResponse.class)))
     public GradeResponse recordGroupGrade(@AuthenticationPrincipal AuthenticatedUser caller,
             @Parameter(description = PROJECT_DESCRIPTION) @PathVariable UUID projectId,
             @Valid @RequestBody GroupGradeRequest request) {

@@ -305,6 +305,7 @@ class AuditApiTest {
         String projectTitle = "Stored project completion " + UUID.randomUUID();
         StoredRecord project = store.create("project", null, null, "IN_PROGRESS",
                 store.object().put("title", projectTitle));
+        store.create("formal_application", null, project.getId().toString(), "APPROVED", store.object());
         for (ArtifactType type : ArtifactType.values()) {
             MvcResult uploadResult = mockMvc.perform(multipart("/api/projects/{projectId}/artifacts",
                                     project.getId())

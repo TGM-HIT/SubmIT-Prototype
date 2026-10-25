@@ -16,6 +16,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import ac.at.tgm.submit.data.RecordStore;
 import ac.at.tgm.submit.data.StoredRecord;
+import ac.at.tgm.submit.formal.FormalApprovalGate;
 import ac.at.tgm.submit.web.ApiDtos.PageResponse;
 import ac.at.tgm.submit.web.ApiException;
 import java.math.BigDecimal;
@@ -47,6 +48,10 @@ final class GradingSupport {
 
     static ApiException conflict(String message) {
         return new ApiException(HttpStatus.CONFLICT, message);
+    }
+
+    static void requireProjectWorkApproval(RecordStore store, UUID projectId) {
+        FormalApprovalGate.requireApproved(store, projectId);
     }
 
     static JsonNode requireObject(JsonNode request) {
