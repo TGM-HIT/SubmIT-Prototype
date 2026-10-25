@@ -102,7 +102,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-45](tickets/done/Dev-45.md) | done | Use the ticket template's exact section headings in ticket files |
 | [Dev-46](tickets/done/Dev-46.md) | done | Align the Compliance ledger introduction with the Auditor follow-up prefixes |
 | [Dev-47](tickets/done/Dev-47.md) | done | Retire the spent Dev-23 ledger-edit exception from the Implementor role |
-| [Dev-48](tickets/Dev-48.md) | to-do | Remove role summaries from agent wrappers |
+| [Dev-48](tickets/done/Dev-48.md) | done | Remove role summaries from agent wrappers |
 | [Dev-49](tickets/Dev-49.md) | to-do | Add model guidance for the Harness Archiver |
 | [Dev-50](tickets/Dev-50.md) | to-do | Resolve preflight against scoped audit exclusions |
 | [Dev-51](tickets/Dev-51.md) | to-do | Add automated checks for controller-to-service boundaries |
