@@ -20,6 +20,7 @@ import ac.at.tgm.submit.grading.RubricDtos.MetricDefinitionDto;
 import ac.at.tgm.submit.grading.RubricDtos.PublishRubricRequest;
 import ac.at.tgm.submit.grading.RubricDtos.ScaleDto;
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
@@ -171,6 +172,103 @@ class ProjectWorkApprovalApiTest {
         UUID artifactId = UUID.fromString(createdId(artifactUpload(project, teacher)));
         String payload = store.repository().findById(artifactId).orElseThrow().getPayload();
         assertEquals("POSTER", mapper.readTree(payload).path("type").asText());
+    }
+
+    @Test
+    void artifactPublicationReviewsPersistNotesAndAllFiveOperationsEmitAuthorizedAuditEvents() throws Exception {
+        UUID project = project("IN_PROGRESS");
+        approveFormalApplicationThroughTeacherReview(project);
+
+        UUID approved = uploadArtifact(project);
+        reviewArtifact(approved, "SUBMIT", null).andExpect(status().isOk());
+        JsonNode approvedResponse = mapper.readTree(reviewArtifact(approved, "APPROVE", "  Approved with care.  ")
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray());
+        assertReviewMetadata(approved, approvedResponse, "Approved with care.");
+
+        UUID rejected = uploadArtifact(project);
+        reviewArtifact(rejected, "SUBMIT", null).andExpect(status().isOk());
+        JsonNode rejectedResponse = mapper.readTree(reviewArtifact(rejected, "REJECT", "  Please improve the source.  ")
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray());
+        assertReviewMetadata(rejected, rejectedResponse, "Please improve the source.");
+
+        UUID blankNote = uploadArtifact(project);
+        reviewArtifact(blankNote, "SUBMIT", null).andExpect(status().isOk());
+        JsonNode blankResponse = mapper.readTree(reviewArtifact(blankNote, "APPROVE", "   ")
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray());
+        assertNoRetainedReviewNote(blankNote, blankResponse);
+
+        UUID omittedNote = uploadArtifact(project);
+        reviewArtifact(omittedNote, "SUBMIT", null).andExpect(status().isOk());
+        JsonNode omittedResponse = mapper.readTree(reviewArtifact(omittedNote, "REJECT", null)
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray());
+        assertNoRetainedReviewNote(omittedNote, omittedResponse);
+
+        UUID unpublished = uploadArtifact(project);
+        reviewArtifact(unpublished, "SUBMIT", null).andExpect(status().isOk());
+        reviewArtifact(unpublished, "APPROVE", "Visible").andExpect(status().isOk());
+        reviewArtifact(unpublished, "UNPUBLISH", null).andExpect(status().isOk());
+
+        UUID removed = uploadArtifact(project);
+        mvc.perform(bearer(delete("/api/artifacts/{id}", removed), teacher))
+                .andExpect(status().isNoContent());
+
+        assertArtifactAuditEvent(approved, "ARTIFACT_UPLOADED");
+        assertArtifactAuditEvent(approved, "ARTIFACT_PUBLICATION_APPROVE");
+        assertArtifactAuditEvent(rejected, "ARTIFACT_PUBLICATION_REJECT");
+        assertArtifactAuditEvent(unpublished, "ARTIFACT_PUBLICATION_UNPUBLISH");
+        assertArtifactAuditEvent(removed, "ARTIFACT_REMOVED");
+    }
+
+    private UUID uploadArtifact(UUID project) throws Exception {
+        JsonNode response = mapper.readTree(artifactUpload(project, teacher).andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsByteArray());
+        return UUID.fromString(response.path("id").asText());
+    }
+
+    private org.springframework.test.web.servlet.ResultActions reviewArtifact(
+            UUID artifactId, String decision, String note) throws Exception {
+        Map<String, String> request = note == null
+                ? Map.of("decision", decision)
+                : Map.of("decision", decision, "note", note);
+        return request(post("/api/artifacts/{id}/publication-review", artifactId), teacher, request);
+    }
+
+    private void assertReviewMetadata(UUID artifactId, JsonNode response, String note) throws Exception {
+        assertText(response, "reviewNote", note);
+        assertTrue(response.has("reviewedAt") && response.path("reviewedAt").isTextual());
+        Instant.parse(response.path("reviewedAt").textValue());
+        JsonNode persisted = mapper.readTree(store.repository().findById(artifactId).orElseThrow().getPayload());
+        assertText(persisted, "reviewNote", note);
+        assertTrue(persisted.has("reviewedAt") && persisted.path("reviewedAt").isTextual());
+        assertEquals(response.path("reviewedAt").textValue(), persisted.path("reviewedAt").textValue());
+    }
+
+    private void assertNoRetainedReviewNote(UUID artifactId, JsonNode response) throws Exception {
+        JsonNode persisted = mapper.readTree(store.repository().findById(artifactId).orElseThrow().getPayload());
+        for (JsonNode artifact : List.of(response, persisted)) {
+            JsonNode note = artifact.get("reviewNote");
+            assertTrue(note == null || note.isNull() || (note.isTextual() && note.textValue().isBlank()),
+                    "Blank or omitted review notes must not be retained.");
+            assertTrue(artifact.has("reviewedAt") && artifact.path("reviewedAt").isTextual());
+            Instant.parse(artifact.path("reviewedAt").textValue());
+        }
+    }
+
+    private void assertArtifactAuditEvent(UUID artifactId, String action) throws Exception {
+        JsonNode page = read(get("/api/audit/artifact/{id}", artifactId), teacher);
+        JsonNode event = null;
+        for (JsonNode candidate : page.path("content")) {
+            if (action.equals(candidate.path("action").asText())
+                    && artifactId.toString().equals(candidate.path("entityId").asText())) {
+                event = candidate;
+                break;
+            }
+        }
+        assertTrue(event != null, "Missing HTTP audit event " + action + " for artifact " + artifactId);
+        assertText(event, "entityType", "artifact");
+        assertText(event, "entityId", artifactId.toString());
+        assertText(event, "actorId", teacherId);
+        assertText(event, "actorUsername", "teacher01");
     }
 
     @Test

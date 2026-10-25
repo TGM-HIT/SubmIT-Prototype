@@ -13,6 +13,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import ac.at.tgm.submit.data.StoredRecord;
+import ac.at.tgm.submit.data.StoredRecordRepository;
 import ac.at.tgm.submit.security.AuthenticatedUser;
 import ac.at.tgm.submit.security.JwtService;
 import ac.at.tgm.submit.security.Role;
@@ -37,6 +39,7 @@ class StudentDetailsControllerTest {
     @Autowired private StudentClassRepository classes;
     @Autowired private ElectiveSubjectRepository subjects;
     @Autowired private JwtService jwt;
+    @Autowired private StoredRecordRepository records;
 
     private UserAccount admin;
     private UserAccount teacher;
@@ -333,6 +336,7 @@ class StudentDetailsControllerTest {
         mvc.perform(patch("/api/users/{id}/role", teacher.getId()).header("Authorization", bearer(admin))
                         .contentType(MediaType.APPLICATION_JSON).content("{\"role\":\"STUDENT\"}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.role").value("STUDENT"));
+        assertNoAutomaticEnrollment(teacher.getId());
         assertEquals("No class / unassigned", getJson("/api/users/" + teacher.getId() + "/student-details", admin)
                 .path("className").asText());
         var assignedClass = classes.save(new StudentClassEntity(UUID.randomUUID(), "Assigned"));
@@ -340,6 +344,23 @@ class StudentDetailsControllerTest {
                         .contentType(MediaType.APPLICATION_JSON).content("{\"classId\":\"" + assignedClass.getId()
                                 + "\",\"electiveSubjectIds\":[]}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.classId").value(assignedClass.getId().toString()));
+    }
+
+    private void assertNoAutomaticEnrollment(UUID studentId) {
+        String id = studentId.toString();
+        List<StoredRecord> allRecords = records.findAll();
+        assertFalse(allRecords.stream()
+                        .anyMatch(record -> "student_application".equals(record.getType())
+                                && id.equals(record.getOwnerId())),
+                "Changing a teacher to STUDENT must not create a solo application.");
+        assertFalse(allRecords.stream()
+                        .anyMatch(record -> "project_group".equals(record.getType())
+                                && record.getPayload().contains(id)),
+                "Changing a teacher to STUDENT must not add the account to a group.");
+        assertFalse(allRecords.stream()
+                        .anyMatch(record -> "allocation_assignment".equals(record.getType())
+                                && (id.equals(record.getOwnerId()) || record.getPayload().contains(id))),
+                "Changing a teacher to STUDENT must not create an allocation assignment.");
         assertEquals(Role.STUDENT, users.findById(teacher.getId()).orElseThrow().getRole());
     }
 

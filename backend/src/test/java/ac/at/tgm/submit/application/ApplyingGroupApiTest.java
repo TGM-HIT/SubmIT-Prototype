@@ -674,17 +674,41 @@ class ApplyingGroupApiTest {
             change(member, lastInbox, "INVITE", revision(lastInbox), Map.of("studentId", student(1)), 200);
         }
         var first = perform(get(path()), tokens.get(1), null, 200);
+        assertEquals(0, integer(first, "page"));
+        assertEquals(20, integer(first, "size"));
         assertEquals(20, array(first, "content").size());
         assertEquals(2, integer(first, "totalPages"));
         assertEquals(22, integer(first, "totalElements"));
         var later = perform(get(path()).param("page", "1"), tokens.get(1), null, 200);
+        assertEquals(20, integer(later, "size"));
+        assertEquals(1, integer(later, "page"));
         String last = lastInbox;
         assertTrue(java.util.stream.StreamSupport.stream(array(later, "content").spliterator(), false)
                 .anyMatch(group -> text(group, "id").equals(last)));
+        var oversizedGroups = perform(get(path()).param("size", "101"), tokens.get(1), null, 200);
+        assertEquals(0, integer(oversizedGroups, "page"));
+        assertEquals(100, integer(oversizedGroups, "size"));
+        assertEquals(22, array(oversizedGroups, "content").size());
+        assertEquals(22, integer(oversizedGroups, "totalElements"));
+
+        var firstInvitations = perform(get(path() + "/" + creatorGroup + "/invitations"),
+                tokens.get(1), null, 200);
+        assertEquals(0, integer(firstInvitations, "page"));
+        assertEquals(20, integer(firstInvitations, "size"));
+        assertEquals(20, array(firstInvitations, "content").size());
+        assertEquals(21, integer(firstInvitations, "totalElements"));
         var invitations = perform(get(path() + "/" + creatorGroup + "/invitations").param("page", "1"),
                 tokens.get(1), null, 200);
+        assertEquals(20, integer(invitations, "size"));
+        assertEquals(1, integer(invitations, "page"));
         assertEquals(1, array(invitations, "content").size());
         assertEquals(student(22), text(array(invitations, "content").get(0), "studentId"));
+        var oversizedInvitations = perform(get(path() + "/" + creatorGroup + "/invitations").param("size", "101"),
+                tokens.get(1), null, 200);
+        assertEquals(0, integer(oversizedInvitations, "page"));
+        assertEquals(100, integer(oversizedInvitations, "size"));
+        assertEquals(21, array(oversizedInvitations, "content").size());
+        assertEquals(21, integer(oversizedInvitations, "totalElements"));
         var staff = perform(get(path()).param("page", "1"), teacher, null, 200);
         assertEquals(2, array(staff, "content").size());
         assertEquals(22, integer(staff, "totalElements"));

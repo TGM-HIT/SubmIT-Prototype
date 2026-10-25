@@ -23,7 +23,11 @@ import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.MethodOrderer;
+import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.TestMethodOrder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.context.TestConfiguration;
@@ -40,6 +44,7 @@ import org.springframework.test.web.servlet.MvcResult;
 @ActiveProfiles("testing")
 @AutoConfigureMockMvc
 @Import(ApplicationPeriodLifecycleApiTest.TestClockConfiguration.class)
+@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class ApplicationPeriodLifecycleApiTest {
     private static final Instant OPENS_AT = Instant.parse("2026-10-22T12:00:00Z");
     private static final Instant CLOSES_AT = Instant.parse("2026-10-22T13:00:00Z");
@@ -58,9 +63,11 @@ class ApplicationPeriodLifecycleApiTest {
     private String student02;
     private String student04;
     private String admin;
+    private boolean soloMutationScenario;
 
     @BeforeEach
     void setUp() throws Exception {
+        soloMutationScenario = false;
         clock.set(OPENS_AT.minusNanos(1));
         student01 = login("student01");
         student02 = login("student02");
@@ -79,7 +86,16 @@ class ApplicationPeriodLifecycleApiTest {
         periodId = store.create("application_period", null, null, "DRAFT", period.node()).getId();
     }
 
+    @AfterEach
+    void preventSoloMutationFixtureFromBecomingDueInAnotherTest() {
+        if (soloMutationScenario) {
+            StoredRecord period = store.repository().findById(periodId).orElseThrow();
+            store.update(period, "ALLOCATED", store.parse(period));
+        }
+    }
+
     @Test
+    @Order(1)
     void configuredOpeningAndClosingBoundariesControlPublicHttpBehavior() throws Exception {
         JsonNode before = getJson("/api/application-periods/" + periodId, student01);
         assertEquals("DRAFT", before.path("status").asText());
@@ -202,6 +218,54 @@ class ApplicationPeriodLifecycleApiTest {
         assertFalse(findPeriod(getJson("/api/application-periods?size=100", student01)).has("projectTitles"));
         mockMvc.perform(get(cataloguePath()).header("Authorization", bearer(student01)))
                 .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @Order(2)
+    void soloApplicationMutationsRejectExpiredAndNonOpenPeriodsWithoutPersistedChanges() throws Exception {
+        soloMutationScenario = true;
+        clock.set(OPENS_AT);
+        MvcResult created = mockMvc.perform(post(applicationPath()).header("Authorization", bearer(student01))
+                        .contentType(MediaType.APPLICATION_JSON).content(applicationRequest()))
+                .andExpect(status().isCreated()).andReturn();
+        UUID soloId = UUID.fromString(mapper.readTree(created.getResponse().getContentAsString())
+                .path("id").asText());
+
+        clock.set(CLOSES_AT.plusNanos(1));
+        List<String> beforeExpired = soloMutationSnapshot();
+        rejectSoloMutations(student02, soloId);
+        assertEquals(beforeExpired, soloMutationSnapshot(),
+                "Expired-period rejections must not create applications or alter application, revision, or audit data.");
+
+        clock.set(OPENS_AT.minusNanos(1));
+        StoredRecord period = store.repository().findById(periodId).orElseThrow();
+        store.update(period, "DRAFT", store.parse(period));
+        List<String> beforeNotOpen = soloMutationSnapshot();
+        rejectSoloMutations(student04, soloId);
+        assertEquals(beforeNotOpen, soloMutationSnapshot(),
+                "Non-OPEN-period rejections must not create applications or alter application, revision, or audit data.");
+    }
+
+    private void rejectSoloMutations(String token, UUID application) throws Exception {
+        mockMvc.perform(post(applicationPath()).header("Authorization", bearer(token))
+                        .contentType(MediaType.APPLICATION_JSON).content(applicationRequest()))
+                .andExpect(status().isConflict());
+        mockMvc.perform(put("/api/applications/{id}", application).header("Authorization", bearer(student01))
+                        .contentType(MediaType.APPLICATION_JSON).content(applicationRequest()))
+                .andExpect(status().isConflict());
+        mockMvc.perform(delete("/api/applications/{id}", application)
+                        .header("Authorization", bearer(student01)))
+                .andExpect(status().isConflict());
+    }
+
+    private List<String> soloMutationSnapshot() {
+        return store.repository().findAll().stream()
+                .filter(record -> List.of("student_application", "student_application_revision", "audit")
+                        .contains(record.getType()))
+                .map(record -> record.getType() + "|" + record.getId() + "|" + record.getOwnerId() + "|"
+                        + record.getParentId() + "|" + record.getStatus() + "|" + record.getPayload())
+                .sorted()
+                .toList();
     }
 
     private JsonNode findPeriod(JsonNode page) {

@@ -6,6 +6,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -424,6 +425,49 @@ class IdeaReviewControllerTest {
         review(revisionIdea, Map.of("decision", "DECLINE", "feedback", "Not allowed for students."),
                 studentToken)
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void ideaAndSpecificationDecisionsRejectWrongLifecycleStagesWithoutPersistedChanges() throws Exception {
+        String ideaId = submitIdea("Lifecycle decision boundaries");
+        review(ideaId, Map.of("decision", "APPROVE_FOR_SPECIFICATION", "feedback", "Proceed."),
+                teacherToken).andExpect(status().isCreated());
+        assertEquals("IDEA_APPROVED_FOR_SPECIFICATION", store.repository()
+                .findById(UUID.fromString(ideaId)).orElseThrow().getStatus());
+
+        List<String> beforeIdeaDecision = decisionState(ideaId);
+        review(ideaId, Map.of("decision", "DECLINE", "feedback", "Wrong stage."),
+                teacherToken).andExpect(status().isConflict());
+        assertEquals(beforeIdeaDecision, decisionState(ideaId),
+                "An idea decision outside IDEA_SUBMITTED must not change the idea, reviews, or audit history.");
+
+        List<String> beforeSpecificationDecision = decisionState(ideaId);
+        mockMvc.perform(post("/api/ideas/{id}/specification/reviews", ideaId)
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(
+                                specificationReviewRequest("ACCEPT_FOR_APPLICATIONS", "Not submitted."))))
+                .andExpect(status().isConflict());
+        assertEquals(beforeSpecificationDecision, decisionState(ideaId),
+                "Acceptance without a submitted full specification must preserve idea and review history.");
+        getIdea(ideaId, teacherToken).andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("IDEA_APPROVED_FOR_SPECIFICATION"))
+                .andExpect(jsonPath("$.specification").doesNotExist())
+                .andExpect(jsonPath("$.reviews.length()").value(1));
+    }
+
+    private List<String> decisionState(String ideaId) {
+        UUID id = UUID.fromString(ideaId);
+        List<String> state = new java.util.ArrayList<>();
+        store.repository().findById(id).ifPresent(record -> state.add("idea|" + record.getStatus()
+                + "|" + record.getPayload()));
+        for (String type : List.of("review", "audit")) {
+            store.repository().findByTypeAndParentId(type, ideaId).stream()
+                    .map(record -> type + "|" + record.getId() + "|" + record.getStatus() + "|"
+                            + record.getPayload())
+                    .sorted().forEach(state::add);
+        }
+        return List.copyOf(state);
     }
 
     @Test

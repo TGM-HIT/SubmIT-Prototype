@@ -45,16 +45,100 @@ class FormalApplicationValidationApiTest {
     @Autowired private UserAccountRepository users;
 
     private String studentToken;
+    private String outsiderToken;
+    private String teacherToken;
     private List<String> memberIds;
     private String outsiderId;
 
     @BeforeEach
     void setUp() throws Exception {
         studentToken = login("student01");
+        outsiderToken = login("student04");
+        teacherToken = login("teacher01");
         memberIds = MEMBER_USERNAMES.stream()
                 .map(username -> users.findByUsername(username).orElseThrow().getId().toString())
                 .toList();
         outsiderId = users.findByUsername("student04").orElseThrow().getId().toString();
+    }
+
+    @Test
+    void formalApplicationLifecycleEnforcesMembershipAndRevisionBoundariesWithoutRejectedWrites() throws Exception {
+        UUID projectId = createAllocatedProject();
+        ObjectNode request = validRequest();
+        List<RecordSnapshot> beforeProject = persistedState(projectId, UUID.randomUUID());
+        List<RecordSnapshot> beforeAudit = allAuditSnapshots();
+        submitCreate(projectId, request, outsiderToken).andExpect(status().isForbidden());
+        assertEquals(beforeProject, persistedState(projectId, UUID.randomUUID()),
+                "A non-member create must leave project application state unchanged.");
+        assertEquals(beforeAudit, allAuditSnapshots(), "A non-member create must not emit an audit event.");
+        assertTrue(records.findByTypeAndParentId("formal_application", projectId.toString()).isEmpty());
+
+        MvcResult created = submitCreate(projectId, request, studentToken).andExpect(status().isCreated()).andReturn();
+        UUID applicationId = UUID.fromString(
+                objectMapper.readTree(created.getResponse().getContentAsString()).path("id").asText());
+        List<RecordSnapshot> beforeNonMemberWrites = persistedState(projectId, applicationId);
+        List<RecordSnapshot> auditBeforeNonMemberWrites = allAuditSnapshots();
+        mockMvc.perform(put("/api/formal-applications/{id}", applicationId)
+                        .header("Authorization", bearer(outsiderToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/api/formal-applications/{id}/submit", applicationId)
+                        .header("Authorization", bearer(outsiderToken)))
+                .andExpect(status().isForbidden());
+        assertEquals(beforeNonMemberWrites, persistedState(projectId, applicationId),
+                "Non-member update and submit must not mutate the application, revisions, reviews, or audit records.");
+        assertEquals(auditBeforeNonMemberWrites, allAuditSnapshots());
+
+        MvcResult draftReview = mockMvc.perform(post("/api/formal-applications/{id}/reviews", applicationId)
+                        .header("Authorization", bearer(teacherToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "decision", "APPROVE", "feedback", "Not submitted."))))
+                .andExpect(status().isConflict()).andReturn();
+        assertEquals(409, draftReview.getResponse().getStatus());
+        assertEquals(beforeNonMemberWrites, persistedState(projectId, applicationId),
+                "A draft application cannot be reviewed and rejection must leave all persisted state unchanged.");
+
+        mockMvc.perform(put("/api/formal-applications/{id}", applicationId)
+                        .header("Authorization", bearer(studentToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/formal-applications/{id}/submit", applicationId)
+                        .header("Authorization", bearer(studentToken)))
+                .andExpect(status().isOk());
+        List<RecordSnapshot> submitted = persistedState(projectId, applicationId);
+        mockMvc.perform(put("/api/formal-applications/{id}", applicationId)
+                        .header("Authorization", bearer(studentToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isConflict());
+        assertEquals(submitted, persistedState(projectId, applicationId),
+                "Submitted applications cannot be edited until returned for revision.");
+
+        mockMvc.perform(post("/api/formal-applications/{id}/reviews", applicationId)
+                        .header("Authorization", bearer(teacherToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "decision", "REQUEST_REVISION", "feedback", "Please revise the objective."))))
+                .andExpect(status().isCreated());
+        mockMvc.perform(put("/api/formal-applications/{id}", applicationId)
+                        .header("Authorization", bearer(studentToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/formal-applications/{id}/submit", applicationId)
+                        .header("Authorization", bearer(studentToken)))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/formal-applications/{id}/reviews", applicationId)
+                        .header("Authorization", bearer(teacherToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of(
+                                "decision", "APPROVE", "feedback", "Approved after revision."))))
+                .andExpect(status().isCreated());
+        assertEquals("APPROVED", records.findById(applicationId).orElseThrow().getStatus());
+        assertEquals(2, records.findByTypeAndParentId("formal_application_revision", applicationId.toString()).size());
     }
 
     @Test
@@ -260,10 +344,23 @@ class FormalApplicationValidationApiTest {
     }
 
     private ResultActions submitCreate(UUID projectId, ObjectNode request) throws Exception {
+        return submitCreate(projectId, request, studentToken);
+    }
+
+    private ResultActions submitCreate(UUID projectId, ObjectNode request, String token) throws Exception {
         return mockMvc.perform(post("/api/projects/{projectId}/formal-applications", projectId)
-                .header("Authorization", bearer(studentToken))
+                .header("Authorization", bearer(token))
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(request)));
+    }
+
+    private List<RecordSnapshot> allAuditSnapshots() {
+        return records.findAll().stream()
+                .filter(record -> "audit".equals(record.getType()))
+                .map(record -> new RecordSnapshot(record.getId(), record.getType(), record.getOwnerId(),
+                        record.getParentId(), record.getStatus(), record.getPayload(), record.getCreatedAt()))
+                .sorted(Comparator.comparing(snapshot -> snapshot.id().toString()))
+                .toList();
     }
 
     private UUID createAllocatedProject() {

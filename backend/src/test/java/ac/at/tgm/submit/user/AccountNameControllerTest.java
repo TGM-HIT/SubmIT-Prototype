@@ -6,6 +6,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import ac.at.tgm.submit.data.StoredRecord;
+import ac.at.tgm.submit.data.StoredRecordRepository;
 import ac.at.tgm.submit.security.AuthenticatedUser;
 import ac.at.tgm.submit.security.JwtService;
 import ac.at.tgm.submit.security.Role;
@@ -29,6 +31,8 @@ class AccountNameControllerTest {
     private JwtService jwtService;
     @Autowired
     private ObjectMapper objectMapper;
+    @Autowired
+    private StoredRecordRepository records;
 
     private UserAccount admin;
     private UserAccount teacher;
@@ -55,6 +59,7 @@ class AccountNameControllerTest {
                 .andExpect(jsonPath("$.displayName").value("Jamie Rivera"))
                 .andExpect(jsonPath("$.role").value("STUDENT"));
         var registered = users.findByUsername("new-student").orElseThrow();
+        assertNoAutomaticEnrollment(registered.getId());
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
                         .get("/api/users/{id}/student-details", registered.getId())
                         .header("Authorization", bearer(admin)))
@@ -88,6 +93,7 @@ class AccountNameControllerTest {
             UserAccount persisted = users.findByUsername(username).orElseThrow();
             org.junit.jupiter.api.Assertions.assertEquals(Role.STUDENT, persisted.getRole(),
                     "Registration must persist STUDENT when supplied role is " + suppliedRole);
+            assertNoAutomaticEnrollment(persisted.getId());
         }
 
         String username = "registration-omitted-role";
@@ -104,6 +110,24 @@ class AccountNameControllerTest {
         UserAccount persisted = users.findByUsername(username).orElseThrow();
         org.junit.jupiter.api.Assertions.assertEquals(Role.STUDENT, persisted.getRole(),
                 "Registration must persist STUDENT when role is omitted");
+        assertNoAutomaticEnrollment(persisted.getId());
+    }
+
+    private void assertNoAutomaticEnrollment(UUID studentId) {
+        String id = studentId.toString();
+        List<StoredRecord> allRecords = records.findAll();
+        org.junit.jupiter.api.Assertions.assertFalse(allRecords.stream()
+                        .anyMatch(record -> "student_application".equals(record.getType())
+                                && id.equals(record.getOwnerId())),
+                "Registration must not create a solo application.");
+        org.junit.jupiter.api.Assertions.assertFalse(allRecords.stream()
+                        .anyMatch(record -> "project_group".equals(record.getType())
+                                && record.getPayload().contains(id)),
+                "Registration must not add the account to an applying or allocated group.");
+        org.junit.jupiter.api.Assertions.assertFalse(allRecords.stream()
+                        .anyMatch(record -> "allocation_assignment".equals(record.getType())
+                                && (id.equals(record.getOwnerId()) || record.getPayload().contains(id))),
+                "Registration must not create an allocation assignment.");
     }
 
     @Test
