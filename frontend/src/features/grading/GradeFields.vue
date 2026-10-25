@@ -33,12 +33,15 @@ const emit = defineEmits<{ 'update:modelValue': [value: GradeDraft] }>()
 const number = (value: unknown): string => typeof value === 'number' && Number.isFinite(value)
   ? formatNumber(value) : String(value ?? '')
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+function records<T>(value: unknown): T[] {
+  return Array.isArray(value) ? value.filter(isRecord) as T[] : []
 }
 function scaleField(value: unknown, field: 'min' | 'max' | 'step' | 'labels'): unknown {
   return isRecord(value) ? value[field] : undefined
 }
-const categories = computed(() => props.rubric?.categories ?? [])
+const categories = computed(() => records<Category>(props.rubric?.categories))
 const criteria = computed(() => categories.value.flatMap((category) => criteriaFor(category)))
 const selected = computed(() => criteria.value.find((criterion) => criterion.id === props.modelValue.criterionId))
 const scaleOptions = computed(() => {
@@ -50,7 +53,7 @@ const scaleOptions = computed(() => {
   return Array.from({ length: Math.floor((max - min) / step) + 1 }, (_, index) => min + index * step)
 })
 
-function criteriaFor(category: Category): Criterion[] { return category.criteria }
+function criteriaFor(category: Category): Criterion[] { return records<Criterion>(category.criteria) }
 function label(value: number): string {
   const labels = scaleField(selected.value?.scale, 'labels')
   const text = isRecord(labels) ? labels[String(value)] : undefined

@@ -8,7 +8,7 @@
         <p v-if="!activeRubric?.version" class="empty">{{ $t('grading.noActiveRubric') }}</p>
         <div v-for="category in categories" :key="String(category.id)" class="stack">
           <h3 class="form-section-title">{{ category.name }}</h3><p v-if="category.description" class="muted">{{ category.description }}</p>
-          <div v-for="criterion in list(category.criteria)" :key="String(criterion.id)" class="data-row">
+          <div v-for="criterion in list<RubricCriterion>(category.criteria)" :key="String(criterion.id)" class="data-row">
             <div class="row-main"><h3>{{ criterion.name }} <span class="status-badge">{{ criterion.subject }}</span></h3><p>{{ criterion.description }}</p><p class="muted">{{ $t('grading.scaleRange', { min: displayNumber(scaleField(criterion.scale, 'min')), max: displayNumber(scaleField(criterion.scale, 'max')), step: displayNumber(scaleField(criterion.scale, 'step')) }) }} <span v-if="criterion.evidenceRequired"> · {{ $t('grading.evidenceRequired') }}</span></p></div>
           </div>
         </div>
@@ -111,6 +111,10 @@ import { formatDateOnly, formatNumber, formatTimestamp, i18n } from '../../i18n'
 import GradeFields from './GradeFields.vue'
 
 type Rubric = components['schemas']['RubricResponse']
+type RubricCategory = Rubric['categories'][number]
+type RubricCriterion = RubricCategory['criteria'][number]
+type MetricDefinition = NonNullable<Rubric['metricDefinitions']>[number]
+type AggregationRule = NonNullable<Rubric['aggregationRules']>[number]
 type Grade = components['schemas']['GradeResponse']
 type Metric = components['schemas']['MetricResponse']
 type FinalGradeHistory = components['schemas']['FinalGradeHistory']
@@ -150,21 +154,21 @@ const groupForm = reactive({ criterionId: '', grade: '', assessedOn: new Date().
 const metricForm = reactive({ metricId: '', value: 0, note: '', transitionReason: '' })
 const finalForm = reactive({ ruleId: '', grade: 0, rationale: '', transitionReason: '' })
 const studentFinalForm = reactive({ studentId: '', ruleId: '', grade: 0, rationale: '', transitionReason: '' })
-const categories = computed(() => list(activeRubric.value?.categories))
-const metricsDefinitions = computed(() => list(activeRubric.value?.metricDefinitions))
-const aggregationRules = computed(() => list(activeRubric.value?.aggregationRules))
+const categories = computed(() => list<RubricCategory>(activeRubric.value?.categories))
+const metricsDefinitions = computed(() => list<MetricDefinition>(activeRubric.value?.metricDefinitions))
+const aggregationRules = computed(() => list<AggregationRule>(activeRubric.value?.aggregationRules))
 const studentRules = computed(() => aggregationRules.value.filter((rule) => rule.scope === 'STUDENT'))
 const projectRules = computed(() => aggregationRules.value.filter((rule) => rule.scope === 'PROJECT'))
-const selectedCriterion = computed(() => categories.value.flatMap((category) => list(category.criteria)).find((criterion) => criterion.id === gradeForm.criterionId))
-const selectedGroupCriterion = computed(() => categories.value.flatMap((category) => list(category.criteria)).find((criterion) => criterion.id === groupForm.criterionId))
+const selectedCriterion = computed(() => categories.value.flatMap((category) => list<RubricCriterion>(category.criteria)).find((criterion) => criterion.id === gradeForm.criterionId))
+const selectedGroupCriterion = computed(() => categories.value.flatMap((category) => list<RubricCriterion>(category.criteria)).find((criterion) => criterion.id === groupForm.criterionId))
 
 function emptyPage<T>(): Page<T> { return { content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 } }
-function list<T>(value: T[] | null | undefined): T[] { return value ?? [] }
+function list<T>(value: unknown): T[] { return Array.isArray(value) ? value.filter(isRecord) as T[] : [] }
 function stringList(value: unknown): string[] { return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [] }
 function number(value: unknown, fallback = 0): number { return typeof value === 'number' ? value : Number(value ?? fallback) }
 function displayNumber(value: unknown): string { return typeof value === 'number' ? formatNumber(value) : String(value ?? '') }
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
 function scaleField(value: unknown, field: 'min' | 'max' | 'step'): unknown {
   return isRecord(value) ? value[field] : undefined

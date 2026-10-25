@@ -125,26 +125,37 @@ function periodStatus(value?: string): string {
   return value && i18n.global.te(key) ? String(i18n.global.t(key)) : String(value ?? i18n.global.t('common.unknown'))
 }
 function applyingOrigin(run: Run, studentId: string): string {
-  const index = run.applyingUnits?.findIndex(unit => unit.studentIds.includes(studentId)) ?? -1
+  if (!Array.isArray(run.applyingUnits)) return String(i18n.global.t('allocation.originUnavailable'))
+  const index = run.applyingUnits.findIndex(unit => Array.isArray(unit.studentIds) && unit.studentIds.includes(studentId))
   return index < 0 ? String(i18n.global.t('allocation.appliedAdded')) : String(i18n.global.t('allocation.cohort', { number: number(index + 1) }))
 }
 function assignments(run: Run): { projectId: string; projectTitle: string; students: { id: string; name: string; className?: string; electiveSubjectNames: string[]; pinned: boolean; hadPreferences?: boolean }[] }[] {
   const groups = new Map<string, { title: string; students: Map<string, { name: string; className?: string; electiveSubjectNames: string[]; pinned: boolean; hadPreferences?: boolean }> }>()
-  for (const assignment of run.result?.assignments ?? []) {
-    const projectId = assignment.projectId
+  const rawAssignments: unknown = run.result?.assignments
+  for (const assignment of records(rawAssignments)) {
+    const projectId = String(assignment.projectId ?? assignment.project ?? '')
+    if (!projectId) continue
     const group = groups.get(projectId) ?? { title: String(i18n.global.t('allocation.unknownProject')), students: new Map<string, { name: string; className?: string; electiveSubjectNames: string[]; pinned: boolean; hadPreferences?: boolean }>() }
     if (typeof assignment.projectTitle === 'string' && assignment.projectTitle.trim()) {
       group.title = assignment.projectTitle
     }
-    const name = typeof assignment.studentDisplayName === 'string' && assignment.studentDisplayName.trim()
-      ? assignment.studentDisplayName : String(i18n.global.t('allocation.unknownStudent'))
-    group.students.set(assignment.studentId, {
-      name,
-      className: assignment.className,
-      electiveSubjectNames: assignment.electiveSubjectNames ?? [],
-      pinned: assignment.pinned,
-      ...(assignment.hadPreferences === undefined ? {} : { hadPreferences: assignment.hadPreferences }),
-    })
+    const studentIds = Array.isArray(assignment.studentIds) ? assignment.studentIds
+      : Array.isArray(assignment.students) ? assignment.students
+        : assignment.studentId === undefined || assignment.studentId === null ? [] : [assignment.studentId]
+    for (const studentValue of studentIds) {
+      const id = String(studentValue)
+      const groupedAssignment = Array.isArray(assignment.studentIds) || Array.isArray(assignment.students)
+      const name = !groupedAssignment && typeof assignment.studentDisplayName === 'string' && assignment.studentDisplayName.trim()
+        ? assignment.studentDisplayName : String(i18n.global.t('allocation.unknownStudent'))
+      group.students.set(id, {
+        name,
+        ...(typeof assignment.className === 'string' ? { className: assignment.className } : {}),
+        electiveSubjectNames: Array.isArray(assignment.electiveSubjectNames)
+          ? assignment.electiveSubjectNames.filter((value): value is string => typeof value === 'string') : [],
+        pinned: assignment.pinned === true,
+        ...(typeof assignment.hadPreferences === 'boolean' ? { hadPreferences: assignment.hadPreferences } : {}),
+      })
+    }
     groups.set(projectId, group)
   }
   return [...groups.entries()].map(([projectId, group]) => ({
@@ -173,6 +184,12 @@ function unassignedLabel(entry: Unassigned): string {
 function unassignedReason(entry: Unassigned): string {
   return ('explanation' in entry ? entry.explanation : undefined)
     ?? entry.reason ?? String(i18n.global.t('allocation.noReason'))
+}
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+function records(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value) ? value.filter(isRecord) : []
 }
 function unassigned(run: Run): Unassigned[] {
   return [

@@ -214,6 +214,62 @@ describe("grading student identities", () => {
     page.unmount()
   })
 
+  it.each([
+    ["non-array collections", {
+      name: "Malformed rubric",
+      categories: { id: "not-an-array" },
+      metricDefinitions: null,
+      aggregationRules: "not-an-array",
+    }],
+    ["malformed members and scale", {
+      name: "Partially malformed rubric",
+      categories: [
+        null,
+        "not-a-category",
+        {
+          id: "category-valid",
+          name: "Valid category",
+          criteria: [
+            null,
+            42,
+            { id: "criterion-malformed-scale", name: "Criterion with malformed scale", subject: "Science", scale: null },
+          ],
+        },
+      ],
+      metricDefinitions: [
+        null,
+        "not-a-metric",
+        { id: "metric-valid", name: "Valid metric", unit: "hours", version: 1 },
+      ],
+      aggregationRules: [
+        null,
+        { id: "rule-valid", scope: "PROJECT", version: 1, type: "AVERAGE" },
+      ],
+    }],
+  ])("safely normalizes %s from the rubric response", async (_scenario, rubric) => {
+    api.role = "TEACHER"
+    api.activeRubric.mockResolvedValue(rubric)
+    const page = mount(GradingPage)
+    await flushPromises()
+    await page.get("#project-id").setValue("project-1")
+
+    expect(page.text()).not.toContain("undefined")
+    expect(page.text()).not.toContain("null")
+    if (rubric.name === "Partially malformed rubric") {
+      expect(page.text()).toContain("Valid category")
+      expect(page.text()).toContain("Criterion with malformed scale")
+      expect(page.text()).toContain("Valid metric")
+      expect(page.text()).toContain("PROJECT")
+      expect(page.findAll("optgroup")).toHaveLength(2)
+      await page.get("#grade-criterion").setValue("criterion-malformed-scale")
+      expect(page.get("#grade-grade").findAll("option")).toHaveLength(1)
+    } else {
+      expect(page.findAll("optgroup")).toHaveLength(0)
+      expect(page.findAll(".choice-item")).toHaveLength(0)
+    }
+    page.unmount()
+  })
+
   it("renders returned metric observation values, versions, and note", async () => {
     api.metrics.mockResolvedValue(pageResult([{
       id: "metric-observation-1",

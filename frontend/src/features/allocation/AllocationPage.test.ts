@@ -260,6 +260,49 @@ describe('allocation supervisor display', () => {
     expect(page.text()).toContain('Supervisor: Teacher One')
   })
 
+  it.each([
+    ['omitted historical applying units', undefined, 'Origin unavailable'],
+    ['an empty applying-units snapshot', [], 'Applied individually · added by allocation'],
+    ['a matching applying cohort', [{ studentIds: ['student-2'] }, { studentIds: ['student-1'] }], 'Applying cohort 2'],
+  ])('preserves origin semantics for %s', async (_case, applyingUnits, expectedOrigin) => {
+    api.getRun.mockResolvedValue({
+      id: 'run-1',
+      status: 'COMPLETED',
+      ...(applyingUnits === undefined ? {} : { applyingUnits }),
+      result: {
+        assignments: [{
+          projectId: 'project-1',
+          studentId: 'student-1',
+          studentDisplayName: 'Student One',
+        }],
+      },
+    })
+    const page = mountPage()
+    await flushPromises()
+    await page.findAll('button').find((button) => button.text() === 'Inspect result')!.trigger('click')
+    await flushPromises()
+
+    expect(page.find('.staff-member-label').text()).toContain(expectedOrigin)
+    page.unmount()
+  })
+
+  it('expands legacy grouped studentIds assignments into all three rendered student identities', async () => {
+    const page = mountPage()
+    await flushPromises()
+    await page.findAll('button').find((button) => button.text() === 'Inspect result')!.trigger('click')
+    await flushPromises()
+
+    const assignment = page.get('.allocation-assignment')
+    expect(assignment.text()).toContain('3 students assigned')
+    expect(assignment.findAll('.staff-member-label').map((member) => member.text())).toHaveLength(3)
+    expect(assignment.findAll('.staff-member-label').map((member) => member.text())).toEqual([
+      expect.stringContaining('Unknown student'),
+      expect.stringContaining('Unknown student'),
+      expect.stringContaining('Unknown student'),
+    ])
+    page.unmount()
+  })
+
   it("shows neutral placeholders for unresolved assigned and unassigned references", async () => {
     const studentId = "11111111-1111-4111-8111-111111111111"
     const projectId = "22222222-2222-4222-8222-222222222222"
