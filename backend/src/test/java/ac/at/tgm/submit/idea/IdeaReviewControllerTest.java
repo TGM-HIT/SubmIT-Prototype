@@ -737,6 +737,25 @@ class IdeaReviewControllerTest {
                 assertSuccessfulIdeaReview(result, ideaId, specificationReview ? "SPECIFICATION" : "IDEA",
                         expectedPayload, specificationReview ? 2 : 1);
             }
+
+            String paddedDecision = specificationReview
+                    ? "\t ACCEPT_FOR_APPLICATIONS \n" : "  APPROVE_FOR_SPECIFICATION  ";
+            Map<String, Object> paddedDecisionRequest =
+                    reviewWithAllRatings(paddedDecision, "Padded decision keeps its submitted text.");
+            paddedDecisionRequest.put("recommendation", "Padded decision recommendation remains unchanged.");
+            String paddedDecisionIdea =
+                    prepareReviewRoute(specificationReview, "Padded valid decision token");
+            MvcResult paddedDecisionResult = postReviewRoute(paddedDecisionIdea, paddedDecisionRequest,
+                    teacherToken, specificationReview).andExpect(status().isCreated()).andReturn();
+            Map<String, Object> paddedDecisionPayload = new LinkedHashMap<>(paddedDecisionRequest);
+            paddedDecisionPayload.put("reviewType", specificationReview ? "SPECIFICATION" : "IDEA");
+            assertSuccessfulIdeaReview(paddedDecisionResult, paddedDecisionIdea,
+                    specificationReview ? "SPECIFICATION" : "IDEA", paddedDecisionPayload,
+                    specificationReview ? 2 : 1,
+                    specificationReview ? "ACCEPT_FOR_APPLICATIONS" : "APPROVE_FOR_SPECIFICATION");
+            getIdea(paddedDecisionIdea, teacherToken).andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value(specificationReview
+                            ? "ACCEPTED_FOR_APPLICATIONS" : "IDEA_APPROVED_FOR_SPECIFICATION"));
         }
     }
 
@@ -802,8 +821,14 @@ class IdeaReviewControllerTest {
         mockMvc.perform(post("/api/ideas/{id}/submit", ideaId)
                         .header("Authorization", "Bearer " + teacherToken))
                 .andExpect(status().isOk());
-        review(ideaId, Map.of("decision", "REQUEST_REVISION", "feedback", "Self-review is forbidden."),
-                teacherToken).andExpect(status().isForbidden());
+        List<String> beforeIdeaSelfReview = decisionState(ideaId);
+        MvcResult ideaSelfReview = review(ideaId,
+                Map.of("decision", "REQUEST_REVISION", "feedback", "Self-review is forbidden."),
+                teacherToken).andReturn();
+        assertReviewError(ideaSelfReview, 403, "Forbidden",
+                "You are not authorized to perform this action.");
+        assertEquals(beforeIdeaSelfReview, decisionState(ideaId),
+                "Rejected idea self-review must preserve all resource, review, and audit records.");
         getIdea(ideaId, teacherToken).andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("IDEA_SUBMITTED"))
                 .andExpect(jsonPath("$.reviews.length()").value(0));
@@ -831,12 +856,18 @@ class IdeaReviewControllerTest {
         mockMvc.perform(post("/api/ideas/{id}/specification/submit", ideaId)
                         .header("Authorization", "Bearer " + teacherToken))
                 .andExpect(status().isOk());
-        mockMvc.perform(post("/api/ideas/{id}/specification/reviews", ideaId)
+        List<String> beforeSpecificationSelfReview = decisionState(ideaId);
+        MvcResult specificationSelfReview = mockMvc.perform(post("/api/ideas/{id}/specification/reviews", ideaId)
                         .header("Authorization", "Bearer " + teacherToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(
-                                Map.of("decision", "ACCEPT_FOR_APPLICATIONS", "feedback", "Self-acceptance is forbidden."))))
-                .andExpect(status().isForbidden());
+                                Map.of("decision", "ACCEPT_FOR_APPLICATIONS", "feedback",
+                                        "Self-acceptance is forbidden."))))
+                .andReturn();
+        assertReviewError(specificationSelfReview, 403, "Forbidden",
+                "You are not authorized to perform this action.");
+        assertEquals(beforeSpecificationSelfReview, decisionState(ideaId),
+                "Rejected specification self-review must preserve all resource, review, and audit records.");
         getIdea(ideaId, teacherToken).andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("SPECIFICATION_SUBMITTED"))
                 .andExpect(jsonPath("$.reviews.length()").value(1));
@@ -1155,6 +1186,13 @@ class IdeaReviewControllerTest {
 
     private void assertSuccessfulIdeaReview(MvcResult result, String ideaId, String reviewType,
             Map<String, Object> expectedPayload, int expectedHistoryCount) throws Exception {
+        assertSuccessfulIdeaReview(result, ideaId, reviewType, expectedPayload, expectedHistoryCount,
+                expectedPayload.get("decision").toString());
+    }
+
+    private void assertSuccessfulIdeaReview(MvcResult result, String ideaId, String reviewType,
+            Map<String, Object> expectedPayload, int expectedHistoryCount, String responseDecision)
+            throws Exception {
         assertEquals(201, result.getResponse().getStatus());
         JsonNode response = objectMapper.readTree(result.getResponse().getContentAsByteArray());
         assertEquals(Set.of("id", "teacherId", "teacherDisplayName", "reviewType", "decision", "feedback",
@@ -1165,7 +1203,7 @@ class IdeaReviewControllerTest {
         assertTrue(response.has("teacherDisplayName"));
         assertTrue(response.path("teacherDisplayName").isNull() || response.path("teacherDisplayName").isTextual());
         assertEquals(reviewType, response.path("reviewType").asText());
-        assertEquals(expectedPayload.get("decision"), response.path("decision").asText());
+        assertEquals(responseDecision, response.path("decision").asText());
         assertEquals(expectedPayload.get("feedback"), response.path("feedback").asText());
         for (String field : REVIEW_RATING_FIELDS) {
             JsonNode responseRating = response.get(field);
@@ -1205,7 +1243,7 @@ class IdeaReviewControllerTest {
         boolean matchingReview = false;
         for (JsonNode entry : history) {
             if (reviewType.equals(entry.path("reviewType").asText())
-                    && expectedPayload.get("decision").equals(entry.path("decision").asText())) {
+                    && responseDecision.equals(entry.path("decision").asText())) {
                 assertEquals(expectedPayload.get("feedback"), entry.path("feedback").asText());
                 matchingReview = true;
             }

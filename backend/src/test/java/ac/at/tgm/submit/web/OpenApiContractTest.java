@@ -23,6 +23,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -78,10 +79,14 @@ class OpenApiContractTest {
         assertEquals("string", decision.path("type").asText());
         assertEquals(1, decision.path("minLength").asInt());
         String decisionDescription = decision.path("description").asText();
-        for (String token : List.of("APPROVE_FOR_SPECIFICATION", "ACCEPT_FOR_APPLICATIONS", "APPROVE",
-                "REQUEST_REVISION", "DECLINE")) {
-            assertTrue(decisionDescription.contains(token), "Missing route decision token " + token);
-        }
+        assertDecisionTokens(decisionDescription, Set.of("APPROVE_FOR_SPECIFICATION", "ACCEPT_FOR_APPLICATIONS",
+                "APPROVE", "REQUEST_REVISION", "DECLINE"), "canonical decision description");
+        assertTrue(decisionDescription.contains("Idea reviews accept APPROVE_FOR_SPECIFICATION, "
+                + "REQUEST_REVISION, or DECLINE;"), "The idea approval token must map to idea reviews.");
+        assertTrue(decisionDescription.contains("specifications accept ACCEPT_FOR_APPLICATIONS, "
+                + "REQUEST_REVISION, or DECLINE;"), "The specification approval token must map to specifications.");
+        assertTrue(decisionDescription.contains("formal applications accept APPROVE, REQUEST_REVISION, or DECLINE."),
+                "The formal approval token must map to formal applications.");
         assertTrue(decisionDescription.contains("Only the set for the route is valid."));
 
         JsonNode feedback = properties.path("feedback");
@@ -108,11 +113,13 @@ class OpenApiContractTest {
         assertEquals("Optional recommendation; at most 2,000 characters.",
                 recommendation.path("description").asText());
 
-        assertOperationDescription(document, routes.get(0), "APPROVE_FOR_SPECIFICATION",
+        assertOperationDescription(document, routes.get(0),
+                Set.of("APPROVE_FOR_SPECIFICATION", "REQUEST_REVISION", "DECLINE"),
                 "Ratings may be omitted", "explicit null ratings are rejected");
-        assertOperationDescription(document, routes.get(1), "ACCEPT_FOR_APPLICATIONS",
+        assertOperationDescription(document, routes.get(1),
+                Set.of("ACCEPT_FOR_APPLICATIONS", "REQUEST_REVISION", "DECLINE"),
                 "all seven ratings must be supplied", "omitted and null ratings are rejected");
-        assertOperationDescription(document, routes.get(2), "APPROVE",
+        assertOperationDescription(document, routes.get(2), Set.of("APPROVE", "REQUEST_REVISION", "DECLINE"),
                 "Each rating is optional", "retained as null");
     }
 
@@ -156,12 +163,25 @@ class OpenApiContractTest {
                         .path("schema").path("$ref").asText());
     }
 
-    private void assertOperationDescription(JsonNode document, String route, String decisionToken,
+    private void assertOperationDescription(JsonNode document, String route, Set<String> allowedDecisions,
             String ratingBehavior, String nullBehavior) {
         String description = document.path("paths").path(route).path("post").path("description").asText();
-        assertTrue(description.contains(decisionToken), route + " decision documentation");
+        assertDecisionTokens(description, allowedDecisions, route + " decision documentation");
         assertTrue(description.contains(ratingBehavior), route + " rating documentation");
         assertTrue(description.contains(nullBehavior), route + " null/omission documentation");
+    }
+
+    private void assertDecisionTokens(String description, Set<String> expectedTokens, String location) {
+        Set<String> documentedTokens = new TreeSet<>();
+        for (String token : List.of("APPROVE_FOR_SPECIFICATION", "ACCEPT_FOR_APPLICATIONS", "APPROVE",
+                "REQUEST_REVISION", "DECLINE")) {
+            if (Pattern.compile("(?<![A-Z_])" + Pattern.quote(token) + "(?![A-Z_])")
+                    .matcher(description).find()) {
+                documentedTokens.add(token);
+            }
+        }
+        assertEquals(expectedTokens, documentedTokens,
+                location + " must document exactly its allowed decision tokens, excluding other route approvals.");
     }
 
     private JsonNode baselineReviewFixture() throws Exception {

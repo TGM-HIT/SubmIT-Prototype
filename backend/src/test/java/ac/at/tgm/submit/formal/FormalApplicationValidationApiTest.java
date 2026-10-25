@@ -314,6 +314,17 @@ class FormalApplicationValidationApiTest {
                     .andExpect(status().isCreated()).andReturn();
             assertSuccessfulFormalReview(result, application, body);
         }
+
+        String paddedDecision = "\t APPROVE \n";
+        Map<String, Object> paddedDecisionBody =
+                formalReviewWithAllRatings(paddedDecision, "Padded decision keeps its submitted text.");
+        SubmittedApplication paddedDecisionApplication = createSubmittedApplication();
+        MvcResult paddedDecisionResult = review(paddedDecisionApplication.applicationId(), paddedDecisionBody,
+                teacherToken).andExpect(status().isCreated()).andReturn();
+        assertSuccessfulFormalReview(paddedDecisionResult, paddedDecisionApplication, paddedDecisionBody, "APPROVE");
+        assertEquals("APPROVED",
+                records.findById(paddedDecisionApplication.applicationId()).orElseThrow().getStatus(),
+                "The padded formal approval token must still trigger the approval transition.");
     }
 
     @Test
@@ -666,12 +677,18 @@ class FormalApplicationValidationApiTest {
 
     private void assertSuccessfulFormalReview(MvcResult result, SubmittedApplication application,
             Map<String, Object> expectedPayload) throws Exception {
+        assertSuccessfulFormalReview(result, application, expectedPayload,
+                expectedPayload.get("decision").toString());
+    }
+
+    private void assertSuccessfulFormalReview(MvcResult result, SubmittedApplication application,
+            Map<String, Object> expectedPayload, String responseDecision) throws Exception {
         assertEquals(201, result.getResponse().getStatus());
         JsonNode response = objectMapper.readTree(result.getResponse().getContentAsByteArray());
         assertEquals(Set.of("id", "teacherId", "decision", "feedback"), jsonFieldNames(response));
         assertTrue(response.path("id").isTextual());
         assertTrue(response.path("teacherId").isTextual());
-        assertEquals(expectedPayload.get("decision"), response.path("decision").textValue());
+        assertEquals(responseDecision, response.path("decision").textValue());
         assertEquals(expectedPayload.get("feedback"), response.path("feedback").textValue());
 
         UUID reviewId = UUID.fromString(response.path("id").textValue());
@@ -717,7 +734,7 @@ class FormalApplicationValidationApiTest {
         boolean matchingReview = false;
         for (JsonNode entry : history) {
             if (reviewId.toString().equals(entry.path("id").asText())) {
-                assertEquals(expectedPayload.get("decision"), entry.path("decision").asText());
+                assertEquals(responseDecision, entry.path("decision").asText());
                 assertEquals(expectedPayload.get("feedback"), entry.path("feedback").asText());
                 matchingReview = true;
             }
