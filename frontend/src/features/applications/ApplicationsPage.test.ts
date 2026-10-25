@@ -1078,4 +1078,124 @@ describe("student catalogue project titles", () => {
       .toEqual(["Choose a project…", "Unknown project"])
     expect(page.text()).not.toContain(ids[0])
   })
+
+})
+
+describe('student application period lock and deadline', () => {
+  const projectIds = ['locked-project-1', 'locked-project-2', 'locked-project-3']
+  const projectTitles = projectIds.map((projectId, index) => ({
+    projectId,
+    title: `Eligible project ${index + 1}`,
+  }))
+  const closesAt = '2026-10-26T15:00:00.000Z'
+
+  beforeEach(() => {
+    setLanguage('en')
+    api.role = 'STUDENT'
+    api.listIdeas.mockResolvedValue({ content: [] })
+    api.years.mockResolvedValue({ content: [] })
+    api.listPeriods.mockResolvedValue({ content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 })
+  })
+
+  afterEach(() => {
+    vi.useRealTimers()
+    document.body.innerHTML = ''
+    vi.clearAllMocks()
+  })
+
+  function period(status: 'CLOSED' | 'FINALIZED' | 'OPEN', id: string, deadline = closesAt) {
+    return {
+      id,
+      label: `Period ${status}`,
+      schoolYear: '2026/2027',
+      status,
+      opensAt: '2026-10-20T09:00:00.000Z',
+      closesAt: deadline,
+      projectIds,
+      projectTitles,
+      eligibleToApply: true,
+      studentApplicationStatus: 'SUBMITTED',
+    }
+  }
+
+  function expectPreferenceControlsAbsent(page: ReturnType<typeof mountPage>, id: string) {
+    expect(page.find('.application-ranking').exists()).toBe(false)
+    expect(page.find(`#add-project-${id}`).exists()).toBe(false)
+    const buttons = page.findAll('button')
+    expect(buttons.map((button) => button.text())).not.toContain('Submit ranked application')
+    expect(buttons.map((button) => button.text())).not.toContain('Save ranking changes')
+    expect(buttons.map((button) => button.text())).not.toContain('Withdraw')
+    expect(buttons.some((button) => button.attributes('aria-label')?.startsWith('Move '))).toBe(false)
+  }
+
+  it.each(['CLOSED', 'FINALIZED'] as const)('shows the %s lock notice and deadline without preference controls', async (status) => {
+    const id = `period-${status.toLowerCase()}`
+    api.listPeriods.mockResolvedValue({
+      content: [period(status, id)],
+      page: 0,
+      size: 20,
+      totalElements: 1,
+      totalPages: 1,
+    })
+
+    const page = mountPage()
+    await flushPromises()
+
+    const periodRow = page.get(`[data-period-label="Period ${status}"]`)
+    expect(periodRow.text()).toContain(formatTimestamp(closesAt))
+    expect(periodRow.text()).toContain(`This period is ${status.toLowerCase()}. Preference changes are locked.`)
+    expect(periodRow.get('.student-period-result').text()).toContain('Your application: Submitted')
+    expect(page.get('.page-intro').text()).toContain(
+      'editable only while the school-year period is open and before its deadline',
+    )
+    expectPreferenceControlsAbsent(page, id)
+    expect(api.myApplication).not.toHaveBeenCalled()
+    page.unmount()
+  })
+
+  it('hides ranking, save, and withdrawal controls after an OPEN period deadline while retaining its explanation and deadline', async () => {
+    const id = 'period-expired-open'
+    const expiredDeadline = '2026-10-25T14:00:00.000Z'
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-10-25T16:00:00.000Z'))
+    api.listPeriods.mockResolvedValue({
+      content: [period('OPEN', id, expiredDeadline)],
+      page: 0,
+      size: 20,
+      totalElements: 1,
+      totalPages: 1,
+    })
+    api.myApplication.mockResolvedValue({
+      id: 'submitted-expired-application',
+      status: 'SUBMITTED',
+      preferences: projectIds.map((projectId, index) => ({
+        projectId,
+        rank: index + 1,
+        projectTitle: `Eligible project ${index + 1}`,
+      })),
+    })
+
+    vi.setSystemTime(new Date('2026-10-25T13:00:00.000Z'))
+    const beforeDeadlinePage = mountPage()
+    await flushPromises()
+    expect(beforeDeadlinePage.findAll('.application-ranking .choice-item')).toHaveLength(3)
+    expect(beforeDeadlinePage.findAll('button').map((button) => button.text())).toContain('Save ranking changes')
+    expect(beforeDeadlinePage.findAll('button').map((button) => button.text())).toContain('Withdraw')
+    beforeDeadlinePage.unmount()
+
+    vi.setSystemTime(new Date('2026-10-25T16:00:00.000Z'))
+    api.myApplication.mockClear()
+    const page = mountPage()
+    await flushPromises()
+
+    const periodRow = page.get(`[data-period-label="Period OPEN"]`)
+    expect(periodRow.text()).toContain(formatTimestamp(expiredDeadline))
+    expect(periodRow.get('.student-period-result').text()).toContain('Your application: Submitted')
+    expect(page.get('.page-intro').text()).toContain(
+      'editable only while the school-year period is open and before its deadline',
+    )
+    expectPreferenceControlsAbsent(page, id)
+    expect(api.myApplication).toHaveBeenCalledExactlyOnceWith(id)
+    page.unmount()
+  })
 })

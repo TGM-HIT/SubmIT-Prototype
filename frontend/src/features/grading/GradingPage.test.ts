@@ -162,6 +162,152 @@ describe("grading student identities", () => {
     expect(page.text()).not.toContain("11111111-1111-4111-8111-111111111111")
   })
 
+  it("uses only the active rubric metric definitions in the list and metric selector", async () => {
+    api.role = "TEACHER"
+    api.activeRubric.mockResolvedValue({
+      name: "Current rubric",
+      categories: [],
+      metricDefinitions: [
+        { id: "lab-hours", name: "Lab hours", unit: "hours", version: 3 },
+        { id: "prototype-tests", name: "Prototype tests", unit: "tests", version: 1 },
+      ],
+    })
+    const page = mount(GradingPage)
+    await flushPromises()
+    await page.get("#project-id").setValue("project-1")
+    await page.findAll("button").find((button) => button.text() === "Load authorized project record")!.trigger("click")
+    await flushPromises()
+
+    expect(page.findAll(".choice-item").map((item) => item.text())).toEqual([
+      "Lab hours · hoursv3",
+      "Prototype tests · testsv1",
+    ])
+    const metricOptions = page.get("#metric-id").findAll("option")
+    expect(metricOptions.map((option) => option.text())).toEqual([
+      "Select configured metric",
+      "Lab hours · hours",
+      "Prototype tests · tests",
+    ])
+    expect(metricOptions.map((option) => (option.element as HTMLOptionElement).value)).toEqual([
+      "",
+      "lab-hours",
+      "prototype-tests",
+    ])
+    expect(page.text()).not.toContain("invented")
+    page.unmount()
+  })
+
+  it("does not invent metric definitions or selector choices when the active rubric has none", async () => {
+    api.role = "TEACHER"
+    api.activeRubric.mockResolvedValue({ name: "Current rubric", categories: [], metricDefinitions: [] })
+    const page = mount(GradingPage)
+    await flushPromises()
+    await page.get("#project-id").setValue("project-1")
+    await page.findAll("button").find((button) => button.text() === "Load authorized project record")!.trigger("click")
+    await flushPromises()
+
+    expect(page.findAll(".choice-item")).toHaveLength(0)
+    const metricOptions = page.get("#metric-id").findAll("option")
+    expect(metricOptions).toHaveLength(1)
+    expect(metricOptions[0].text()).toBe("Select configured metric")
+    expect((metricOptions[0].element as HTMLOptionElement).value).toBe("")
+    page.unmount()
+  })
+
+  it("renders returned metric observation values, versions, and note", async () => {
+    api.metrics.mockResolvedValue(pageResult([{
+      id: "metric-observation-1",
+      metricId: "lab-hours",
+      metricVersion: 7,
+      value: 12.5,
+      measuredAt: "2026-10-12T09:00:00Z",
+      rubricVersion: "rubric-v8",
+      note: "Verified against the laboratory log",
+    }]))
+    const page = mount(GradingPage)
+    await flushPromises()
+    await page.get("#project-id").setValue("project-1")
+    await page.findAll("button").find((button) => button.text() === "Load authorized project record")!.trigger("click")
+    await flushPromises()
+    await page.findAll('[role="tab"]').find((tab) => tab.text() === "Metric observations")!.trigger("click")
+
+    const observation = page.findAll(".data-row").find((row) => row.text().includes("lab-hours"))
+    expect(observation).toBeDefined()
+    expect(observation!.text()).toContain("lab-hours · 12.5")
+    expect(observation!.text()).toContain("v7")
+    expect(observation!.text()).toContain("rubric-v8")
+    expect(observation!.text()).toContain("Verified against the laboratory log")
+    page.unmount()
+  })
+
+  it("displays a configured final-grade rule and its returned assessment and metric input snapshot", async () => {
+    api.finalGrade.mockResolvedValue({
+      current: {
+        id: "configured-project-grade",
+        scope: "PROJECT",
+        grade: 4,
+        ruleId: "project-final-rule",
+        ruleVersion: 3,
+        inputs: {
+          studentGrades: [{ criterionId: "knowledge", grade: 4, rubricVersion: "rubric-v8" }],
+          metrics: [{ metricId: "lab-hours", value: 12.5, metricVersion: 7, rubricVersion: "rubric-v8" }],
+        },
+      },
+      history: [],
+    })
+    const page = mount(GradingPage)
+    await flushPromises()
+    await page.get("#project-id").setValue("project-1")
+    await page.findAll("button").find((button) => button.text() === "Load authorized project record")!.trigger("click")
+    await flushPromises()
+    await page.findAll('[role="tab"]').find((tab) => tab.text() === "Final grades")!.trigger("click")
+
+    const displayed = JSON.parse(page.get("pre.json-view").text())
+    expect(displayed.current.ruleId).toBe("project-final-rule")
+    expect(displayed.current.ruleVersion).toBe(3)
+    expect(displayed.current.inputs.studentGrades).toEqual([
+      { criterionId: "knowledge", grade: 4, rubricVersion: "rubric-v8" },
+    ])
+    expect(displayed.current.inputs.metrics).toEqual([
+      { metricId: "lab-hours", value: 12.5, metricVersion: 7, rubricVersion: "rubric-v8" },
+    ])
+    page.unmount()
+  })
+
+  it("displays the returned manual final-grade rationale and input snapshot", async () => {
+    api.finalGrade.mockResolvedValue({
+      current: {
+        id: "manual-project-grade",
+        scope: "PROJECT",
+        grade: 3,
+        ruleId: null,
+        rationale: "Teacher rationale based on the submitted project evidence.",
+        inputs: {
+          studentGrades: [{ criterionId: "presentation", grade: 3, rubricVersion: "rubric-v8" }],
+          metrics: [{ metricId: "prototype-tests", value: 5, metricVersion: 1 }],
+        },
+      },
+      history: [],
+    })
+    const page = mount(GradingPage)
+    await flushPromises()
+    await page.get("#project-id").setValue("project-1")
+    await page.findAll("button").find((button) => button.text() === "Load authorized project record")!.trigger("click")
+    await flushPromises()
+    await page.findAll('[role="tab"]').find((tab) => tab.text() === "Final grades")!.trigger("click")
+
+    const displayed = JSON.parse(page.get("pre.json-view").text())
+    expect(displayed.current.ruleId).toBeNull()
+    expect(displayed.current.rationale).toBe("Teacher rationale based on the submitted project evidence.")
+    expect(displayed.current.inputs.studentGrades).toEqual([
+      { criterionId: "presentation", grade: 3, rubricVersion: "rubric-v8" },
+    ])
+    expect(displayed.current.inputs.metrics).toEqual([
+      { metricId: "prototype-tests", value: 5, metricVersion: 1 },
+    ])
+    page.unmount()
+  })
+
   it.each([
     ["en", ["Active", "Superseded", "Published"]],
     ["de", ["Aktiv", "Abgelöst", "Veröffentlicht"]],

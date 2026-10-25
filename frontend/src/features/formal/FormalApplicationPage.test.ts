@@ -57,6 +57,10 @@ function button(page: VueWrapper, label: string) {
   return match!
 }
 
+function counter(page: VueWrapper, fieldId: string): string {
+  return page.get(`#${fieldId}`).element.closest('.field')?.querySelector('.metric')?.textContent?.trim() ?? ''
+}
+
 function expectProposalCopy(page: VueWrapper) {
   expect(page.get('.page-intro').text()).toBe(
     "This is the allocated group's official formal proposal—not the student preference rankings. Project work begins only after the teacher approves this formal proposal.",
@@ -114,6 +118,51 @@ describe('Formal proposal presentation and unchanged lifecycle', () => {
     expect(page.findAll('button').map((entry) => entry.text())).not.toContain('Start a formal proposal')
     expect(api.get).not.toHaveBeenCalled()
     expect(api.create).not.toHaveBeenCalled()
+    page.unmount()
+  })
+
+  it('shows live UTF-16 current/maximum counters for every limited proposal field and both shared member totals', async () => {
+    const page = await mountStudent(null)
+    await page.get('#eligible-project').setValue(projectId)
+    await button(page, 'Start a formal proposal').trigger('click')
+
+    await page.get('#topic').setValue('😀')
+    await page.get('#situation').setValue('S')
+    await page.get('#objective').setValue('Objective')
+    await page.get('#member-topic-0').setValue('😀')
+    expect(counter(page, 'topic')).toBe('2/200')
+    expect(counter(page, 'situation')).toBe('1/400')
+    expect(counter(page, 'objective')).toBe('9/400')
+    expect(counter(page, 'member-topic-0')).toBe('2/200')
+
+    await page.get('#member-concern-0').setValue('A')
+    await page.get('#member-result-0').setValue('XY')
+    await button(page, '＋ Add allocated group member').trigger('click')
+    await page.get('#member-topic-1').setValue('Second topic')
+    await page.get('#member-concern-1').setValue('BC')
+    await page.get('#member-result-1').setValue('123')
+    expect(counter(page, 'member-concern-0')).toBe('3/2400 shared characters')
+    expect(counter(page, 'member-concern-1')).toBe('3/2400 shared characters')
+    expect(counter(page, 'member-result-0')).toBe('5/2400 shared characters')
+    expect(counter(page, 'member-result-1')).toBe('5/2400 shared characters')
+
+    await page.get('#member-concern-0').setValue('ABCD')
+    expect(counter(page, 'member-concern-0')).toBe('6/2400 shared characters')
+    await page.get('#member-concern-1').setValue('BCDE')
+    expect(counter(page, 'member-concern-1')).toBe('8/2400 shared characters')
+    await page.get('#member-result-0').setValue('ABCD')
+    expect(counter(page, 'member-result-0')).toBe('7/2400 shared characters')
+    await page.get('#member-result-1').setValue('VWXYZ')
+    expect(counter(page, 'member-result-1')).toBe('9/2400 shared characters')
+
+    await button(page, '＋ Add allocated group member').trigger('click')
+    await page.get('#member-topic-2').setValue('😀')
+    await page.get('#member-concern-2').setValue('Z')
+    await page.get('#member-result-2').setValue('WXYZ')
+    expect(counter(page, 'member-topic-1')).toBe('12/200')
+    expect(counter(page, 'member-topic-2')).toBe('2/200')
+    expect(counter(page, 'member-concern-2')).toBe('9/2400 shared characters')
+    expect(counter(page, 'member-result-2')).toBe('13/2400 shared characters')
     page.unmount()
   })
 
