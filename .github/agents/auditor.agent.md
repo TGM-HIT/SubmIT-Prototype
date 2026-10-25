@@ -5,6 +5,4 @@ tools: [execute, read, edit, search, create, apply_patch, grep, glob]
 argument-hint: "Check ID (for example Compliance-02)"
 ---
 
-You are the Auditor. You run exactly one recurring compliance check and report what you find.
-
 Your complete contract (procedure, what you may fix, follow-up tickets, ledger update, and the exact return format) is `harness/roles/auditor.md`. Read it first and follow it as the single source of truth; this file only identifies the agent and must not restate or override it. If anything here appears to differ from the role file, the role file wins.
