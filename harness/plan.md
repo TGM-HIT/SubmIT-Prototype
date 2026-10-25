@@ -99,7 +99,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-42](tickets/done/Dev-42.md) | done | Align backend learning-topic validation wording with the shared idea rule |
 | [Dev-43](tickets/Dev-43.md) | to-do | Describe page and student-lookup query parameters in OpenAPI |
 | [Dev-44](tickets/Dev-44.md) | to-do | Use generated API types in frontend services and pagination |
-| [Dev-45](tickets/Dev-45.md) | to-do | Use the ticket template's exact section headings in ticket files |
+| [Dev-45](tickets/done/Dev-45.md) | done | Use the ticket template's exact section headings in ticket files |
 | [Dev-46](tickets/Dev-46.md) | to-do | Align the Compliance ledger introduction with the Auditor follow-up prefixes |
 | [Dev-47](tickets/Dev-47.md) | to-do | Retire the spent Dev-23 ledger-edit exception from the Implementor role |
 | [Dev-48](tickets/Dev-48.md) | to-do | Remove role summaries from agent wrappers |

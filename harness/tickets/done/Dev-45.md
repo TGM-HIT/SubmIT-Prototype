@@ -8,7 +8,7 @@ Twenty-four tracked ticket files shorten one or both section headings defined by
 
 Source: Compliance-04-20261022-0847, report finding 4:
 
-- [The ticket template](../templates/ticket.md) defines `## One-time manual verification (in addition to automated tests)` and `## Acceptance criteria (the Evaluator judges)`.
+- [The ticket template](../../templates/ticket.md) defines `## One-time manual verification (in addition to automated tests)` and `## Acceptance criteria (the Evaluator judges)`.
 - Dev-38, Dev-39, Dev-42, Feature-21, and Feature-22 are now closed and stored under `harness/tickets/done/`; their current paths are used below. This formatting work does not reopen them.
 - Dev-53, created after the audit, also has a shortened manual-verification heading and is included so the final tracked-ticket search can return no matches.
 
