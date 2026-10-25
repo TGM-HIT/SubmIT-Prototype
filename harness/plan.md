@@ -93,7 +93,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-36](tickets/Dev-36.md) | to-do | Remove the remaining glob deprecation and use the Node LTS image |
 | [Dev-37](tickets/done/Dev-37.md) | done | Align the Users & roles default-class rule with the shared role-change rule |
 | [Dev-38](tickets/done/Dev-38.md) | done | Align the frontend README public-archive description with the snapshot-browser requirement |
-| [Dev-39](tickets/Dev-39.md) | awaiting-human | Specify application-period labels and last-administrator protection |
+| [Dev-39](tickets/Dev-39.md) | in-progress | Specify application-period labels and last-administrator protection |
 | [Dev-40](tickets/Dev-40.md) | to-do | Add tests for untested backend and shared specification rules |
 | [Dev-41](tickets/Dev-41.md) | to-do | Add frontend tests for untested frontend specification rules |
 | [Dev-42](tickets/Dev-42.md) | to-do | Align backend learning-topic validation wording with the shared idea rule |

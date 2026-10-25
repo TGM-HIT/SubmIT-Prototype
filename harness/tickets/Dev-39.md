@@ -8,6 +8,8 @@ Two implemented, user-visible rules are missing from the specifications. An appl
 
 Source: Compliance-02-20261021-2331, report finding 5; `ApplicationPeriodService.validatePeriod`, `ApplicationResponseMapper.period`, and `UserService.changeRole`.
 
+- Product-owner decision (2026-10-25, Markus Schabel, recorded in `harness/runs/Dev-39-20261025-0933/human-acceptance.md`): chose option A for both evidence questions. Backend rationale: "A is enough for Dev-39, but add a follow-up ticket for backend tests." Frontend rationale: "There should be no legacy headings since the application is not rolled out." Disposition: "Decisions given, continue." Additional instruction: "Please create a new Ticket for code changes if neccessary." For this documentation-only ticket, implementation-source inspection plus the existing assertions suffices for the separate `schoolYear` response field, accepted 1- and 100-character trimmed labels, and legacy UI heading fallback. These assertion gaps remain unverified, not retrospectively test-proven. Create the requested backend-test follow-up separately; do not add test or production-code changes here. The selected option A does not remove the existing fallback implementation or its specification requirements, and requests no frontend heading change.
+
 ## Scope and contract
 
 - Documentation only. Update `docs/SPEC.md`, `backend/SPEC.md`, and `frontend/SPEC.md` to describe the existing behavior below; do not change code, tests, OpenAPI annotations or generated artifacts, or user guides.
@@ -24,7 +26,7 @@ Source: Compliance-02-20261021-2331, report finding 5; `ApplicationPeriodService
 
 ## Mechanical checks (the Evaluator re-runs)
 
-Durable automated tests already cover the implementation facts being documented; this ticket adds no behavioral code and requires no new tests:
+Inspect the existing durable tests below alongside implementation source; this ticket adds no behavioral code and requires no new tests. Under the product-owner decision, source inspection suffices for the separate `schoolYear` response property, acceptance of 1- and 100-character trimmed labels, and the legacy UI heading fallback where the current assertions do not independently establish those details. Do not claim those assertion gaps have been closed:
 
 - `ApplicationPeriodSupervisorTest.labelIsTrimmedAndReturnedByCreateSingleAndListAndDuplicateYearPeriodsRemainDistinct` verifies trimming, persistence and responses for create/single/list, and distinct labels for periods in the same year.
 - `ApplicationPeriodSupervisorTest.invalidLabelsAreRejectedForCreateAndUpdate` verifies missing, blank, whitespace-only, and over-100-character labels are rejected on both operations.
@@ -46,7 +48,7 @@ Standard checks: documentation-only changes require no project build or test run
 - `docs/SPEC.md` describes periods as having an administrator-provided label alongside the school year. `backend/SPEC.md` specifies that the label is required on create and update, trimmed, nonblank, and 1 to 100 characters after trimming, and that responses expose the label and school year separately. `frontend/SPEC.md` states that visible student and staff period views and the administrator period selector identify periods by label while retaining school year as context.
 - The specifications accurately state that a legacy stored period without a label falls back to the school year in responses and visible labels without rewriting the stored record.
 - The specifications state that a role change that would demote the only remaining `ADMIN` to a non-`ADMIN` role returns `409 Conflict` and leaves the role unchanged, while demotion is permitted when another administrator remains.
-- The label statements are supported by the named `ApplicationPeriodSupervisorTest` and frontend test scenarios; the administrator-protection statements are supported by the named `UserRoleControllerTest` scenarios.
+- The label statements are supported by implementation-source inspection and the named `ApplicationPeriodSupervisorTest` and frontend test scenarios, subject to the explicit product-owner acceptance of the three assertion gaps above; the administrator-protection statements are supported by the named `UserRoleControllerTest` scenarios. Backend assertion improvements belong to the separate requested follow-up, not this ticket.
 - No contradictory statement about these rules remains in the three changed specifications, and no other files are changed.
 - Standard (all tickets): existing behavior outside the stated scope is unchanged; no unrelated cleanups; generated artifacts are never hand-edited and are regenerated and reviewed when applicable; commit generated output only when repository conventions require it; no check is claimed that was not performed.
 
