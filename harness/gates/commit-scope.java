@@ -20,6 +20,8 @@ class CommitScope {
         "harness/gates/commit-scope.java",
         "harness/checks/Compliance-04.md",
         "harness/roles/auditor.md",
+        "harness/templates/ticket.md",
+        "harness/roles/ticket-author.md",
         "harness/roles/implementor.md",
         "harness/roles/learner.md",
         "harness/roles/orchestrator.md",
