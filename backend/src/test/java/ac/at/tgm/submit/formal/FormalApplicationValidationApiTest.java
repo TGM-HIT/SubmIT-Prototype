@@ -2,6 +2,7 @@ package ac.at.tgm.submit.formal;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -17,8 +18,11 @@ import ac.at.tgm.submit.data.StoredRecordRepository;
 import ac.at.tgm.submit.user.UserAccountRepository;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.function.Consumer;
 import org.junit.jupiter.api.BeforeEach;
@@ -28,6 +32,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.ResultActions;
@@ -37,6 +42,8 @@ import org.springframework.test.web.servlet.ResultActions;
 @AutoConfigureMockMvc
 class FormalApplicationValidationApiTest {
     private static final List<String> MEMBER_USERNAMES = List.of("student01", "student02", "student03");
+    private static final List<String> REVIEW_RATING_FIELDS = List.of("workSize", "curriculumRelevance",
+            "technicalComplexity", "feasibility", "learningValue", "resourceNeeds", "riskAndDependencies");
 
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;
@@ -47,6 +54,7 @@ class FormalApplicationValidationApiTest {
     private String studentToken;
     private String outsiderToken;
     private String teacherToken;
+    private String adminToken;
     private List<String> memberIds;
     private String outsiderId;
 
@@ -55,6 +63,7 @@ class FormalApplicationValidationApiTest {
         studentToken = login("student01");
         outsiderToken = login("student04");
         teacherToken = login("teacher01");
+        adminToken = login("admin01");
         memberIds = MEMBER_USERNAMES.stream()
                 .map(username -> users.findByUsername(username).orElseThrow().getId().toString())
                 .toList();
@@ -156,6 +165,186 @@ class FormalApplicationValidationApiTest {
                 .andExpect(status().isCreated());
         assertEquals("APPROVED", records.findById(applicationId).orElseThrow().getStatus());
         assertEquals(2, records.findByTypeAndParentId("formal_application_revision", applicationId.toString()).size());
+    }
+
+    @Test
+    @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
+    void reviewSchemaConsolidationPreservesRatingSerialization() throws Exception {
+        SubmittedApplication omittedRatings = createSubmittedApplication();
+        Map<String, Object> omittedBody = Map.of(
+                "decision", "REQUEST_REVISION", "feedback", "Omitted ratings stay null.");
+        MvcResult omittedResult = review(omittedRatings.applicationId(), omittedBody, teacherToken)
+                .andExpect(status().isCreated()).andReturn();
+        Map<String, Object> expectedOmitted = formalReviewPayload("REQUEST_REVISION", "Omitted ratings stay null.");
+        assertSuccessfulFormalReview(omittedResult, omittedRatings, expectedOmitted);
+
+        SubmittedApplication allRatings = createSubmittedApplication();
+        Map<String, Object> allRatingsBody = formalReviewWithAllRatings("APPROVE", "  Preserve formal feedback  ");
+        allRatingsBody.put("recommendation", "Formal recommendation.");
+        MvcResult allRatingsResult = review(allRatings.applicationId(), allRatingsBody, teacherToken)
+                .andExpect(status().isCreated()).andReturn();
+        assertSuccessfulFormalReview(allRatingsResult, allRatings, allRatingsBody);
+
+        SubmittedApplication omittedRecommendation = createSubmittedApplication();
+        Map<String, Object> omittedRecommendationBody =
+                formalReviewWithAllRatings("REQUEST_REVISION", "No recommendation field.");
+        MvcResult omittedRecommendationResult =
+                review(omittedRecommendation.applicationId(), omittedRecommendationBody, teacherToken)
+                        .andExpect(status().isCreated()).andReturn();
+        Map<String, Object> expectedOmittedRecommendation =
+                new LinkedHashMap<>(omittedRecommendationBody);
+        expectedOmittedRecommendation.put("recommendation", null);
+        assertSuccessfulFormalReview(omittedRecommendationResult, omittedRecommendation,
+                expectedOmittedRecommendation);
+
+        SubmittedApplication explicitNullRecommendation = createSubmittedApplication();
+        Map<String, Object> explicitNullRecommendationBody =
+                formalReviewWithAllRatings("REQUEST_REVISION", "Explicit null recommendation.");
+        explicitNullRecommendationBody.put("recommendation", null);
+        MvcResult explicitNullRecommendationResult =
+                review(explicitNullRecommendation.applicationId(), explicitNullRecommendationBody, teacherToken)
+                        .andExpect(status().isCreated()).andReturn();
+        assertSuccessfulFormalReview(explicitNullRecommendationResult, explicitNullRecommendation,
+                explicitNullRecommendationBody);
+
+        for (String field : REVIEW_RATING_FIELDS) {
+            SubmittedApplication explicitNull = createSubmittedApplication();
+            Map<String, Object> nullBody = formalReviewWithAllRatings("REQUEST_REVISION", "Null " + field + ".");
+            nullBody.put(field, null);
+            MvcResult nullResult = review(explicitNull.applicationId(), nullBody, teacherToken)
+                    .andExpect(status().isCreated()).andReturn();
+            assertSuccessfulFormalReview(nullResult, explicitNull, nullBody);
+
+            for (int invalidRating : List.of(0, 6)) {
+                SubmittedApplication invalid = createSubmittedApplication();
+                Map<String, Object> invalidBody =
+                        formalReviewWithAllRatings("REQUEST_REVISION", "Invalid " + field + ".");
+                invalidBody.put(field, invalidRating);
+                List<RecordSnapshot> before = persistedState(invalid.projectId(), invalid.applicationId());
+                List<RecordSnapshot> auditBefore = allAuditSnapshots();
+                MvcResult invalidResult = review(invalid.applicationId(), invalidBody, teacherToken).andReturn();
+                String message = field + ": must be "
+                        + (invalidRating == 0 ? "greater than or equal to 1" : "less than or equal to 5");
+                assertFormalReviewError(invalidResult, 400, "Bad Request", message);
+                assertEquals(before, persistedState(invalid.projectId(), invalid.applicationId()));
+                assertEquals(auditBefore, allAuditSnapshots());
+            }
+        }
+    }
+
+    @Test
+    @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
+    void reviewSchemaConsolidationPreservesTextAndDecisionValidation() throws Exception {
+        Map<String, String> invalidStrings = new LinkedHashMap<>();
+        invalidStrings.put("missing decision", "decision");
+        invalidStrings.put("null decision", "decision");
+        invalidStrings.put("blank decision", "decision");
+        invalidStrings.put("missing feedback", "feedback");
+        invalidStrings.put("null feedback", "feedback");
+        invalidStrings.put("blank feedback", "feedback");
+        for (Map.Entry<String, String> invalidString : invalidStrings.entrySet()) {
+            Map<String, Object> body = formalReviewWithAllRatings("REQUEST_REVISION", "Valid feedback.");
+            String name = invalidString.getKey();
+            String field = invalidString.getValue();
+            if (name.startsWith("missing")) {
+                body.remove(field);
+            } else if (name.startsWith("null")) {
+                body.put(field, null);
+            } else {
+                body.put(field, " \t ");
+            }
+            SubmittedApplication application = createSubmittedApplication();
+            List<RecordSnapshot> before = persistedState(application.projectId(), application.applicationId());
+            List<RecordSnapshot> auditBefore = allAuditSnapshots();
+            MvcResult result = review(application.applicationId(), body, teacherToken).andReturn();
+            assertFormalReviewError(result, 400, "Bad Request", field + ": must not be blank");
+            assertEquals(before, persistedState(application.projectId(), application.applicationId()));
+            assertEquals(auditBefore, allAuditSnapshots());
+        }
+
+        Map<String, Object> overlongFeedback = formalReviewWithAllRatings("REQUEST_REVISION", "f".repeat(5001));
+        SubmittedApplication feedbackApplication = createSubmittedApplication();
+        List<RecordSnapshot> beforeFeedback =
+                persistedState(feedbackApplication.projectId(), feedbackApplication.applicationId());
+        List<RecordSnapshot> auditBeforeFeedback = allAuditSnapshots();
+        MvcResult feedbackResult = review(feedbackApplication.applicationId(), overlongFeedback, teacherToken)
+                .andReturn();
+        assertFormalReviewError(feedbackResult, 400, "Bad Request",
+                "feedback: size must be between 0 and 5000");
+        assertEquals(beforeFeedback, persistedState(feedbackApplication.projectId(), feedbackApplication.applicationId()));
+        assertEquals(auditBeforeFeedback, allAuditSnapshots());
+
+        Map<String, Object> overlongRecommendation =
+                formalReviewWithAllRatings("REQUEST_REVISION", "Valid feedback.");
+        overlongRecommendation.put("recommendation", "r".repeat(2001));
+        SubmittedApplication recommendationApplication = createSubmittedApplication();
+        List<RecordSnapshot> beforeRecommendation =
+                persistedState(recommendationApplication.projectId(), recommendationApplication.applicationId());
+        List<RecordSnapshot> auditBeforeRecommendation = allAuditSnapshots();
+        MvcResult recommendationResult = review(recommendationApplication.applicationId(), overlongRecommendation,
+                teacherToken).andReturn();
+        assertFormalReviewError(recommendationResult, 400, "Bad Request",
+                "recommendation: size must be between 0 and 2000");
+        assertEquals(beforeRecommendation,
+                persistedState(recommendationApplication.projectId(), recommendationApplication.applicationId()));
+        assertEquals(auditBeforeRecommendation, allAuditSnapshots());
+
+        Map<String, Object> wrongDecision = formalReviewWithAllRatings(
+                "APPROVE_FOR_SPECIFICATION", "Wrong route decision.");
+        SubmittedApplication wrongDecisionApplication = createSubmittedApplication();
+        List<RecordSnapshot> beforeWrongDecision =
+                persistedState(wrongDecisionApplication.projectId(), wrongDecisionApplication.applicationId());
+        List<RecordSnapshot> auditBeforeWrongDecision = allAuditSnapshots();
+        MvcResult wrongDecisionResult = review(wrongDecisionApplication.applicationId(), wrongDecision, teacherToken)
+                .andReturn();
+        assertFormalReviewError(wrongDecisionResult, 400, "Bad Request",
+                "Unsupported formal application decision.");
+        assertEquals(beforeWrongDecision,
+                persistedState(wrongDecisionApplication.projectId(), wrongDecisionApplication.applicationId()));
+        assertEquals(auditBeforeWrongDecision, allAuditSnapshots());
+
+        for (int index = 0; index < List.of("APPROVE", "REQUEST_REVISION", "DECLINE").size(); index++) {
+            String decision = List.of("APPROVE", "REQUEST_REVISION", "DECLINE").get(index);
+            String feedback = index == 0
+                    ? "f".repeat(5000) : index == 1 ? "  padded formal feedback remains  " : "Valid feedback.";
+            Map<String, Object> body = formalReviewWithAllRatings(decision, feedback);
+            body.put("recommendation", index == 0 ? "r".repeat(2000) : "  formal recommendation  ");
+            SubmittedApplication application = createSubmittedApplication();
+            MvcResult result = review(application.applicationId(), body, teacherToken)
+                    .andExpect(status().isCreated()).andReturn();
+            assertSuccessfulFormalReview(result, application, body);
+        }
+    }
+
+    @Test
+    @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
+    void reviewSchemaConsolidationPreservesPermissionsAndLifecycle() throws Exception {
+        for (String reviewer : List.of(studentToken, adminToken)) {
+            SubmittedApplication application = createSubmittedApplication();
+            List<RecordSnapshot> before = persistedState(application.projectId(), application.applicationId());
+            List<RecordSnapshot> auditBefore = allAuditSnapshots();
+            MvcResult result = review(application.applicationId(),
+                    formalReviewWithAllRatings("APPROVE", "Unauthorized review."), reviewer).andReturn();
+            assertFormalReviewError(result, 403, "Forbidden", "You are not authorized to perform this action.");
+            assertEquals(before, persistedState(application.projectId(), application.applicationId()));
+            assertEquals(auditBefore, allAuditSnapshots());
+        }
+
+        DraftApplication draft = createDraftApplication();
+        List<RecordSnapshot> beforeDraft = persistedState(draft.projectId(), draft.applicationId());
+        List<RecordSnapshot> auditBeforeDraft = allAuditSnapshots();
+        MvcResult draftResult = review(draft.applicationId(),
+                formalReviewWithAllRatings("APPROVE", "Wrong lifecycle stage."), teacherToken).andReturn();
+        assertFormalReviewError(draftResult, 409, "Conflict",
+                "Only a submitted formal application can be reviewed.");
+        assertEquals(beforeDraft, persistedState(draft.projectId(), draft.applicationId()));
+        assertEquals(auditBeforeDraft, allAuditSnapshots());
+
+        SubmittedApplication authorized = createSubmittedApplication();
+        Map<String, Object> request = formalReviewWithAllRatings("APPROVE", "Authorized review.");
+        MvcResult authorizedResult = review(authorized.applicationId(), request, teacherToken)
+                .andExpect(status().isCreated()).andReturn();
+        assertSuccessfulFormalReview(authorizedResult, authorized, request);
     }
 
     @Test
@@ -426,6 +615,138 @@ class FormalApplicationValidationApiTest {
                 .add(milestone("Complete the model investigation", "2027-02-01")));
         body.put("cooperationPartner", "");
         return body;
+    }
+
+    private ResultActions review(UUID applicationId, Map<String, Object> request, String token) throws Exception {
+        return mockMvc.perform(post("/api/formal-applications/{id}/reviews", applicationId)
+                .header("Authorization", bearer(token))
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)));
+    }
+
+    private Map<String, Object> formalReviewWithAllRatings(String decision, String feedback) {
+        Map<String, Object> body = new java.util.LinkedHashMap<>();
+        body.put("decision", decision);
+        body.put("feedback", feedback);
+        int rating = 1;
+        for (String field : REVIEW_RATING_FIELDS) {
+            body.put(field, rating);
+            rating = rating == 5 ? 1 : rating + 1;
+        }
+        return body;
+    }
+
+    private Map<String, Object> formalReviewPayload(String decision, String feedback) {
+        Map<String, Object> body = new java.util.LinkedHashMap<>();
+        body.put("decision", decision);
+        body.put("feedback", feedback);
+        for (String field : REVIEW_RATING_FIELDS) {
+            body.put(field, null);
+        }
+        body.put("recommendation", null);
+        return body;
+    }
+
+    private SubmittedApplication createSubmittedApplication() throws Exception {
+        DraftApplication draft = createDraftApplication();
+        mockMvc.perform(post("/api/formal-applications/{id}/submit", draft.applicationId())
+                        .header("Authorization", bearer(studentToken)))
+                .andExpect(status().isOk());
+        return new SubmittedApplication(draft.projectId(), draft.applicationId());
+    }
+
+    private DraftApplication createDraftApplication() throws Exception {
+        UUID projectId = createAllocatedProject();
+        MvcResult created = submitCreate(projectId, validRequest())
+                .andExpect(status().isCreated()).andReturn();
+        UUID applicationId = UUID.fromString(
+                objectMapper.readTree(created.getResponse().getContentAsByteArray()).path("id").asText());
+        return new DraftApplication(projectId, applicationId);
+    }
+
+    private void assertSuccessfulFormalReview(MvcResult result, SubmittedApplication application,
+            Map<String, Object> expectedPayload) throws Exception {
+        assertEquals(201, result.getResponse().getStatus());
+        JsonNode response = objectMapper.readTree(result.getResponse().getContentAsByteArray());
+        assertEquals(Set.of("id", "teacherId", "decision", "feedback"), jsonFieldNames(response));
+        assertTrue(response.path("id").isTextual());
+        assertTrue(response.path("teacherId").isTextual());
+        assertEquals(expectedPayload.get("decision"), response.path("decision").textValue());
+        assertEquals(expectedPayload.get("feedback"), response.path("feedback").textValue());
+
+        UUID reviewId = UUID.fromString(response.path("id").textValue());
+        StoredRecord reviewRecord = records.findById(reviewId).orElseThrow();
+        assertEquals("formal_application_review", reviewRecord.getType());
+        assertEquals(application.applicationId().toString(), reviewRecord.getParentId());
+        JsonNode storedPayload = objectMapper.readTree(reviewRecord.getPayload());
+        Map<String, Object> serializedPayload = new LinkedHashMap<>(expectedPayload);
+        for (String field : REVIEW_RATING_FIELDS) {
+            serializedPayload.putIfAbsent(field, null);
+        }
+        serializedPayload.putIfAbsent("recommendation", null);
+        assertEquals(serializedPayload.keySet(), jsonFieldNames(storedPayload));
+        serializedPayload.forEach((key, value) -> {
+            JsonNode actual = storedPayload.get(key);
+            if (value == null) {
+                assertTrue(actual != null && actual.isNull(), key + " must be retained as explicit null.");
+            } else {
+                assertEquals(objectMapper.valueToTree(value), actual, key + " stored value");
+            }
+        });
+
+        String teacherId = users.findByUsername("teacher01").orElseThrow().getId().toString();
+        StoredRecord audit = records.findAll().stream()
+                .filter(record -> "audit".equals(record.getType())
+                        && reviewId.toString().equals(record.getParentId())
+                        && "FORMAL_APPLICATION_REVIEWED".equals(record.getStatus()))
+                .findFirst().orElseThrow();
+        JsonNode auditPayload = objectMapper.readTree(audit.getPayload());
+        assertEquals(teacherId, audit.getOwnerId());
+        assertEquals("formal_application_review", audit.getReferenceType());
+        assertEquals("FORMAL_APPLICATION_REVIEWED", auditPayload.path("action").asText());
+        assertEquals("formal_application_review", auditPayload.path("entityType").asText());
+        assertEquals(reviewId.toString(), auditPayload.path("entityId").asText());
+        assertEquals(teacherId, auditPayload.path("actorId").asText());
+
+        MvcResult historyResult = mockMvc.perform(get("/api/projects/{projectId}/formal-applications", application.projectId())
+                        .header("Authorization", bearer(studentToken)))
+                .andExpect(status().isOk()).andReturn();
+        JsonNode history = objectMapper.readTree(historyResult.getResponse().getContentAsByteArray())
+                .path("reviewHistory").path("content");
+        assertTrue(history.isArray());
+        boolean matchingReview = false;
+        for (JsonNode entry : history) {
+            if (reviewId.toString().equals(entry.path("id").asText())) {
+                assertEquals(expectedPayload.get("decision"), entry.path("decision").asText());
+                assertEquals(expectedPayload.get("feedback"), entry.path("feedback").asText());
+                matchingReview = true;
+            }
+        }
+        assertTrue(matchingReview, "The formal review must be present in its paginated response history.");
+    }
+
+    private void assertFormalReviewError(MvcResult result, int expectedStatus, String expectedError,
+            String expectedMessage) throws Exception {
+        assertEquals(expectedStatus, result.getResponse().getStatus());
+        JsonNode body = objectMapper.readTree(result.getResponse().getContentAsByteArray());
+        assertTrue(body.path("status").isIntegralNumber());
+        assertTrue(body.path("error").isTextual());
+        assertTrue(body.path("message").isTextual());
+        assertEquals(expectedStatus, body.path("status").intValue());
+        assertEquals(expectedError, body.path("error").textValue());
+        assertEquals(expectedMessage, body.path("message").textValue());
+    }
+
+    private Set<String> jsonFieldNames(JsonNode node) {
+        Set<String> result = new TreeSet<>();
+        node.fieldNames().forEachRemaining(result::add);
+        return result;
+    }
+
+    private record SubmittedApplication(UUID projectId, UUID applicationId) {
+    }
+
+    private record DraftApplication(UUID projectId, UUID applicationId) {
     }
 
     private ObjectNode boundaryRequest() {

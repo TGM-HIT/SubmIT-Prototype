@@ -1,5 +1,5 @@
 import { expectTypeOf, test } from 'vitest'
-import type { components } from './schema'
+import type { components, operations } from './schema'
 import type { Page } from './client'
 import {
   adminApi,
@@ -14,6 +14,36 @@ import {
 
 type ContentItem<Service extends (...args: never[]) => Promise<{ content: unknown[] }>> =
   Awaited<ReturnType<Service>>['content'][number]
+
+test('review operations use the canonical generated request shape', () => {
+  type CanonicalRequest = components['schemas']['ReviewRequest']
+  expectTypeOf<operations['review_1']['requestBody']['content']['application/json']>()
+    .toEqualTypeOf<CanonicalRequest>()
+  expectTypeOf<operations['review']['requestBody']['content']['application/json']>()
+    .toEqualTypeOf<CanonicalRequest>()
+  expectTypeOf<operations['review_2']['requestBody']['content']['application/json']>()
+    .toEqualTypeOf<CanonicalRequest>()
+
+  type IdeaDefaultReview = (id: string, input: CanonicalRequest) => Promise<components['schemas']['ReviewResponse']>
+  type IdeaReview = (
+    id: string,
+    input: CanonicalRequest,
+    specification?: false,
+  ) => Promise<components['schemas']['ReviewResponse']>
+  type SpecificationReview = (
+    id: string,
+    input: CanonicalRequest,
+    specification: true,
+  ) => Promise<components['schemas']['ReviewResponse']>
+  const ideaDefaultReview: IdeaDefaultReview = ideasApi.review
+  const ideaReview: IdeaReview = ideasApi.review
+  const specificationReview: SpecificationReview = ideasApi.review
+  expectTypeOf<Parameters<typeof ideaDefaultReview>[1]>().toEqualTypeOf<CanonicalRequest>()
+  expectTypeOf<Parameters<typeof ideaReview>[1]>().toEqualTypeOf<CanonicalRequest>()
+  expectTypeOf<Parameters<typeof specificationReview>[1]>().toEqualTypeOf<CanonicalRequest>()
+
+  expectTypeOf<Parameters<typeof formalApi.review>[1]>().toEqualTypeOf<CanonicalRequest>()
+})
 
 test('collection service content items retain their generated component types', () => {
   expectTypeOf<ContentItem<typeof ideasApi.list>>()
@@ -61,7 +91,7 @@ test('in-scope service requests and responses retain their generated component t
 
   type IdeaReviewCall = (
     id: string,
-    input: components['schemas']['IdeaReviewRequest'],
+    input: components['schemas']['ReviewRequest'],
     specification?: false,
   ) => Promise<components['schemas']['ReviewResponse']>
   type SpecificationReviewCall = (
@@ -72,7 +102,7 @@ test('in-scope service requests and responses retain their generated component t
   const ideaReview: IdeaReviewCall = ideasApi.review
   const specificationReview: SpecificationReviewCall = ideasApi.review
   expectTypeOf<Parameters<typeof ideaReview>[1]>()
-    .toEqualTypeOf<components['schemas']['IdeaReviewRequest']>()
+    .toEqualTypeOf<components['schemas']['ReviewRequest']>()
   expectTypeOf<Awaited<ReturnType<typeof ideaReview>>>()
     .toEqualTypeOf<components['schemas']['ReviewResponse']>()
   expectTypeOf<Parameters<typeof specificationReview>[1]>()

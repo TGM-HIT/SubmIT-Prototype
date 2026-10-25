@@ -73,7 +73,10 @@ public class FormalApplicationController {
 
     @PostMapping("/api/formal-applications/{id}/reviews")
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Review a formal application and record its decision and feedback.")
+    @Operation(summary = "Review a formal application and record its decision and feedback.",
+            description = "Accepts APPROVE, REQUEST_REVISION, or DECLINE; only these decisions are valid for "
+                    + "formal reviews. Each rating is optional; omitted and explicit null ratings are retained as "
+                    + "null, while supplied ratings must be integers from 1 to 5.")
     public FormalReviewResponse review(@AuthenticationPrincipal AuthenticatedUser caller, @PathVariable UUID id,
             @Valid @RequestBody ReviewRequest request) {
         return service.review(caller, id, objectMapper.valueToTree(request));

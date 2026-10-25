@@ -2,6 +2,7 @@ package ac.at.tgm.submit.web;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -13,6 +14,7 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import ac.at.tgm.submit.security.Role;
 import ac.at.tgm.submit.web.ApiDtos.AuditEntryResponse;
 import java.time.Instant;
+import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
@@ -38,6 +40,135 @@ class OpenApiContractTest {
     @Test
     void ordinaryApplicationNameUsesProductIdentity() {
         assertEquals("SubmIT", environment.getProperty("spring.application.name"));
+    }
+
+    @Test
+    void reviewOperationsShareCanonicalRequestSchema() throws Exception {
+        JsonNode document = apiDocument();
+        JsonNode schemas = document.path("components").path("schemas");
+        assertTrue(schemas.path("ReviewRequest").isObject());
+        assertFalse(schemas.has("IdeaReviewRequest"));
+
+        List<String> routes = List.of("/api/ideas/{id}/reviews",
+                "/api/ideas/{id}/specification/reviews", "/api/formal-applications/{id}/reviews");
+        JsonNode commonSchema = schemas.path("ReviewRequest");
+        for (String route : routes) {
+            JsonNode requestBody = document.path("paths").path(route).path("post").path("requestBody");
+            assertTrue(requestBody.path("required").asBoolean(), route + " JSON body must be required");
+            assertEquals("#/components/schemas/ReviewRequest",
+                    requestBody.path("content").path("application/json").path("schema").path("$ref").asText(),
+                    route + " must reference the canonical request");
+            String schemaName = requestBody.path("content").path("application/json").path("schema")
+                    .path("$ref").asText().substring("#/components/schemas/".length());
+            assertEquals(commonSchema, schemas.path(schemaName),
+                    route + " must resolve to the complete shared schema");
+        }
+
+        JsonNode properties = commonSchema.path("properties");
+        Set<String> expectedProperties = names("decision,feedback,workSize,curriculumRelevance,"
+                + "technicalComplexity,feasibility,learningValue,resourceNeeds,riskAndDependencies,recommendation");
+        assertEquals(expectedProperties, fieldNames(properties));
+        assertEquals(names("decision,feedback"), textualMembers(commonSchema.path("required")));
+        for (String field : expectedProperties) {
+            assertFalse(allowsNull(properties.path(field)), field + " must not become nullable");
+            assertFalse(properties.path(field).has("enum"), field + " must not gain an enum");
+        }
+
+        JsonNode decision = properties.path("decision");
+        assertEquals("string", decision.path("type").asText());
+        assertEquals(1, decision.path("minLength").asInt());
+        String decisionDescription = decision.path("description").asText();
+        for (String token : List.of("APPROVE_FOR_SPECIFICATION", "ACCEPT_FOR_APPLICATIONS", "APPROVE",
+                "REQUEST_REVISION", "DECLINE")) {
+            assertTrue(decisionDescription.contains(token), "Missing route decision token " + token);
+        }
+        assertTrue(decisionDescription.contains("Only the set for the route is valid."));
+
+        JsonNode feedback = properties.path("feedback");
+        assertEquals("string", feedback.path("type").asText());
+        assertEquals(5000, feedback.path("maxLength").asInt());
+        assertEquals(0, feedback.path("minLength").asInt());
+        assertEquals("Required, non-blank written feedback; at most 5,000 characters.",
+                feedback.path("description").asText());
+
+        for (String field : List.of("workSize", "curriculumRelevance", "technicalComplexity", "feasibility",
+                "learningValue", "resourceNeeds", "riskAndDependencies")) {
+            JsonNode rating = properties.path(field);
+            assertEquals("integer", rating.path("type").asText(), field);
+            assertEquals("int32", rating.path("format").asText(), field);
+            assertEquals(1, rating.path("minimum").asInt(), field);
+            assertEquals(5, rating.path("maximum").asInt(), field);
+            assertEquals("Optional rating from 1 to 5.", rating.path("description").asText(), field);
+        }
+
+        JsonNode recommendation = properties.path("recommendation");
+        assertEquals("string", recommendation.path("type").asText());
+        assertEquals(2000, recommendation.path("maxLength").asInt());
+        assertEquals(0, recommendation.path("minLength").asInt());
+        assertEquals("Optional recommendation; at most 2,000 characters.",
+                recommendation.path("description").asText());
+
+        assertOperationDescription(document, routes.get(0), "APPROVE_FOR_SPECIFICATION",
+                "Ratings may be omitted", "explicit null ratings are rejected");
+        assertOperationDescription(document, routes.get(1), "ACCEPT_FOR_APPLICATIONS",
+                "all seven ratings must be supplied", "omitted and null ratings are rejected");
+        assertOperationDescription(document, routes.get(2), "APPROVE",
+                "Each rating is optional", "retained as null");
+    }
+
+    @Test
+    void reviewSchemaConsolidationPreservesOtherContracts() throws Exception {
+        JsonNode baseline = baselineReviewFixture();
+        JsonNode schemas = apiDocument().path("components").path("schemas");
+        JsonNode sharedSchema = schemas.path("ReviewRequest");
+        for (String oldName : List.of("IdeaReviewRequest", "ReviewRequest")) {
+            ObjectNode expected = ((ObjectNode) baseline.path("schemas").path(oldName)).deepCopy();
+            ((ObjectNode) expected.path("properties").path("decision"))
+                    .put("description", sharedSchema.path("properties").path("decision").path("description").asText());
+            assertEquals(expected, sharedSchema,
+                    "The canonical schema must preserve " + oldName + " except its decision description.");
+        }
+
+        JsonNode document = apiDocument();
+        JsonNode baselineOperations = baseline.path("operations");
+        for (String route : List.of("/api/ideas/{id}/reviews",
+                "/api/ideas/{id}/specification/reviews", "/api/formal-applications/{id}/reviews")) {
+            assertEquals(baselineOperations.path(route).path("responses"),
+                    document.path("paths").path(route).path("post").path("responses"),
+                    route + " response objects must be preserved in full.");
+        }
+    }
+
+    @Test
+    void unrelatedPublicationReviewRequestRemainsDistinct() throws Exception {
+        JsonNode baseline = baselineReviewFixture();
+        JsonNode document = apiDocument();
+        JsonNode schemas = document.path("components").path("schemas");
+        assertEquals(baseline.path("schemas").path("PublicationReviewRequest"),
+                schemas.path("PublicationReviewRequest"));
+        assertEquals(baseline.path("publicationOperation").path("requestBody"),
+                document.path("paths").path(baseline.path("publicationOperation").path("path").asText())
+                        .path("post").path("requestBody"));
+        assertFalse(schemas.path("PublicationReviewRequest").equals(schemas.path("ReviewRequest")));
+        assertEquals("#/components/schemas/PublicationReviewRequest",
+                document.path("paths").path("/api/artifacts/{artifactId}/publication-review")
+                        .path("post").path("requestBody").path("content").path("application/json")
+                        .path("schema").path("$ref").asText());
+    }
+
+    private void assertOperationDescription(JsonNode document, String route, String decisionToken,
+            String ratingBehavior, String nullBehavior) {
+        String description = document.path("paths").path(route).path("post").path("description").asText();
+        assertTrue(description.contains(decisionToken), route + " decision documentation");
+        assertTrue(description.contains(ratingBehavior), route + " rating documentation");
+        assertTrue(description.contains(nullBehavior), route + " null/omission documentation");
+    }
+
+    private JsonNode baselineReviewFixture() throws Exception {
+        try (InputStream fixture = getClass().getResourceAsStream("/review-contract-baseline.json")) {
+            assertNotNull(fixture, "The checked-in pre-change review contract fixture must be present.");
+            return objectMapper.readTree(fixture);
+        }
     }
 
     private static final List<String> HTTP_METHODS = List.of("get", "post", "put", "patch", "delete", "head",

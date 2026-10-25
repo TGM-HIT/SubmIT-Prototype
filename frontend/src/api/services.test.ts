@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { configureApi } from './client'
-import { adminApi, ideasApi, userApi } from './services'
+import { adminApi, formalApi, ideasApi, userApi } from './services'
 
 describe('ideas API service', () => {
   afterEach(() => {
@@ -103,6 +103,58 @@ describe('ideas API service', () => {
       })))
 
       await expect(adminApi.audit()).rejects.toThrow('The audit response is incomplete or invalid.')
+    })
+  })
+
+  describe('review API transport', () => {
+    afterEach(() => {
+      vi.unstubAllGlobals()
+      configureApi({ getToken: () => null, onUnauthorized: () => undefined })
+    })
+
+    it('review schema consolidation preserves transport', async () => {
+      const fetchMock = vi.fn().mockImplementation(() => new Response('{}', {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      }))
+      vi.stubGlobal('fetch', fetchMock)
+
+      await ideasApi.review('idea/id', {
+        decision: 'REQUEST_REVISION',
+        feedback: '  keep this feedback  ',
+        recommendation: '  preserve this recommendation  ',
+      })
+      // @ts-expect-error Runtime preservation probe: generated rating input is non-nullable.
+      await ideasApi.review('idea/id', { decision: 'REQUEST_REVISION', feedback: 'Idea null', workSize: null, recommendation: '  preserve this recommendation  ' }, false)
+      await ideasApi.review('idea/id', {
+        decision: 'ACCEPT_FOR_APPLICATIONS',
+        feedback: 'Specification feedback',
+        recommendation: '  preserve this recommendation  ',
+      }, true)
+      // @ts-expect-error Runtime preservation probe: generated rating input is non-nullable.
+      await ideasApi.review('idea/id', { decision: 'ACCEPT_FOR_APPLICATIONS', feedback: 'Specification null', workSize: null, recommendation: '  preserve this recommendation  ' }, true)
+      await formalApi.review('formal/id', {
+        decision: 'APPROVE',
+        feedback: 'Formal feedback',
+        recommendation: '  preserve this recommendation  ',
+      })
+      // @ts-expect-error Runtime preservation probe: generated rating input is non-nullable.
+      await formalApi.review('formal/id', { decision: 'APPROVE', feedback: 'Formal null', workSize: null, recommendation: '  preserve this recommendation  ' })
+
+      expect(fetchMock).toHaveBeenCalledTimes(6)
+      expect(fetchMock.mock.calls.map(([url, init]) => [url, init?.method, init?.body])).toEqual([
+        ['/api/ideas/idea%2Fid/reviews', 'POST',
+          '{"decision":"REQUEST_REVISION","feedback":"  keep this feedback  ","recommendation":"  preserve this recommendation  "}'],
+        ['/api/ideas/idea%2Fid/reviews', 'POST',
+          '{"decision":"REQUEST_REVISION","feedback":"Idea null","workSize":null,"recommendation":"  preserve this recommendation  "}'],
+        ['/api/ideas/idea%2Fid/specification/reviews', 'POST',
+          '{"decision":"ACCEPT_FOR_APPLICATIONS","feedback":"Specification feedback","recommendation":"  preserve this recommendation  "}'],
+        ['/api/ideas/idea%2Fid/specification/reviews', 'POST',
+          '{"decision":"ACCEPT_FOR_APPLICATIONS","feedback":"Specification null","workSize":null,"recommendation":"  preserve this recommendation  "}'],
+        ['/api/formal-applications/formal%2Fid/reviews', 'POST',
+          '{"decision":"APPROVE","feedback":"Formal feedback","recommendation":"  preserve this recommendation  "}'],
+        ['/api/formal-applications/formal%2Fid/reviews', 'POST',
+          '{"decision":"APPROVE","feedback":"Formal null","workSize":null,"recommendation":"  preserve this recommendation  "}'],
+      ])
     })
   })
 

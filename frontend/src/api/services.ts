@@ -12,7 +12,6 @@ type FormalApplicationRequest = components['schemas']['FormalApplicationRequest'
 type FormalApplicationResponse = components['schemas']['FormalApplicationResponse']
 type ReviewRequest = components['schemas']['ReviewRequest']
 type ReviewResponse = components['schemas']['ReviewResponse']
-type IdeaReviewRequest = components['schemas']['IdeaReviewRequest']
 type SpecificationRequest = components['schemas']['SpecificationRequest']
 type SpecificationResponse = components['schemas']['SpecificationResponse']
 type SupervisionPreferenceRequest = components['schemas']['SupervisionPreferenceRequest']
@@ -52,7 +51,7 @@ function json<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
 
 function reviewIdea(
   id: string,
-  input: IdeaReviewRequest,
+  input: ReviewRequest,
   specification?: false,
 ): Promise<ReviewResponse>
 function reviewIdea(
@@ -62,7 +61,7 @@ function reviewIdea(
 ): Promise<ReviewResponse>
 function reviewIdea(
   id: string,
-  input: IdeaReviewRequest | ReviewRequest,
+  input: ReviewRequest,
   specification = false,
 ): Promise<ReviewResponse> {
   const path = specification ? 'specification/reviews' : 'reviews'

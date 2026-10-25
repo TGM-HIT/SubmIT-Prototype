@@ -45,7 +45,11 @@ public class SpecificationController {
 
     @PostMapping("/{id}/specification/reviews")
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Review an idea specification and record its decision and feedback.")
+    @Operation(summary = "Review an idea specification and record its decision and feedback.",
+            description = "Accepts ACCEPT_FOR_APPLICATIONS, REQUEST_REVISION, or DECLINE; only these decisions "
+                    + "are valid for specification reviews. Although ratings are optional in the shared request "
+                    + "schema, all seven ratings must be supplied as integers from 1 to 5 at runtime; omitted and "
+                    + "null ratings are rejected.")
     @IdeaApiResponses.TeacherAuthorSpecificationReview
     public ReviewResponse review(@AuthenticationPrincipal AuthenticatedUser caller, @PathVariable UUID id,
             @Valid @RequestBody ReviewRequest request) {

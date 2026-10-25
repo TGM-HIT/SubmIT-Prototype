@@ -406,7 +406,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Review an idea specification and record its decision and feedback. */
+        /**
+         * Review an idea specification and record its decision and feedback.
+         * @description Accepts ACCEPT_FOR_APPLICATIONS, REQUEST_REVISION, or DECLINE; only these decisions are valid for specification reviews. Although ratings are optional in the shared request schema, all seven ratings must be supplied as integers from 1 to 5 at runtime; omitted and null ratings are rejected.
+         */
         post: operations["review"];
         delete?: never;
         options?: never;
@@ -423,7 +426,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Review an idea and record its decision and rubric ratings. */
+        /**
+         * Review an idea and record its decision and rubric ratings.
+         * @description Accepts APPROVE_FOR_SPECIFICATION, REQUEST_REVISION, or DECLINE; only these decisions are valid for idea reviews. Each rating must be an integer from 1 to 5 when supplied. Ratings may be omitted and remain absent from the stored review; explicit null ratings are rejected.
+         */
         post: operations["review_1"];
         delete?: never;
         options?: never;
@@ -492,7 +498,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Review a formal application and record its decision and feedback. */
+        /**
+         * Review a formal application and record its decision and feedback.
+         * @description Accepts APPROVE, REQUEST_REVISION, or DECLINE; only these decisions are valid for formal reviews. Each rating is optional; omitted and explicit null ratings are retained as null, while supplied ratings must be integers from 1 to 5.
+         */
         post: operations["review_2"];
         delete?: never;
         options?: never;
@@ -2180,50 +2189,7 @@ export interface components {
             reviewedAt: string | null;
         };
         ReviewRequest: {
-            /** @description Required, non-blank decision. Formal applications accept APPROVE, REQUEST_REVISION, or DECLINE; specifications accept ACCEPT_FOR_APPLICATIONS, REQUEST_REVISION, or DECLINE. */
-            decision: string;
-            /** @description Required, non-blank written feedback; at most 5,000 characters. */
-            feedback: string;
-            /**
-             * Format: int32
-             * @description Optional rating from 1 to 5.
-             */
-            workSize?: number;
-            /**
-             * Format: int32
-             * @description Optional rating from 1 to 5.
-             */
-            curriculumRelevance?: number;
-            /**
-             * Format: int32
-             * @description Optional rating from 1 to 5.
-             */
-            technicalComplexity?: number;
-            /**
-             * Format: int32
-             * @description Optional rating from 1 to 5.
-             */
-            feasibility?: number;
-            /**
-             * Format: int32
-             * @description Optional rating from 1 to 5.
-             */
-            learningValue?: number;
-            /**
-             * Format: int32
-             * @description Optional rating from 1 to 5.
-             */
-            resourceNeeds?: number;
-            /**
-             * Format: int32
-             * @description Optional rating from 1 to 5.
-             */
-            riskAndDependencies?: number;
-            /** @description Optional recommendation; at most 2,000 characters. */
-            recommendation?: string;
-        };
-        IdeaReviewRequest: {
-            /** @description Required, non-blank idea-review decision: APPROVE_FOR_SPECIFICATION, REQUEST_REVISION, or DECLINE. */
+            /** @description Required, non-blank decision. Idea reviews accept APPROVE_FOR_SPECIFICATION, REQUEST_REVISION, or DECLINE; specifications accept ACCEPT_FOR_APPLICATIONS, REQUEST_REVISION, or DECLINE; formal applications accept APPROVE, REQUEST_REVISION, or DECLINE. Only the set for the route is valid. */
             decision: string;
             /** @description Required, non-blank written feedback; at most 5,000 characters. */
             feedback: string;
@@ -3696,7 +3662,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description A configured rule lacks required inputs, the selected rubric is ineffective, or a rubric-binding transition lacks a reason. */
+            /** @description The formal application is not approved. A configured rule lacks required inputs, the selected rubric is ineffective, or a rubric-binding transition lacks a reason. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -4752,7 +4718,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description Rubric version differs from the project's bound version. */
+            /** @description The formal application is not approved. Rubric version differs from the project's bound version. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -4826,7 +4792,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description The source grade has already been superseded. */
+            /** @description The project's formal application is not approved, or the source grade has already been superseded. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -4962,7 +4928,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description The rubric binding is ineffective or a rubric-version transition lacks its required reason. */
+            /** @description The formal application is not approved, the rubric binding is ineffective, or a version transition lacks a required reason. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -5098,7 +5064,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description The rubric binding is ineffective or a rubric-version transition lacks its required reason. */
+            /** @description The formal application is not approved, the rubric binding is ineffective, or a version transition lacks a required reason. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -5253,7 +5219,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description OK */
+            /** @description Completed project. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -5298,7 +5264,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description Required completion prerequisites are unmet or the project lifecycle state does not permit completion. */
+            /** @description The formal application is not approved, required completion prerequisites are unmet, or the project lifecycle state does not permit completion. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -5386,7 +5352,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Created */
+            /** @description Private artefact metadata. */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -5431,7 +5397,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description The project's lifecycle state does not permit artifact upload. */
+            /** @description The formal application is not approved, or the project lifecycle state does not permit artifact upload. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -5824,7 +5790,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["IdeaReviewRequest"];
+                "application/json": components["schemas"]["ReviewRequest"];
             };
         };
         responses: {
@@ -6406,7 +6372,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description OK */
+            /** @description Updated artefact publication state. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -6415,7 +6381,7 @@ export interface operations {
                     "*/*": components["schemas"]["ArtifactResponse"];
                 };
             };
-            /** @description The artifact ID or submitted publication review is invalid. */
+            /** @description The artifact ID is not a UUID, or the required review request is malformed, has a blank or unsupported decision, or has a note longer than 2,000 characters. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -6433,7 +6399,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description The caller lacks the role required to review publication. */
+            /** @description The caller lacks project access or is not a teacher for an APPROVE, REJECT, or UNPUBLISH decision. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -6442,7 +6408,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description The artifact does not exist. */
+            /** @description The artifact or its project does not exist. */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -6451,7 +6417,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description The artifact's publication or lifecycle state does not permit this review. */
+            /** @description The formal application is not approved, the project is not active, SUBMIT requires a PRIVATE or REJECTED artifact, APPROVE or REJECT requires PENDING_REVIEW, and UNPUBLISH requires an APPROVED artifact. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -8056,7 +8022,7 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description The artifact's lifecycle state does not permit deletion. */
+            /** @description The formal application is not approved, the project lifecycle state does not permit changes, or the artifact's lifecycle state prevents deletion. */
             409: {
                 headers: {
                     [name: string]: unknown;

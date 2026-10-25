@@ -29,7 +29,11 @@ final class IdeaApiResponses {
 
     @Target(ElementType.METHOD)
     @Retention(RetentionPolicy.RUNTIME)
-    @Operation(summary = "Review an idea and record its decision and rubric ratings.")
+    @Operation(summary = "Review an idea and record its decision and rubric ratings.",
+            description = "Accepts APPROVE_FOR_SPECIFICATION, REQUEST_REVISION, or DECLINE; only these decisions "
+                    + "are valid for idea reviews. Each rating must be an integer from 1 to 5 when supplied. "
+                    + "Ratings may be omitted and remain absent from the stored review; explicit null ratings are "
+                    + "rejected.")
     @ApiResponse(responseCode = "403", description = "A teacher author cannot review their own idea.",
             content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
     @interface TeacherAuthorIdeaReview {

@@ -172,8 +172,7 @@ type Owner = components['schemas']['IdeaOwnerResponse']
 type IdeaOverview = Idea & { ownSupervisionPreference?: string }
 type IdeaInput = components['schemas']['IdeaRequest']
 type Review = components['schemas']['ReviewResponse']
-type IdeaReviewRequest = components['schemas']['IdeaReviewRequest']
-type SpecificationReviewRequest = components['schemas']['ReviewRequest']
+type ReviewRequest = components['schemas']['ReviewRequest']
 type RatingKey = 'workSize' | 'curriculumRelevance' | 'technicalComplexity' | 'feasibility' | 'learningValue' | 'resourceNeeds' | 'riskAndDependencies'
 const ratings = computed(() => ([
   'workSize', 'curriculumRelevance', 'technicalComplexity', 'feasibility',
@@ -600,7 +599,7 @@ async function submitReview(): Promise<void> {
   }
   const result = await task.run(() => {
     if (isSpecReview.value) {
-      const body: SpecificationReviewRequest = {
+      const body: ReviewRequest = {
         decision: String(reviewForm.decision),
         feedback,
         recommendation: String(reviewForm.recommendation),
@@ -611,7 +610,7 @@ async function submitReview(): Promise<void> {
       }
       return ideasApi.review(selectedIdea.value!.id!, body, true)
     }
-    const body: IdeaReviewRequest = {
+    const body: ReviewRequest = {
       decision: String(reviewForm.decision),
       feedback,
       recommendation: String(reviewForm.recommendation),

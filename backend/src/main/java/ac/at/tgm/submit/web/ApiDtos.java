@@ -191,9 +191,10 @@ public final class ApiDtos {
     }
 
     public record ReviewRequest(
-            @NotBlank @Schema(description = "Required, non-blank decision. Formal applications accept APPROVE, "
-                    + "REQUEST_REVISION, or DECLINE; specifications accept ACCEPT_FOR_APPLICATIONS, "
-                    + "REQUEST_REVISION, or DECLINE.", minLength = 1)
+            @NotBlank @Schema(description = "Required, non-blank decision. Idea reviews accept "
+                    + "APPROVE_FOR_SPECIFICATION, REQUEST_REVISION, or DECLINE; specifications accept "
+                    + "ACCEPT_FOR_APPLICATIONS, REQUEST_REVISION, or DECLINE; formal applications accept APPROVE, "
+                    + "REQUEST_REVISION, or DECLINE. Only the set for the route is valid.", minLength = 1)
             String decision,
             @NotBlank @Size(max = 5000)
             @Schema(description = "Required, non-blank written feedback; at most 5,000 characters.", minLength = 1)
@@ -216,8 +217,10 @@ public final class ApiDtos {
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public static class IdeaReviewRequest {
         @NotBlank
-        @Schema(description = "Required, non-blank idea-review decision: APPROVE_FOR_SPECIFICATION, "
-                + "REQUEST_REVISION, or DECLINE.", minLength = 1)
+        @Schema(description = "Required, non-blank decision. Idea reviews accept APPROVE_FOR_SPECIFICATION, "
+                + "REQUEST_REVISION, or DECLINE; specifications accept ACCEPT_FOR_APPLICATIONS, "
+                + "REQUEST_REVISION, or DECLINE; formal applications accept APPROVE, REQUEST_REVISION, or DECLINE. "
+                + "Only the set for the route is valid.", minLength = 1)
         private String decision;
         @NotBlank
         @Size(max = 5000)

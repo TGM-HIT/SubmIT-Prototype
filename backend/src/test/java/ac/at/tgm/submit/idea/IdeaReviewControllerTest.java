@@ -7,10 +7,12 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import ac.at.tgm.submit.data.RecordStore;
+import ac.at.tgm.submit.data.StoredRecord;
 import ac.at.tgm.submit.security.Role;
 import ac.at.tgm.submit.user.UserAccount;
 import ac.at.tgm.submit.user.UserAccountRepository;
@@ -21,6 +23,8 @@ import ac.at.tgm.submit.user.ElectiveSubjectRepository;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -36,13 +40,16 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 
-@SpringBootTest(properties = "spring.datasource.url=jdbc:h2:mem:ideareviews;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE")
+@SpringBootTest(properties = "spring.datasource.url=jdbc:h2:mem:ideareviews;DB_CLOSE_DELAY=0;DB_CLOSE_ON_EXIT=FALSE")
 @ActiveProfiles("testing")
 @AutoConfigureMockMvc
 class IdeaReviewControllerTest {
+    private static final List<String> REVIEW_RATING_FIELDS = List.of("workSize", "curriculumRelevance",
+            "technicalComplexity", "feasibility", "learningValue", "resourceNeeds", "riskAndDependencies");
     @Autowired
     private MockMvc mockMvc;
     @Autowired
@@ -531,6 +538,254 @@ class IdeaReviewControllerTest {
     }
 
     @Test
+    @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
+    void reviewSchemaConsolidationPreservesRatingSerialization() throws Exception {
+        String ideaWithoutRatings = submitIdea("Omitted idea ratings remain absent");
+        Map<String, Object> omittedIdeaBody = Map.of(
+                "decision", "REQUEST_REVISION", "feedback", "Idea feedback");
+        MvcResult omittedIdeaResult = review(ideaWithoutRatings, omittedIdeaBody, teacherToken)
+                .andExpect(status().isCreated()).andReturn();
+        Map<String, Object> omittedIdeaPayload = new LinkedHashMap<>(omittedIdeaBody);
+        omittedIdeaPayload.put("reviewType", "IDEA");
+        assertSuccessfulIdeaReview(omittedIdeaResult, ideaWithoutRatings, "IDEA", omittedIdeaPayload, 1);
+
+        String ideaWithRatings = submitIdea("All idea ratings stay present");
+        Map<String, Object> validIdeaBody = reviewWithAllRatings("DECLINE", "  Idea feedback  ");
+        validIdeaBody.put("recommendation", "  Preserve the recommendation.  ");
+        MvcResult validIdeaResult = review(ideaWithRatings, validIdeaBody, teacherToken)
+                .andExpect(status().isCreated()).andReturn();
+        Map<String, Object> validIdeaPayload = new LinkedHashMap<>(validIdeaBody);
+        validIdeaPayload.put("reviewType", "IDEA");
+        assertSuccessfulIdeaReview(validIdeaResult, ideaWithRatings, "IDEA", validIdeaPayload, 1);
+
+        Map<String, Object> explicitNullIdeaRecommendationBody =
+                reviewWithAllRatings("REQUEST_REVISION", "Explicit null recommendation.");
+        explicitNullIdeaRecommendationBody.put("recommendation", null);
+        String ideaNullRecommendation = submitIdea("Explicit null idea recommendation");
+        MvcResult explicitNullIdeaRecommendationResult = review(ideaNullRecommendation,
+                explicitNullIdeaRecommendationBody, teacherToken).andExpect(status().isCreated()).andReturn();
+        Map<String, Object> explicitNullIdeaRecommendationPayload =
+                new LinkedHashMap<>(explicitNullIdeaRecommendationBody);
+        explicitNullIdeaRecommendationPayload.put("reviewType", "IDEA");
+        explicitNullIdeaRecommendationPayload.remove("recommendation");
+        assertSuccessfulIdeaReview(explicitNullIdeaRecommendationResult, ideaNullRecommendation, "IDEA",
+                explicitNullIdeaRecommendationPayload, 1);
+
+        for (String field : REVIEW_RATING_FIELDS) {
+            Map<String, Object> nullIdeaBody = reviewWithAllRatings("REQUEST_REVISION", "Null rating probe.");
+            nullIdeaBody.put(field, null);
+            String nullIdea = submitIdea("Idea explicit null " + field);
+            List<String> beforeNullIdea = decisionState(nullIdea);
+            MvcResult nullIdeaResult = review(nullIdea, nullIdeaBody, teacherToken).andReturn();
+            assertReviewError(nullIdeaResult, 400, "Bad Request",
+                    "Request body is malformed or contains an invalid value.");
+            assertEquals(beforeNullIdea, decisionState(nullIdea), field + " null rejection must not write state.");
+
+            for (int invalidRating : List.of(0, 6)) {
+                Map<String, Object> invalidIdeaBody =
+                        reviewWithAllRatings("REQUEST_REVISION", "Out-of-range probe.");
+                invalidIdeaBody.put(field, invalidRating);
+                String invalidIdea = submitIdea("Idea invalid rating " + field + " " + invalidRating);
+                List<String> beforeInvalidIdea = decisionState(invalidIdea);
+                MvcResult invalidIdeaResult = review(invalidIdea, invalidIdeaBody, teacherToken).andReturn();
+                String boundaryMessage = field + ": must be "
+                        + (invalidRating == 0 ? "greater than or equal to 1" : "less than or equal to 5");
+                assertReviewError(invalidIdeaResult, 400, "Bad Request", boundaryMessage);
+                assertEquals(beforeInvalidIdea, decisionState(invalidIdea),
+                        field + " out-of-range rejection must not write state.");
+            }
+        }
+
+        String specificationWithoutRatings = submitSpecificationIdea("Omitted specification ratings rejected");
+        List<String> beforeOmittedSpecification = decisionState(specificationWithoutRatings);
+        MvcResult omittedSpecificationResult = specificationReview(specificationWithoutRatings,
+                Map.of("decision", "REQUEST_REVISION", "feedback", "Specification feedback"), teacherToken)
+                .andReturn();
+        assertReviewError(omittedSpecificationResult, 400, "Bad Request",
+                "workSize must be an integer from 1 to 5.");
+        assertEquals(beforeOmittedSpecification, decisionState(specificationWithoutRatings));
+
+        String specificationWithRatings = submitSpecificationIdea("All specification ratings retained");
+        Map<String, Object> validSpecificationBody =
+                reviewWithAllRatings("ACCEPT_FOR_APPLICATIONS", "Specification feedback");
+        MvcResult validSpecificationResult = specificationReview(specificationWithRatings, validSpecificationBody,
+                teacherToken).andExpect(status().isCreated()).andReturn();
+        Map<String, Object> validSpecificationPayload = new LinkedHashMap<>(validSpecificationBody);
+        validSpecificationPayload.put("reviewType", "SPECIFICATION");
+        validSpecificationPayload.put("recommendation", null);
+        assertSuccessfulIdeaReview(validSpecificationResult, specificationWithRatings, "SPECIFICATION",
+                validSpecificationPayload, 2);
+
+        Map<String, Object> explicitNullRecommendationBody =
+                reviewWithAllRatings("REQUEST_REVISION", "Explicit null recommendation.");
+        explicitNullRecommendationBody.put("recommendation", null);
+        String specificationNullRecommendation =
+                submitSpecificationIdea("Explicit null specification recommendation");
+        MvcResult explicitNullRecommendationResult = specificationReview(specificationNullRecommendation,
+                explicitNullRecommendationBody, teacherToken).andExpect(status().isCreated()).andReturn();
+        Map<String, Object> explicitNullRecommendationPayload =
+                new LinkedHashMap<>(explicitNullRecommendationBody);
+        explicitNullRecommendationPayload.put("reviewType", "SPECIFICATION");
+        assertSuccessfulIdeaReview(explicitNullRecommendationResult, specificationNullRecommendation,
+                "SPECIFICATION", explicitNullRecommendationPayload, 2);
+
+        for (String field : REVIEW_RATING_FIELDS) {
+            Map<String, Object> nullSpecificationBody =
+                    reviewWithAllRatings("REQUEST_REVISION", "Null rating probe.");
+            nullSpecificationBody.put(field, null);
+            String nullSpecification = submitSpecificationIdea("Specification explicit null " + field);
+            List<String> beforeNullSpecification = decisionState(nullSpecification);
+            MvcResult nullSpecificationResult = specificationReview(nullSpecification, nullSpecificationBody,
+                    teacherToken).andReturn();
+            assertReviewError(nullSpecificationResult, 400, "Bad Request",
+                    field + " must be an integer from 1 to 5.");
+            assertEquals(beforeNullSpecification, decisionState(nullSpecification),
+                    field + " null rejection must not write state.");
+
+            for (int invalidRating : List.of(0, 6)) {
+                Map<String, Object> invalidSpecificationBody =
+                        reviewWithAllRatings("REQUEST_REVISION", "Out-of-range probe.");
+                invalidSpecificationBody.put(field, invalidRating);
+                String invalidSpecification =
+                        submitSpecificationIdea("Specification invalid rating " + field + " " + invalidRating);
+                List<String> beforeInvalidSpecification = decisionState(invalidSpecification);
+                MvcResult invalidSpecificationResult = specificationReview(invalidSpecification,
+                        invalidSpecificationBody, teacherToken).andReturn();
+                String boundaryMessage = field + ": must be "
+                        + (invalidRating == 0 ? "greater than or equal to 1" : "less than or equal to 5");
+                assertReviewError(invalidSpecificationResult, 400, "Bad Request", boundaryMessage);
+                assertEquals(beforeInvalidSpecification, decisionState(invalidSpecification),
+                        field + " out-of-range rejection must not write state.");
+            }
+        }
+    }
+
+    @Test
+    @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
+    void reviewSchemaConsolidationPreservesTextAndDecisionValidation() throws Exception {
+        for (boolean specificationReview : List.of(false, true)) {
+            String wrongDecision = specificationReview
+                    ? "APPROVE_FOR_SPECIFICATION" : "ACCEPT_FOR_APPLICATIONS";
+            String expectedDecisionMessage = specificationReview
+                    ? "Unsupported specification decision." : "Unsupported idea review decision.";
+            Map<String, String> invalidStrings = new LinkedHashMap<>();
+            invalidStrings.put("missing decision", "decision");
+            invalidStrings.put("null decision", "decision");
+            invalidStrings.put("blank decision", "decision");
+            invalidStrings.put("missing feedback", "feedback");
+            invalidStrings.put("null feedback", "feedback");
+            invalidStrings.put("blank feedback", "feedback");
+            for (Map.Entry<String, String> invalidString : invalidStrings.entrySet()) {
+                Map<String, Object> request = reviewWithAllRatings("REQUEST_REVISION", "Valid feedback.");
+                String name = invalidString.getKey();
+                String field = invalidString.getValue();
+                if (name.startsWith("missing")) {
+                    request.remove(field);
+                } else if (name.startsWith("null")) {
+                    request.put(field, null);
+                } else {
+                    request.put(field, " \t ");
+                }
+                String ideaId = prepareReviewRoute(specificationReview, "Invalid " + name);
+                List<String> before = decisionState(ideaId);
+                MvcResult result = postReviewRoute(ideaId, request, teacherToken, specificationReview).andReturn();
+                assertReviewError(result, 400, "Bad Request", field + ": must not be blank");
+                assertEquals(before, decisionState(ideaId), name + " rejection must not write state.");
+            }
+
+            Map<String, Object> overlongFeedback = reviewWithAllRatings("REQUEST_REVISION", "f".repeat(5001));
+            String feedbackIdea = prepareReviewRoute(specificationReview, "Feedback exceeds 5000");
+            List<String> beforeFeedback = decisionState(feedbackIdea);
+            MvcResult feedbackResult =
+                    postReviewRoute(feedbackIdea, overlongFeedback, teacherToken, specificationReview).andReturn();
+            assertReviewError(feedbackResult, 400, "Bad Request", "feedback: size must be between 0 and 5000");
+            assertEquals(beforeFeedback, decisionState(feedbackIdea));
+
+            Map<String, Object> overlongRecommendation =
+                    reviewWithAllRatings("REQUEST_REVISION", "Valid feedback.");
+            overlongRecommendation.put("recommendation", "r".repeat(2001));
+            String recommendationIdea = prepareReviewRoute(specificationReview, "Recommendation exceeds 2000");
+            List<String> beforeRecommendation = decisionState(recommendationIdea);
+            MvcResult recommendationResult = postReviewRoute(recommendationIdea, overlongRecommendation,
+                    teacherToken, specificationReview).andReturn();
+            assertReviewError(recommendationResult, 400, "Bad Request",
+                    "recommendation: size must be between 0 and 2000");
+            assertEquals(beforeRecommendation, decisionState(recommendationIdea));
+
+            Map<String, Object> otherRouteDecision = reviewWithAllRatings(wrongDecision, "Valid feedback.");
+            String wrongDecisionIdea = prepareReviewRoute(specificationReview, "Other route decision");
+            List<String> beforeWrongDecision = decisionState(wrongDecisionIdea);
+            MvcResult wrongDecisionResult = postReviewRoute(wrongDecisionIdea, otherRouteDecision,
+                    teacherToken, specificationReview).andReturn();
+            assertReviewError(wrongDecisionResult, 400, "Bad Request", expectedDecisionMessage);
+            assertEquals(beforeWrongDecision, decisionState(wrongDecisionIdea));
+
+            List<String> allowedDecisions = specificationReview
+                    ? List.of("ACCEPT_FOR_APPLICATIONS", "REQUEST_REVISION", "DECLINE")
+                    : List.of("APPROVE_FOR_SPECIFICATION", "REQUEST_REVISION", "DECLINE");
+            for (int index = 0; index < allowedDecisions.size(); index++) {
+                String decision = allowedDecisions.get(index);
+                String feedback = index == 0
+                        ? "f".repeat(5000) : index == 1 ? "  padded feedback remains padded  " : "Valid feedback.";
+                Map<String, Object> request = reviewWithAllRatings(decision, feedback);
+                request.put("recommendation", index == 0 ? "r".repeat(2000) : "  recommendation  ");
+                String ideaId = prepareReviewRoute(specificationReview, "Valid decision " + decision);
+                MvcResult result = postReviewRoute(ideaId, request, teacherToken, specificationReview)
+                        .andExpect(status().isCreated()).andReturn();
+                Map<String, Object> expectedPayload = new LinkedHashMap<>(request);
+                expectedPayload.put("reviewType", specificationReview ? "SPECIFICATION" : "IDEA");
+                assertSuccessfulIdeaReview(result, ideaId, specificationReview ? "SPECIFICATION" : "IDEA",
+                        expectedPayload, specificationReview ? 2 : 1);
+            }
+        }
+    }
+
+    @Test
+    @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
+    void reviewSchemaConsolidationPreservesPermissionsAndLifecycle() throws Exception {
+        for (boolean specificationReview : List.of(false, true)) {
+            for (String reviewer : List.of(studentToken, adminToken)) {
+                String ideaId = prepareReviewRoute(specificationReview,
+                        "Unauthorized review " + reviewer.hashCode());
+                List<String> before = decisionState(ideaId);
+                MvcResult result = postReviewRoute(ideaId,
+                        reviewWithAllRatings(specificationReview ? "ACCEPT_FOR_APPLICATIONS"
+                                : "APPROVE_FOR_SPECIFICATION", "A valid reviewer comment."),
+                        reviewer, specificationReview).andReturn();
+                assertReviewError(result, 403, "Forbidden", "You are not authorized to perform this action.");
+                assertEquals(before, decisionState(ideaId), "An unauthorized reviewer must not create writes.");
+            }
+
+            String wrongStageIdea = specificationReview
+                    ? submitIdea("Specification review before specification submit")
+                    : createIdea("Idea review before idea submit", studentToken);
+            List<String> beforeWrongStage = decisionState(wrongStageIdea);
+            String decision = specificationReview ? "ACCEPT_FOR_APPLICATIONS" : "APPROVE_FOR_SPECIFICATION";
+            MvcResult wrongStage = postReviewRoute(wrongStageIdea,
+                    reviewWithAllRatings(decision, "Lifecycle boundary."),
+                    teacherToken, specificationReview).andReturn();
+            assertReviewError(wrongStage, 409, "Conflict",
+                    "The requested decision is not valid at this lifecycle stage.");
+            assertEquals(beforeWrongStage, decisionState(wrongStageIdea),
+                    "A wrong-stage review must preserve all review-linked and audit state.");
+
+            String authorizedIdea = prepareReviewRoute(specificationReview, "Authorized teacher review");
+            String acceptedDecision = specificationReview ? "ACCEPT_FOR_APPLICATIONS" : "APPROVE_FOR_SPECIFICATION";
+            Map<String, Object> request = reviewWithAllRatings(acceptedDecision, "Authorized review.");
+            MvcResult authorized = postReviewRoute(authorizedIdea, request, teacherToken, specificationReview)
+                    .andExpect(status().isCreated()).andReturn();
+            Map<String, Object> expectedPayload = new LinkedHashMap<>(request);
+            expectedPayload.put("reviewType", specificationReview ? "SPECIFICATION" : "IDEA");
+            if (specificationReview) {
+                expectedPayload.put("recommendation", null);
+            }
+            assertSuccessfulIdeaReview(authorized, authorizedIdea,
+                    specificationReview ? "SPECIFICATION" : "IDEA", expectedPayload,
+                    specificationReview ? 2 : 1);
+        }
+    }
+
+    @Test
     void teacherAuthorsFollowTheAuthorLifecycleAndCannotReviewTheirOwnIdeaOrSpecification() throws Exception {
         String ideaId = createIdea("Teacher-authored project", teacherToken);
         getIdea(ideaId, teacherToken).andExpect(status().isOk())
@@ -852,9 +1107,159 @@ class IdeaReviewControllerTest {
                 .content(objectMapper.writeValueAsString(request)));
     }
 
+    private org.springframework.test.web.servlet.ResultActions specificationReview(
+            String ideaId, Map<String, Object> request, String token) throws Exception {
+        return mockMvc.perform(post("/api/ideas/{id}/specification/reviews", ideaId)
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)));
+    }
+
+    private String submitSpecificationIdea(String title) throws Exception {
+        String ideaId = submitIdea(title);
+        review(ideaId, Map.of("decision", "APPROVE_FOR_SPECIFICATION", "feedback", "Proceed to specification."),
+                teacherToken).andExpect(status().isCreated());
+        mockMvc.perform(put("/api/ideas/{id}/specification", ideaId)
+                        .header("Authorization", "Bearer " + studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(specificationRequest("A submitted specification."))))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/ideas/{id}/specification/submit", ideaId)
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk());
+        return ideaId;
+    }
+
+    private String prepareReviewRoute(boolean specificationReview, String title) throws Exception {
+        return specificationReview ? submitSpecificationIdea(title) : submitIdea(title);
+    }
+
+    private org.springframework.test.web.servlet.ResultActions postReviewRoute(
+            String ideaId, Map<String, Object> request, String token, boolean specificationReview) throws Exception {
+        return specificationReview
+                ? specificationReview(ideaId, request, token)
+                : review(ideaId, request, token);
+    }
+
+    private Map<String, Object> reviewWithAllRatings(String decision, String feedback) {
+        Map<String, Object> request = new LinkedHashMap<>();
+        request.put("decision", decision);
+        request.put("feedback", feedback);
+        int rating = 1;
+        for (String field : REVIEW_RATING_FIELDS) {
+            request.put(field, rating);
+            rating = rating == 5 ? 1 : rating + 1;
+        }
+        return request;
+    }
+
+    private void assertSuccessfulIdeaReview(MvcResult result, String ideaId, String reviewType,
+            Map<String, Object> expectedPayload, int expectedHistoryCount) throws Exception {
+        assertEquals(201, result.getResponse().getStatus());
+        JsonNode response = objectMapper.readTree(result.getResponse().getContentAsByteArray());
+        assertEquals(Set.of("id", "teacherId", "teacherDisplayName", "reviewType", "decision", "feedback",
+                "workSize", "curriculumRelevance", "technicalComplexity", "feasibility", "learningValue",
+                "resourceNeeds", "riskAndDependencies", "recommendation"), jsonFieldNames(response));
+        assertTrue(response.path("id").isTextual());
+        assertTrue(response.path("teacherId").isTextual());
+        assertTrue(response.has("teacherDisplayName"));
+        assertTrue(response.path("teacherDisplayName").isNull() || response.path("teacherDisplayName").isTextual());
+        assertEquals(reviewType, response.path("reviewType").asText());
+        assertEquals(expectedPayload.get("decision"), response.path("decision").asText());
+        assertEquals(expectedPayload.get("feedback"), response.path("feedback").asText());
+        for (String field : REVIEW_RATING_FIELDS) {
+            JsonNode responseRating = response.get(field);
+            assertTrue(responseRating != null);
+            Object expectedRating = expectedPayload.get(field);
+            if (expectedRating instanceof Number) {
+                assertEquals(((Number) expectedRating).intValue(), responseRating.intValue(), field);
+            } else {
+                assertTrue(responseRating.isNull(), field + " response must remain null when not recorded.");
+            }
+        }
+        JsonNode responseRecommendation = response.get("recommendation");
+        assertTrue(responseRecommendation != null);
+        Object expectedRecommendation = expectedPayload.get("recommendation");
+        if (expectedRecommendation instanceof String) {
+            assertEquals(expectedRecommendation, responseRecommendation.textValue());
+        } else {
+            assertTrue(responseRecommendation.isNull(), "Unrecorded recommendations remain null in the response.");
+        }
+
+        StoredReviewPayload stored = storedReviewPayload(ideaId);
+        assertEquals(expectedPayload.keySet(), jsonFieldNames(stored.payload()));
+        expectedPayload.forEach((key, value) -> {
+            JsonNode actual = stored.payload().get(key);
+            if (value == null) {
+                assertTrue(actual != null && actual.isNull(), key + " must be explicitly null in stored payload.");
+            } else {
+                assertEquals(objectMapper.valueToTree(value), actual, key + " stored value");
+            }
+        });
+        assertReviewAudit(stored.id(), ideaId);
+
+        MvcResult historyResult = getIdea(ideaId, studentToken).andExpect(status().isOk()).andReturn();
+        JsonNode history = objectMapper.readTree(historyResult.getResponse().getContentAsByteArray()).path("reviews");
+        assertTrue(history.isArray());
+        assertEquals(expectedHistoryCount, history.size());
+        boolean matchingReview = false;
+        for (JsonNode entry : history) {
+            if (reviewType.equals(entry.path("reviewType").asText())
+                    && expectedPayload.get("decision").equals(entry.path("decision").asText())) {
+                assertEquals(expectedPayload.get("feedback"), entry.path("feedback").asText());
+                matchingReview = true;
+            }
+        }
+        assertTrue(matchingReview, "The persisted review must appear in authorized review history.");
+    }
+
+    private StoredReviewPayload storedReviewPayload(String ideaId) throws Exception {
+        StoredRecord stored = store.repository()
+                .findFirstByTypeAndParentIdOrderByCreatedAtDesc("review", ideaId).orElseThrow();
+        return new StoredReviewPayload(stored.getId(), objectMapper.readTree(stored.getPayload()));
+    }
+
+    private void assertReviewAudit(UUID reviewId, String ideaId) throws Exception {
+        String teacherId = users.findByUsername("teacher01").orElseThrow().getId().toString();
+        StoredRecord audit = store.repository().findAll().stream()
+                .filter(record -> "audit".equals(record.getType())
+                        && reviewId.toString().equals(record.getParentId())
+                        && "IDEA_REVIEW_RECORDED".equals(record.getStatus()))
+                .findFirst().orElseThrow();
+        JsonNode payload = objectMapper.readTree(audit.getPayload());
+        assertEquals(teacherId, audit.getOwnerId());
+        assertEquals("idea", audit.getReferenceType());
+        assertEquals("IDEA_REVIEW_RECORDED", payload.path("action").asText());
+        assertEquals("idea", payload.path("entityType").asText());
+        assertEquals(reviewId.toString(), payload.path("entityId").asText());
+        assertEquals(teacherId, payload.path("actorId").asText());
+        assertEquals(ideaId, store.repository().findById(reviewId).orElseThrow().getParentId());
+    }
+
+    private void assertReviewError(MvcResult result, int expectedStatus, String expectedError, String expectedMessage)
+            throws Exception {
+        assertEquals(expectedStatus, result.getResponse().getStatus());
+        JsonNode body = objectMapper.readTree(result.getResponse().getContentAsByteArray());
+        assertTrue(body.path("status").isIntegralNumber());
+        assertTrue(body.path("error").isTextual());
+        assertTrue(body.path("message").isTextual());
+        assertEquals(expectedStatus, body.path("status").intValue());
+        assertEquals(expectedError, body.path("error").textValue());
+        assertEquals(expectedMessage, body.path("message").textValue());
+    }
+
+    private Set<String> jsonFieldNames(JsonNode node) {
+        Set<String> result = new TreeSet<>();
+        node.fieldNames().forEachRemaining(result::add);
+        return result;
+    }
+
     private org.springframework.test.web.servlet.ResultActions getIdea(String ideaId, String token) throws Exception {
         return mockMvc.perform(get("/api/ideas/{id}", ideaId)
                 .header("Authorization", "Bearer " + token));
+    }
+
+    private record StoredReviewPayload(UUID id, JsonNode payload) {
     }
 
     private JsonNode preferenceFor(JsonNode preferences, String teacherId) {

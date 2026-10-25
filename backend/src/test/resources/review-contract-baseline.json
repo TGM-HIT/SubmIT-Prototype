@@ -1,0 +1,412 @@
+{
+  "schemas": {
+    "IdeaReviewRequest": {
+      "type": "object",
+      "properties": {
+        "decision": {
+          "type": "string",
+          "description": "Required, non-blank idea-review decision: APPROVE_FOR_SPECIFICATION, REQUEST_REVISION, or DECLINE.",
+          "minLength": 1
+        },
+        "feedback": {
+          "type": "string",
+          "description": "Required, non-blank written feedback; at most 5,000 characters.",
+          "maxLength": 5000,
+          "minLength": 0
+        },
+        "workSize": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Optional rating from 1 to 5.",
+          "maximum": 5,
+          "minimum": 1
+        },
+        "curriculumRelevance": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Optional rating from 1 to 5.",
+          "maximum": 5,
+          "minimum": 1
+        },
+        "technicalComplexity": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Optional rating from 1 to 5.",
+          "maximum": 5,
+          "minimum": 1
+        },
+        "feasibility": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Optional rating from 1 to 5.",
+          "maximum": 5,
+          "minimum": 1
+        },
+        "learningValue": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Optional rating from 1 to 5.",
+          "maximum": 5,
+          "minimum": 1
+        },
+        "resourceNeeds": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Optional rating from 1 to 5.",
+          "maximum": 5,
+          "minimum": 1
+        },
+        "riskAndDependencies": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Optional rating from 1 to 5.",
+          "maximum": 5,
+          "minimum": 1
+        },
+        "recommendation": {
+          "type": "string",
+          "description": "Optional recommendation; at most 2,000 characters.",
+          "maxLength": 2000,
+          "minLength": 0
+        }
+      },
+      "required": [
+        "decision",
+        "feedback"
+      ]
+    },
+    "ReviewRequest": {
+      "type": "object",
+      "properties": {
+        "decision": {
+          "type": "string",
+          "description": "Required, non-blank decision. Formal applications accept APPROVE, REQUEST_REVISION, or DECLINE; specifications accept ACCEPT_FOR_APPLICATIONS, REQUEST_REVISION, or DECLINE.",
+          "minLength": 1
+        },
+        "feedback": {
+          "type": "string",
+          "description": "Required, non-blank written feedback; at most 5,000 characters.",
+          "maxLength": 5000,
+          "minLength": 0
+        },
+        "workSize": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Optional rating from 1 to 5.",
+          "maximum": 5,
+          "minimum": 1
+        },
+        "curriculumRelevance": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Optional rating from 1 to 5.",
+          "maximum": 5,
+          "minimum": 1
+        },
+        "technicalComplexity": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Optional rating from 1 to 5.",
+          "maximum": 5,
+          "minimum": 1
+        },
+        "feasibility": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Optional rating from 1 to 5.",
+          "maximum": 5,
+          "minimum": 1
+        },
+        "learningValue": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Optional rating from 1 to 5.",
+          "maximum": 5,
+          "minimum": 1
+        },
+        "resourceNeeds": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Optional rating from 1 to 5.",
+          "maximum": 5,
+          "minimum": 1
+        },
+        "riskAndDependencies": {
+          "type": "integer",
+          "format": "int32",
+          "description": "Optional rating from 1 to 5.",
+          "maximum": 5,
+          "minimum": 1
+        },
+        "recommendation": {
+          "type": "string",
+          "description": "Optional recommendation; at most 2,000 characters.",
+          "maxLength": 2000,
+          "minLength": 0
+        }
+      },
+      "required": [
+        "decision",
+        "feedback"
+      ]
+    },
+    "PublicationReviewRequest": {
+      "type": "object",
+      "properties": {
+        "decision": {
+          "type": "string",
+          "description": "Required action: SUBMIT, APPROVE, REJECT, or UNPUBLISH.",
+          "example": "SUBMIT",
+          "minLength": 1,
+          "pattern": "SUBMIT|APPROVE|REJECT|UNPUBLISH"
+        },
+        "note": {
+          "type": "string",
+          "description": "Optional review note; at most 2,000 characters.",
+          "maxLength": 2000,
+          "minLength": 0
+        }
+      },
+      "required": [
+        "decision"
+      ]
+    }
+  },
+  "operations": {
+    "/api/ideas/{id}/reviews": {
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/IdeaReviewRequest"
+            }
+          }
+        },
+        "required": true
+      },
+      "responses": {
+        "403": {
+          "description": "A teacher author cannot review their own idea. The caller lacks the required reviewer role.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApiErrorResponse"
+              }
+            }
+          }
+        },
+        "201": {
+          "description": "Created",
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewResponse"
+              }
+            }
+          }
+        },
+        "404": {
+          "description": "The idea does not exist.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApiErrorResponse"
+              }
+            }
+          }
+        },
+        "400": {
+          "description": "The idea ID or submitted review is invalid.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApiErrorResponse"
+              }
+            }
+          }
+        },
+        "409": {
+          "description": "The full specification is missing or the idea lifecycle state does not permit a review.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApiErrorResponse"
+              }
+            }
+          }
+        },
+        "401": {
+          "description": "Missing or invalid bearer authentication credentials.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApiErrorResponse"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/ideas/{id}/specification/reviews": {
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ReviewRequest"
+            }
+          }
+        },
+        "required": true
+      },
+      "responses": {
+        "403": {
+          "description": "A teacher author cannot review their own specification. The caller lacks the required reviewer role.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApiErrorResponse"
+              }
+            }
+          }
+        },
+        "201": {
+          "description": "Created",
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/ReviewResponse"
+              }
+            }
+          }
+        },
+        "404": {
+          "description": "The idea does not exist.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApiErrorResponse"
+              }
+            }
+          }
+        },
+        "400": {
+          "description": "The idea ID or submitted specification review is invalid.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApiErrorResponse"
+              }
+            }
+          }
+        },
+        "409": {
+          "description": "The full specification is missing or its lifecycle state does not permit a review.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApiErrorResponse"
+              }
+            }
+          }
+        },
+        "401": {
+          "description": "Missing or invalid bearer authentication credentials.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApiErrorResponse"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/formal-applications/{id}/reviews": {
+      "requestBody": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/ReviewRequest"
+            }
+          }
+        },
+        "required": true
+      },
+      "responses": {
+        "201": {
+          "description": "Created",
+          "content": {
+            "*/*": {
+              "schema": {
+                "$ref": "#/components/schemas/FormalReviewResponse"
+              }
+            }
+          }
+        },
+        "404": {
+          "description": "The formal application does not exist.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApiErrorResponse"
+              }
+            }
+          }
+        },
+        "400": {
+          "description": "The application ID or submitted formal review is invalid.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApiErrorResponse"
+              }
+            }
+          }
+        },
+        "409": {
+          "description": "The formal application's lifecycle state does not permit a review.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApiErrorResponse"
+              }
+            }
+          }
+        },
+        "403": {
+          "description": "The caller lacks the role required to review formal applications.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApiErrorResponse"
+              }
+            }
+          }
+        },
+        "401": {
+          "description": "Missing or invalid bearer authentication credentials.",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApiErrorResponse"
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "publicationOperation": {
+    "path": "/api/artifacts/{artifactId}/publication-review",
+    "requestBody": {
+      "content": {
+        "application/json": {
+          "schema": {
+            "$ref": "#/components/schemas/PublicationReviewRequest"
+          }
+        }
+      },
+      "required": true
+    }
+  }
+}
