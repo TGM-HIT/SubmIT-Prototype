@@ -1055,6 +1055,7 @@ class OpenApiContractTest {
                 .forEach(status -> expectedConditionKeys.add(route + " " + status)));
         assertEquals(expectedConditionKeys, TICKET_ERROR_CONDITIONS.keySet(),
                 "The independent semantic oracle must cover every non-authentication route/status in the matrix.");
+        assertPublicationReviewContractInventory();
 
         for (Map.Entry<String, Set<String>> route : TICKET_ERROR_CODES.entrySet()) {
             String[] operationParts = route.getKey().split(" ", 2);
@@ -1107,6 +1108,27 @@ class OpenApiContractTest {
         assertIndependentConditionCorrections(paths, failures);
         assertBaselinePreservedErrorResponses(paths, failures);
         assertTrue(failures.isEmpty(), () -> String.join(System.lineSeparator(), failures));
+    }
+
+    private void assertPublicationReviewContractInventory() {
+        String route = "post /api/artifacts/{artifactId}/publication-review";
+        assertEquals(Set.of("400", "403", "404", "409"), TICKET_ERROR_CODES.get(route),
+                "Publication review must retain its complete independently inventoried error-status set.");
+        assertEquals(List.of("artifact ID is not a UUID", "review request is malformed",
+                        "blank or unsupported decision", "note longer than 2,000 characters"),
+                TICKET_ERROR_CONDITIONS.get(route + " 400"));
+        assertEquals(List.of("lacks project access", "not a teacher", "APPROVE", "REJECT", "UNPUBLISH"),
+                TICKET_ERROR_CONDITIONS.get(route + " 403"));
+        assertEquals(List.of("artifact or its project does not exist"),
+                TICKET_ERROR_CONDITIONS.get(route + " 404"));
+        assertEquals(List.of("formal application is not approved", "project is not active",
+                        "SUBMIT requires a PRIVATE or REJECTED artifact", "APPROVE or REJECT requires PENDING_REVIEW",
+                        "UNPUBLISH requires an APPROVED artifact"),
+                TICKET_ERROR_CONDITIONS.get(route + " 409"));
+        assertTrue(BASELINE_SUCCESS_RESPONSES.contains(new BaselineSuccess("post",
+                        "/api/artifacts/{artifactId}/publication-review", "200",
+                        "#/components/schemas/ArtifactResponse")),
+                "The independent success baseline must retain the 200 ArtifactResponse.");
     }
 
     private void assertIndependentConditionCorrections(JsonNode paths, List<String> failures) {
@@ -1622,10 +1644,10 @@ class OpenApiContractTest {
                 post|/api/elective-subjects|400|elective-subject name
                 post|/api/elective-subjects|403|role required to create elective subjects
                 post|/api/elective-subjects|409|elective subject;submitted name;already exists
-                post|/api/artifacts/{artifactId}/publication-review|400|artifact ID;publication review
-                post|/api/artifacts/{artifactId}/publication-review|403|role required to review publication
-                post|/api/artifacts/{artifactId}/publication-review|404|artifact does not exist
-                post|/api/artifacts/{artifactId}/publication-review|409|formal application is not approved;publication or lifecycle state
+                post|/api/artifacts/{artifactId}/publication-review|400|artifact ID is not a UUID;review request is malformed;blank or unsupported decision;note longer than 2,000 characters
+                post|/api/artifacts/{artifactId}/publication-review|403|lacks project access;not a teacher;APPROVE;REJECT;UNPUBLISH
+                post|/api/artifacts/{artifactId}/publication-review|404|artifact or its project does not exist
+                post|/api/artifacts/{artifactId}/publication-review|409|formal application is not approved;project is not active;SUBMIT requires a PRIVATE or REJECTED artifact;APPROVE or REJECT requires PENDING_REVIEW;UNPUBLISH requires an APPROVED artifact
                 get|/api/application-periods|400|pagination query parameter
                 post|/api/application-periods|400|period configuration;catalogue
                 post|/api/application-periods|403|role required to create application periods

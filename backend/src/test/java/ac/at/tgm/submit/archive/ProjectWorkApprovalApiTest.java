@@ -41,6 +41,8 @@ import org.springframework.test.web.servlet.MvcResult;
 class ProjectWorkApprovalApiTest {
     private static final String PASSWORD = "testing-password";
     private static final List<String> UNAPPROVED = List.of("DRAFT", "SUBMITTED", "NEEDS_REVISION", "DECLINED");
+    private static final List<String> REVIEW_DECISIONS = List.of(
+            "review-SUBMIT", "review-APPROVE", "review-REJECT", "review-UNPUBLISH");
     private static final byte[] FILE = "artifact".getBytes(java.nio.charset.StandardCharsets.UTF_8);
 
     @Autowired private MockMvc mvc;
@@ -69,21 +71,18 @@ class ProjectWorkApprovalApiTest {
     @Test
     void rejectsEveryProjectWorkMutationUntilFormalApplicationIsApproved() throws Exception {
         for (String state : UNAPPROVED) {
-            for (String operation : List.of("upload", "delete", "review", "complete", "grade",
-                    "revision", "group-grade", "metric", "final-grade")) {
+            for (String operation : projectWorkOperations()) {
                 assertRejected(operation, state);
             }
         }
-        for (String operation : List.of("upload", "delete", "review", "complete", "grade",
-                "revision", "group-grade", "metric", "final-grade")) {
+        for (String operation : projectWorkOperations()) {
             assertRejected(operation, null);
         }
     }
 
     @Test
     void allowsEachProjectWorkMutationAfterTeacherApproval() throws Exception {
-        for (String operation : List.of("upload", "delete", "review", "complete", "grade",
-                "revision", "group-grade", "metric", "final-grade")) {
+        for (String operation : projectWorkOperations()) {
             assertApproved(operation);
         }
     }
@@ -260,7 +259,12 @@ class ProjectWorkApprovalApiTest {
     private void assertApproved(String operation) throws Exception {
         UUID project = project("IN_PROGRESS");
         Prepared prepared = prepare(operation, project);
-        store.create("formal_application", studentId.toString(), project.toString(), "APPROVED", store.object());
+        if (operation.startsWith("review-")) {
+            approveFormalApplicationThroughTeacherReview(project);
+        } else {
+            store.create("formal_application", studentId.toString(), project.toString(), "APPROVED",
+                    store.object());
+        }
         var result = perform(operation, project, teacher, prepared);
         int expected = switch (operation) {
             case "upload", "grade", "revision", "group-grade", "metric" -> 201;
@@ -269,6 +273,20 @@ class ProjectWorkApprovalApiTest {
         };
         MvcResult actual = result.andReturn();
         assertEquals(expected, actual.getResponse().getStatus(), operation + " success status");
+        if (operation.startsWith("review-")) {
+            String expectedPublicationStatus = switch (operation) {
+                case "review-SUBMIT" -> "PENDING_REVIEW";
+                case "review-APPROVE" -> "APPROVED";
+                case "review-REJECT" -> "REJECTED";
+                case "review-UNPUBLISH" -> "PRIVATE";
+                default -> throw new IllegalArgumentException(operation);
+            };
+            JsonNode response = mapper.readTree(actual.getResponse().getContentAsByteArray());
+            assertText(response, "publicationStatus", expectedPublicationStatus);
+            StoredRecord artifact = store.repository().findById(UUID.fromString(prepared.id())).orElseThrow();
+            assertEquals(expectedPublicationStatus, artifact.getStatus());
+            assertText(mapper.readTree(artifact.getPayload()), "publicationStatus", expectedPublicationStatus);
+        }
     }
 
     private Prepared prepare(String operation, UUID project) throws Exception {
@@ -280,8 +298,18 @@ class ProjectWorkApprovalApiTest {
             }
             return new Prepared(null, "project");
         }
-        if (operation.equals("delete") || operation.equals("review")) {
+        if (operation.equals("delete")) {
             StoredRecord artifact = createArtifact(project, ArtifactType.POSTER);
+            return new Prepared(artifact.getId().toString(), "artifact");
+        }
+        if (operation.startsWith("review-")) {
+            String startingStatus = switch (operation) {
+                case "review-SUBMIT" -> "PRIVATE";
+                case "review-APPROVE", "review-REJECT" -> "PENDING_REVIEW";
+                case "review-UNPUBLISH" -> "APPROVED";
+                default -> throw new IllegalArgumentException(operation);
+            };
+            StoredRecord artifact = createArtifact(project, ArtifactType.POSTER, startingStatus);
             return new Prepared(artifact.getId().toString(), "artifact");
         }
         if (operation.equals("revision")) {
@@ -302,14 +330,36 @@ class ProjectWorkApprovalApiTest {
         });
     }
 
+    private void approveFormalApplicationThroughTeacherReview(UUID project) throws Exception {
+        String secondStudentId = login("student02").path("user").path("id").asText();
+        String thirdStudentId = login("student03").path("user").path("id").asText();
+        List<String> members = List.of(studentId.toString(), secondStudentId, thirdStudentId);
+        StoredRecord group = store.repository().findFirstByTypeAndParentIdOrderByCreatedAtDesc(
+                "project_group", project.toString()).orElseThrow();
+        var groupPayload = store.parse(group);
+        groupPayload.set("studentIds", mapper.valueToTree(members));
+        store.update(group, group.getStatus(), groupPayload);
+
+        String applicationId = createdId(request(
+                post("/api/projects/{id}/formal-applications", project), student, applicationRequest(members)));
+        request(put("/api/formal-applications/{id}", applicationId), student, applicationRequest(members))
+                .andExpect(status().isOk());
+        request(post("/api/formal-applications/{id}/submit", applicationId), student, Map.of())
+                .andExpect(status().isOk());
+        request(post("/api/formal-applications/{id}/reviews", applicationId), teacher,
+                Map.of("decision", "APPROVE", "feedback", "Approved.")).andExpect(status().isCreated());
+        assertEquals("APPROVED", application(project).getStatus());
+    }
+
     private org.springframework.test.web.servlet.ResultActions perform(
             String operation, UUID project, String token, Prepared prepared) throws Exception {
         return switch (operation) {
             case "upload" -> artifactUpload(project, token);
             case "delete" -> mvc.perform(bearer(delete("/api/artifacts/{id}", prepared.id()), token))
                     ;
-            case "review" -> request(post("/api/artifacts/{id}/publication-review", prepared.id()), token,
-                    Map.of("decision", "SUBMIT"));
+            case "review-SUBMIT", "review-APPROVE", "review-REJECT", "review-UNPUBLISH" ->
+                    request(post("/api/artifacts/{id}/publication-review", prepared.id()), token,
+                            Map.of("decision", operation.substring("review-".length())));
             case "complete" -> mvc.perform(bearer(post("/api/projects/{id}/complete", project), token));
             case "grade" -> request(post("/api/projects/{id}/student-grades", project), token,
                     Map.of("rubricId", rubricId, "studentId", studentId, "criterionId", "individual", "grade", 4));
@@ -335,12 +385,16 @@ class ProjectWorkApprovalApiTest {
     }
 
     private StoredRecord createArtifact(UUID project, ArtifactType type) {
+        return createArtifact(project, type, "PRIVATE");
+    }
+
+    private StoredRecord createArtifact(UUID project, ArtifactType type, String publicationStatus) {
         var payload = store.object().put("type", type.name()).put("title", type.name())
                 .put("content", java.util.Base64.getEncoder().encodeToString(FILE))
                 .put("contentType", "application/octet-stream").put("size", FILE.length)
-                .put("publicationStatus", "PRIVATE").put("filename", "fixture.bin")
+                .put("publicationStatus", publicationStatus).put("filename", "fixture.bin")
                 .put("description", "Fixture").put("uploadedAt", java.time.Instant.now().toString());
-        return store.create("artifact", teacherId, project.toString(), "PRIVATE", payload);
+        return store.create("artifact", teacherId, project.toString(), publicationStatus, payload);
     }
 
     private UUID project(String status) {
@@ -428,13 +482,30 @@ class ProjectWorkApprovalApiTest {
 
     private Map<String, List<String>> projectSnapshot(UUID project) {
         Map<String, List<String>> snapshot = new java.util.TreeMap<>();
-        for (String type : List.of("artifact", "student_grade", "group_grade", "project_metric",
+        StoredRecord projectRecord = store.repository().findById(project).orElseThrow();
+        snapshot.put("project", List.of(projectRecord.getId() + "|" + projectRecord.getStatus()
+                + "|" + projectRecord.getPayload()));
+        for (String type : List.of("project_group", "artifact", "student_grade", "group_grade", "project_metric",
                 "final_grade", "rubric_binding", "formal_application")) {
             snapshot.put(type, store.repository().findByTypeAndParentId(type, project.toString()).stream()
                     .map(record -> record.getId() + "|" + record.getStatus() + "|" + record.getPayload())
                     .sorted().toList());
         }
+        var auditPage = store.page("audit", null, null, PageRequest.of(0, 1000));
+        assertEquals(auditPage.getTotalElements(), auditPage.getNumberOfElements(),
+                "Audit snapshot must include every audit record.");
+        snapshot.put("audit", auditPage.getContent().stream()
+                .map(record -> record.getId() + "|" + record.getOwnerId() + "|" + record.getParentId()
+                        + "|" + record.getReferenceType() + "|" + record.getStatus() + "|" + record.getPayload())
+                .sorted().toList());
         return snapshot;
+    }
+
+    private List<String> projectWorkOperations() {
+        List<String> operations = new java.util.ArrayList<>(List.of(
+                "upload", "delete", "complete", "grade", "revision", "group-grade", "metric", "final-grade"));
+        operations.addAll(2, REVIEW_DECISIONS);
+        return List.copyOf(operations);
     }
 
     private org.springframework.test.web.servlet.ResultActions request(
@@ -454,6 +525,7 @@ class ProjectWorkApprovalApiTest {
         assertEquals(expected, result.getResponse().getStatus());
         assertTrue(body.has("status") && body.path("status").isIntegralNumber());
         assertEquals(expected, body.path("status").intValue());
+        assertText(body, "error", org.springframework.http.HttpStatus.valueOf(expected).getReasonPhrase());
         assertTrue(body.has("message") && body.path("message").isTextual());
     }
 

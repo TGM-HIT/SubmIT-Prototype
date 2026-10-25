@@ -54,9 +54,18 @@ public final class ArtifactApiResponses {
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "Updated artefact publication state.",
                     useReturnTypeSchema = true),
+            @ApiResponse(responseCode = "400", description = "The artifact ID is not a UUID, or the required "
+                    + "review request is malformed, has a blank or unsupported decision, or has a note longer "
+                    + "than 2,000 characters.",
+                    content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))),
+            @ApiResponse(responseCode = "403", description = "The caller lacks project access or is not a teacher "
+                    + "for an APPROVE, REJECT, or UNPUBLISH decision.",
+                    content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))),
+            @ApiResponse(responseCode = "404", description = "The artifact or its project does not exist.",
+                    content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))),
             @ApiResponse(responseCode = "409", description = "The formal application is not approved, the project "
-                    + "lifecycle state does not permit changes, or the artifact's publication or lifecycle state "
-                    + "prevents this review.",
+                    + "is not active, SUBMIT requires a PRIVATE or REJECTED artifact, APPROVE or REJECT requires "
+                    + "PENDING_REVIEW, and UNPUBLISH requires an APPROVED artifact.",
                     content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     public @interface PublicationReview {
