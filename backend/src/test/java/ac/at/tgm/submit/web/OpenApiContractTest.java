@@ -996,7 +996,10 @@ class OpenApiContractTest {
         }
 
         assertNotNull(query, "GET /api/users/students must retain its q query parameter");
-        assertFalse(query.path("required").asBoolean(true), "q must remain optional");
+        JsonNode required = query.get("required");
+        assertNotNull(required, "q must define required");
+        assertTrue(required.isBoolean(), "q.required must be a JSON boolean");
+        assertFalse(required.booleanValue(), "q must remain optional");
         assertEquals("string", query.path("schema").path("type").asText());
         String description = query.path("description").asText();
         String lowerDescription = description.toLowerCase(Locale.ROOT);
