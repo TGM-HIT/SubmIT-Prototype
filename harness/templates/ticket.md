@@ -4,6 +4,10 @@
 
 <Describe the user-visible problem or desired outcome. State relevant current behavior and who is affected. Keep this focused on the problem, not a preselected implementation.>
 
+## Source (when applicable)
+
+For any source-file citation with a line number or range, put the citation and its repository revision together in this note: `Source: <source context>; repository revision: <exact full SHA from git rev-parse HEAD>; <path>:<line-or-range>`. Capture the SHA immediately before authoring the new ticket and verify that each cited line identifies the intended content at that revision. Do not abbreviate or infer the SHA or substitute a run-start or later revision. A path-only reference does not require a revision. Omit this note when the ticket has no line-numbered source-file citations.
+
 ## Scope and contract
 
 - <Define what must change and where.>
