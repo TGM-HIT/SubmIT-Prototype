@@ -28,11 +28,11 @@ Standard project checks:
 - Backend API annotation changes: from `backend/`, run `./gradlew test`, `./gradlew checkstyleMain`, and `./gradlew generateOpenApi`; review the generated `contracts/openapi.yaml` diff.
 - From `frontend/`, run `npm run api:types`, review the tracked `src/api/schema.d.ts` operation documentation, then run `npm run typecheck`, `npm test`, and `npm run build`.
 
-## One-time manual verification
+## One-time manual verification (in addition to automated tests)
 
 - None; this API-documentation-only change is covered by the runtime-generated OpenAPI contract test, existing create/update validation tests, and generated-artifact review.
 
-## Acceptance criteria
+## Acceptance criteria (the Evaluator judges)
 
 - Compared with the existing create operation at the stated Git HEAD baseline, the generated PUT operation communicates the same Java UTF-16 code-unit counting rule and the same group-size and individual/shared text limits. `OpenApiContractTest.formalApplicationUpdateDocumentsUtf16Limits` verifies the generated description and the shared request schema.
 - Compared with the stated Git HEAD baseline, the request schema, requiredness, existing field limits and descriptions, formats, response contract, and runtime validation remain unchanged; only the PUT operation description is added. Existing schema-description and create/update boundary tests named in “Mechanical checks” pass.

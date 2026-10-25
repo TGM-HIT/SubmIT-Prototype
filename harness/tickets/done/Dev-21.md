@@ -48,11 +48,11 @@ Standard project checks:
 - Backend test changes: from `backend/`, run `./gradlew test` and `./gradlew checkstyleMain`.
 - No API annotations or models change, so OpenAPI generation is not required.
 
-## One-time manual verification
+## One-time manual verification (in addition to automated tests)
 
 - None required; all ticket behavior is verifiable through automated API requests.
 
-## Acceptance criteria
+## Acceptance criteria (the Evaluator judges)
 
 - Each of the 19 collection endpoints listed in Scope and contract returns pagination metadata with size 20 when `size` is omitted and size 100 when `size=101` is requested.
 - The paired requests for each endpoint use the same valid fixture, resource IDs, identity, authorization, filters, and page; `page` remains 0 and `totalElements` is unchanged.

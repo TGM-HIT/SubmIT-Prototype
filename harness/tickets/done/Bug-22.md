@@ -34,11 +34,11 @@ Standard checks, from `backend/`:
 - `git diff --check` from the repository root. Format exactly changed Markdown paths before any commit containing Markdown.
 - No frontend/browser checks are required for a backend-test-only change. No OpenAPI regeneration is needed unless an explicitly justified API annotation/model change becomes necessary; then use the existing generation/type-review workflow and preserve the approved contract.
 
-## One-time manual verification
+## One-time manual verification (in addition to automated tests)
 
 - None. Deterministic HTTP regression, exact persisted target setup, fresh repeated execution and the full backend suite establish acceptance. Do not substitute manual UI checks or “rerun succeeded” for the boundary regression.
 
-## Acceptance criteria
+## Acceptance criteria (the Evaluator judges)
 
 1. The intermittent failure has a documented evidence-based cause and a focused correction; target selection is independent of random UUID position and default-page inclusion. Covered by F1/F2/F4.
 2. A deterministic beyond-page-zero regression proves exact account selection and correct assignment values, with no wrong/missing-account success-shaped fallback. Covered by F2.

@@ -24,7 +24,7 @@ Source: Compliance-03-20261022-0744, report finding 2; `docs/SPEC.md` section 4;
 - Compare the revised backend request wording with `docs/SPEC.md` section 4 and the existing `IdeaRequest.learningTopics` API description; confirm the requiredness matches and no unrelated validation limits are introduced.
 - No project build or test checks are required.
 
-## One-time manual verification
+## One-time manual verification (in addition to automated tests)
 
 - None required; the documentation consistency review is specified under Mechanical checks.
 

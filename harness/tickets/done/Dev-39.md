@@ -39,7 +39,7 @@ Documentation verification: review the changes against the cited implementation 
 
 Standard checks: documentation-only changes require no project build or test run. Run `make format-markdown FILES="docs/SPEC.md backend/SPEC.md frontend/SPEC.md"` before committing these changes.
 
-## One-time manual verification
+## One-time manual verification (in addition to automated tests)
 
 - None required; no application behavior or UI changes.
 

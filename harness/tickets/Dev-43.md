@@ -51,7 +51,7 @@ Standard checks:
 - From `backend/`: `./gradlew test`, `./gradlew checkstyleMain`, then `./gradlew generateOpenApi` and review the `contracts/openapi.yaml` diff.
 - From `frontend/`: `npm run api:types`, then `npm run typecheck`, `npm test`, and `npm run build`.
 
-## One-time manual verification
+## One-time manual verification (in addition to automated tests)
 
 - **Implementor-performed:** inspect the regenerated OpenAPI diff. Compare parsed YAML structures (ignore mapping-key order; preserve sequence order) and confirm that only descriptions for the 21 `page` parameters and `GET /api/users/students` `q` changed. Do not normalize any values. Confirm the regenerated tracked `frontend/src/api/schema.d.ts` contains the updated descriptions and no unrelated generated changes. Record the review in the handoff.
 

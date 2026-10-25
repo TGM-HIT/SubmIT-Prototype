@@ -49,12 +49,12 @@ Standard checks:
 - From the repository root: `make startup-config-check`; execute N1 and N4 and retain exact outcomes. No dependency installation solely to run tests unless the command reports missing dependencies.
 - Format exactly the Markdown paths included in each commit; run `git diff --check`. Do not hand-edit generated contracts or commit ignored outputs. No SPEC behavior change is intended.
 
-## One-time manual verification
+## One-time manual verification (in addition to automated tests)
 
 - **Implementor-performed:** use the existing authenticated preview command with a documented testing account, password supplied through the environment, and `/` at desktop size. Record newly started backend/frontend logs and confirm the backend identifies itself as SubmIT, npm reports `submit-frontend`, and the newly created browser profile has the `submit-preview-` prefix. Store sanitized evidence under the ignored run evidence directory. Do not force Chromium internal page reloads merely to reproduce the exact user log line; validate the application-owned prefix directly.
 - N4's runtime container check must be attempted. If unavailable, report its exact failure separately; no fake image/test success or changes to permissions to bypass it. No human-only UI judgement is needed for an identity-only change.
 
-## Acceptance criteria
+## Acceptance criteria (the Evaluator judges)
 
 1. Fresh backend logs, build/package identity, npm output and preview-generated profile paths use the mapped SubmIT identities; active authored references contain no unexplained old branding. Historical records and browser-owned suffixes are unchanged. Covered by N1/N2/N3 and fresh preview verification.
 2. Packaging still starts `ac.at.tgm.submit.SubmITlication`, rejects foreign-namespace application classes, and renamed JAR consumers and non-root container startup work without old-name assumptions. Covered by N2/N4.

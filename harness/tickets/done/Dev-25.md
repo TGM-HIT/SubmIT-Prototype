@@ -28,11 +28,11 @@ Standard project checks:
 - Backend API annotation changes: from `backend/`, run `./gradlew test`, `./gradlew checkstyleMain`, and `./gradlew generateOpenApi`; review the generated `contracts/openapi.yaml` diff.
 - From `frontend/`, run `npm run api:types` because the generated frontend schema contains `AllocationRunResponse.finalizedAt`; inspect the result. If tracked types change, also run `npm run typecheck`, `npm test`, and `npm run build`. Commit generated frontend types only if their contents change.
 
-## One-time manual verification
+## One-time manual verification (in addition to automated tests)
 
 - None; the generated schema and preserved contract shape are covered by automated tests and generated-contract review.
 
-## Acceptance criteria
+## Acceptance criteria (the Evaluator judges)
 
 - The runtime-generated `AllocationRunResponse.finalizedAt` schema has the exact description `Instant when an administrator successfully finalized the allocation run.`, remains `type: string` and `format: date-time`, and retains its existing requiredness and nullability. `OpenApiContractTest.allocationRunFinalizedAtDocumentsFinalizationMeaning` checks the description, type, and format; `OpenApiContractTest.operationsHaveSummariesAndConstrainedFieldsHaveDescriptions` checks the response schema's properties, requiredness, and nullability.
 - Finalization timing, authorization, eligibility, response serialization, and every other runtime behavior remain unchanged from the stated Git HEAD baseline.

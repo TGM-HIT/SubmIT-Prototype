@@ -36,11 +36,11 @@ Standard project checks:
 - Backend changes: from `backend/`, run `./gradlew test`, `./gradlew checkstyleMain`, and `./gradlew generateOpenApi`; review the generated `contracts/openapi.yaml` diff.
 - From `frontend/`, run `npm run api:types` and review tracked output. If generated frontend types change, also run `npm run typecheck`, `npm test`, and `npm run build`.
 
-## One-time manual verification
+## One-time manual verification (in addition to automated tests)
 
 - None; the API behavior and runtime-generated contract are verified by automated tests.
 
-## Acceptance criteria
+## Acceptance criteria (the Evaluator judges)
 
 - The backend specification and generated operation/parameter descriptions state that teachers may optionally filter a project's individual grade history by `studentId`, while students can retrieve only their own grades and are forbidden from requesting another student's ID. `OpenApiContractTest.studentGradeListDocumentsFilterAndStudentRestriction` verifies the generated wording and query-parameter shape.
 - For the same project and grade records, a teacher's unfiltered request returns both members' grade histories, while a request filtered to one member returns only that member's records. `GradingControllerStudentGradesFilterTest.teacherCanFilterProjectStudentGrades` verifies status, content, and pagination.

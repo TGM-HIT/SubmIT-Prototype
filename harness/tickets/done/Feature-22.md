@@ -54,12 +54,12 @@ Standard project checks (run from the required module directories):
 - `frontend/`: `npm run api:types`, `npm run typecheck`, `npm test`, and `npm run build`.
 - Review generated `contracts/openapi.yaml` without committing the ignored output; commit updated tracked `frontend/src/api/schema.d.ts` only if generated types change.
 
-## One-time manual verification
+## One-time manual verification (in addition to automated tests)
 
 - **Implementor-performed:** Using the supported local browser preview and documented opt-in fixture, sign in as `student01`. Verify the dropdown contains both finalized eligible projects across periods, displays distinct human-readable labels and proposal state without UUIDs, opens the existing proposal without a duplicate create request, and starts a draft for the project with none. Verify the preliminary-only project is absent. The fixture must prepare its records before navigation; failed prerequisite requests must be investigated, never ignored.
 - **Implementor-performed:** Verify a student with no finalized assignment sees an honest empty state; a preliminary allocation alone does not appear. Verify teacher/admin review still uses the existing flow. Capture affected states at desktop and mobile under `harness/runs/<run-id>/evidence/`, inspect focus/accessibility and horizontal overflow, and report relevant console/network failures and request URLs/statuses. Do not use direct data mutation or a one-off browser/database script; use UI/API flows and existing or minimal reusable testing-profile fixtures with durable tests.
 
-## Acceptance criteria
+## Acceptance criteria (the Evaluator judges)
 
 - A signed-in student selects a project for a Formal proposal from all and only their finalized allocated projects, including projects with existing proposals. No project UUID is entered or displayed as the project label.
 - Selecting a project opens its current proposal/status/history or, if none exists, provides the existing start-draft flow. Existing proposal statuses, editability, payload, teacher review, and duplicate prevention remain intact.

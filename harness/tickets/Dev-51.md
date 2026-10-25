@@ -27,7 +27,7 @@ Durable automated tests:
 
 Standard project checks: from `backend/`, `./gradlew test` and `./gradlew checkstyleMain`.
 
-## One-time manual verification
+## One-time manual verification (in addition to automated tests)
 
 - None required; the regression check is automated and no user-facing behavior changes.
 

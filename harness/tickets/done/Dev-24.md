@@ -38,11 +38,11 @@ Standard project checks:
 - Backend test changes: from `backend/`, run `./gradlew test` and `./gradlew checkstyleMain`.
 - No OpenAPI generation is required because API annotations, request/response models, and validation rules must not change. The contract test reads the generated runtime `/v3/api-docs`.
 
-## One-time manual verification
+## One-time manual verification (in addition to automated tests)
 
 - None; API behavior and the runtime-generated OpenAPI schema are covered by automated tests.
 
-## Acceptance criteria
+## Acceptance criteria (the Evaluator judges)
 
 - All four catalogue operations accept unique 1- and 100-character ASCII names, return/store the normalized name for accepted padded input within the request limit, and reject empty, whitespace-only, and 101-character inputs with `400`. `StudentDetailsControllerTest.catalogueNameBoundariesAndTrimmingAreEnforced` covers each boundary for each operation and proves rejected requests do not mutate catalogue state.
 - For each catalogue, duplicate POST attempts and rename attempts that collide with another entry return `409` for exact and mixed-case names, including a padded mixed-case variant. No rejected request changes the catalogue. Renaming an entry to its own unchanged name succeeds. `StudentDetailsControllerTest.catalogueNamesAreUniqueIgnoringCase` covers these cases for both catalogues.

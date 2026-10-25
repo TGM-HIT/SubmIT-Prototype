@@ -38,7 +38,7 @@ Durable automated tests:
 
 Standard frontend checks: from `frontend/`, run `npm run typecheck`, `npm test`, and `npm run build`.
 
-## One-time manual verification
+## One-time manual verification (in addition to automated tests)
 
 - None required; the ticket adds component-level regression tests and changes no user-facing behavior.
 

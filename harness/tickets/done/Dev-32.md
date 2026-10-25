@@ -41,11 +41,11 @@ Named verification scenarios using existing file reads, searches and the reposit
 - **C6 — Freshness, failure and findings contract:** Walk the check's instructions for successful fresh generation, absent initial output, missing password/browser, occupied ports, failed UI requests and generation failure with older output present. Verify only the fresh successful case permits a completeness/correctness conclusion; failed cases stop with exact diagnostics and uninspected topics. Verify generated defects lead to authored-source or evidenced product follow-ups, never edits/commits to generated files. Check configured-only grading, authenticated versus anonymous privacy and unresolved-policy handling explicitly.
 - Run `git diff --check`. Before committing Markdown, run `make format-markdown FILES="..."` with exactly the Markdown files in that commit. No backend/frontend build, application tests, browser capture or full Compliance run is required to implement this documentation-only ticket; the future Compliance-07 run itself must perform the generation/review described above. No new automated test tooling is required; C1-C6 are explicit mechanical contract inspections, not runtime-test claims.
 
-## One-time manual verification
+## One-time manual verification (in addition to automated tests)
 
 - None beyond C1-C6 contract inspection. No UI or generated content changes are part of this implementation. Do not confuse verification of the new check definition with actually running Compliance-07; no successful audit may be claimed before execution.
 
-## Acceptance criteria
+## Acceptance criteria (the Evaluator judges)
 
 1. Compliance-01 through Compliance-06 consistently exclude only the recursive `docs/user-guide/` subtree; the Auditor contract explicitly permits Compliance-07's dedicated generation/inspection without weakening other exclusions. Covered by C1/C2/C3.
 2. Incoming links from authored documents do not cause generated outputs to be read or their absence/anchors/images to become audit findings; ordinary non-generated link checks remain intact. Covered by C2.

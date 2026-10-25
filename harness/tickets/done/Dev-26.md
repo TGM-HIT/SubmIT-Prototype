@@ -27,11 +27,11 @@ Standard project checks:
 - Backend API annotation changes: from `backend/`, run `./gradlew test`, `./gradlew checkstyleMain`, and `./gradlew generateOpenApi`; review the generated `contracts/openapi.yaml` diff.
 - From `frontend/`, run `npm run api:types` because the tracked generated request type includes `RegisterRequest.role`; review the result. If tracked types change, also run `npm run typecheck`, `npm test`, and `npm run build`. Commit generated frontend types only if their contents change.
 
-## One-time manual verification
+## One-time manual verification (in addition to automated tests)
 
 - None; the runtime-generated schema and registration endpoint behavior are covered by automated tests.
 
-## Acceptance criteria
+## Acceptance criteria (the Evaluator judges)
 
 - The generated `RegisterRequest.role` property clearly states that its value is ignored and registration always creates a `STUDENT` account. `OpenApiContractTest.registrationRoleIsDocumentedAsIgnored` verifies this description.
 - The generated role property remains an optional string with exactly the enum values `STUDENT`, `TEACHER`, and `ADMIN`. The same contract test verifies type, enum, and optionality.

@@ -28,11 +28,11 @@ Standard project checks:
 
 - Documentation-only/harness-only change: no application build or test suite applies. Run `make format-markdown FILES="harness/roles/auditor.md harness/roles/orchestrator.md"` and `git diff --check`; verify the affected role and global guidance are consistent.
 
-## One-time manual verification
+## One-time manual verification (in addition to automated tests)
 
 - None; the change is limited to role guidance and is verified by the named text assertions and Markdown checks.
 
-## Acceptance criteria
+## Acceptance criteria (the Evaluator judges)
 
 - `harness/roles/auditor.md` requires Opus at a high thinking level for every compliance check, without a mid-tier/medium default or check-specific exception. The named positive and negative text checks verify the rule.
 - `harness/roles/orchestrator.md` describes the same all-check Opus/high requirement and no longer summarizes the former two-check exception. The named text checks verify agreement with the Auditor role.

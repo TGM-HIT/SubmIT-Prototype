@@ -52,13 +52,13 @@ Standard checks, from `frontend/`:
 
 Review the generated API contract for the language endpoint, required response property, and unintended changes. Review tracked generated frontend types where changed.
 
-## One-time manual verification
+## One-time manual verification (in addition to automated tests)
 
 - **Implementor-performed:** Using the documented testing profile and browser preview, sign in as a student, choose German in User Settings, save, navigate across representative authenticated views, reload, and verify German remains selected. Choose English and verify immediate switch and persistence. Cancel a draft change and force a save error to confirm no unintended language/account update. Repeat the selection/save flow for teacher and administrator accounts.
 - **Implementor-performed:** The current preview CLI does not expose a browser-locale option. Add a minimal reusable `--locale <BCP-47-tag>` option to the supported preview tooling, configure Chromium so the real `navigator.language` reflects it, and add durable CLI smoke coverage. Open login and registration with `de-DE`, `en-US`, and `fr-FR`; verify German, English, and English fallback respectively, without assigning `navigator.language` from application code or changing an account preference. Cover public `/archive/:projectId` with a successful mocked API response in frontend route tests under all three browser languages; do not treat a missing archive record or failed request as a successful manual check.
 - Capture desktop and mobile screenshots of representative German and English authenticated screens and unauthenticated screens under `harness/runs/<run-id>/evidence/`. Confirm long German labels wrap without horizontal overflow, inspect keyboard focus and accessible labels, and report console/network failures with their request/status. Do not use one-off scripts or direct data mutation; use supported preview tooling and UI/API flows.
 
-## Acceptance criteria
+## Acceptance criteria (the Evaluator judges)
 
 - The persisted account preference has only `en` and `de`; existing/new accounts default to `en`, and login/session hydration restores the saved choice.
 - Every frontend-owned user-facing string on authenticated and unauthenticated routes is available in both languages, including accessible text and frontend-authored validation/status/error messages. No missing German catalog keys silently display English.

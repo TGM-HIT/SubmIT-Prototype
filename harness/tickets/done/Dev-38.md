@@ -27,7 +27,7 @@ Source: Compliance-01-20261021-2225, report finding 3: `frontend/README.md:21`; 
 - Review the README diff against the current public archive implementation and `docs/SPEC.md`, `frontend/SPEC.md`, and `backend/SPEC.md`; confirm the chosen wording follows the applicable implementation-state branch above and preserves the access and safety requirements.
 - Documentation-only change: no project build or test checks required.
 
-## One-time manual verification
+## One-time manual verification (in addition to automated tests)
 
 - None required. The route behavior is checked against source; no UI behavior is changed.
 

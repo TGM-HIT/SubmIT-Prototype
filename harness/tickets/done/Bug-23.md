@@ -31,13 +31,13 @@ Standard checks, from `frontend/`:
 - From the repository root, `git diff --check` and format exactly any changed Markdown paths before committing them.
 - No backend checks or API regeneration are required for this frontend-only display change.
 
-## One-time manual verification
+## One-time manual verification (in addition to automated tests)
 
 - **Implementor-performed — Student and teacher navigation:** Use the reusable browser preview from [the frontend guidelines](../../../frontend/DEV-GUIDELINES.md#local-browser-preview), with documented `student01` and `teacher01` testing-profile accounts and credentials supplied through the supported environment. For each role, capture `/formal-application` at desktop and mobile viewports. Verify the visible sidebar label and page heading say “Formal proposal”, the active link is correct, and the introductory/load controls clearly describe an allocated group's proposal, not pre-allocation preferences. Labels must remain readable without overlap or horizontal overflow.
 - These initial-screen captures need only authenticated testing accounts: entering this route does not itself load a project proposal. Dependent requests are authentication/session loading; do not click Load without an existing proposal or provoke an expected 404. A separate student/teacher desktop review of the populated screen can use the existing testing-profile submitted proposal at project `03a00000-0000-4000-8000-000000000001`: enter that ID in `#project-id`, activate the toolbar load button and wait for the existing proposal response from `GET /api/projects/{projectId}/formal-applications`. For teacher review, wait for `#formal-decision`; do not submit a decision merely to verify wording. No allocation setup or new fixture is needed.
 - Store screenshots and preview results under `harness/runs/<run-id>/evidence/` (ignored). Inspect console/network results. If authentication, fixture loading or rendering fails, report the exact failing request/state and investigate; do not treat missing content, API errors or substituted fixture state as successful visual evidence. There is no manual-only acceptance fallback; L1/L2 provide durable behavior checks.
 
-## Acceptance criteria
+## Acceptance criteria (the Evaluator judges)
 
 1. Students and teachers see “Formal proposal” in navigation and the route's page title; administrator navigation and the separate preference Applications entry remain as baseline. Covered by L1.
 2. The entire form consistently identifies the post-allocation document as a formal proposal, explicitly distinguishes it from preference rankings and retains the teacher-approval prerequisite. Covered by L2/L3.

@@ -24,7 +24,7 @@ Durable API regression tests:
 
 Standard project checks: from `backend/`, run `./gradlew compileJava compileTestJava --rerun-tasks`, `./gradlew test`, and `./gradlew checkstyleMain`. No OpenAPI generation is needed because endpoint annotations, API models, and validation rules do not change.
 
-## One-time manual verification
+## One-time manual verification (in addition to automated tests)
 
 - None required; the durable MockMvc tests exercise the affected public HTTP routes, and production behavior is unchanged.
 

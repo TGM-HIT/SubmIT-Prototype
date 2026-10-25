@@ -37,7 +37,7 @@ Durable API regression tests:
 
 Standard project checks: from `backend/`, `./gradlew test` and `./gradlew checkstyleMain`.
 
-## One-time manual verification
+## One-time manual verification (in addition to automated tests)
 
 - None required; the change adds backend regression tests and changes no user-facing behavior.
 

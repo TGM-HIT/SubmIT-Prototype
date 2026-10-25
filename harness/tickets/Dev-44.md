@@ -54,7 +54,7 @@ Standard project checks (all must pass):
 
 - From `frontend/`: `npm run typecheck`, `npm test`, and `npm run build`.
 
-## One-time manual verification
+## One-time manual verification (in addition to automated tests)
 
 - **Implementor-performed:** inspect `frontend/src/api/services.ts` for `Data` and `unknown` in exported service method signatures, and inspect `frontend/src/api/client.ts` for hand-written pagination metadata. Record any remaining occurrences and their reasons in the handoff. In-scope service methods must no longer expose `Data` or `unknown`; generic transport/error plumbing and the Bug-29 audit model are explicitly out of scope. Confirm that no request paths, HTTP methods, serialized bodies, or visible behavior changed.
 

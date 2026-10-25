@@ -37,11 +37,11 @@ Standard checks:
 - Run the root verification entry point if modified to wire enforcement. Retain compiler/checker stdout, stderr and exit codes under the ignored run evidence directory; distinguish freshly executed checks from up-to-date tasks and third-party warnings.
 - Format exactly the changed Markdown files before each commit and run `git diff --check`. No new dependencies or manual generated-file edits.
 
-## One-time manual verification
+## One-time manual verification (in addition to automated tests)
 
 - None. Compiler/declaration diagnostics, isolated negative fixtures and the existing public HTTP/frontend/tooling suites establish acceptance. No screenshot or human-only UI assessment is needed.
 
-## Acceptance criteria
+## Acceptance criteria (the Evaluator judges)
 
 1. The reported test-compilation warning is resolved at its actual cause, and owned backend production/tests and frontend production/tests/configuration/tooling have no verified deprecated API usage under the current supported toolchain. Covered by P1/P2/P3/P5.
 2. Standard verification rejects reintroduced deprecated usage in both modules with actionable diagnostics, including Java tests/removal warnings and declaration-resolved frontend aliases/overloads/Vue/Node cases. Analysis failures are explicit. Covered by P1/P2/P3.

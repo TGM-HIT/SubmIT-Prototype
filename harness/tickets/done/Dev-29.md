@@ -44,11 +44,11 @@ Standard project checks:
 - From `frontend/`, run `npm run api:types`, `npm run typecheck`, `npm test`, and `npm run build`; verify the regenerated tracked types have no content change.
 - Run `make format-markdown FILES="docs/SPEC.md backend/SPEC.md frontend/SPEC.md backend/DEV-GUIDELINES.md frontend/DEV-GUIDELINES.md README.md backend/README.md frontend/README.md"` and `git diff --check`. The Orchestrator separately formats closeout ticket/ledger changes.
 
-## One-time manual verification
+## One-time manual verification (in addition to automated tests)
 
 - None. Clean backend execution, profile-specific integration tests, executable-archive startup during OpenAPI generation, startup wiring checks, and generated-contract comparison cover the namespace refactor.
 
-## Acceptance criteria
+## Acceptance criteria (the Evaluator judges)
 
 - All production and test Java classes use the `ac.at.tgm.submit` root with matching paths and preserved subpackages; the entry-point class is `SubmITlication` and no duplicate or obsolete application/package classes remain. Inventory, source-reference, clean-test, and archive checks establish this.
 - Spring application discovery, authenticated registration/login, profile-specific seed/bootstrap behavior, and runtime API discovery continue working, proven by the named existing tests and successful archive-backed OpenAPI generation.
