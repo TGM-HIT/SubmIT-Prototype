@@ -13,6 +13,7 @@ Source at repository HEAD `6351e42e1578c20cec899828be0f0b688b8898b1`: `harness/r
 - Capture the current HEAD immediately before authoring the new ticket and ensure its line-numbered citations identify content at that revision. Do not abbreviate, infer, or substitute a run-start SHA or a later commit for the captured HEAD.
 - Tickets that cite files without line numbers do not need a commit ID under this rule. Do not add revision metadata to existing tickets or change their citations as part of this work.
 - Do not change ticket IDs, plan workflow, audit baseline/report requirements, or other ticket-authoring behavior.
+- Scope-gate allowances: `harness/templates/ticket.md`, `harness/roles/ticket-author.md`.
 
 ## Mechanical checks (the Evaluator re-runs)
 
