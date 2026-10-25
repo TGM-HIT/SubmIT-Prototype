@@ -10,7 +10,7 @@ Owner feedback in `Bug-29-20261024-2031/human-acceptance.md` asked: "show the re
 
 ## Scope and contract
 
-- Build on completed [Bug-29](done/Bug-29.md). Preserve its canonical fields and typed pagination, but extend audit recording, response enrichment, and presentation as specified below. This ticket deliberately supersedes its exact audit-property-set baseline by adding documented context fields; it does not reopen Bug-29 or change the group-member contract.
+- Build on completed [Bug-29](Bug-29.md). Preserve its canonical fields and typed pagination, but extend audit recording, response enrichment, and presentation as specified below. This ticket deliberately supersedes its exact audit-property-set baseline by adding documented context fields; it does not reopen Bug-29 or change the group-member contract.
 - Make `/admin` -> **Audit history** display, for every valid returned entry:
   - A readable action-specific description, such as "Elective subject created" or "User role changed", rather than one generic event title. Inventory the action codes actually emitted by the backend, including dynamically constructed actions, and provide matching English and German catalog entries for all current codes.
   - The recorded `occurredAt` date and time, formatted with the existing locale-aware timestamp helper and reacting to the selected account language. Do not substitute request time, render a date without its time, or alter the stored instant.
