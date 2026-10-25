@@ -4,7 +4,7 @@ Draft from Compliance-03-20261022-0744: needs Ticket Author refinement before im
 
 ## Intent
 
-The generated OpenAPI contract is the documented request contract for API clients and generated frontend types. For 33 required non-blank request strings, it allows empty strings (`minLength: 0`). For nine fields that the backend validates as a full match, it emits unanchored JSON Schema patterns. As a result, a contract-based client or validator accepts values that the backend rejects with `400`, such as an empty idea title or a publication decision `XSUBMITX`.
+The generated OpenAPI contract is the documented request contract for API clients and generated frontend types. For 32 unconditionally non-blank generated request string schema locations (including array-item schemas), it allows empty strings (`minLength: 0`). For nine fields that the backend validates as a full match, it emits unanchored JSON Schema patterns. As a result, a contract-based client or validator accepts values that the backend rejects with `400`, such as an empty idea title or a publication decision `XSUBMITX`.
 
 Source: Compliance-03-20261022-0744, report finding 1:
 
@@ -14,14 +14,14 @@ Source: Compliance-03-20261022-0744, report finding 1:
 
 ## Scope and contract
 
-- The generated request schema must declare `minLength: 1` for each of these unconditionally non-blank strings. For list fields marked `[]`, this applies to the array items:
+- The generated request schema must declare `minLength: 1` for each of these unconditionally non-blank strings. For list fields marked `[]`, this applies to the array items. The entries below name generated OpenAPI components and properties. The consolidation in [Dev-54](done/Dev-54.md) is already present in the current generated contract: all three review routes reference the canonical `ReviewRequest` component, so `ReviewRequest.feedback` appears once in this inventory. That sequencing prerequisite is already satisfied. The idea-review endpoint still binds to the distinct runtime `IdeaReviewRequest` bean; this ticket does not rename, merge, or alter that runtime DTO or its validation.
   - `VersionTransition.reason`
   - `IdeaRequest.title`, `description`, `intendedOutcome`, `scopePoints[]`, `learningTopics[]`, `schoolYear`
   - `SpecificationRequest.objectives[]`, `intendedUsers[]`, `requirements[]`, `deliverables[]`, `scope`, `dependencies[]`
   - `FormalApplicationRequest.topic`, `initialSituation`, `objective`
   - `IndividualTopic.topic`, `Milestone.text`, `StudentText.text`
   - `ApplicationPeriodRequest.schoolYear`, `GradeRevisionRequest.reason`, `ArtifactUploadRequest.title`
-  - `ReviewRequest.feedback`, `IdeaReviewRequest.feedback`
+  - `ReviewRequest.feedback`
   - `AggregationRuleDto.id`; `CategoryDto.id`, `name`; `CriterionDto.id`, `name`; `MetricDefinitionDto.id`, `name`
   - `PublishRubricRequest.version`, `name`
 - Keep each property's existing `maxLength`, description, requiredness, and array bounds. The fix must not leave `minLength: 0` on any of these properties.
@@ -45,7 +45,7 @@ Source: Compliance-03-20261022-0744, report finding 1:
 
 Durable automated tests (join the build):
 
-- Add `OpenApiContractTest.requiredNonBlankRequestStringsDeclareMinimumLength`. From `/v3/api-docs`, for each property listed above (for list fields, each array item), assert `type: string`, `minLength: 1`, and the unchanged `maxLength`.
+- Add `OpenApiContractTest.requiredNonBlankRequestStringsDeclareMinimumLength`. From `/v3/api-docs`, for each generated component/property listed above (for list fields, each array item), assert `type: string`, `minLength: 1`, and the unchanged `maxLength`. Assert the shared generated `ReviewRequest.feedback` once; do not expect a generated `IdeaReviewRequest` component. Runtime validation remains bound to the distinct idea-review `IdeaReviewRequest` DTO.
 - Add `OpenApiContractTest.fullMatchRequestConstraintsRejectEmbeddedValues`. For each of the nine pattern-validated properties, evaluate the emitted constraint with JSON Schema search semantics (`Matcher.find()` for `pattern`, membership for `enum`). Assert that:
   - a valid value is accepted, such as `SUBMIT`, `STUDENT`, `WEIGHTED_AVERAGE`, `BOTH`, or `2026-10-22`;
   - an embedded value is rejected, such as `XSUBMITX` or `x2026-10-22x`.
@@ -64,7 +64,7 @@ Standard project checks (all must pass, and the Evaluator re-runs them):
 
 ## Acceptance criteria (the Evaluator judges)
 
-- Every listed unconditionally non-blank request string or array item declares `minLength: 1` in the generated contract. Its `maxLength`, description, and requiredness are unchanged.
+- Every listed unconditionally non-blank generated request string property or array item declares `minLength: 1` in the generated contract. `ReviewRequest.feedback` is the single shared generated review-feedback property; its `maxLength`, description, and requiredness are unchanged. The distinct runtime `IdeaReviewRequest` DTO and its validation remain unchanged.
 - None of the nine full-match properties accepts a value with leading or trailing extra characters under JSON Schema semantics. Every value that runtime validation accepts is still accepted.
 - Conditional fields, response schemas, runtime validation, statuses, and messages are unchanged. Blank or invalid values still return `400`, and valid requests still succeed.
 - Standard (all tickets): the standard project checks pass; existing behavior outside the stated scope is unchanged; no unrelated cleanups; generated artifacts are never hand-edited and are regenerated and reviewed when applicable; commit generated output only when repository tracking conventions require it (for example, tracked `frontend/src/api/schema.d.ts` may need to be committed, while ignored `contracts/openapi.yaml` must not be committed); no check is claimed that was not performed.
