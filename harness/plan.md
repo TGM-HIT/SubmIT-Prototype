@@ -107,7 +107,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-50](tickets/done/Dev-50.md) | done | Resolve preflight against scoped audit exclusions |
 | [Dev-51](tickets/Dev-51.md) | to-do | Add automated checks for controller-to-service boundaries |
 | [Dev-52](tickets/done/Dev-52.md) | done | Anchor line-numbered ticket sources to a Git revision |
-| [Dev-53](tickets/Dev-53.md) | to-do | Test period response fields and label boundaries |
+| [Dev-53](tickets/done/Dev-53.md) | done | Test period response fields and label boundaries |
 
 ### Agents
 
