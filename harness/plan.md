@@ -97,7 +97,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-40](tickets/done/Dev-40.md) | done | Add tests for untested backend and shared specification rules |
 | [Dev-41](tickets/done/Dev-41.md) | done | Add frontend tests for untested frontend specification rules |
 | [Dev-42](tickets/done/Dev-42.md) | done | Align backend learning-topic validation wording with the shared idea rule |
-| [Dev-43](tickets/Dev-43.md) | to-do | Describe page and student-lookup query parameters in OpenAPI |
+| [Dev-43](tickets/Dev-43.md) | awaiting-human | Describe page and student-lookup query parameters in OpenAPI |
 | [Dev-44](tickets/done/Dev-44.md) | done | Use generated API types in frontend services and pagination |
 | [Dev-45](tickets/done/Dev-45.md) | done | Use the ticket template's exact section headings in ticket files |
 | [Dev-46](tickets/done/Dev-46.md) | done | Align the Compliance ledger introduction with the Auditor follow-up prefixes |
