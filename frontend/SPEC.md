@@ -27,6 +27,7 @@ Provide authenticated views for:
 - Project completion views for individual final grades, the overall project grade where configured, and their underlying rubric assessments and metric inputs.
 - A public, unauthenticated archive view for completed projects, plus authenticated project archive management and private-artefact views.
 - Teacher and administrator views for application-period configuration and application summaries.
+- Visible student and staff period views identify each period by its label and retain the school year as context; the administrator period selector does the same. If a legacy period has no usable stored label, use its school year as the displayed label.
 - Administrator views for users, roles, confirmed supervisor assignments, automatically started allocation runs, early preliminary runs while a period is open, run results, post-deadline replacement runs before finalization, and finalizing eligible allocation results. The early-run control explains that applications remain open and students do not see those results; early and deadline/replacement runs have distinct text labels.
 - Audit-history views for visible submissions, reviews, applications, and allocation runs.
 
