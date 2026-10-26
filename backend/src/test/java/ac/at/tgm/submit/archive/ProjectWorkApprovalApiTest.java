@@ -2,6 +2,7 @@ package ac.at.tgm.submit.archive;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -332,6 +333,55 @@ class ProjectWorkApprovalApiTest {
                     .path("publicationStatus").textValue());
             assertEquals("PENDING_REVIEW", store.repository().findById(artifact.getId()).orElseThrow().getStatus());
         }
+
+        StoredRecord memberArtifact = createStudentArtifact(project, studentId);
+        assertEquals("PRIVATE", memberArtifact.getStatus());
+        JsonNode projectGroup = store.parse(store.repository()
+                .findFirstByTypeAndParentIdOrderByCreatedAtDesc("project_group", project.toString()).orElseThrow());
+        JsonNode projectMembers = projectGroup.get("studentIds");
+        assertTrue(projectMembers != null && projectMembers.isArray());
+        boolean memberIncluded = false;
+        for (JsonNode projectMember : projectMembers) {
+            assertTrue(projectMember.isTextual());
+            memberIncluded |= studentId.toString().equals(projectMember.textValue());
+        }
+        assertTrue(memberIncluded);
+        String outsider = null;
+        UUID outsiderId = null;
+        for (int number = 2; number <= 5 && outsider == null; number++) {
+            JsonNode candidateLogin = login(String.format("student%02d", number));
+            UUID candidateId = UUID.fromString(candidateLogin.path("user").path("id").asText());
+            boolean candidateIsMember = false;
+            for (JsonNode projectMember : projectMembers) {
+                candidateIsMember |= candidateId.toString().equals(projectMember.textValue());
+            }
+            if (!candidateIsMember) {
+                outsider = candidateLogin.path("token").asText();
+                outsiderId = candidateId;
+            }
+        }
+        assertTrue(outsider != null && outsiderId != null, "Fixture must provide a nonmember student.");
+        StoredRecord outsiderArtifact = createStudentArtifact(project, outsiderId);
+        assertEquals("PRIVATE", outsiderArtifact.getStatus());
+        MvcResult memberResult = request(post("/api/artifacts/{id}/publication-review", memberArtifact.getId()),
+                student, Map.of("decision", "SUBMIT")).andExpect(status().isOk()).andReturn();
+        JsonNode memberResponse = mapper.readTree(memberResult.getResponse().getContentAsByteArray());
+        assertEquals(memberArtifact.getId().toString(), memberResponse.path("id").textValue());
+        assertEquals("PENDING_REVIEW", memberResponse.path("publicationStatus").textValue());
+        assertEquals("PENDING_REVIEW", store.repository().findById(memberArtifact.getId()).orElseThrow().getStatus());
+
+        StoredRecord outsiderBefore = store.repository().findById(outsiderArtifact.getId()).orElseThrow();
+        String outsiderStatusBefore = outsiderBefore.getStatus();
+        String outsiderPayloadBefore = outsiderBefore.getPayload();
+        Map<String, List<String>> beforeOutsiderSubmit = projectSnapshot(project);
+        MvcResult outsiderResult = request(post("/api/artifacts/{id}/publication-review", outsiderArtifact.getId()),
+                outsider, Map.of("decision", "SUBMIT")).andExpect(status().isForbidden()).andReturn();
+        assertError(outsiderResult, 403);
+        StoredRecord outsiderAfter = store.repository().findById(outsiderArtifact.getId()).orElseThrow();
+        assertEquals(outsiderStatusBefore, outsiderAfter.getStatus());
+        assertEquals(outsiderPayloadBefore, outsiderAfter.getPayload());
+        assertEquals(beforeOutsiderSubmit, projectSnapshot(project),
+                "Outsider SUBMIT denial must preserve artifact, related project records, and complete audit history.");
 
         for (String decision : List.of("APPROVE", "REJECT", "UNPUBLISH")) {
             String initialStatus = "UNPUBLISH".equals(decision) ? "APPROVED" : "PENDING_REVIEW";

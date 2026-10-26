@@ -196,6 +196,16 @@ class AllocationEarlyRunApiTest {
     void allocationRunStartAndFinalizeEnforceAdministratorRoleSetsOnEquivalentFixtures() throws Exception {
         String teacherOnly = teacherToken;
         String teacherId = users.findByUsername("teacher01").orElseThrow().getId().toString();
+        UUID populatedStudent = students.getFirst();
+        UUID populatedProject = projects.getFirst();
+        for (UUID student : students.subList(0, 3)) {
+            includeEligible(student);
+            ObjectNode applicationPayload = store.object();
+            applicationPayload.putArray("preferences").addObject().put("projectId", populatedProject.toString())
+                    .put("rank", 1);
+            store.create("student_application", student.toString(), periodId.toString(),
+                    "SUBMITTED", applicationPayload);
+        }
         mockMvc.perform(patch("/api/users/{id}/role", teacherId).header("Authorization", bearer(adminToken))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(Map.of("roles", List.of("TEACHER", "ADMIN")))))
@@ -217,20 +227,32 @@ class AllocationEarlyRunApiTest {
         MvcResult adminRunResult = mockMvc.perform(post("/api/application-periods/{id}/allocation-runs", periodId)
                         .header("Authorization", bearer(adminToken)))
                 .andExpect(status().isCreated()).andReturn();
-        mockMvc.perform(post("/api/application-periods/{id}/allocation-runs", periodId)
+        MvcResult dualRunResult = mockMvc.perform(post("/api/application-periods/{id}/allocation-runs", periodId)
                         .header("Authorization", bearer(dual)))
-                .andExpect(status().isCreated());
+                .andExpect(status().isCreated()).andReturn();
         assertEquals(runsBeforeDeniedStart + 2, store.repository().findByTypeAndParentId(
                 "allocation_run", periodId.toString()).size());
         assertEquals(auditBeforeDeniedStart + 2, auditCount());
-        String runId = mapper.readTree(adminRunResult.getResponse().getContentAsString()).path("id").asText();
+        JsonNode adminRun = mapper.readTree(adminRunResult.getResponse().getContentAsString());
+        JsonNode dualRun = mapper.readTree(dualRunResult.getResponse().getContentAsString());
+        String runId = adminRun.path("id").asText();
+        String dualRunId = dualRun.path("id").asText();
         long auditsBeforeStaffReads = auditCount();
         for (String staff : List.of(adminToken, teacherOnly, dual)) {
-            mockMvc.perform(get("/api/application-periods/{id}/allocation-runs", periodId)
+            MvcResult listedResult = mockMvc.perform(get("/api/application-periods/{id}/allocation-runs", periodId)
                             .header("Authorization", bearer(staff)))
-                    .andExpect(status().isOk());
-            mockMvc.perform(get("/api/allocation-runs/{id}", runId).header("Authorization", bearer(staff)))
-                    .andExpect(status().isOk());
+                    .andExpect(status().isOk()).andReturn();
+            JsonNode listed = mapper.readTree(listedResult.getResponse().getContentAsString());
+            JsonNode content = listed.get("content");
+            assertTrue(content != null && content.isArray());
+            assertEquals(2, content.size());
+            assertRunProjection(findRun(content, runId), runId, populatedStudent, populatedProject);
+            assertRunProjection(findRun(content, dualRunId), dualRunId, populatedStudent, populatedProject);
+            MvcResult detailResult = mockMvc.perform(get("/api/allocation-runs/{id}", runId)
+                            .header("Authorization", bearer(staff)))
+                    .andExpect(status().isOk()).andReturn();
+            assertRunProjection(mapper.readTree(detailResult.getResponse().getContentAsString()),
+                    runId, populatedStudent, populatedProject);
             assertEquals(auditsBeforeStaffReads, auditCount());
         }
         mockMvc.perform(get("/api/application-periods/{id}/allocation-runs", periodId)
@@ -246,6 +268,31 @@ class AllocationEarlyRunApiTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(mapper.writeValueAsString(Map.of("roles", List.of("TEACHER")))))
                 .andExpect(status().isOk());
+    }
+
+    private JsonNode findRun(JsonNode runs, String expectedId) {
+        for (JsonNode run : runs) {
+            if (run.path("id").isTextual() && expectedId.equals(run.path("id").textValue())) {
+                return run;
+            }
+        }
+        throw new AssertionError("Allocation run not found in populated list: " + expectedId);
+    }
+
+    private void assertRunProjection(JsonNode run, String expectedId, UUID expectedStudent, UUID expectedProject) {
+        assertTrue(run != null && run.isObject());
+        assertTrue(run.path("id").isTextual());
+        assertEquals(expectedId, run.path("id").textValue());
+        assertTrue(run.path("periodId").isTextual());
+        assertEquals(periodId.toString(), run.path("periodId").textValue());
+        assertTrue(run.path("status").isTextual());
+        assertEquals("COMPLETED", run.path("status").textValue());
+        assertBooleanProperty(run, "early", true);
+        assertBooleanProperty(run, "initial", false);
+        JsonNode assignedProject = assignment(run, expectedStudent).get("projectId");
+        assertTrue(assignedProject != null && assignedProject.isTextual());
+        assertEquals(expectedProject.toString(), assignedProject.textValue());
+        assertTrue(run.path("result").path("unassignedStudents").isArray());
     }
 
     private void assertFinalizeRoleMatrix(String allowedToken, String teacherOnly, String studentOnly)

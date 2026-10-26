@@ -58,9 +58,10 @@ class RoleRestrictedPublicRouteInventoryTest {
             route("PUT /api/application-periods/{id}", "ADMIN,TEACHER+ADMIN",
                     "application.ApplicationPeriodLifecycleApiTest#periodCreateAndUpdateApplyTheAdministratorRoleSetToEquivalentPublicRequests"),
             route("GET /api/application-periods", "authenticated role-sensitive student/staff projection",
-                    "application.ApplicationPeriodLifecycleApiTest#studentCatalogueAndApplicationRoutesEnforceStudentAndStaffRoleSets"),
-            route("GET /api/application-periods/{id}", "student owner or staff projection",
-                    "application.ApplicationPeriodLifecycleApiTest#studentCatalogueAndApplicationRoutesEnforceStudentAndStaffRoleSets"),
+                    "application.ApplicationPeriodLifecycleApiTest#populatedPeriodListAndDetailExposeStudentStaffAndAdministratorRoleSetProjections"),
+            route("GET /api/application-periods/{id}",
+                    "authenticated role-conditioned projection; dual role receives administrator projection",
+                    "application.ApplicationPeriodLifecycleApiTest#populatedPeriodListAndDetailExposeStudentStaffAndAdministratorRoleSetProjections"),
             route("GET /api/application-periods/{periodId}/catalogue/{projectId}", "STUDENT",
                     "application.ApplicationPeriodLifecycleApiTest#studentCatalogueAndApplicationRoutesEnforceStudentAndStaffRoleSets"),
             route("POST /api/application-periods/{periodId}/applications", "STUDENT",
@@ -85,9 +86,9 @@ class RoleRestrictedPublicRouteInventoryTest {
             route("POST /api/application-periods/{periodId}/allocation-runs", "ADMIN,TEACHER+ADMIN",
                     "allocation.AllocationEarlyRunApiTest#allocationRunStartAndFinalizeEnforceAdministratorRoleSetsOnEquivalentFixtures"),
             route("GET /api/application-periods/{periodId}/allocation-runs", "TEACHER,ADMIN,TEACHER+ADMIN",
-                    "application.StudentPeriodAssignmentApiTest#studentCannotReadStaffApplicationOrAllocationResources"),
+                    "allocation.AllocationEarlyRunApiTest#allocationRunStartAndFinalizeEnforceAdministratorRoleSetsOnEquivalentFixtures"),
             route("GET /api/allocation-runs/{id}", "TEACHER,ADMIN,TEACHER+ADMIN",
-                    "application.StudentPeriodAssignmentApiTest#studentCannotReadStaffApplicationOrAllocationResources"),
+                    "allocation.AllocationEarlyRunApiTest#allocationRunStartAndFinalizeEnforceAdministratorRoleSetsOnEquivalentFixtures"),
             route("POST /api/allocation-runs/{id}/finalize", "ADMIN,TEACHER+ADMIN",
                     "allocation.AllocationEarlyRunApiTest#allocationRunStartAndFinalizeEnforceAdministratorRoleSetsOnEquivalentFixtures"),
             route("POST /api/application-periods/{periodId}/applying-groups", "STUDENT",
@@ -227,16 +228,17 @@ class RoleRestrictedPublicRouteInventoryTest {
     }
 
     @Test
-    void everyInventoriedRoleSensitiveRouteHasConcretePolicyAndTestMethodEvidence() {
+    void everyInventoriedRoleSensitiveRouteHasPolicyAndResolvableEvidenceReference() {
         Set<String> paths = new HashSet<>();
         for (RoutePolicy route : ROUTES) {
             assertTrue(paths.add(route.methodAndPath()), "Duplicate inventory route: " + route.methodAndPath());
             assertFalse(route.policy().isBlank(), "Missing role policy for " + route.methodAndPath());
             String[] reference = route.testEvidence().split("#", 2);
-            assertEquals(2, reference.length, "Evidence must name a concrete test method for " + route.methodAndPath());
+            assertEquals(2, reference.length, "Evidence reference must name a test method for "
+                    + route.methodAndPath());
             String testClass = "ac.at.tgm.submit." + reference[0];
             assertDoesNotThrow(() -> Class.forName(testClass).getDeclaredMethod(reference[1]),
-                    "Missing referenced test method for " + route.methodAndPath());
+                    "Unresolvable evidence reference for " + route.methodAndPath());
         }
         assertEquals(Set.of("STUDENT", "TEACHER", "ADMIN"),
                 java.util.Arrays.stream(Role.values()).map(Enum::name).collect(java.util.stream.Collectors.toSet()));
