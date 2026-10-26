@@ -110,6 +110,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-52](tickets/done/Dev-52.md) | done | Anchor line-numbered ticket sources to a Git revision |
 | [Dev-53](tickets/done/Dev-53.md) | done | Test period response fields and label boundaries |
 | [Dev-54](tickets/done/Dev-54.md) | done | Consolidate duplicate review request schemas |
+| [Dev-55](tickets/Dev-55.md) | to-do | Seed a synthetic grading rubric for testing |
 
 ### Agents
 
