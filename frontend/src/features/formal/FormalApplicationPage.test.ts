@@ -7,7 +7,7 @@ import FormalApplicationPage from './FormalApplicationPage.vue'
 import { setLanguage } from '../../i18n'
 
 const api = vi.hoisted(() => ({
-  eligibleProjects: vi.fn(), get: vi.fn(), create: vi.fn(), update: vi.fn(), submit: vi.fn(), review: vi.fn(),
+  eligibleProjects: vi.fn(), roster: vi.fn(), get: vi.fn(), create: vi.fn(), update: vi.fn(), submit: vi.fn(), review: vi.fn(),
 }))
 vi.mock('../../api/services', () => ({ formalApi: api }))
 
@@ -18,14 +18,33 @@ const otherProjectId = '03a00000-0000-4000-8000-000000000003'
 const periodId = '03a00000-0000-4000-8000-000000000004'
 const applicationId = '03a00000-0000-4000-8000-000000000002'
 const studentId = 'student-id'
+const secondStudentId = 'student-id-2'
+const thirdStudentId = 'student-id-3'
+const rosterMembers: components['schemas']['FormalApplicationRosterMember'][] = [
+  { studentId, displayName: 'Avery Student' },
+  { studentId: secondStudentId, displayName: 'Blake Student' },
+  { studentId: thirdStudentId, displayName: 'Casey Student' },
+]
 const input: components['schemas']['FormalApplicationRequest'] = {
   topic: 'Allocated project',
   initialSituation: 'Existing situation',
   objective: 'Project goal',
   cooperationPartner: 'Partner',
-  individualTopics: [{ studentId, topic: 'Individual topic' }],
-  investigationConcerns: [{ studentId, text: 'Investigation' }],
-  plannedResults: [{ studentId, text: 'Result' }],
+  individualTopics: [
+    { studentId, topic: 'Individual topic' },
+    { studentId: secondStudentId, topic: 'Second topic' },
+    { studentId: thirdStudentId, topic: 'Third topic' },
+  ],
+  investigationConcerns: [
+    { studentId, text: 'Investigation' },
+    { studentId: secondStudentId, text: 'Second investigation' },
+    { studentId: thirdStudentId, text: 'Third investigation' },
+  ],
+  plannedResults: [
+    { studentId, text: 'Result' },
+    { studentId: secondStudentId, text: 'Second result' },
+    { studentId: thirdStudentId, text: 'Third result' },
+  ],
   milestones: [{ text: 'First milestone', date: '2027-01-01' }],
 }
 const record = (status: FormalApplication['status'] = 'DRAFT'): FormalApplication => ({
@@ -68,9 +87,9 @@ function expectProposalCopy(page: VueWrapper) {
   expect(page.text()).not.toMatch(/group application|formal (?:project )?application|edit application|this application/i)
 }
 
-async function mountStudent(status: EligibleProject['formalProposalStatus'] = 'DRAFT'): Promise<VueWrapper> {
+async function mountStudent(status: EligibleProject['formalProposalStatus'] = 'DRAFT', attach = false): Promise<VueWrapper> {
   api.eligibleProjects.mockResolvedValue(eligiblePage([eligible(status)]))
-  const page = mount(FormalApplicationPage)
+  const page = mount(FormalApplicationPage, attach ? { attachTo: document.body } : undefined)
   await flushPromises()
   return page
 }
@@ -92,6 +111,7 @@ describe('Formal proposal presentation and unchanged lifecycle', () => {
     setLanguage('en')
     setActivePinia(createPinia())
     api.eligibleProjects.mockResolvedValue(eligiblePage([eligible()]))
+    api.roster.mockResolvedValue({ members: rosterMembers })
     useAuthStore().updateUser({
       id: studentId, username: 'student01', displayName: 'Student', roles: ['STUDENT'], language: 'en',
     })
@@ -124,6 +144,7 @@ describe('Formal proposal presentation and unchanged lifecycle', () => {
   it('shows live UTF-16 current/maximum counters for every limited proposal field and both shared member totals', async () => {
     const page = await mountStudent(null)
     await page.get('#eligible-project').setValue(projectId)
+    await flushPromises()
     await button(page, 'Start a formal proposal').trigger('click')
 
     await page.get('#topic').setValue('😀')
@@ -137,8 +158,6 @@ describe('Formal proposal presentation and unchanged lifecycle', () => {
 
     await page.get('#member-concern-0').setValue('A')
     await page.get('#member-result-0').setValue('XY')
-    await button(page, '＋ Add allocated group member').trigger('click')
-    await page.get('#member-topic-1').setValue('Second topic')
     await page.get('#member-concern-1').setValue('BC')
     await page.get('#member-result-1').setValue('123')
     expect(counter(page, 'member-concern-0')).toBe('3/2400 shared characters')
@@ -155,7 +174,7 @@ describe('Formal proposal presentation and unchanged lifecycle', () => {
     await page.get('#member-result-1').setValue('VWXYZ')
     expect(counter(page, 'member-result-1')).toBe('9/2400 shared characters')
 
-    await button(page, '＋ Add allocated group member').trigger('click')
+    await page.get('#member-topic-1').setValue('Second topic')
     await page.get('#member-topic-2').setValue('😀')
     await page.get('#member-concern-2').setValue('Z')
     await page.get('#member-result-2').setValue('WXYZ')
@@ -193,6 +212,25 @@ describe('Formal proposal presentation and unchanged lifecycle', () => {
     expect(page.text()).toContain('Überarbeitung erforderlich')
     expect(page.text()).toContain('UNCHANGED_FORMAL_TEACHER_REVIEW')
     expect(page.text()).toContain('Allocated project')
+    await button(page, 'Projektantrag bearbeiten').trigger('click')
+    expect(page.get('[role="tablist"]').attributes('aria-label')).toBe('Beiträge der Gruppenmitglieder')
+    page.unmount()
+    setLanguage('en')
+  })
+
+  it('localizes student roster loading and retry feedback in German', async () => {
+    setLanguage('de')
+    const rosterRequest = deferred<{ members: components['schemas']['FormalApplicationRosterMember'][] }>()
+    api.roster.mockReturnValue(rosterRequest.promise)
+    const page = await mountStudent(null)
+    await page.get('#eligible-project').setValue(projectId)
+    await flushPromises()
+    expect(page.get('[role="status"]').text()).toContain('Die endgültige Gruppenliste wird geladen')
+    rosterRequest.reject(new Error('offline'))
+    await flushPromises()
+    expect(page.get('[role="alert"]').text()).toContain('Die endgültige Gruppenliste konnte nicht geladen werden')
+    expect(button(page, 'Gruppenliste erneut laden').exists()).toBe(true)
+    expect(page.text()).not.toContain('Projektantrag beginnen')
     page.unmount()
     setLanguage('en')
   })
@@ -200,6 +238,7 @@ describe('Formal proposal presentation and unchanged lifecycle', () => {
   it('starts an allocated-project draft and creates it with the existing field payload', async () => {
     const page = await mountStudent(null)
     await page.get('#eligible-project').setValue(projectId)
+    await flushPromises()
     expect(page.get('.notice').text()).toContain('No Formal proposal exists')
     await button(page, 'Start a formal proposal').trigger('click')
     expect(page.get('h2').text()).toBe('Formal proposal')
@@ -209,11 +248,19 @@ describe('Formal proposal presentation and unchanged lifecycle', () => {
     await page.get('#situation').setValue(input.initialSituation)
     await page.get('#objective').setValue(input.objective)
     await page.get('#partner').setValue(input.cooperationPartner!)
-    await page.get('#member-topic-0').setValue('Individual topic')
-    await page.get('#member-concern-0').setValue('Investigation')
-    await page.get('#member-result-0').setValue('Result')
+    for (const [index, entry] of input.individualTopics!.entries()) {
+      await page.get(`#member-topic-${index}`).setValue(entry.topic)
+      await page.get(`#member-concern-${index}`).setValue(input.investigationConcerns![index].text)
+      await page.get(`#member-result-${index}`).setValue(input.plannedResults![index].text)
+    }
     await page.get('#milestone-0').setValue('First milestone')
     await page.get('#milestone-date-0').setValue('2027-01-01')
+    expect(page.findAll('[role="tab"]').map((tab) => tab.text())).toEqual(['Avery Student', 'Blake Student', 'Casey Student'])
+    expect(page.text()).not.toContain(studentId)
+    expect(page.text()).not.toContain(secondStudentId)
+    expect(page.text()).not.toContain(thirdStudentId)
+    expect(page.findAll('button').map((entry) => entry.text())).not.toContain('＋ Add allocated group member')
+    expect(page.findAll('[role="tabpanel"] button')).toHaveLength(0)
     let resolveCreate: ((value: FormalApplication) => void) | undefined
     api.create.mockImplementation(() => new Promise((resolve) => { resolveCreate = resolve }))
     await page.get('form.panel').trigger('submit')
@@ -225,6 +272,184 @@ describe('Formal proposal presentation and unchanged lifecycle', () => {
     expect(page.get('[role="status"]').text()).toBe('Formal proposal draft created.')
     button(page, 'Edit formal proposal')
     expectProposalCopy(page)
+    page.unmount()
+  })
+
+  it('uses accessible member tabs, preserves unsaved values across keyboard navigation, and maps IDs to the right fields', async () => {
+    api.roster.mockResolvedValue({ members: [
+      { studentId, displayName: 'Jordan Lee' },
+      { studentId: secondStudentId, displayName: 'Jordan Lee' },
+      { studentId: thirdStudentId, displayName: 'Morgan Chen' },
+    ] })
+    const page = await mountStudent(null, true)
+    await page.get('#eligible-project').setValue(projectId)
+    await flushPromises()
+    await button(page, 'Start a formal proposal').trigger('click')
+
+    const tabs = page.findAll('[role="tab"]')
+    expect(tabs.map((tab) => tab.text())).toEqual(['Jordan Lee (1)', 'Jordan Lee (2)', 'Morgan Chen'])
+    for (const [index, tab] of tabs.entries()) {
+      expect(tab.attributes('aria-controls')).toBe(`member-panel-${index}`)
+      expect(page.get(`#member-panel-${index}`).attributes('aria-labelledby')).toBe(`member-tab-${index}`)
+      expect(page.get(`#member-panel-${index}`).attributes('role')).toBe('tabpanel')
+      expect(tab.attributes('aria-label')).toBeUndefined()
+    }
+    expect(page.text()).not.toContain(studentId)
+    expect(page.text()).not.toContain(secondStudentId)
+    expect(page.text()).not.toContain(thirdStudentId)
+    expect(page.findAll('button').map((entry) => entry.text()).join(' ')).not.toContain('Add allocated group member')
+    expect(page.findAll('[role="tabpanel"] button')).toHaveLength(0)
+
+    await page.get('#member-topic-0').setValue('Jordan contribution one')
+    await page.get('#member-concern-0').setValue('Jordan question one')
+    await page.get('#member-result-0').setValue('Jordan result one')
+    await page.get('[role="tablist"]').trigger('keydown', { key: 'ArrowRight' })
+    expect(page.get('[role="tab"][aria-selected="true"]').text()).toBe('Jordan Lee (2)')
+    await page.get('#member-topic-1').setValue('Jordan contribution two')
+    await page.get('[role="tablist"]').trigger('keydown', { key: 'End' })
+    expect(page.get('[role="tab"][aria-selected="true"]').text()).toBe('Morgan Chen')
+    await page.get('[role="tablist"]').trigger('keydown', { key: 'Home' })
+    expect((page.get('#member-topic-0').element as HTMLInputElement).value).toBe('Jordan contribution one')
+    expect((page.get('#member-topic-1').element as HTMLInputElement).value).toBe('Jordan contribution two')
+    await page.get('[role="tablist"]').trigger('keydown', { key: 'ArrowLeft' })
+    expect(page.get('[role="tab"][aria-selected="true"]').text()).toBe('Morgan Chen')
+    await page.get('[role="tablist"]').trigger('keydown', { key: 'ArrowDown' })
+    expect(page.get('[role="tab"][aria-selected="true"]').text()).toBe('Jordan Lee (1)')
+    expect(document.activeElement?.id).toBe('member-tab-0')
+
+    await page.get('#topic').setValue('Shared topic')
+    await page.get('#situation').setValue('Shared situation')
+    await page.get('#objective').setValue('Shared objective')
+    await page.get('#partner').setValue('Partner')
+    await page.get('#member-topic-2').setValue('Third contribution three')
+    for (let index = 0; index < 3; index += 1) {
+      await page.get(`#member-concern-${index}`).setValue(`Concern for ${index}`)
+      await page.get(`#member-result-${index}`).setValue(`Result for ${index}`)
+    }
+    await page.get('#milestone-0').setValue('Milestone')
+    await page.get('#milestone-date-0').setValue('2027-01-01')
+    api.create.mockResolvedValue({ ...record(), topic: 'Shared topic' })
+    await page.get('form.panel').trigger('submit')
+    await flushPromises()
+    expect(api.create).toHaveBeenCalledExactlyOnceWith(projectId, {
+      ...input,
+      topic: 'Shared topic',
+      initialSituation: 'Shared situation',
+      objective: 'Shared objective',
+      individualTopics: [
+        { studentId, topic: 'Jordan contribution one' },
+        { studentId: secondStudentId, topic: 'Jordan contribution two' },
+        { studentId: thirdStudentId, topic: 'Third contribution three' },
+      ],
+      investigationConcerns: [
+        { studentId, text: 'Concern for 0' },
+        { studentId: secondStudentId, text: 'Concern for 1' },
+        { studentId: thirdStudentId, text: 'Concern for 2' },
+      ],
+      plannedResults: [
+        { studentId, text: 'Result for 0' },
+        { studentId: secondStudentId, text: 'Result for 1' },
+        { studentId: thirdStudentId, text: 'Result for 2' },
+      ],
+      milestones: [{ text: 'Milestone', date: '2027-01-01' }],
+    })
+    expect(document.activeElement?.textContent).toBe('Shared topic')
+    page.unmount()
+  })
+
+  it('hydrates an existing proposal by private roster identity while exposing names only', async () => {
+    api.roster.mockResolvedValue({ members: [
+      { studentId, displayName: 'Jordan Lee' },
+      { studentId: secondStudentId, displayName: 'Jordan Lee' },
+      { studentId: thirdStudentId, displayName: 'Morgan Chen' },
+    ] })
+    api.get.mockResolvedValue(record())
+    const page = await mountStudent('DRAFT')
+    await page.get('#eligible-project').setValue(projectId)
+    await flushPromises()
+    await button(page, 'Edit formal proposal').trigger('click')
+    expect(page.findAll('[role="tab"]').map((tab) => tab.text())).toEqual([
+      'Jordan Lee (1)', 'Jordan Lee (2)', 'Morgan Chen',
+    ])
+    expect(page.text()).not.toContain(studentId)
+    expect(page.text()).not.toContain(secondStudentId)
+    expect(page.text()).not.toContain(thirdStudentId)
+    expect(page.findAll('[role="tab"]').every((tab) => !tab.attributes('aria-label'))).toBe(true)
+    expect((page.get('#member-topic-0').element as HTMLInputElement).value).toBe('Individual topic')
+    expect((page.get('#member-topic-1').element as HTMLInputElement).value).toBe('Second topic')
+    expect((page.get('#member-topic-2').element as HTMLInputElement).value).toBe('Third topic')
+    expect((page.get('#member-concern-0').element as HTMLTextAreaElement).value).toBe('Investigation')
+    expect((page.get('#member-concern-1').element as HTMLTextAreaElement).value).toBe('Second investigation')
+    expect((page.get('#member-result-2').element as HTMLTextAreaElement).value).toBe('Third result')
+    api.update.mockResolvedValue(record())
+    await page.get('form.panel').trigger('submit')
+    await flushPromises()
+    expect(api.update).toHaveBeenCalledExactlyOnceWith(applicationId, input)
+    page.unmount()
+  })
+
+  it('keeps roster and proposal failures explicit, retryable, and blocks start until data is available', async () => {
+    api.roster.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({ members: rosterMembers })
+    const page = await mountStudent(null)
+    await page.get('#eligible-project').setValue(projectId)
+    await flushPromises()
+    expect(page.get('[role="alert"]').text()).toContain('finalized group roster could not be loaded')
+    expect(page.findAll('button').map((entry) => entry.text())).not.toContain('Start a formal proposal')
+    expect(api.create).not.toHaveBeenCalled()
+    await button(page, 'Retry loading the group roster').trigger('click')
+    await flushPromises()
+    expect(api.roster).toHaveBeenCalledTimes(2)
+    expect(page.text()).toContain('No Formal proposal exists')
+    expect(page.find('[role="alert"]').exists()).toBe(false)
+    page.unmount()
+
+    api.eligibleProjects.mockResolvedValue(eligiblePage([eligible('DRAFT')]))
+    api.roster.mockResolvedValue({ members: rosterMembers })
+    api.get.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(record())
+    const failedProposal = await mountStudent('DRAFT')
+    await failedProposal.get('#eligible-project').setValue(projectId)
+    await flushPromises()
+    expect(failedProposal.get('[role="alert"]').text()).toContain('existing Formal proposal could not be loaded')
+    expect(failedProposal.text()).not.toContain('No Formal proposal exists')
+    expect(failedProposal.findAll('button').map((entry) => entry.text())).not.toContain('Edit formal proposal')
+    await button(failedProposal, 'Retry loading this proposal').trigger('click')
+    await flushPromises()
+    expect(failedProposal.find('[role="alert"]').exists()).toBe(false)
+    expect(failedProposal.text()).toContain('Edit formal proposal')
+    failedProposal.unmount()
+  })
+
+  it('keeps selection locked during a deferred roster response so stale identities cannot take over', async () => {
+    api.eligibleProjects.mockResolvedValue(eligiblePage([
+      eligible('DRAFT', projectId, 'First project'),
+      eligible(null, otherProjectId, 'Second project'),
+    ]))
+    const firstRoster = deferred<{ members: components['schemas']['FormalApplicationRosterMember'][] }>()
+    api.roster.mockReturnValueOnce(firstRoster.promise).mockResolvedValueOnce({
+      members: rosterMembers.map((member, index) => ({ ...member, displayName: `Second member ${index + 1}` })),
+    })
+    api.get.mockResolvedValue(record())
+    const page = mount(FormalApplicationPage)
+    await flushPromises()
+    await page.get('#eligible-project').setValue(projectId)
+    expect(page.get('#eligible-project').attributes('disabled')).toBeDefined()
+    const selector = page.get('#eligible-project').element as HTMLSelectElement
+    selector.value = otherProjectId
+    selector.dispatchEvent(new Event('change'))
+    await flushPromises()
+    expect((page.get('#eligible-project').element as HTMLSelectElement).value).toBe(projectId)
+    expect(api.roster).toHaveBeenCalledExactlyOnceWith(projectId)
+
+    firstRoster.resolve({ members: rosterMembers })
+    await flushPromises()
+    expect(page.get('section.panel h2').text()).toBe(input.topic)
+    expect(page.get('#eligible-project').attributes('disabled')).toBeUndefined()
+    await page.get('#eligible-project').setValue(otherProjectId)
+    await flushPromises()
+    expect(page.text()).toContain('Second project')
+    expect(page.find('section.panel h2').exists()).toBe(false)
+    expect(page.findAll('[role="tab"]')).toHaveLength(0)
+    expect(api.roster).toHaveBeenNthCalledWith(2, otherProjectId)
     page.unmount()
   })
 
@@ -240,6 +465,22 @@ describe('Formal proposal presentation and unchanged lifecycle', () => {
     expect(api.update).toHaveBeenCalledExactlyOnceWith(applicationId, input)
     expect(page.get('[role="status"]').text()).toBe('Formal proposal draft saved.')
     expectProposalCopy(page)
+    page.unmount()
+  })
+
+  it('closes without a mutation request and restores focus to the existing edit action', async () => {
+    const page = await mountStudent('DRAFT', true)
+    await load(page)
+    await button(page, 'Edit formal proposal').trigger('click')
+    await page.get('#topic').setValue('Unsaved work stays local')
+    await button(page, 'Close editor').trigger('click')
+    await flushPromises()
+    expect(page.find('form.panel').exists()).toBe(false)
+    expect(document.activeElement?.textContent).toBe('Edit formal proposal')
+    expect(api.create).not.toHaveBeenCalled()
+    expect(api.update).not.toHaveBeenCalled()
+    expect(api.submit).not.toHaveBeenCalled()
+    expect(api.get).toHaveBeenCalledExactlyOnceWith(projectId)
     page.unmount()
   })
 
@@ -379,7 +620,7 @@ describe('Formal proposal presentation and unchanged lifecycle', () => {
     await page.get('#eligible-project').setValue(otherProjectId)
     await flushPromises()
     expect((page.get('#eligible-project').element as HTMLSelectElement).value).toBe(otherProjectId)
-    expect(page.get('[role="alert"]').text()).toContain('Something went wrong. Please retry.')
+    expect(page.get('[role="alert"]').text()).toContain('existing Formal proposal could not be loaded')
     expect(page.get('#eligible-project').findAll('option').at(2)?.text()).toContain('Needs revision')
     expect(api.create).not.toHaveBeenCalled()
     page.unmount()

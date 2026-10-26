@@ -93,6 +93,10 @@ class TestingEligibleFormalProjectsFixtureTest {
         assertProject(page.path("content").get(1), TestingEligibleFormalProjectsFixtureConfiguration.NEW_PROJECT_ID,
                 "New proposal", "2027/2028",
                 "2027/2028", null, null);
+        mockMvc.perform(get("/api/projects/{projectId}/formal-applications",
+                        TestingEligibleFormalProjectsFixtureConfiguration.NEW_PROJECT_ID)
+                        .header("Authorization", "Bearer " + token))
+                .andExpect(status().isNotFound());
         Set<UUID> returnedProjectIds = new java.util.HashSet<>();
         JsonNode content = required(page, "content");
         assertTrue(content.isArray());
@@ -101,6 +105,96 @@ class TestingEligibleFormalProjectsFixtureTest {
         }
         assertFalse(returnedProjectIds.contains(
                 TestingEligibleFormalProjectsFixtureConfiguration.PRELIMINARY_PROJECT_ID));
+    }
+
+    @Test
+    void privateRosterReturnsOnlyCurrentGroupIdentitiesAndRequiresFinalizedMembership() throws Exception {
+        UserAccount student01 = users.findByUsername("student01").orElseThrow();
+        UserAccount student02 = users.findByUsername("student02").orElseThrow();
+        UserAccount student03 = users.findByUsername("student03").orElseThrow();
+        String memberToken = login("student01");
+        String outsideToken = login("student04");
+        String unallocatedToken = login("student25");
+        String teacherToken = login("teacher01");
+        String adminToken = login("admin01");
+        UUID projectId = TestingEligibleFormalProjectsFixtureConfiguration.NEW_PROJECT_ID;
+
+        JsonNode unallocatedProjects = objectMapper.readTree(mockMvc.perform(
+                        get("/api/formal-applications/eligible-projects")
+                                .header("Authorization", "Bearer " + unallocatedToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray());
+        assertEquals(0, required(unallocatedProjects, "totalElements").intValue(),
+                "The no-finalized-membership caller must be established independently.");
+        JsonNode roster = objectMapper.readTree(mockMvc.perform(get(
+                                    "/api/projects/{projectId}/formal-application-roster", projectId)
+                            .header("Authorization", "Bearer " + memberToken))
+                    .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray());
+        assertEquals(Set.of("members"), fieldNames(roster));
+        JsonNode members = required(roster, "members");
+        assertTrue(members.isArray());
+        assertEquals(List.of(student01, student02, student03).stream()
+                .map(user -> user.getId().toString()).toList(),
+                textList(members, "studentId"));
+        List<String> names = List.of(student01, student02, student03).stream()
+                .map(UserAccount::getDisplayName).toList();
+        assertEquals(names, textList(members, "displayName"));
+        for (JsonNode member : members) {
+            assertEquals(Set.of("studentId", "displayName"), fieldNames(member));
+        }
+
+        mockMvc.perform(get("/api/projects/{projectId}/formal-application-roster", projectId))
+                .andExpect(status().isUnauthorized());
+        StoredRecord otherGroup = records.findFirstByTypeAndParentIdOrderByCreatedAtDesc(
+                "project_group", TestingEligibleFormalProjectsFixtureConfiguration.EXISTING_PROJECT_ID.toString())
+                .orElseThrow();
+        String otherGroupPayload = otherGroup.getPayload();
+        try {
+            JsonNode alteredOtherGroup = objectMapper.readTree(otherGroupPayload);
+            ((com.fasterxml.jackson.databind.node.ArrayNode) alteredOtherGroup.path("studentIds"))
+                    .add(users.findByUsername("student04").orElseThrow().getId().toString());
+            otherGroup.setPayload(objectMapper.writeValueAsString(alteredOtherGroup));
+            records.saveAndFlush(otherGroup);
+            mockMvc.perform(get("/api/projects/{projectId}/formal-application-roster",
+                            TestingEligibleFormalProjectsFixtureConfiguration.EXISTING_PROJECT_ID)
+                            .header("Authorization", "Bearer " + outsideToken))
+                    .andExpect(status().isOk());
+            mockMvc.perform(get("/api/projects/{projectId}/formal-application-roster", projectId)
+                            .header("Authorization", "Bearer " + outsideToken))
+                    .andExpect(status().isForbidden());
+        } finally {
+            otherGroup.setPayload(otherGroupPayload);
+            records.saveAndFlush(otherGroup);
+        }
+        for (String token : List.of(unallocatedToken, teacherToken, adminToken)) {
+            mockMvc.perform(get("/api/projects/{projectId}/formal-application-roster", projectId)
+                            .header("Authorization", "Bearer " + token))
+                    .andExpect(status().isForbidden());
+        }
+        mockMvc.perform(get("/api/projects/{projectId}/formal-application-roster",
+                        TestingEligibleFormalProjectsFixtureConfiguration.PRELIMINARY_PROJECT_ID)
+                        .header("Authorization", "Bearer " + memberToken))
+                .andExpect(status().isForbidden());
+
+        StoredRecord group = records.findFirstByTypeAndParentIdOrderByCreatedAtDesc(
+                "project_group", projectId.toString()).orElseThrow();
+        String originalPayload = group.getPayload();
+        try {
+            JsonNode altered = objectMapper.readTree(originalPayload);
+            ((com.fasterxml.jackson.databind.node.ArrayNode) altered.path("studentIds"))
+                    .set(2, objectMapper.getNodeFactory().textNode("f3a00000-0000-4000-8000-000000000099"));
+            group.setPayload(objectMapper.writeValueAsString(altered));
+            records.saveAndFlush(group);
+            JsonNode fallback = objectMapper.readTree(mockMvc.perform(get(
+                                    "/api/projects/{projectId}/formal-application-roster", projectId)
+                            .header("Authorization", "Bearer " + memberToken))
+                    .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray());
+            assertEquals("Unknown student", required(required(fallback, "members").get(2), "displayName").textValue());
+            assertEquals("f3a00000-0000-4000-8000-000000000099",
+                    required(required(fallback, "members").get(2), "studentId").textValue());
+        } finally {
+            group.setPayload(originalPayload);
+            records.saveAndFlush(group);
+        }
     }
 
     private void assertPersistedFinalizedGroup(UUID projectId, UUID periodId, UUID runId, List<String> members,
@@ -170,5 +264,28 @@ class TestingEligibleFormalProjectsFixtureTest {
             values.add(item.textValue());
         }
         return List.copyOf(values);
+    }
+
+    private List<String> textList(JsonNode array, String field) {
+        assertTrue(array.isArray());
+        java.util.ArrayList<String> values = new java.util.ArrayList<>();
+        for (JsonNode item : array) {
+            values.add(requireText(item, field));
+        }
+        return List.copyOf(values);
+    }
+
+    private Set<String> fieldNames(JsonNode object) {
+        java.util.TreeSet<String> fields = new java.util.TreeSet<>();
+        object.fieldNames().forEachRemaining(fields::add);
+        return fields;
+    }
+
+    private String login(String username) throws Exception {
+        MvcResult result = mockMvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(java.util.Map.of(
+                                "username", username, "password", "testing-password"))))
+                .andExpect(status().isOk()).andReturn();
+        return requireText(objectMapper.readTree(result.getResponse().getContentAsByteArray()), "token");
     }
 }

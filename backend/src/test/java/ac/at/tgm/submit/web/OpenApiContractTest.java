@@ -45,6 +45,50 @@ class OpenApiContractTest {
     }
 
     @Test
+    void formalProposalRosterIsExplicitlyAuthenticatedAndMinimallyTyped() throws Exception {
+        JsonNode document = apiDocument();
+        JsonNode operation = document.path("paths").path(
+                "/api/projects/{projectId}/formal-application-roster").path("get");
+        assertTrue(operation.isObject());
+        JsonNode security = operation.path("security");
+        assertTrue(security.isArray());
+        assertTrue(security.get(0).path("bearerAuth").isArray());
+        assertTrue(operation.path("responses").has("401"));
+        assertTrue(operation.path("responses").has("403"));
+        assertEquals("#/components/schemas/FormalApplicationRosterResponse",
+                operation.path("responses").path("200").path("content").path("*/*")
+                        .path("schema").path("$ref").asText());
+        JsonNode parameters = operation.path("parameters");
+        assertTrue(parameters.isArray());
+        assertEquals(1, parameters.size(), "No caller-supplied student ID is accepted.");
+        assertEquals("projectId", parameters.get(0).path("name").asText());
+        assertEquals("path", parameters.get(0).path("in").asText());
+
+        JsonNode schemas = document.path("components").path("schemas");
+        JsonNode roster = schemas.path("FormalApplicationRosterResponse");
+        assertEquals(Set.of("members"), fieldNames(roster.path("properties")));
+        assertEquals(Set.of("members"), textualMembers(roster.path("required")));
+        assertEquals("array", roster.path("properties").path("members").path("type").asText());
+        assertEquals("#/components/schemas/FormalApplicationRosterMember",
+                roster.path("properties").path("members").path("items").path("$ref").asText());
+        JsonNode member = schemas.path("FormalApplicationRosterMember");
+        assertEquals(Set.of("studentId", "displayName"), fieldNames(member.path("properties")));
+        assertEquals(Set.of("studentId", "displayName"), textualMembers(member.path("required")));
+        JsonNode studentId = member.path("properties").path("studentId");
+        assertEquals("string", studentId.path("type").asText());
+        assertEquals("uuid", studentId.path("format").asText());
+        assertTrue(studentId.path("description").asText().contains("associate existing contribution fields"));
+        JsonNode displayName = member.path("properties").path("displayName");
+        assertEquals("string", displayName.path("type").asText());
+        assertTrue(displayName.path("description").asText().contains("Unknown student"));
+
+        JsonNode assignment = schemas.path("StudentAssignmentResponse").path("properties");
+        assertFalse(assignment.has("studentId"));
+        JsonNode assignmentMember = schemas.path("StudentGroupMemberResponse").path("properties");
+        assertFalse(assignmentMember.has("studentId"));
+    }
+
+    @Test
     void reviewOperationsShareCanonicalRequestSchema() throws Exception {
         JsonNode document = apiDocument();
         JsonNode schemas = document.path("components").path("schemas");
@@ -623,7 +667,7 @@ class OpenApiContractTest {
 
         List<String> failures = new ArrayList<>();
         int operations = checkOperations(document.path("paths"), failures);
-        assertEquals(84, operations, "The generated API operation count should be reviewed when endpoints change.");
+        assertEquals(85, operations, "The generated API operation count should be reviewed when endpoints change.");
         JsonNode schemas = document.path("components").path("schemas");
         checkComponentSchemas(schemas, failures);
         checkResponseRequiredness(schemas, failures);
@@ -1257,8 +1301,8 @@ class OpenApiContractTest {
                 }
             }
         }
-        assertEquals(84, operationCount);
-        assertEquals(80, protectedCount);
+        assertEquals(85, operationCount);
+        assertEquals(81, protectedCount);
         assertTrue(failures.isEmpty(), () -> String.join(System.lineSeparator(), failures));
     }
 
@@ -1266,7 +1310,7 @@ class OpenApiContractTest {
     void operationsDocumentApplicableStandardErrorResponses() throws Exception {
         JsonNode paths = apiDocument().path("paths");
         List<String> failures = new ArrayList<>();
-        assertEquals(78, TICKET_ERROR_CODES.size(), "The independent ticket oracle must list all operations.");
+        assertEquals(79, TICKET_ERROR_CODES.size(), "The independent ticket oracle must list all operations.");
         Set<String> actualOperations = new java.util.TreeSet<>();
         paths.properties().forEach(path -> path.getValue().properties().forEach(method -> {
             if (HTTP_METHODS.contains(method.getKey())) {
@@ -1541,7 +1585,7 @@ class OpenApiContractTest {
             }
             baselineCodes.computeIfAbsent(location, unused -> new TreeSet<>()).add(expected.status());
         }
-        assertEquals(79, BASELINE_SUCCESS_RESPONSES.size(), "The checked-in baseline must cover all operations.");
+        assertEquals(80, BASELINE_SUCCESS_RESPONSES.size(), "The checked-in baseline must cover all operations.");
 
         for (Map.Entry<String, Set<String>> route : TICKET_ERROR_CODES.entrySet()) {
             String[] parts = route.getKey().split(" ", 2);
@@ -1652,6 +1696,7 @@ class OpenApiContractTest {
                 get|/api/projects/{projectId}/group-grades|400,403,404
                 post|/api/projects/{projectId}/group-grades|400,403,404,409
                 get|/api/formal-applications/eligible-projects|403
+                get|/api/projects/{projectId}/formal-application-roster|400,403
                 get|/api/projects/{projectId}/formal-applications|400,403,404,409
                 post|/api/projects/{projectId}/formal-applications|400,403,409
                 post|/api/projects/{projectId}/complete|400,403,404,409
@@ -1768,6 +1813,8 @@ class OpenApiContractTest {
                 post|/api/projects/{projectId}/group-grades|409|formal application is not approved;rubric binding is ineffective;transition;required reason
                 get|/api/formal-applications/eligible-projects|403|student role required
                 get|/api/projects/{projectId}/formal-applications|400|project ID;UUID
+                get|/api/projects/{projectId}/formal-application-roster|400|project ID;UUID
+                get|/api/projects/{projectId}/formal-application-roster|403|student in this finalized group
                 get|/api/projects/{projectId}/formal-applications|403|role or project access
                 get|/api/projects/{projectId}/formal-applications|404|formal application does not exist;valid allocated project group
                 get|/api/projects/{projectId}/formal-applications|409|allocated project group is missing or invalid
@@ -2134,6 +2181,7 @@ class OpenApiContractTest {
                 get|/api/projects/{projectId}/group-grades|200|#/components/schemas/PageResponseGradeResponse
                 post|/api/projects/{projectId}/group-grades|201|#/components/schemas/GradeResponse
                 get|/api/formal-applications/eligible-projects|200|#/components/schemas/PageResponseEligibleFormalProjectResponse
+                get|/api/projects/{projectId}/formal-application-roster|200|#/components/schemas/FormalApplicationRosterResponse
                 get|/api/projects/{projectId}/formal-applications|200|#/components/schemas/FormalApplicationResponse
                 post|/api/projects/{projectId}/formal-applications|201|#/components/schemas/FormalApplicationResponse
                 post|/api/projects/{projectId}/complete|200|#/components/schemas/CompletionResponse

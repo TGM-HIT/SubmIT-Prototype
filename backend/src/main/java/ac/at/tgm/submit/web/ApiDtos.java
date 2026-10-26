@@ -953,4 +953,20 @@ public final class ApiDtos {
                     allowableValues = {"DRAFT", "NEEDS_REVISION", "SUBMITTED", "APPROVED", "DECLINED"},
                     types = {"string", "null"}) String formalProposalStatus) {
     }
+
+    @Schema(requiredProperties = {"members"})
+    public record FormalApplicationRosterResponse(
+            @NotNull @ArraySchema(arraySchema = @Schema(description =
+                   "Finalized allocated group members in roster order.", requiredMode = Schema.RequiredMode.REQUIRED),
+                   schema = @Schema(implementation = FormalApplicationRosterMember.class))
+            List<FormalApplicationRosterMember> members) {
+    }
+
+    @Schema(requiredProperties = {"studentId", "displayName"})
+    public record FormalApplicationRosterMember(
+            @NotNull @Schema(description = "Member account UUID used only to associate existing contribution fields.",
+                   format = "uuid", requiredMode = Schema.RequiredMode.REQUIRED) UUID studentId,
+            @NotNull @Schema(description = "Current account display name, or Unknown student when the account no longer resolves.",
+                   requiredMode = Schema.RequiredMode.REQUIRED) String displayName) {
+    }
 }

@@ -10,6 +10,7 @@ type StudentApplicationRequest = components['schemas']['StudentApplicationReques
 type StudentApplicationResponse = components['schemas']['StudentApplicationResponse']
 type FormalApplicationRequest = components['schemas']['FormalApplicationRequest']
 type FormalApplicationResponse = components['schemas']['FormalApplicationResponse']
+type FormalApplicationRosterResponse = components['schemas']['FormalApplicationRosterResponse']
 type ReviewRequest = components['schemas']['ReviewRequest']
 type ReviewResponse = components['schemas']['ReviewResponse']
 type SpecificationRequest = components['schemas']['SpecificationRequest']
@@ -210,6 +211,9 @@ export const allocationApi = {
 export const formalApi = {
   eligibleProjects(page = 0, size = 100): Promise<Page<components['schemas']['PageResponseEligibleFormalProjectResponse']>> {
     return json(`/api/formal-applications/eligible-projects?${pageQuery(page, size)}`)
+  },
+  roster(projectId: string): Promise<FormalApplicationRosterResponse> {
+    return json(`/api/projects/${encodeURIComponent(projectId)}/formal-application-roster`)
   },
   get(projectId: string): Promise<FormalApplicationResponse> {
     return json(`/api/projects/${encodeURIComponent(projectId)}/formal-applications`)

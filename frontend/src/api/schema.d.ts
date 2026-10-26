@@ -880,6 +880,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{projectId}/formal-application-roster": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get the finalized group roster for a student's Formal proposal.
+         * @description Returns only member account IDs and current display names to a STUDENT who belongs to the selected project's finalized allocated group. IDs are provided only to associate existing Formal proposal contribution fields; no caller-supplied student ID is accepted.
+         */
+        get: operations["roster"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/grading-rubrics/{id}": {
         parameters: {
             query?: never;
@@ -3015,6 +3035,19 @@ export interface components {
              * @description Number of pages containing all matching items.
              */
             totalPages: number;
+        };
+        FormalApplicationRosterMember: {
+            /**
+             * Format: uuid
+             * @description Member account UUID used only to associate existing contribution fields.
+             */
+            studentId: string;
+            /** @description Current account display name, or Unknown student when the account no longer resolves. */
+            displayName: string;
+        };
+        FormalApplicationRosterResponse: {
+            /** @description Finalized allocated group members in roster order. */
+            members: components["schemas"]["FormalApplicationRosterMember"][];
         };
         PageResponseArtifactResponse: {
             /** @description Items returned in this page. */
@@ -7675,6 +7708,55 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    roster: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The finalized group's private roster. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["FormalApplicationRosterResponse"];
+                };
+            };
+            /** @description The project ID must be a valid UUID. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Authentication is required. Missing or invalid bearer authentication credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Caller is not a student in this finalized group. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiErrorResponse"];
                 };
             };
         };

@@ -5,7 +5,7 @@
       <div v-if="isStudent" class="stack">
         <div class="field">
           <label class="label" for="eligible-project">{{ $t('formal.allocatedProject') }}</label>
-          <select id="eligible-project" :value="selectedProjectId" class="select" :disabled="eligibleProjectsLoading || !!eligibleProjectsError || task.loading.value" @change="changeEligibleProject">
+          <select id="eligible-project" :value="selectedProjectId" class="select" :disabled="eligibleProjectsLoading || !!eligibleProjectsError || task.loading.value || rosterLoading || proposalLoading" @change="changeEligibleProject">
             <option value="">{{ $t('formal.chooseProject') }}</option>
             <option v-for="project in eligibleProjects" :key="`${project.periodId}-${project.projectId}`" :value="project.projectId">{{ projectOptionLabel(project) }}</option>
           </select>
@@ -17,12 +17,17 @@
         </div>
         <p v-else-if="eligibleProjects.length === 0" class="notice" role="status">{{ $t('formal.noProjects') }}</p>
         <p v-else-if="!selectedProject" class="muted">{{ $t('formal.chooseToOpen') }}</p>
-        <p v-if="task.loading.value && selectedProject?.formalProposalId" class="notice" role="status">{{ $t('formal.loadingProposal') }}</p>
-        <div v-if="task.error.value && selectedProject?.formalProposalId && !current" class="error-box" role="alert">
-          <p>{{ task.error.value }}</p>
+        <p v-if="rosterLoading" class="notice" role="status">{{ $t('formal.loadingRoster') }}</p>
+        <div v-if="rosterError" class="error-box" role="alert">
+          <p>{{ rosterError }}</p>
+          <button class="button button-secondary" type="button" @click="selectEligibleProject">{{ $t('formal.retryRoster') }}</button>
+        </div>
+        <p v-if="proposalLoading" class="notice" role="status">{{ $t('formal.loadingProposal') }}</p>
+        <div v-if="proposalError" class="error-box" role="alert">
+          <p>{{ proposalError }}</p>
           <button class="button button-secondary" type="button" @click="selectEligibleProject">{{ $t('formal.retryProposal') }}</button>
         </div>
-        <div v-if="selectedProject && !selectedProject.formalProposalId && !current">
+        <div v-if="selectedProject && roster && !proposalLoading && !proposalError && !rosterError && !selectedProject.formalProposalId && !current">
           <p class="notice">{{ $t('formal.noProposal') }}</p>
           <button class="button" type="button" @click="newApplication">{{ $t('formal.startProposal') }}</button>
         </div>
@@ -37,7 +42,7 @@
       </template>
     </div>
     <form v-if="editing && current" class="panel stack" @submit.prevent="save">
-      <div class="page-heading"><h2 class="section-title">{{ $t('formal.proposal') }}</h2><span class="status-badge" :class="`status-${current.status?.toLowerCase()}`">{{ readable(current.status) }}</span></div>
+      <div class="page-heading"><h2 ref="proposalHeading" tabindex="-1" class="section-title">{{ $t('formal.proposal') }}</h2><span class="status-badge" :class="`status-${current.status?.toLowerCase()}`">{{ readable(current.status) }}</span></div>
       <div class="grid grid-2">
         <div class="field"><label class="label" for="topic">{{ $t('formal.topic') }}</label><input id="topic" v-model="form.topic" class="input" maxlength="200" required /><span class="metric">{{ number(form.topic.length) }}/200</span></div>
         <div class="field"><label class="label" for="partner">{{ $t('formal.partner') }}</label><input id="partner" v-model="form.cooperationPartner" class="input" maxlength="1000" /></div>
@@ -46,6 +51,23 @@
       <div class="field"><label class="label" for="objective">{{ $t('formal.objective') }}</label><textarea id="objective" v-model="form.objective" class="textarea" maxlength="400" required /><span class="metric">{{ number(form.objective.length) }}/400</span></div>
       <div class="form-section-title">{{ $t('formal.contributions') }}</div>
       <p class="notice">{{ $t('formal.contributionHelp') }}</p>
+      <template v-if="isStudent">
+        <div role="tablist" :aria-label="$t('formal.memberTabs')" class="member-tabs" @keydown="navigateMemberTab">
+          <button v-for="(member, index) in form.members" :id="`member-tab-${index}`" :key="member.studentId"
+            class="button button-secondary member-tab" :class="{ 'is-active': activeMemberTab === index }" type="button"
+            role="tab" :aria-selected="activeMemberTab === index" :aria-controls="`member-panel-${index}`"
+            :tabindex="activeMemberTab === index ? 0 : -1" @click="activeMemberTab = index">
+            {{ memberTabLabel(index) }}
+          </button>
+        </div>
+        <div v-for="(member, index) in form.members" v-show="activeMemberTab === index" :id="`member-panel-${index}`"
+          :key="member.studentId" role="tabpanel" :aria-labelledby="`member-tab-${index}`" tabindex="0" class="panel stack member-panel">
+          <div class="field"><label class="label" :for="`member-topic-${index}`">{{ $t('formal.individualTopic') }}</label><input :id="`member-topic-${index}`" v-model="member.topic" class="input" maxlength="200" required /><span class="metric">{{ number(member.topic.length) }}/200</span></div>
+          <div class="field"><label class="label" :for="`member-concern-${index}`">{{ $t('formal.concerns') }}</label><textarea :id="`member-concern-${index}`" v-model="member.investigationConcern" class="textarea" maxlength="2400" required /><span class="metric">{{ $t('formal.sharedCharacters', { count: number(concernsUsed) }) }}</span></div>
+          <div class="field"><label class="label" :for="`member-result-${index}`">{{ $t('formal.plannedResult') }}</label><textarea :id="`member-result-${index}`" v-model="member.plannedResult" class="textarea" maxlength="2400" required /><span class="metric">{{ $t('formal.sharedCharacters', { count: number(resultsUsed) }) }}</span></div>
+        </div>
+      </template>
+      <template v-else>
       <div v-for="(member, index) in form.members" :key="index" class="panel stack">
         <div class="page-heading"><h3 class="section-title">{{ $t('formal.groupMember', { number: number(index + 1) }) }}</h3><button class="button button-secondary button-small" type="button" @click="removeMember(index)">{{ $t('formal.remove') }}</button></div>
         <div class="field"><label class="label" :for="`member-id-${index}`">{{ $t('formal.studentId') }}</label><input :id="`member-id-${index}`" v-model.trim="member.studentId" class="input" required /></div>
@@ -54,6 +76,7 @@
         <div class="field"><label class="label" :for="`member-result-${index}`">{{ $t('formal.plannedResult') }}</label><textarea :id="`member-result-${index}`" v-model="member.plannedResult" class="textarea" maxlength="2400" required /><span class="metric">{{ $t('formal.sharedCharacters', { count: number(resultsUsed) }) }}</span></div>
       </div>
       <button class="button button-secondary" type="button" @click="addMember">＋ {{ $t('formal.addMember') }}</button>
+      </template>
       <div class="form-section-title">{{ $t('formal.milestones') }}</div>
       <div v-for="(milestone, index) in form.milestones" :key="index" class="grid grid-2">
         <div class="field"><label class="label" :for="`milestone-${index}`">{{ $t('formal.milestone', { number: number(index + 1) }) }}</label><input :id="`milestone-${index}`" v-model="milestone.text" class="input" maxlength="1000" required /></div>
@@ -61,14 +84,14 @@
       </div>
       <button class="button button-secondary" type="button" @click="addMilestone">＋ {{ $t('formal.addMilestone') }}</button>
       <div v-if="task.error.value" class="error-box" role="alert">{{ task.error.value }}</div>
-      <div class="actions"><button class="button" :disabled="task.loading.value || concernsUsed > 2400 || resultsUsed > 2400">{{ $t('formal.saveDraft') }}</button><button v-if="current.status === 'DRAFT' || current.status === 'NEEDS_REVISION'" class="button button-secondary" type="button" :disabled="task.loading.value" @click="submitApplication">{{ $t('formal.submitReview') }}</button><button class="button button-secondary" type="button" @click="editing = false">{{ $t('formal.closeEditor') }}</button></div>
+      <div class="actions"><button class="button" :disabled="task.loading.value || concernsUsed > 2400 || resultsUsed > 2400">{{ $t('formal.saveDraft') }}</button><button v-if="current.status === 'DRAFT' || current.status === 'NEEDS_REVISION'" class="button button-secondary" type="button" :disabled="task.loading.value" @click="submitApplication">{{ $t('formal.submitReview') }}</button><button class="button button-secondary" type="button" @click="closeEditor">{{ $t('formal.closeEditor') }}</button></div>
     </form>
     <section v-if="current && !editing" class="panel stack">
-      <div class="page-heading"><div><h2 class="section-title">{{ current.topic }}</h2><p v-if="isStudent && selectedProject" class="muted">{{ selectedProject.projectTitle }} · {{ selectedProject.periodLabel }} ({{ selectedProject.schoolYear }}) · {{ readable(current.status) }}</p><p v-else class="muted">{{ $t('formal.project') }} {{ current.projectId }} · {{ readable(current.status) }}</p></div><span class="status-badge">{{ readable(current.status) }}</span></div>
+      <div class="page-heading"><div><h2 ref="savedHeading" tabindex="-1" class="section-title">{{ current.topic }}</h2><p v-if="isStudent && selectedProject" class="muted">{{ selectedProject.projectTitle }} · {{ selectedProject.periodLabel }} ({{ selectedProject.schoolYear }}) · {{ readable(current.status) }}</p><p v-else class="muted">{{ $t('formal.project') }} {{ current.projectId }} · {{ readable(current.status) }}</p></div><span class="status-badge">{{ readable(current.status) }}</span></div>
       <p><strong>{{ $t('formal.initialSituation') }}</strong><br />{{ current.initialSituation }}</p>
       <p><strong>{{ $t('formal.objectiveDisplay') }}</strong><br />{{ current.objective }}</p>
       <div class="notice">{{ current.status === 'APPROVED' ? $t('formal.approvedNotice') : $t('formal.notApprovedNotice') }}</div>
-      <div v-if="editableStatus" class="actions"><button class="button" @click="editing = true">{{ $t('formal.editProposal') }}</button></div>
+      <div v-if="editableStatus" class="actions"><button ref="editProposalButton" class="button" @click="openEditor">{{ $t('formal.editProposal') }}</button></div>
       <h3 class="form-section-title">{{ $t('formal.teacherReview') }}</h3>
       <article v-for="review in current.reviewHistory?.content ?? []" :key="review.id" class="data-row"><div class="row-main"><h3>{{ readable(review.decision) }}</h3><p>{{ review.feedback }}</p></div></article>
       <p v-if="!current.reviewHistory?.content?.length" class="muted">{{ $t('formal.noReviews') }}</p>
@@ -84,7 +107,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, reactive, ref } from 'vue'
 import type { components } from '../../api/schema'
 import { ApiError } from '../../api/client'
 import { formalApi } from '../../api/services'
@@ -94,6 +117,7 @@ import { formatNumber, i18n } from '../../i18n'
 
 type FormalApplication = components['schemas']['FormalApplicationResponse']
 type EligibleProject = components['schemas']['EligibleFormalProjectResponse']
+type RosterMember = components['schemas']['FormalApplicationRosterMember']
 type MemberDraft = { studentId: string; topic: string; investigationConcern: string; plannedResult: string }
 const auth = useAuthStore()
 const task = useTask()
@@ -103,6 +127,15 @@ const selectedProjectId = ref('')
 const eligibleProjects = ref<EligibleProject[]>([])
 const eligibleProjectsLoading = ref(true)
 const eligibleProjectsError = ref('')
+const roster = ref<RosterMember[] | null>(null)
+const rosterLoading = ref(false)
+const rosterError = ref('')
+const proposalLoading = ref(false)
+const proposalError = ref('')
+const activeMemberTab = ref(0)
+const selectionVersion = ref(0)
+const savedHeading = ref<HTMLElement | null>(null)
+const editProposalButton = ref<HTMLButtonElement | null>(null)
 const current = ref<FormalApplication | null>(null)
 const editing = ref(false)
 const decision = ref('APPROVE')
@@ -135,20 +168,25 @@ function projectOptionLabel(project: EligibleProject): string {
 }
 function clearForm(): void {
   Object.assign(form, { topic: '', initialSituation: '', objective: '', cooperationPartner: '', members: [], milestones: [{ text: '', date: '' }] })
+  activeMemberTab.value = 0
 }
 function hydrate(record: FormalApplication): void {
+  const memberIds = isStudent.value && roster.value
+    ? roster.value.map((member) => member.studentId)
+    : (record.individualTopics ?? []).map((entry) => entry.studentId ?? '')
   Object.assign(form, {
     topic: record.topic ?? '', initialSituation: record.initialSituation ?? '', objective: record.objective ?? '',
     cooperationPartner: record.cooperationPartner ?? '',
-    members: (record.individualTopics ?? []).map((entry) => ({
-      studentId: entry.studentId ?? '', topic: entry.topic ?? '',
-      investigationConcern: record.investigationConcerns?.find((item) => item.studentId === entry.studentId)?.text ?? '',
-      plannedResult: record.plannedResults?.find((item) => item.studentId === entry.studentId)?.text ?? '',
+    members: memberIds.map((studentId) => ({
+      studentId,
+      topic: record.individualTopics?.find((entry) => entry.studentId === studentId)?.topic ?? '',
+      investigationConcern: record.investigationConcerns?.find((item) => item.studentId === studentId)?.text ?? '',
+      plannedResult: record.plannedResults?.find((item) => item.studentId === studentId)?.text ?? '',
     })),
     milestones: record.milestones?.length ? record.milestones.map((item) => ({ text: item.text ?? '', date: item.date ?? '' })) : [{ text: '', date: '' }],
   })
 }
-function acceptProposal(record: FormalApplication): void {
+function acceptProposal(record: FormalApplication, moveFocus = false): void {
   const option = eligibleProjects.value.find((project) => project.projectId === record.projectId)
   if (option) {
     option.formalProposalId = record.id
@@ -164,6 +202,7 @@ function acceptProposal(record: FormalApplication): void {
   current.value = record
   hydrate(record)
   editing.value = false
+  if (moveFocus) void nextTick(() => savedHeading.value?.focus())
 }
 async function loadApplication(): Promise<void> {
   current.value = null
@@ -195,7 +234,7 @@ async function loadEligibleProjects(): Promise<void> {
 }
 function changeEligibleProject(event: Event): void {
   const select = event.target as HTMLSelectElement
-  if (task.loading.value) {
+  if (task.loading.value || rosterLoading.value || proposalLoading.value) {
     select.value = selectedProjectId.value
     return
   }
@@ -203,30 +242,91 @@ function changeEligibleProject(event: Event): void {
   void selectEligibleProject()
 }
 async function selectEligibleProject(): Promise<void> {
-  // Keep the initiating project selected until its fetch/save/submit has settled.
-  if (task.loading.value) return
+  if (task.loading.value || rosterLoading.value || proposalLoading.value) return
+  const version = ++selectionVersion.value
   current.value = null
   editing.value = false
+  roster.value = null
+  rosterError.value = ''
+  proposalError.value = ''
   task.error.value = ''
   task.success.value = ''
   clearForm()
   const project = selectedProject.value
   projectId.value = project?.projectId ?? ''
   if (!project) return
-  if (!project.formalProposalId) return
-  const result = await task.run(() => formalApi.get(project.projectId))
-  if (result) acceptProposal(result)
+  rosterLoading.value = true
+  try {
+    const result = await formalApi.roster(project.projectId)
+    if (!result.members.length) throw new Error('The finalized group roster is empty.')
+    if (version !== selectionVersion.value || selectedProjectId.value !== project.projectId) return
+    roster.value = result.members
+  } catch {
+    if (version === selectionVersion.value && selectedProjectId.value === project.projectId) {
+      rosterError.value = String(i18n.global.t('formal.rosterFailed'))
+    }
+    return
+  } finally {
+    if (version === selectionVersion.value) rosterLoading.value = false
+  }
+  if (!project.formalProposalId || version !== selectionVersion.value) return
+  proposalLoading.value = true
+  try {
+    const result = await formalApi.get(project.projectId)
+    if (version === selectionVersion.value && selectedProjectId.value === project.projectId) acceptProposal(result)
+  } catch {
+    if (version === selectionVersion.value && selectedProjectId.value === project.projectId) {
+      proposalError.value = String(i18n.global.t('formal.proposalFailed'))
+    }
+  } finally {
+    if (version === selectionVersion.value) proposalLoading.value = false
+  }
 }
 function newApplication(): void {
-  if (isStudent.value && (!selectedProject.value || selectedProject.value.formalProposalId)) return
+  if (isStudent.value && (!selectedProject.value || !roster.value || rosterError.value || selectedProject.value.formalProposalId)) return
   if (!projectId.value) return
   clearForm()
-  form.members.push({ studentId: auth.user?.id ?? '', topic: '', investigationConcern: '', plannedResult: '' })
+  form.members = roster.value?.map(({ studentId }) =>
+    ({ studentId, topic: '', investigationConcern: '', plannedResult: '' })) ?? [
+    { studentId: auth.user?.id ?? '', topic: '', investigationConcern: '', plannedResult: '' },
+  ]
   current.value = {
     projectId: projectId.value,
     status: 'DRAFT',
   } as FormalApplication
   editing.value = true
+  if (isStudent.value) void nextTick(() => document.getElementById('member-tab-0')?.focus())
+}
+function openEditor(): void {
+  editing.value = true
+  if (isStudent.value) void nextTick(() => document.getElementById('member-tab-0')?.focus())
+}
+function memberTabLabel(index: number): string {
+  const name = roster.value?.[index]?.displayName ?? String(i18n.global.t('formal.unknownStudent'))
+  const duplicates = roster.value?.filter((entry) => entry.displayName === name).length ?? 0
+  return duplicates > 1
+    ? String(i18n.global.t('formal.memberOrdinal', { name, number: number(index + 1) }))
+    : name
+}
+function navigateMemberTab(event: KeyboardEvent): void {
+  const count = form.members.length
+  if (!count) return
+  let target = activeMemberTab.value
+  if (event.key === 'ArrowRight' || event.key === 'ArrowDown') target = (target + 1) % count
+  else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') target = (target + count - 1) % count
+  else if (event.key === 'Home') target = 0
+  else if (event.key === 'End') target = count - 1
+  else return
+  event.preventDefault()
+  activeMemberTab.value = target
+  void nextTick(() => document.getElementById(`member-tab-${target}`)?.focus())
+}
+function closeEditor(): void {
+  editing.value = false
+  void nextTick(() => {
+    if (isStudent.value && editProposalButton.value) editProposalButton.value.focus()
+    else savedHeading.value?.focus()
+  })
 }
 function addMember(): void {
   form.members.push({ studentId: '', topic: '', investigationConcern: '', plannedResult: '' })
@@ -258,12 +358,12 @@ async function save(): Promise<void> {
   const result = current.value?.id
     ? await task.run(() => formalApi.update(current.value!.id!, input), String(i18n.global.t('formal.draftSaved')))
     : await task.run(() => formalApi.create(projectId.value, input), String(i18n.global.t('formal.draftCreated')))
-  if (result) acceptProposal(result)
+  if (result) acceptProposal(result, isStudent.value)
 }
 async function submitApplication(): Promise<void> {
   if (task.loading.value || !current.value?.id || !confirm(String(i18n.global.t('formal.submitConfirm')))) return
   const result = await task.run(() => formalApi.submit(current.value!.id!), String(i18n.global.t('formal.submitted')))
-  if (result) acceptProposal(result)
+  if (result) acceptProposal(result, isStudent.value)
 }
 async function reviewApplication(): Promise<void> {
   if (!current.value?.id || !confirm(String(i18n.global.t('formal.recordConfirm')))) return
@@ -275,3 +375,36 @@ async function reviewApplication(): Promise<void> {
 }
 if (isStudent.value) onMounted(loadEligibleProjects)
 </script>
+
+<style scoped>
+.member-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  border-bottom: 1px solid var(--border, #cbd5e1);
+  padding-bottom: 0.5rem;
+}
+.member-tab {
+  flex: 1 1 10rem;
+  min-width: min(10rem, 100%);
+  overflow-wrap: anywhere;
+}
+.member-tab.is-active {
+  border-color: var(--primary, #1d4ed8);
+  color: var(--primary, #1d4ed8);
+  font-weight: 700;
+}
+.member-tab:focus,
+.member-panel:focus {
+  outline: 3px solid var(--focus, #2563eb);
+  outline-offset: 2px;
+}
+.member-panel {
+  min-width: 0;
+}
+@media (max-width: 480px) {
+  .member-tab {
+    flex-basis: 100%;
+  }
+}
+</style>

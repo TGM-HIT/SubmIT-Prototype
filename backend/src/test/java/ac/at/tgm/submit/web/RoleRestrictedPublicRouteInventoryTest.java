@@ -136,6 +136,8 @@ class RoleRestrictedPublicRouteInventoryTest {
                     "idea.IdeaReviewControllerTest#teacherDecisionAndSupervisionRoutesCompareAllApplicableRoleSets"),
             route("GET /api/formal-applications/eligible-projects", "STUDENT",
                     "formal.FormalApplicationEligibleProjectsApiTest#endpointIsAuthenticatedStudentOnlyAndHasNoCallerSuppliedStudentId"),
+            route("GET /api/projects/{projectId}/formal-application-roster", "STUDENT finalized project member",
+                    "formal.TestingEligibleFormalProjectsFixtureTest#privateRosterReturnsOnlyCurrentGroupIdentitiesAndRequiresFinalizedMembership"),
             route("POST /api/projects/{projectId}/formal-applications", "STUDENT project member",
                     "formal.FormalApplicationValidationApiTest#formalApplicationCreateUpdateAndSubmitAreStudentOnlyForAllSupportedRoleSets"),
             route("PUT /api/formal-applications/{id}", "STUDENT owner",
