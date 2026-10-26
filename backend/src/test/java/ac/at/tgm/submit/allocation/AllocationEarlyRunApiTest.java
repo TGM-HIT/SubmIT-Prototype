@@ -214,14 +214,31 @@ class AllocationEarlyRunApiTest {
             assertEquals("OPEN", store.get("application_period", periodId).getStatus());
             assertEquals(auditBeforeDeniedStart, auditCount());
         }
-        for (String allowed : List.of(adminToken, dual)) {
-            mockMvc.perform(post("/api/application-periods/{id}/allocation-runs", periodId)
-                            .header("Authorization", bearer(allowed)))
-                    .andExpect(status().isCreated());
-        }
+        MvcResult adminRunResult = mockMvc.perform(post("/api/application-periods/{id}/allocation-runs", periodId)
+                        .header("Authorization", bearer(adminToken)))
+                .andExpect(status().isCreated()).andReturn();
+        mockMvc.perform(post("/api/application-periods/{id}/allocation-runs", periodId)
+                        .header("Authorization", bearer(dual)))
+                .andExpect(status().isCreated());
         assertEquals(runsBeforeDeniedStart + 2, store.repository().findByTypeAndParentId(
                 "allocation_run", periodId.toString()).size());
         assertEquals(auditBeforeDeniedStart + 2, auditCount());
+        String runId = mapper.readTree(adminRunResult.getResponse().getContentAsString()).path("id").asText();
+        long auditsBeforeStaffReads = auditCount();
+        for (String staff : List.of(adminToken, teacherOnly, dual)) {
+            mockMvc.perform(get("/api/application-periods/{id}/allocation-runs", periodId)
+                            .header("Authorization", bearer(staff)))
+                    .andExpect(status().isOk());
+            mockMvc.perform(get("/api/allocation-runs/{id}", runId).header("Authorization", bearer(staff)))
+                    .andExpect(status().isOk());
+            assertEquals(auditsBeforeStaffReads, auditCount());
+        }
+        mockMvc.perform(get("/api/application-periods/{id}/allocation-runs", periodId)
+                        .header("Authorization", bearer(studentTokens.getFirst())))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/api/allocation-runs/{id}", runId)
+                        .header("Authorization", bearer(studentTokens.getFirst())))
+                .andExpect(status().isForbidden());
 
         assertFinalizeRoleMatrix(adminToken, teacherOnly, studentTokens.getFirst());
         assertFinalizeRoleMatrix(dual, teacherOnly, studentTokens.getFirst());

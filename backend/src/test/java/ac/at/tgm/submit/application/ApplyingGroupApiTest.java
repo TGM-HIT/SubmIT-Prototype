@@ -292,18 +292,30 @@ class ApplyingGroupApiTest {
         change(1, id, "INVITE", revision(id), Map.of("studentId", student(2)), 200);
         change(2, id, "ACCEPT", revision(id), Map.of(), 200);
         change(1, id, "INVITE", revision(id), Map.of("studentId", student(3)), 200);
-        String[] actors = {tokens.get(1), tokens.get(2), tokens.get(3), tokens.get(4), teacher, admin, null};
-        int[] read = {200, 200, 200, 403, 200, 200, 401};
-        int[] invites = {200, 403, 403, 403, 200, 200, 401};
-        int[] approve = {200, 200, 403, 403, 403, 403, 401};
+        String teacherOnly = teacher;
+        setRoles(users.findByUsername("teacher01").orElseThrow().getId().toString(),
+                List.of("TEACHER", "ADMIN"));
+        String dual = login("teacher01");
+        String[] actors = {tokens.get(1), tokens.get(2), tokens.get(3), tokens.get(4),
+                teacherOnly, dual, admin, null};
+        int[] read = {200, 200, 200, 403, 200, 200, 200, 401};
+        int[] invites = {200, 403, 403, 403, 200, 200, 200, 401};
+        int[] approve = {200, 200, 403, 403, 403, 403, 403, 401};
         for (int i = 0; i < actors.length; i++) {
-            perform(get(path()), actors[i], null, i == 6 ? 401 : 200);
+            perform(get(path()), actors[i], null, i == 7 ? 401 : 200);
             perform(get(path() + "/" + id), actors[i], null, read[i]);
             perform(get(path() + "/" + id + "/invitations"), actors[i], null, invites[i]);
+            String beforeDeniedAction = stored(id).getPayload();
+            long auditsBeforeDeniedAction = auditCount();
             perform(post(path() + "/" + id + "/actions/APPROVE"), actors[i],
                     Map.of("revision", revision(id)), approve[i]);
-            if (i >= 4) perform(post(path()), actors[i], null, i == 6 ? 401 : 403);
+            if (i >= 4 && i <= 6) {
+                assertEquals(beforeDeniedAction, stored(id).getPayload());
+                assertEquals(auditsBeforeDeniedAction, auditCount());
+            }
+            if (i >= 4) perform(post(path()), actors[i], null, i == 7 ? 401 : 403);
         }
+        setRoles(users.findByUsername("teacher01").orElseThrow().getId().toString(), List.of("TEACHER"));
         UUID other = store.create("application_period", null, null, "OPEN",
                 store.parse(store.get("application_period", period))).getId();
         String foreign = "/api/application-periods/" + other + "/applying-groups/" + id;

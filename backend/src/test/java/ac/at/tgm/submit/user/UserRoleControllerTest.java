@@ -99,6 +99,45 @@ class UserRoleControllerTest {
     }
 
     @Test
+    void administratorUserRoutesAllowAdminAndDualCallersAndRejectTeacherAndStudentCallers() throws Exception {
+        teacher.setRoles(List.of(Role.TEACHER, Role.ADMIN));
+        users.saveAndFlush(teacher);
+        String dualToken = jwtService.issueToken(
+                new AuthenticatedUser(teacher.getId(), teacher.getUsername(), teacher.getRoles()));
+        String teacherOnlyToken = jwtService.issueToken(
+                new AuthenticatedUser(teacher.getId(), teacher.getUsername(), List.of(Role.TEACHER)));
+        String studentToken = jwtService.issueToken(
+                new AuthenticatedUser(student.getId(), student.getUsername(), List.of(Role.STUDENT)));
+
+        for (String token : List.of(teacherOnlyToken, studentToken)) {
+            mockMvc.perform(get("/api/users").header("Authorization", "Bearer " + token))
+                    .andExpect(status().isForbidden());
+        }
+        mockMvc.perform(get("/api/users").header("Authorization", bearer(admin))).andExpect(status().isOk());
+        mockMvc.perform(get("/api/users").header("Authorization", "Bearer " + dualToken)).andExpect(status().isOk());
+
+        List<Role> unchangedStudentRoles = users.findById(student.getId()).orElseThrow().getRoles();
+        for (String token : List.of(teacherOnlyToken, studentToken)) {
+            mockMvc.perform(patch("/api/users/{id}/role", student.getId())
+                            .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
+                            .content(rolesRequest(List.of(Role.TEACHER))))
+                    .andExpect(status().isForbidden());
+            assertEquals(unchangedStudentRoles, users.findById(student.getId()).orElseThrow().getRoles());
+        }
+        mockMvc.perform(patch("/api/users/{id}/role", student.getId()).header("Authorization", bearer(admin))
+                        .contentType(MediaType.APPLICATION_JSON).content(rolesRequest(List.of(Role.TEACHER))))
+                .andExpect(status().isOk());
+        assertEquals(List.of(Role.TEACHER), users.findById(student.getId()).orElseThrow().getRoles());
+
+        mockMvc.perform(patch("/api/users/{id}/role", anotherAdmin.getId())
+                        .header("Authorization", "Bearer " + dualToken).contentType(MediaType.APPLICATION_JSON)
+                        .content(rolesRequest(List.of(Role.TEACHER, Role.ADMIN))))
+                .andExpect(status().isOk());
+        assertEquals(List.of(Role.TEACHER, Role.ADMIN),
+                users.findById(anotherAdmin.getId()).orElseThrow().getRoles());
+    }
+
+    @Test
     void userResponseEmitsIdentityFieldsAndOmitsUnavailableStudentDetails() throws Exception {
         var result = mockMvc.perform(get("/api/users").header("Authorization", bearer(admin)))
                 .andExpect(status().isOk()).andReturn();

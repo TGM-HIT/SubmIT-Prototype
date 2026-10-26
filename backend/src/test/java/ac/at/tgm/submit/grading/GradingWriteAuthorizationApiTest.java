@@ -48,6 +48,7 @@ class GradingWriteAuthorizationApiTest {
 
     private String adminToken;
     private String teacherToken;
+    private String studentToken;
     private String teacherId;
     private UUID projectId;
     private String studentId;
@@ -62,7 +63,9 @@ class GradingWriteAuthorizationApiTest {
         AuthTokens teacher = login("teacher01");
         teacherToken = teacher.token();
         teacherId = teacher.userId();
-        studentId = login("student01").userId();
+        AuthTokens student = login("student01");
+        studentToken = student.token();
+        studentId = student.userId();
         projectId = UUID.randomUUID();
         var group = store.object().put("projectId", projectId.toString());
         group.putArray("studentIds").add(studentId.toString());
@@ -184,6 +187,83 @@ class GradingWriteAuthorizationApiTest {
         assertTrue(publishRubric("admin-publication-" + UUID.randomUUID()) != null);
     }
 
+    @Test
+    void teacherOnlyCanWriteEveryTeacherAssessmentWhileAdminAndStudentAreForbiddenWithoutSideEffects()
+            throws Exception {
+        Map<String, Object> studentGrade = studentGrade();
+        assertForbiddenWithoutMutation(post("/api/projects/{projectId}/student-grades", projectId),
+                adminToken, studentGrade);
+        assertForbiddenWithoutMutation(post("/api/projects/{projectId}/student-grades", projectId),
+                studentToken, studentGrade);
+        JsonNode initialGrade = body(request(post("/api/projects/{projectId}/student-grades", projectId),
+                teacherToken, studentGrade).andExpect(status().isCreated()).andReturn());
+        String gradeId = text(initialGrade, "id");
+
+        Map<String, Object> revision = Map.of("reason", "Correction", "grade", 3);
+        assertForbiddenWithoutMutation(
+                post("/api/projects/{projectId}/student-grades/{gradeId}/revisions", projectId, gradeId),
+                adminToken, revision);
+        assertForbiddenWithoutMutation(
+                post("/api/projects/{projectId}/student-grades/{gradeId}/revisions", projectId, gradeId),
+                studentToken, revision);
+        request(post("/api/projects/{projectId}/student-grades/{gradeId}/revisions", projectId, gradeId),
+                teacherToken, revision).andExpect(status().isCreated());
+
+        Map<String, Object> groupGrade = Map.of("rubricId", rubricId, "criterionId", "team",
+                "grade", 4, "evidence", "Completed project evidence", "comments", "Group review");
+        assertForbiddenWithoutMutation(post("/api/projects/{projectId}/group-grades", projectId),
+                adminToken, groupGrade);
+        assertForbiddenWithoutMutation(post("/api/projects/{projectId}/group-grades", projectId),
+                studentToken, groupGrade);
+        request(post("/api/projects/{projectId}/group-grades", projectId),
+                teacherToken, groupGrade).andExpect(status().isCreated());
+
+        Map<String, Object> metric = Map.of("rubricId", rubricId, "metricId", "hours",
+                "value", 12, "note", "Recorded workshop hours");
+        assertForbiddenWithoutMutation(post("/api/projects/{projectId}/metrics", projectId), adminToken, metric);
+        assertForbiddenWithoutMutation(post("/api/projects/{projectId}/metrics", projectId), studentToken, metric);
+        request(post("/api/projects/{projectId}/metrics", projectId), teacherToken, metric)
+                .andExpect(status().isCreated());
+
+        Map<String, Object> finalGrades = Map.of(
+                "rubricId", rubricId,
+                "project", Map.of("grade", 4, "rationale", "Project rubric and metric inputs considered."),
+                "students", List.of(Map.of("studentId", studentId, "grade", 3,
+                        "rationale", "Individual assessments considered.")));
+        assertForbiddenWithoutMutation(put("/api/projects/{projectId}/final-grade", projectId),
+                adminToken, finalGrades);
+        assertForbiddenWithoutMutation(put("/api/projects/{projectId}/final-grade", projectId),
+                studentToken, finalGrades);
+        request(put("/api/projects/{projectId}/final-grade", projectId), teacherToken, finalGrades)
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void rubricPublicationRequiresAdminMembershipAndDenialsLeaveNoRecordsOrAudit() throws Exception {
+        var teacher = users.findByUsername("teacher01").orElseThrow();
+        teacher.setRoles(List.of(Role.TEACHER, Role.ADMIN));
+        users.saveAndFlush(teacher);
+        String dualToken = login("teacher01").token();
+        PublishRubricRequest deniedPayload = rubricRequest("denied-publication-" + UUID.randomUUID());
+        assertForbiddenWithoutMutation(post("/api/grading-rubrics"), teacherToken, deniedPayload);
+        assertForbiddenWithoutMutation(post("/api/grading-rubrics"), studentToken, deniedPayload);
+
+        assertNotNull(publishRubric("admin-matrix-" + UUID.randomUUID(), adminToken));
+        assertNotNull(publishRubric("dual-matrix-" + UUID.randomUUID(), dualToken));
+    }
+
+    private void assertForbiddenWithoutMutation(
+            org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder route,
+            String token, Object body) throws Exception {
+        long recordsBefore = store.repository().findAll().size();
+        long auditsBefore = store.repository().findByType("audit",
+                org.springframework.data.domain.PageRequest.of(0, 1000)).getTotalElements();
+        request(route, token, body).andExpect(status().isForbidden());
+        assertEquals(recordsBefore, store.repository().findAll().size());
+        assertEquals(auditsBefore, store.repository().findByType("audit",
+                org.springframework.data.domain.PageRequest.of(0, 1000)).getTotalElements());
+    }
+
     private void assertAudit(String entityType, String entityId, String action) throws Exception {
         JsonNode page = body(mockMvc.perform(bearer(
                 get("/api/audit/{entityType}/{entityId}", entityType, entityId), teacherToken))
@@ -272,20 +352,24 @@ class GradingWriteAuthorizationApiTest {
     }
 
     private UUID publishRubric(String version, String token) throws Exception {
-        ScaleDto scale = new ScaleDto(BigDecimal.ONE, BigDecimal.valueOf(5), null, null);
-        List<CriterionDto> criteria = List.of(
-                new CriterionDto("individual", "Individual", null, "STUDENT", null, false, scale),
-                new CriterionDto("team", "Group", null, "GROUP", null, true, scale));
-        PublishRubricRequest rubric = new PublishRubricRequest(version, "Authorization rubric", null,
-                LocalDate.now().minusDays(1).toString(), null, scale,
-                List.of(new CategoryDto("project", "Project", null, criteria)),
-                List.of(new MetricDefinitionDto("hours", "Hours", 1, null, "hours", BigDecimal.ZERO, null)),
-                List.<AggregationRuleDto>of());
+        PublishRubricRequest rubric = rubricRequest(version);
         MvcResult result = mockMvc.perform(post("/api/grading-rubrics")
                         .header("Authorization", bearerValue(token))
                         .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsBytes(rubric)))
                 .andExpect(status().isCreated()).andReturn();
         return UUID.fromString(text(body(result), "id"));
+    }
+
+    private PublishRubricRequest rubricRequest(String version) {
+        ScaleDto scale = new ScaleDto(BigDecimal.ONE, BigDecimal.valueOf(5), null, null);
+        List<CriterionDto> criteria = List.of(
+                new CriterionDto("individual", "Individual", null, "STUDENT", null, false, scale),
+                new CriterionDto("team", "Group", null, "GROUP", null, true, scale));
+        return new PublishRubricRequest(version, "Authorization rubric", null,
+                LocalDate.now().minusDays(1).toString(), null, scale,
+                List.of(new CategoryDto("project", "Project", null, criteria)),
+                List.of(new MetricDefinitionDto("hours", "Hours", 1, null, "hours", BigDecimal.ZERO, null)),
+                List.<AggregationRuleDto>of());
     }
 
     private JsonNode body(MvcResult result) throws Exception {
