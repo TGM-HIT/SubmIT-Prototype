@@ -78,6 +78,18 @@ PREVIEW_PASSWORD=testing-password npm run preview -- --auth --username teacher01
 
 Interactions run after authentication in the order fill, click, wait, then expand, Tab navigation, and keyboard selection. Expanding changes only the preview page's rendered select size, not application data or production code.
 
+### Real-browser keyboard regression suite
+
+The repeatable initial keyboard regression suite runs actual Chrome/Chromium key input through the existing CDP preview and testing-session lifecycle. From `frontend/`, run:
+
+```sh
+PREVIEW_PASSWORD=testing-password npm run test:keyboard -- --output-dir ../harness/runs/<run-id>/evidence
+```
+
+The caller-provided evidence directory must be ignored by Git. The command requires the documented testing password, supported Node.js, installed frontend dependencies and backend toolchain, Chrome/Chromium (`CHROME_BIN` may select a nonstandard executable), and six successive frontend/backend preview ports from the configured bases (5173–5178 and 8080–8085 by default). It starts six disposable testing-profile sessions across two repetitions, waits for the existing seeders, and stops only sessions it owns. K1/K2 share one session per repetition; K3 desktop and mobile each start from isolated fixture state. A pre-existing session or occupied port is a failure, not something the suite stops or reuses. Each K3 session opts into the existing `DADB_TESTING_ELIGIBLE_FORMAL_PROJECT_PREVIEW` fixture for the private finalized roster and the 2027/2028 **New proposal** project; ordinary testing seed data and account counts are unchanged. See `backend/DEV-GUIDELINES.md` for the existing accounts and fixture details.
+
+`keyboard-results.json` contains the named scenario, viewport, key sequence, expected/observed focus or state assertions, and precise failure step. The suite also runs a deliberate incorrect-focus assertion and requires it to fail explicitly. Scenario screenshots are named by run, K1-K3, viewport and final UI state; failed-case captures use a failure-diagnostic suffix. Rendered screenshot text is masked. Results exclude credentials, authentication payloads, tokens, account IDs, and proposal field contents. A passing browser run is evidence of the listed page-level interactions only: it is not an exhaustive accessibility certification. `npm run test` covers component tests, and `npm run preview:test` covers Node-runner and mocked preview regressions; neither is real-browser evidence. OS-native select popup permission checks, assistive-technology behavior, and personal visual or usability judgments still require their separate genuinely human checks.
+
 For an actual collapsed native popup on macOS, use headed Google Chrome with `--tab-to SELECTOR --native-select-by-key SELECTOR=VALUE`. This uses macOS System Events input; it is restricted to headed macOS Chrome, does not fall back to CDP key events, and verifies the selected DOM value before saving a screenshot. If macOS reports that `osascript` is not permitted to send keystrokes:
 
 1. Open **System Settings → Privacy & Security → Accessibility**.

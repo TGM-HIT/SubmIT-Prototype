@@ -29,6 +29,11 @@ import {
   RECORD_LOCATOR_EXPRESSION,
   viewportFor,
   waitForReady,
+  SUPPORTED_BROWSER_KEYS,
+  dispatchBrowserKey,
+  assertBrowserState,
+  assertDialogContainsFocus,
+  assertDialogClosed,
 } from './preview.mjs'
 
 test('G8 optional network evidence includes completion and initiator without authentication or payload data', () => {
@@ -118,6 +123,13 @@ test('parses preview options and rejects incomplete or invalid invocations', () 
     { action: 'online' },
   ])
   assert.deepEqual(parseArgs(['--step', 'measure-overflow']).steps, [{ action: 'measure-overflow' }])
+  assert.deepEqual(parseArgs(['--step', 'key:ArrowRight', '--step', 'assert-dialog-contained',
+    '--step', 'assert-dialog-closed']).steps, [
+    { action: 'key', value: 'ArrowRight' },
+    { action: 'assert-dialog-contained' },
+    { action: 'assert-dialog-closed' },
+  ])
+  assert.throws(() => parseArgs(['--step', 'key:KeyA']), /one of Tab/)
   assert.throws(() => parseArgs(['--step', 'select-index:#teacher-id=-1']), /NONNEGATIVE_INDEX/)
   assert.throws(
     () => parseArgs(['--step', 'click-row-action:teacher01']),
@@ -383,14 +395,20 @@ test('runs ordered preview steps and captures screenshots between interactions',
   const outputDir = await mkdtemp(path.join(tmpdir(), 'submit-preview-steps-'))
   context.after(() => rm(outputDir, { recursive: true, force: true }))
   const events = []
-  let dialogCount = 2
+  let dialogCount = 1
   const logs = []
   await applyPageSteps({
     async send(method, params) {
       events.push(method === 'Runtime.evaluate' ? params.expression : `${method}:${params.key}:${params.type}`)
       if (method === 'Page.captureScreenshot') return { data: Buffer.from('png').toString('base64') }
+      if (method === 'Input.dispatchKeyEvent' && params.key === 'Escape' && params.type === 'keyDown') {
+        dialogCount = 0
+        return {}
+      }
+      if (params.expression?.includes("const dialogs = [...document.querySelectorAll('[role=\"dialog\"]')")) {
+        return { result: { value: { dialogOpen: true, focusInside: true } } }
+      }
       if (params.expression?.includes('document.querySelectorAll("[role=dialog]").length')) {
-        dialogCount -= 1
         return { result: { value: dialogCount } }
       }
       if (params.expression?.includes('requestAnimationFrame')) {
@@ -401,8 +419,10 @@ test('runs ordered preview steps and captures screenshots between interactions',
   }, [
     { action: 'click', value: 'button.open' },
     { action: 'key', value: 'Tab' },
+    { action: 'assert-dialog-contained' },
     { action: 'screenshot', value: 'modal.png' },
     { action: 'key', value: 'Escape' },
+    { action: 'assert-dialog-closed' },
     { action: 'focus', value: '#trigger' },
   ], { outputDir, log: (message) => logs.push(message) })
   assert.match(events[0], /button\.open/)
@@ -410,10 +430,108 @@ test('runs ordered preview steps and captures screenshots between interactions',
     'Input.dispatchKeyEvent:Tab:keyDown',
     'Input.dispatchKeyEvent:Tab:keyUp',
   ])
-  assert.match(logs.join(' '), /focus remains inside the dialog/)
+  assert.match(logs.join(' '), /Dialog is open and contains focus/)
   assert.match(logs.join(' '), /Screenshot saved:/)
-  assert.match(logs.join(' '), /top dialog closed/)
+  assert.match(logs.join(' '), /No dialog is open/)
   assert.match(logs.join(' '), /Focus returned to #trigger/)
+})
+
+test('generic CDP keyboard dispatch has no implicit dialog assumptions on ordinary pages', async () => {
+  const calls = []
+  const client = {
+    async send(method, params) {
+      calls.push([method, params])
+      return {}
+    },
+  }
+  for (const name of ['Tab', 'Shift+Tab', 'Escape']) await dispatchBrowserKey(client, name)
+  assert.equal(calls.length, 6)
+  assert.deepEqual(calls.map(([, params]) => [params.key, params.code, params.windowsVirtualKeyCode,
+    params.modifiers, params.type]), [
+    ['Tab', 'Tab', 9, 0, 'keyDown'], ['Tab', 'Tab', 9, 0, 'keyUp'],
+    ['Tab', 'Tab', 9, 8, 'keyDown'], ['Tab', 'Tab', 9, 8, 'keyUp'],
+    ['Escape', 'Escape', 27, 0, 'keyDown'], ['Escape', 'Escape', 27, 0, 'keyUp'],
+  ])
+  await assert.rejects(dispatchBrowserKey(client, 'F12'), /Unsupported browser key/)
+  const pageCalls = []
+  await applyPageSteps({
+    async send(method, params) {
+      pageCalls.push({ method, params })
+      return {}
+    },
+  }, [
+    { action: 'key', value: 'Tab' },
+    { action: 'key', value: 'Shift+Tab' },
+    { action: 'key', value: 'Escape' },
+  ], { log: () => undefined })
+  assert.equal(pageCalls.every(({ method }) => method === 'Input.dispatchKeyEvent'), true,
+    'ordinary page key dispatch performs no dialog lookup/assertion')
+})
+
+test('dispatches every supported browser key with CDP down/up metadata and Shift modifier', async () => {
+  const calls = []
+  const client = { async send(method, params) { calls.push({ method, ...params }); return {} } }
+  for (const name of SUPPORTED_BROWSER_KEYS) await dispatchBrowserKey(client, name)
+  assert.equal(calls.length, SUPPORTED_BROWSER_KEYS.length * 2)
+  for (let index = 0; index < SUPPORTED_BROWSER_KEYS.length; index += 1) {
+    const down = calls[index * 2]
+    const up = calls[index * 2 + 1]
+    assert.equal(down.method, 'Input.dispatchKeyEvent')
+    assert.equal(down.type, 'keyDown')
+    assert.equal(up.type, 'keyUp')
+    assert.equal(down.code, up.code)
+    assert.equal(down.key, up.key)
+    assert.equal(down.windowsVirtualKeyCode, up.windowsVirtualKeyCode)
+    if (down.key === 'Enter') assert.equal(down.text, '\r')
+    if (down.code === 'Space') assert.equal(down.text, ' ')
+    assert.equal(down.modifiers, index === 1 ? 8 : 0)
+    assert.equal(up.modifiers, index === 1 ? 8 : 0)
+    assert.ok(Number.isInteger(down.windowsVirtualKeyCode))
+  }
+  assert.deepEqual(calls.slice(0, 4).map(({ key, code }) => [key, code]), [
+    ['Tab', 'Tab'], ['Tab', 'Tab'], ['Tab', 'Tab'], ['Tab', 'Tab'],
+  ])
+  assert.equal(calls[8].key, ' ')
+  assert.equal(calls[8].code, 'Space')
+})
+
+test('browser state assertions report named wrong expectations and bounded timeouts', async () => {
+  let evaluations = 0
+  const client = {
+    async send(method) {
+      assert.equal(method, 'Runtime.evaluate')
+      evaluations += 1
+      return { result: { value: 'username' } }
+    },
+  }
+  await assert.rejects(assertBrowserState(client, {
+    description: 'K1 deliberately wrong focus',
+    expression: `document.activeElement?.id ?? ''`,
+    expected: 'password',
+    timeoutMs: 60,
+    intervalMs: 10,
+  }), /K1 deliberately wrong focus.*expected "password", observed "username"/)
+  assert.ok(evaluations > 1, 'bounded assertion polls browser state until timeout')
+  await assert.rejects(assertBrowserState(client, {
+    description: 'invalid timeout',
+    expression: 'true',
+    expected: true,
+    timeoutMs: 0,
+  }), /timeout must be a positive integer/)
+})
+
+test('dialog containment and close assertions remain explicit and fail on incorrect dialog state', async () => {
+  const client = { async send(_method, { expression }) {
+    if (expression.includes('const dialogs =')) {
+      return { result: { value: { dialogOpen: true, focusInside: true } } }
+    }
+    return { result: { value: 0 } }
+  } }
+  assert.deepEqual(await assertDialogContainsFocus(client), { dialogOpen: true, focusInside: true })
+  assert.equal(await assertDialogClosed(client), 0)
+  await assert.rejects(assertDialogContainsFocus({ async send() {
+    return { result: { value: { dialogOpen: true, focusInside: false } } }
+  } }), /Dialog focus assertion failed/)
 })
 
 test('selects an enabled option by index and dispatches the normal select events', async () => {

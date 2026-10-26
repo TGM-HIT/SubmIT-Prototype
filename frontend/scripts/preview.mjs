@@ -5,6 +5,7 @@ import { constants } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { isDeepStrictEqual } from 'node:util'
 
 const frontendDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..')
 const repoDir = path.resolve(frontendDir, '..')
@@ -17,6 +18,83 @@ const defaults = {
   locale: undefined,
   startupTimeout: 180_000,
   sessionFile: path.join(frontendDir, '.preview', 'session.json'),
+}
+
+export const SUPPORTED_BROWSER_KEYS = Object.freeze([
+  'Tab', 'Shift+Tab', 'Escape', 'Enter', 'Space', 'ArrowLeft', 'ArrowRight',
+  'ArrowUp', 'ArrowDown', 'Home', 'End',
+])
+
+const browserKeyMetadata = Object.freeze({
+  Tab: { key: 'Tab', code: 'Tab', windowsVirtualKeyCode: 9 },
+  Escape: { key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 },
+  Enter: { key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 },
+  Space: { key: ' ', code: 'Space', windowsVirtualKeyCode: 32 },
+  ArrowLeft: { key: 'ArrowLeft', code: 'ArrowLeft', windowsVirtualKeyCode: 37 },
+  ArrowUp: { key: 'ArrowUp', code: 'ArrowUp', windowsVirtualKeyCode: 38 },
+  ArrowRight: { key: 'ArrowRight', code: 'ArrowRight', windowsVirtualKeyCode: 39 },
+  ArrowDown: { key: 'ArrowDown', code: 'ArrowDown', windowsVirtualKeyCode: 40 },
+  Home: { key: 'Home', code: 'Home', windowsVirtualKeyCode: 36 },
+  End: { key: 'End', code: 'End', windowsVirtualKeyCode: 35 },
+})
+export async function dispatchBrowserKey(client, name) {
+  if (!SUPPORTED_BROWSER_KEYS.includes(name)) {
+    throw new Error(`Unsupported browser key ${JSON.stringify(name)}. Supported keys: ${SUPPORTED_BROWSER_KEYS.join(', ')}.`)
+  }
+  const base = name === 'Shift+Tab' ? 'Tab' : name
+  const metadata = browserKeyMetadata[base]
+  const modifiers = name === 'Shift+Tab' ? 8 : 0
+  for (const type of ['keyDown', 'keyUp']) {
+    await client.send('Input.dispatchKeyEvent', {
+      type,
+      ...metadata,
+      ...(type === 'keyDown' && base === 'Enter' ? { text: '\r', unmodifiedText: '\r' } : {}),
+      ...(type === 'keyDown' && base === 'Space' ? { text: ' ', unmodifiedText: ' ' } : {}),
+      modifiers,
+    })
+  }
+  return { key: name, modifiers }
+}
+
+export async function assertBrowserState(client, {
+  description,
+  expression,
+  expected,
+  timeoutMs = 3000,
+  intervalMs = 50,
+}) {
+  if (!description || !expression) throw new Error('Browser state assertions require a description and expression.')
+  if (!Number.isInteger(timeoutMs) || timeoutMs < 1) throw new Error('Browser state assertion timeout must be a positive integer.')
+  const deadline = Date.now() + timeoutMs
+  let observed
+  do {
+    observed = await evaluatePage(client, expression, description)
+    if (isDeepStrictEqual(observed, expected)) return observed
+    if (Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, intervalMs))
+  } while (Date.now() < deadline)
+  throw new Error(`Browser assertion failed at step "${description}": expected ${JSON.stringify(expected)}, observed ${JSON.stringify(observed)} after ${timeoutMs}ms.`)
+}
+
+export async function assertDialogContainsFocus(client) {
+  const state = await evaluatePage(client, `(() => {
+    const dialogs = [...document.querySelectorAll('[role="dialog"]')];
+    const top = dialogs.sort((left, right) =>
+      Number(getComputedStyle(right.parentElement).zIndex) - Number(getComputedStyle(left.parentElement).zIndex))[0];
+    return { dialogOpen: Boolean(top), focusInside: Boolean(top && top.contains(document.activeElement)) };
+  })()`, 'inspect dialog focus containment')
+  if (!state.dialogOpen || !state.focusInside) {
+    throw new Error(`Dialog focus assertion failed: expected focus inside an open dialog, observed ${JSON.stringify(state)}.`)
+  }
+  return state
+}
+
+export async function assertDialogClosed(client, timeoutMs = 1000) {
+  return assertBrowserState(client, {
+    description: 'dialog closes after Escape',
+    expression: 'document.querySelectorAll("[role=dialog]").length',
+    expected: 0,
+    timeoutMs,
+  })
 }
 
 function assignmentSeparator(value) {
@@ -160,8 +238,8 @@ export function parseArgs(args) {
           if (action === 'screenshot' && path.basename(argument) !== argument) {
             throw new Error('--step screenshot must use a filename, not a path.')
           }
-          if (action === 'key' && !['Tab', 'Shift+Tab', 'Escape'].includes(argument)) {
-            throw new Error('--step key must be Tab, Shift+Tab, or Escape.')
+          if (action === 'key' && !SUPPORTED_BROWSER_KEYS.includes(argument)) {
+            throw new Error(`--step key must be one of ${SUPPORTED_BROWSER_KEYS.join('|')}.`)
           }
           if (action === 'select-index') {
             const assignment = argument.lastIndexOf('=')
@@ -177,10 +255,11 @@ export function parseArgs(args) {
           } else {
             options.steps.push({ action, value: argument })
           }
-        } else if (['accept-confirms', 'reject-confirms', 'offline', 'online', 'measure-overflow'].includes(action) && !argument) {
+        } else if (['accept-confirms', 'reject-confirms', 'offline', 'online', 'measure-overflow',
+          'assert-dialog-contained', 'assert-dialog-closed'].includes(action) && !argument) {
           options.steps.push({ action })
         } else {
-          throw new Error('--step must be fill:SELECTOR=VALUE, select-index:SELECTOR=INDEX, click-record-action:TITLE_OR_ID|SELECTOR, read-record:TITLE_OR_ID, click:SELECTOR, wait:SELECTOR, read:SELECTOR, focus:SELECTOR, scroll:SELECTOR, screenshot:FILE, key:Tab|Shift+Tab|Escape, accept-confirms, reject-confirms, offline, online, or measure-overflow.')
+          throw new Error('--step must be fill:SELECTOR=VALUE, select-index:SELECTOR=INDEX, click-record-action:TITLE_OR_ID|SELECTOR, read-record:TITLE_OR_ID, click:SELECTOR, wait:SELECTOR, read:SELECTOR, focus:SELECTOR, scroll:SELECTOR, screenshot:FILE, key:SUPPORTED_KEY, assert-dialog-contained, assert-dialog-closed, accept-confirms, reject-confirms, offline, online, or measure-overflow.')
         }
       } else {
         options[name] = value
@@ -931,16 +1010,7 @@ export async function applyPageInteractions(client, options, {
     console.log(`Tabbed to ${selector}.`)
   }
   for (const selector of options.openSelect ?? []) {
-    const bounds = await evaluatePage(client, `(() => {
-      const element = document.querySelector(${JSON.stringify(selector)});
-      if (!(element instanceof HTMLSelectElement)) throw new Error('Element is not a select: ' + ${JSON.stringify(selector)});
-      if (element.disabled) throw new Error('Select is disabled: ' + ${JSON.stringify(selector)});
-      const rect = element.getBoundingClientRect();
-      return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
-    })()`, `locate native select ${selector}`)
-    await client.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: bounds.x, y: bounds.y })
-    await client.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: bounds.x, y: bounds.y, button: 'left', clickCount: 1 })
-    await client.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: bounds.x, y: bounds.y, button: 'left', clickCount: 1 })
+    await openNativeSelect(client, selector)
     console.log(`Sent a browser mouse click to native selector ${selector}.`)
   }
   for (const { selector, value } of options.selectByKey ?? []) {
@@ -968,6 +1038,7 @@ export async function applyPageInteractions(client, options, {
     if (indices.target === indices.current) {
       throw new Error(`The enabled option ${JSON.stringify(value)} (index ${indices.target}) is already selected in ${selector}; choose a different value to verify keyboard selection.`)
     }
+
     const key = async (name, code, keyCode) => {
       await client.send('Input.dispatchKeyEvent', {
         type: 'keyDown',
@@ -1006,6 +1077,19 @@ export async function applyPageInteractions(client, options, {
     log(`Selected ${JSON.stringify(value)} in ${selector} with ${useNativeMacKeys ? 'the macOS native popup keyboard' : 'the keyboard'}.`)
   }
   await applyPageSteps(client, options.steps ?? [], { outputDir: options.outputDir, log })
+}
+
+export async function openNativeSelect(client, selector) {
+  const bounds = await evaluatePage(client, `(() => {
+    const element = document.querySelector(${JSON.stringify(selector)});
+    if (!(element instanceof HTMLSelectElement)) throw new Error('Element is not a select: ' + ${JSON.stringify(selector)});
+    if (element.disabled) throw new Error('Select is disabled: ' + ${JSON.stringify(selector)});
+    const rect = element.getBoundingClientRect();
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+  })()`, `locate native select ${selector}`)
+  await client.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: bounds.x, y: bounds.y })
+  await client.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: bounds.x, y: bounds.y, button: 'left', clickCount: 1 })
+  await client.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: bounds.x, y: bounds.y, button: 'left', clickCount: 1 })
 }
 
 export const RECORD_LOCATOR_EXPRESSION = `(key, selector, click, timeoutMs = 10000) => new Promise((resolve, reject) => {
@@ -1136,6 +1220,12 @@ export async function applyPageSteps(client, steps, { outputDir, log = console.l
         element.scrollIntoView({ block: 'center', inline: 'nearest' });
       })()`, `scroll ${step.value} into view`)
       log(`Scrolled ${step.value} into view.`)
+    } else if (step.action === 'assert-dialog-contained') {
+      const state = await assertDialogContainsFocus(client)
+      log(`Dialog is open and contains focus (${JSON.stringify(state)}).`)
+    } else if (step.action === 'assert-dialog-closed') {
+      await assertDialogClosed(client)
+      log('No dialog is open.')
     } else if (step.action === "accept-confirms" || step.action === "reject-confirms") {
       const accepted = step.action === "accept-confirms"
       await evaluatePage(client, `window.confirm = () => ${accepted}`, "configure confirmation dialogs in the local preview")
@@ -1160,29 +1250,8 @@ export async function applyPageSteps(client, steps, { outputDir, log = console.l
         throw new Error(`Horizontal document overflow: ${metrics.documentWidth}px document width exceeds ${metrics.viewportWidth}px viewport width.`)
       }
     } else if (step.action === 'key') {
-      const key = step.value === 'Shift+Tab' ? 'Tab' : step.value
-      const code = key === 'Tab' ? 'Tab' : 'Escape'
-      const keyCode = key === 'Tab' ? 9 : 27
-      const modifiers = step.value === 'Shift+Tab' ? 8 : 0
-      const topDialogCount = step.value === 'Escape'
-        ? await evaluatePage(client, 'document.querySelectorAll("[role=dialog]").length', 'count open dialogs')
-        : undefined
-      await client.send('Input.dispatchKeyEvent', { type: 'keyDown', key, code, windowsVirtualKeyCode: keyCode, modifiers })
-      await client.send('Input.dispatchKeyEvent', { type: 'keyUp', key, code, windowsVirtualKeyCode: keyCode, modifiers })
-      if (key === 'Tab') {
-        const contained = await evaluatePage(client, `(() => {
-          const dialogs = [...document.querySelectorAll('[role="dialog"]')];
-          const top = dialogs.sort((left, right) => Number(getComputedStyle(right.parentElement).zIndex) - Number(getComputedStyle(left.parentElement).zIndex))[0];
-          return Boolean(top && top.contains(document.activeElement));
-        })()`, 'verify Tab focus remains inside the top dialog')
-        if (!contained) throw new Error('Tab moved focus outside the open dialog.')
-        log(`Pressed ${step.value}; focus remains inside the dialog.`)
-      } else {
-        await evaluatePage(client, 'new Promise((resolve) => setTimeout(resolve, 50))', 'wait for Escape to close the dialog')
-        const dialogCount = await evaluatePage(client, 'document.querySelectorAll("[role=dialog]").length', 'count open dialogs after Escape')
-        if (dialogCount >= topDialogCount) throw new Error('Escape did not close the top dialog.')
-        log('Pressed Escape; the top dialog closed.')
-      }
+      await dispatchBrowserKey(client, step.value)
+      log(`Pressed ${step.value}.`)
     } else if (step.action === 'screenshot') {
       if (!outputDir) throw new Error('A screenshot step requires an output directory.')
       const outputPath = await saveScreenshot(client, outputDir, step.value)
@@ -1456,12 +1525,23 @@ backend/DEV-GUIDELINES.md and pass --username student01 (or another documented a
 Use --fill, --click, --wait-for, and --expand-select to perform reusable preview interactions after authentication,
 or repeat --step ACTION:VALUE to sequence conditional flows. Steps support fill:SELECTOR=VALUE, click:SELECTOR,
 click-row-action:USERNAME|SELECTOR,
-wait:SELECTOR, read:SELECTOR, focus:SELECTOR, scroll:SELECTOR, key:Tab|Shift+Tab|Escape, select-index:SELECTOR=INDEX, screenshot:FILE, accept-confirms, reject-confirms, offline, or online.
+wait:SELECTOR, read:SELECTOR, focus:SELECTOR, scroll:SELECTOR, key:Tab|Shift+Tab|Escape|Enter|Space|ArrowLeft|ArrowRight|ArrowUp|ArrowDown|Home|End,
+select-index:SELECTOR=INDEX, screenshot:FILE, assert-dialog-contained, assert-dialog-closed,
+accept-confirms, reject-confirms, offline, or online. Generic key steps dispatch real browser keyboard events
+without assuming a dialog; use the explicit dialog assertions only in dialog scenarios.
 offline/online change the browser's network state only after the page is loaded, for reusable local failure/offline scenarios; intentional API disconnect errors remain in the network report but do not fail the preview. measure-overflow reports document/body/viewport widths and fails on horizontal document overflow.
 --network-report prints local API method/URL/initiator/status/completion evidence, excluding authentication requests, headers and payloads.
 for example to load a form that requires a project ID before its details are shown. Use --tab-to and
 --select-by-key for browser keyboard navigation. On macOS, use --headed and --native-select-by-key for GUI
 keyboard input to a collapsed popup (Terminal may require Accessibility permission).
+
+Automated page-level browser keyboard regression suite:
+  npm run test:keyboard -- --output-dir <ignored-evidence-directory>
+Runs K1-K3 on desktop and 390px mobile in six disposable testing sessions across two repetitions. K1/K2 share
+one session per repetition; K3 desktop and mobile each start from isolated fixture state. Includes an intentional
+wrong-focus assertion. It requires PREVIEW_PASSWORD, installed local frontend/backend toolchains, Chrome/Chromium,
+and six successive free frontend/backend preview ports. It always fails explicitly on missing prerequisites or
+failed assertions; it never skips.
 `
 }
 

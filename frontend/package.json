@@ -11,7 +11,8 @@
     "build": "npm run typecheck && vite build",
     "preview": "node scripts/preview.mjs",
     "preview:help": "node scripts/preview.mjs --help",
-    "preview:test": "node --test scripts/preview.smoke.mjs scripts/documentation/documentation.smoke.mjs scripts/deprecated-apis.smoke.mjs",
+    "preview:test": "node --test scripts/preview.smoke.mjs scripts/keyboard.smoke.mjs scripts/documentation/documentation.smoke.mjs scripts/deprecated-apis.smoke.mjs",
+    "test:keyboard": "node scripts/keyboard.mjs",
     "api:types": "openapi-typescript ../contracts/openapi.yaml --default-non-nullable false -o src/api/schema.d.ts"
   },
   "dependencies": {
