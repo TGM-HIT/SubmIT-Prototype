@@ -50,7 +50,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Bug-28](tickets/Bug-28.md) | to-do | Make generated request string constraints match runtime validation |
 | [Bug-29](tickets/done/Bug-29.md) | done | Declare always-returned audit and group-member response fields |
 | [Bug-30](tickets/done/Bug-30.md) | done | Show meaningful audit events with timestamps, resources, and actors |
-| [Bug-31](tickets/Bug-31.md) | awaiting-human | Show group members by name in student Formal proposals |
+| [Bug-31](tickets/Bug-31.md) | in-progress | Show group members by name in student Formal proposals |
 
 ### Development
 
