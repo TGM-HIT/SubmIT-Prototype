@@ -36,6 +36,8 @@ For any ticket that changes a developer guide, evaluate any changes to `frontend
 
 Return one verdict: `pass`, `revise`, or `awaiting-human`.
 
+For keyboard verification, distinguish component-dispatched events from actual browser keyboard input and from checks explicitly requiring a person or physical device. Accept retained real-browser input sequences with observed focus/selection and viewport as evidence for Implementor-performed browser checks when they establish the ticket's required behavior; component events or static screenshots alone are not substitutes. A preview helper's incorrect dialog assumption does not itself make a page-level interaction human-only. Before assigning that observation to a human, require a bounded check of supported page-level keyboard tooling and an exact capability limitation. Keep checks human-only when the ticket explicitly requires it or supported tooling cannot obtain the relevant observation. Do not treat this distinction as retroactive verification of missing interactions.
+
 If the Implementor's handoff says manual evidence from an earlier pass was reused on a revise pass, check that claim against the files changed in the revise commit and treat any changed UI behavior the reused evidence does not cover as an unmet criterion.
 
 - `pass` means all required acceptance criteria are established; ship it.
