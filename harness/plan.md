@@ -111,6 +111,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-53](tickets/done/Dev-53.md) | done | Test period response fields and label boundaries |
 | [Dev-54](tickets/done/Dev-54.md) | done | Consolidate duplicate review request schemas |
 | [Dev-55](tickets/Dev-55.md) | to-do | Seed a synthetic grading rubric for testing |
+| [Dev-56](tickets/Dev-56.md) | to-do | Correct the backend Java namespace |
 
 ### Agents
 
