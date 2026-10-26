@@ -13,7 +13,7 @@ const account = (role: 'STUDENT' | 'TEACHER' | 'ADMIN') => ({
   id: `account-${role.toLowerCase()}`,
   username: `${role.toLowerCase()}-username`,
   displayName: 'Saved name',
-  role,
+  roles: [role],
   language: 'en' as const,
 })
 

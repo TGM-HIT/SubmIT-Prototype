@@ -166,7 +166,7 @@ describe('ideas API service', () => {
 
     it('patches only the self-language endpoint with the stable selected language', async () => {
       const response = {
-        id: 'account-id', username: 'student', displayName: 'Student', role: 'STUDENT', language: 'de',
+        id: 'account-id', username: 'student', displayName: 'Student', roles: ['STUDENT'], language: 'de',
       }
       const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(response), {
         status: 200, headers: { 'Content-Type': 'application/json' },

@@ -93,7 +93,7 @@ class IdeaResponseMapper {
 
     private IdeaOwnerResponse ownerResponse(UUID id, String name, boolean creator, Role viewerRole) {
         StudentDetailsResponse details = viewerRole == Role.ADMIN || viewerRole == Role.TEACHER
-                ? users.findById(id).filter(user -> user.getRole() == Role.STUDENT)
+                ? users.findById(id).filter(user -> user.hasRole(Role.STUDENT))
                         .map(studentDetails::response).orElse(null)
                 : null;
         return new IdeaOwnerResponse(id, name, creator,

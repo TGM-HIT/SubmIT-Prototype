@@ -11,6 +11,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import ac.at.tgm.submit.data.RecordStore;
+import ac.at.tgm.submit.security.Role;
+import ac.at.tgm.submit.user.UserAccountRepository;
 import ac.at.tgm.submit.grading.RubricDtos.AggregationRuleDto;
 import ac.at.tgm.submit.grading.RubricDtos.CategoryDto;
 import ac.at.tgm.submit.grading.RubricDtos.CriterionDto;
@@ -23,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -41,6 +44,7 @@ class GradingWriteAuthorizationApiTest {
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;
     @Autowired private RecordStore store;
+    @Autowired private UserAccountRepository users;
 
     private String adminToken;
     private String teacherToken;
@@ -52,6 +56,9 @@ class GradingWriteAuthorizationApiTest {
     @BeforeEach
     void setUp() throws Exception {
         adminToken = login("admin01").token();
+        var teacherAccount = users.findByUsername("teacher01").orElseThrow();
+        teacherAccount.setRoles(List.of(Role.TEACHER));
+        users.saveAndFlush(teacherAccount);
         AuthTokens teacher = login("teacher01");
         teacherToken = teacher.token();
         teacherId = teacher.userId();
@@ -64,14 +71,27 @@ class GradingWriteAuthorizationApiTest {
         rubricId = publishRubric("authorization-rubric-" + UUID.randomUUID());
     }
 
+    @AfterEach
+    void restoreTeacherSingletonRole() {
+        var teacher = users.findByUsername("teacher01").orElseThrow();
+        teacher.setRoles(List.of(Role.TEACHER));
+        users.saveAndFlush(teacher);
+    }
+
     @Test
-    void onlyTeachersMayWriteGradesRevisionsMetricsAndFinalGradesWhileAdminReadsAndPublishesRemainAllowed()
+    void dualRoleMayWriteEveryTeacherAssessmentWhileAdminOnlyReadsAndPublishesRemainAllowed()
             throws Exception {
+        var teacherAccount = users.findByUsername("teacher01").orElseThrow();
+        teacherAccount.setRoles(List.of(Role.TEACHER, Role.ADMIN));
+        users.saveAndFlush(teacherAccount);
+        String dualToken = login("teacher01").token();
+        mockMvc.perform(bearer(get("/api/users"), dualToken)).andExpect(status().isOk());
+        assertNotNull(publishRubric("dual-role-publication-" + UUID.randomUUID(), dualToken));
         Map<String, Object> studentGrade = studentGrade();
         request(post("/api/projects/{projectId}/student-grades", projectId), adminToken, studentGrade)
                 .andExpect(status().isForbidden());
         JsonNode initialGrade = body(request(post("/api/projects/{projectId}/student-grades", projectId),
-                teacherToken, studentGrade).andExpect(status().isCreated()).andReturn());
+                dualToken, studentGrade).andExpect(status().isCreated()).andReturn());
         assertEquals(studentId.toString(), text(initialGrade, "studentId"));
         String gradeId = text(initialGrade, "id");
 
@@ -80,7 +100,7 @@ class GradingWriteAuthorizationApiTest {
                 adminToken, revision).andExpect(status().isForbidden());
         JsonNode revisionResponse = body(request(
                 post("/api/projects/{projectId}/student-grades/{gradeId}/revisions", projectId, gradeId),
-                teacherToken, revision).andExpect(status().isCreated()).andReturn());
+                dualToken, revision).andExpect(status().isCreated()).andReturn());
         String revisionId = text(revisionResponse, "id");
 
         Map<String, Object> groupGrade = Map.of("rubricId", rubricId, "criterionId", "team",
@@ -88,14 +108,14 @@ class GradingWriteAuthorizationApiTest {
         request(post("/api/projects/{projectId}/group-grades", projectId), adminToken, groupGrade)
                 .andExpect(status().isForbidden());
         JsonNode groupResponse = body(request(post("/api/projects/{projectId}/group-grades", projectId),
-                teacherToken, groupGrade).andExpect(status().isCreated()).andReturn());
+                dualToken, groupGrade).andExpect(status().isCreated()).andReturn());
 
         Map<String, Object> metric = Map.of("rubricId", rubricId, "metricId", "hours",
                 "value", 12, "note", "Recorded workshop hours");
         request(post("/api/projects/{projectId}/metrics", projectId), adminToken, metric)
                 .andExpect(status().isForbidden());
         JsonNode metricResponse = body(request(post("/api/projects/{projectId}/metrics", projectId),
-                teacherToken, metric).andExpect(status().isCreated()).andReturn());
+                dualToken, metric).andExpect(status().isCreated()).andReturn());
 
         Map<String, Object> finalGrades = Map.of(
                 "rubricId", rubricId,
@@ -105,7 +125,7 @@ class GradingWriteAuthorizationApiTest {
         request(put("/api/projects/{projectId}/final-grade", projectId), adminToken, finalGrades)
                 .andExpect(status().isForbidden());
         JsonNode finalGradeResponse = body(mockMvc.perform(bearer(
-                put("/api/projects/{projectId}/final-grade", projectId), teacherToken)
+                put("/api/projects/{projectId}/final-grade", projectId), dualToken)
                 .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsBytes(finalGrades)))
                 .andExpect(status().isOk()).andReturn());
         JsonNode projectFinalWrite = object(finalGradeResponse, "project");
@@ -248,6 +268,10 @@ class GradingWriteAuthorizationApiTest {
     }
 
     private UUID publishRubric(String version) throws Exception {
+        return publishRubric(version, adminToken);
+    }
+
+    private UUID publishRubric(String version, String token) throws Exception {
         ScaleDto scale = new ScaleDto(BigDecimal.ONE, BigDecimal.valueOf(5), null, null);
         List<CriterionDto> criteria = List.of(
                 new CriterionDto("individual", "Individual", null, "STUDENT", null, false, scale),
@@ -258,7 +282,7 @@ class GradingWriteAuthorizationApiTest {
                 List.of(new MetricDefinitionDto("hours", "Hours", 1, null, "hours", BigDecimal.ZERO, null)),
                 List.<AggregationRuleDto>of());
         MvcResult result = mockMvc.perform(post("/api/grading-rubrics")
-                        .header("Authorization", bearerValue(adminToken))
+                        .header("Authorization", bearerValue(token))
                         .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsBytes(rubric)))
                 .andExpect(status().isCreated()).andReturn();
         return UUID.fromString(text(body(result), "id"));

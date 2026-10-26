@@ -182,9 +182,9 @@ const statuses = ['IDEA_DRAFT','IDEA_SUBMITTED','IDEA_NEEDS_REVISION','IDEA_APPR
 const auth = useAuthStore()
 const task = useTask()
 const number = formatNumber
-const isStudent = computed(() => auth.user?.role === 'STUDENT')
-const isTeacher = computed(() => auth.user?.role === 'TEACHER')
-const isAdmin = computed(() => auth.user?.role === 'ADMIN')
+const isStudent = computed(() => auth.user?.roles.includes('STUDENT') ?? false)
+const isTeacher = computed(() => auth.user?.roles.includes('TEACHER') ?? false)
+const isAdmin = computed(() => auth.user?.roles.includes('ADMIN') ?? false)
 const canAuthor = computed(() => isStudent.value || isTeacher.value)
 const canSeeOwner = computed(() => !isStudent.value)
 const page = ref<Page<IdeaOverview>>({ content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 })

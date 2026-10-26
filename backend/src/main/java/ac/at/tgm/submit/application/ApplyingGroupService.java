@@ -9,6 +9,7 @@ import ac.at.tgm.submit.audit.AuditService;
 import ac.at.tgm.submit.data.RecordStore;
 import ac.at.tgm.submit.data.StoredRecord;
 import ac.at.tgm.submit.security.AuthenticatedUser;
+import ac.at.tgm.submit.security.Role;
 import ac.at.tgm.submit.user.UserAccountRepository;
 import ac.at.tgm.submit.web.ApiDtos.PageResponse;
 import ac.at.tgm.submit.web.ApiDtos.PreferenceResponse;
@@ -84,7 +85,7 @@ public class ApplyingGroupService {
     @PreAuthorize("hasAnyRole('STUDENT','TEACHER','ADMIN')")
     public PageResponse<MemberResponse> invitations(AuthenticatedUser caller, UUID periodId, UUID id, int page, int size) {
         StoredRecord group = find(periodId, id);
-        if ("STUDENT".equals(caller.role().name())) {
+        if (caller.hasRole(Role.STUDENT)) {
             manager(caller, group);
         }
         List<String> invited = records.ids(store.parse(group).path(INVITED));
@@ -284,7 +285,7 @@ public class ApplyingGroupService {
     }
 
     private boolean canRead(AuthenticatedUser caller, StoredRecord group) {
-        if (!"STUDENT".equals(caller.role().name())) {
+        if (!caller.hasRole(Role.STUDENT)) {
             return true;
         }
         ObjectNode data = store.parse(group);

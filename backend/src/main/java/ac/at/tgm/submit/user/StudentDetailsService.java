@@ -109,7 +109,7 @@ public class StudentDetailsService {
         requireAdmin(caller);
         UserAccount student = users.findById(studentId)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Student was not found."));
-        if (student.getRole() != Role.STUDENT) {
+        if (!student.hasRole(Role.STUDENT)) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Assignments can only target student accounts.");
         }
         List<UUID> subjectIds = request.electiveSubjectIds() == null ? List.of() : request.electiveSubjectIds();
@@ -147,7 +147,7 @@ public class StudentDetailsService {
     private UserAccount findStudent(UUID studentId) {
         UserAccount student = users.findById(studentId)
                 .orElseThrow(() -> new ApiException(HttpStatus.NOT_FOUND, "Student was not found."));
-        if (student.getRole() != Role.STUDENT) {
+        if (!student.hasRole(Role.STUDENT)) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Assignments can only target student accounts.");
         }
         return student;
@@ -178,13 +178,13 @@ public class StudentDetailsService {
     }
 
     private void requireStaff(AuthenticatedUser caller) {
-        if (caller.role() == Role.STUDENT) {
+        if (caller.hasRole(Role.STUDENT)) {
             throw new ApiException(HttpStatus.FORBIDDEN, "This operation requires a teacher or administrator.");
         }
     }
 
     private void requireAdmin(AuthenticatedUser caller) {
-        if (caller.role() != Role.ADMIN) {
+        if (!caller.hasRole(Role.ADMIN)) {
             throw new ApiException(HttpStatus.FORBIDDEN, "This operation requires the ADMIN role.");
         }
     }

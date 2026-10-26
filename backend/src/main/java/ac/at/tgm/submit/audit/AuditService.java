@@ -75,7 +75,7 @@ public class AuditService {
     }
 
     private void requireStaff(AuthenticatedUser caller) {
-        if (caller.role() == Role.STUDENT) {
+        if (caller.hasRole(Role.STUDENT)) {
             throw new org.springframework.security.access.AccessDeniedException("Audit access is restricted.");
         }
     }

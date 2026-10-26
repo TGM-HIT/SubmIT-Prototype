@@ -165,7 +165,7 @@ public class IdeaOwnership {
     private void validateStudent(UUID id) {
         UserAccount student = users.findById(id)
                 .orElseThrow(() -> new ApiException(HttpStatus.BAD_REQUEST, "The selected student was not found."));
-        if (student.getRole() != Role.STUDENT) {
+        if (!student.hasRole(Role.STUDENT)) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Only student accounts can own an idea.");
         }
     }

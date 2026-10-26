@@ -40,8 +40,8 @@ class LegacyAccountLanguageRestartTest {
     Path temporaryDirectory;
 
     @Test
-    void migratesLegacyAccountAndRetainsBothLanguageChoicesAcrossBackendRestart() throws Exception {
-        String databaseUrl = "jdbc:h2:file:" + temporaryDirectory.resolve("legacy-account").toAbsolutePath()
+    void retainsCurrentRoleSetAndBothLanguageChoicesAcrossBackendRestart() throws Exception {
+        String databaseUrl = "jdbc:h2:file:" + temporaryDirectory.resolve("account-language").toAbsolutePath()
                 + ";DB_CLOSE_ON_EXIT=FALSE";
         createPreFeatureSchema(databaseUrl);
         String baseUrl;
@@ -109,9 +109,15 @@ class LegacyAccountLanguageRestartTest {
                       username VARCHAR(80) NOT NULL UNIQUE,
                       display_name VARCHAR(120) NOT NULL,
                       password_hash VARCHAR(255) NOT NULL,
-                      role VARCHAR(20) NOT NULL,
                       student_class_id UUID,
                       CONSTRAINT fk_legacy_class FOREIGN KEY (student_class_id) REFERENCES student_classes(id)
+                    )
+                    """);
+            statement.execute("""
+                    CREATE TABLE user_account_roles (
+                      user_id UUID NOT NULL,
+                      role VARCHAR(20) NOT NULL,
+                      FOREIGN KEY (user_id) REFERENCES user_accounts(id)
                     )
                     """);
             statement.execute("""
@@ -126,17 +132,17 @@ class LegacyAccountLanguageRestartTest {
             statement.execute("INSERT INTO student_classes (id, name) VALUES ('" + CLASS_ID + "', 'Legacy Class')");
             statement.execute("INSERT INTO elective_subjects (id, name) VALUES ('" + SUBJECT_ID + "', 'Legacy Science')");
             try (PreparedStatement insert = connection.prepareStatement("""
-                    INSERT INTO user_accounts (id, username, display_name, password_hash, role, student_class_id)
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    INSERT INTO user_accounts (id, username, display_name, password_hash, student_class_id)
+                    VALUES (?, ?, ?, ?, ?)
                     """)) {
                 insert.setObject(1, STUDENT_ID);
                 insert.setString(2, USERNAME);
                 insert.setString(3, "Legacy Name");
                 insert.setString(4, new BCryptPasswordEncoder().encode(PASSWORD));
-                insert.setString(5, "STUDENT");
-                insert.setObject(6, CLASS_ID);
+                insert.setObject(5, CLASS_ID);
                 insert.executeUpdate();
             }
+            statement.execute("INSERT INTO user_account_roles (user_id, role) VALUES ('" + STUDENT_ID + "', 'STUDENT')");
             statement.execute("INSERT INTO student_elective_subjects (student_id, subject_id) VALUES ('"
                     + STUDENT_ID + "', '" + SUBJECT_ID + "')");
         }
@@ -190,8 +196,9 @@ class LegacyAccountLanguageRestartTest {
     private void assertDatabaseInvariants(String url, String language) throws Exception {
         try (Connection connection = DriverManager.getConnection(url, "sa", "");
              PreparedStatement query = connection.prepareStatement("""
-                     SELECT u.username, u.display_name, u.password_hash, u.role, u.language, c.name, s.name
+                     SELECT u.username, u.display_name, u.password_hash, r.role, u.language, c.name, s.name
                      FROM user_accounts u
+                     JOIN user_account_roles r ON r.user_id = u.id
                      LEFT JOIN student_classes c ON c.id = u.student_class_id
                      LEFT JOIN student_elective_subjects us ON us.student_id = u.id
                      LEFT JOIN elective_subjects s ON s.id = us.subject_id

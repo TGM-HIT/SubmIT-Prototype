@@ -91,7 +91,7 @@ class AllocationEngine {
         } catch (IllegalArgumentException exception) {
             return null;
         }
-        if (users.findById(studentId).filter(user -> user.getRole() == Role.STUDENT).isEmpty()) {
+        if (users.findById(studentId).filter(user -> user.hasRole(Role.STUDENT)).isEmpty()) {
             return null;
         }
         String projectId = store.parse(pin).path(PROJECT_ID).asText();

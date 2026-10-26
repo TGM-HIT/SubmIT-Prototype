@@ -73,8 +73,7 @@ public class UserController {
             content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
     public UserResponse changeRole(@AuthenticationPrincipal AuthenticatedUser caller,
             @PathVariable UUID id, @Valid @RequestBody RoleRequest request) {
-        Role role = request.role();
-        return userService.changeRole(caller, id, role);
+        return userService.changeRoles(caller, id, request.roles());
     }
 
     private int normalizeSize(int size) {

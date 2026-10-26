@@ -33,8 +33,10 @@ public final class ApiDtos {
             @NotNull @Schema(description = "Required account name; leading and trailing whitespace is trimmed, "
                     + "a value blank after trimming is rejected, and the trimmed name is limited to 120 characters.")
             String displayName,
-            @Schema(description = "Ignored. Registration always creates a STUDENT account, regardless of this value.")
-            Role role) {
+            @ArraySchema(schema = @Schema(implementation = Role.class),
+                    arraySchema = @Schema(description = "Ignored. Registration always creates a STUDENT account, "
+                            + "regardless of supplied roles."))
+            List<Role> roles) {
     }
 
     public record LoginRequest(
@@ -52,13 +54,14 @@ public final class ApiDtos {
             @Schema(description = "Authenticated account response.") UserResponse user) {
     }
 
-    @Schema(requiredProperties = {"id", "username", "displayName", "role", "language"})
+    @Schema(requiredProperties = {"id", "username", "displayName", "roles", "language"})
     public record UserResponse(
             @Schema(description = "Account ID.") UUID id,
             @Schema(description = "Login name.") String username,
             @Schema(description = "Current account display name.", requiredMode = Schema.RequiredMode.REQUIRED)
             String displayName,
-            @Schema(description = "Assigned account role.") Role role,
+            @NotEmpty @ArraySchema(schema = @Schema(implementation = Role.class),
+                    arraySchema = @Schema(description = "Assigned account roles.")) List<Role> roles,
             @Schema(description = "Persisted account language.", requiredMode = Schema.RequiredMode.REQUIRED)
             AccountLanguage language,
             @Schema(description = "Current student class; returned only on the administrator account-list endpoint.")
@@ -80,8 +83,9 @@ public final class ApiDtos {
     }
 
     public record RoleRequest(
-            @NotNull @Schema(description = "Account role to assign.", allowableValues = {"STUDENT", "TEACHER", "ADMIN"})
-            Role role) {
+            @NotEmpty @Size(min = 1, max = 2) @Schema(description = "Account roles to assign. Supported sets are STUDENT, "
+                    + "TEACHER, ADMIN, or TEACHER and ADMIN together.")
+            List<@NotNull Role> roles) {
     }
 
     public record CatalogueEntryRequest(

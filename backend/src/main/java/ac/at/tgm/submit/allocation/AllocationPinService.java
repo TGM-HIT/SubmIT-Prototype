@@ -110,7 +110,7 @@ public class AllocationPinService {
     private UserAccount findStudent(UUID studentId) {
         UserAccount student = users.findById(studentId)
                 .orElseThrow(() -> new EntityNotFoundException("Student was not found."));
-        if (student.getRole() != Role.STUDENT) {
+        if (!student.hasRole(Role.STUDENT)) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "The target account is not a STUDENT.");
         }
         return student;

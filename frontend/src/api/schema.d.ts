@@ -2487,11 +2487,8 @@ export interface components {
             password: string;
             /** @description Required account name; leading and trailing whitespace is trimmed, a value blank after trimming is rejected, and the trimmed name is limited to 120 characters. */
             displayName: string;
-            /**
-             * @description Ignored. Registration always creates a STUDENT account, regardless of this value.
-             * @enum {string}
-             */
-            role?: "STUDENT" | "TEACHER" | "ADMIN";
+            /** @description Ignored. Registration always creates a STUDENT account, regardless of supplied roles. */
+            roles?: ("STUDENT" | "TEACHER" | "ADMIN")[];
         };
         UserResponse: {
             /**
@@ -2503,11 +2500,8 @@ export interface components {
             username: string;
             /** @description Current account display name. */
             displayName: string;
-            /**
-             * @description Assigned account role.
-             * @enum {string}
-             */
-            role: "STUDENT" | "TEACHER" | "ADMIN";
+            /** @description Assigned account roles. */
+            roles: ("STUDENT" | "TEACHER" | "ADMIN")[];
             /**
              * @description Persisted account language.
              * @enum {string}
@@ -2810,11 +2804,8 @@ export interface components {
             displayName: string;
         };
         RoleRequest: {
-            /**
-             * @description Account role to assign.
-             * @enum {string}
-             */
-            role: "STUDENT" | "TEACHER" | "ADMIN";
+            /** @description Account roles to assign. Supported sets are STUDENT, TEACHER, ADMIN, or TEACHER and ADMIN together. */
+            roles: ("STUDENT" | "TEACHER" | "ADMIN")[];
         };
         LanguageRequest: {
             /**

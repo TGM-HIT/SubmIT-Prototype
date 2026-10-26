@@ -27,7 +27,7 @@ class AllocationStudentDetailsMapper {
             if (entry instanceof ObjectNode object) {
                 UUID id = parseId(entry.path("studentId").asText());
                 if (id != null) {
-                    users.findById(id).filter(user -> user.getRole() == Role.STUDENT)
+                    users.findById(id).filter(user -> user.hasRole(Role.STUDENT))
                             .ifPresent(user -> {
                                 var student = details.response(user);
                                 if (student.className() != null) {

@@ -160,7 +160,7 @@ class AuditApiTest {
         Instant beforeRoleChange = Instant.now();
         mockMvc.perform(patch("/api/users/{id}/role", roleChangingActor.getId())
                         .header("Authorization", bearer(roleChangingToken))
-                        .contentType(MediaType.APPLICATION_JSON).content("{\"role\":\"TEACHER\"}"))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"roles\":[\"TEACHER\"]}"))
                 .andExpect(status().isOk());
         Instant afterRoleChange = Instant.now();
         AuditEvent roleChange = new AuditEvent("USER_ROLE_CHANGED", "user", roleChangingActor.getId(),

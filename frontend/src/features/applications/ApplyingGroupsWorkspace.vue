@@ -128,7 +128,7 @@ function groupStatus(status: string): string {
   const key = `applyingGroups.states.${status.toLowerCase()}`
   return i18n.global.te(key) ? String(i18n.global.t(key)) : status
 }
-const student = computed(() => auth.user?.role === 'STUDENT')
+const student = computed(() => auth.user?.roles.includes('STUDENT') ?? false)
 const now = ref(Date.now())
 const clock = setInterval(() => { now.value = Date.now() }, 1000)
 onUnmounted(() => clearInterval(clock))

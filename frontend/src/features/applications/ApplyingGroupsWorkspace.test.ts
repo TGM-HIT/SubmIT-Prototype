@@ -6,7 +6,7 @@ import { ApiError } from '../../api/client'
 
 const api = vi.hoisted(() => ({ list: vi.fn(), create: vi.fn(), change: vi.fn(), invitations: vi.fn(), lookup: vi.fn() }))
 vi.mock('../../api/services', () => ({ applyingGroupsApi: api, ideasApi: { lookupStudents: api.lookup } }))
-vi.mock('../../stores/auth', () => ({ useAuthStore: () => ({ user: { role: 'STUDENT' } }) }))
+vi.mock('../../stores/auth', () => ({ useAuthStore: () => ({ user: { roles: ['STUDENT'] } }) }))
 type Group = components['schemas']['GroupResponse']
 const page = <T>(content: T[], index = 0, totalPages = 1) => ({ content, page: index, size: 20, totalPages, totalElements: totalPages * 20 })
 function group(overrides: Partial<Group> = {}): Group {

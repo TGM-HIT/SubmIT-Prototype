@@ -71,7 +71,7 @@ public class ApplicationPeriodEligibility {
     private void validateReferences(EligibilityIds ids) {
         List<UserAccount> selected = users.findAllById(ids.studentIds());
         if (selected.size() != ids.studentIds().size()
-                || selected.stream().anyMatch(user -> user.getRole() != Role.STUDENT)) {
+                || selected.stream().anyMatch(user -> !user.hasRole(Role.STUDENT))) {
             throw badRequest("Every selected student ID must reference a current STUDENT account.");
         }
         if (classes.findAllById(ids.classIds()).size() != ids.classIds().size()) {
@@ -160,7 +160,7 @@ public class ApplicationPeriodEligibility {
     public boolean isEligible(StoredRecord period, UUID studentId) {
         JsonNode data = store.parse(period);
         UserAccount student = users.findById(studentId).orElse(null);
-        if (student == null || student.getRole() != Role.STUDENT) {
+        if (student == null || !student.hasRole(Role.STUDENT)) {
             return false;
         }
         if (!SELECTED.equals(data.path(ELIGIBILITY_MODE).asText(ALL_STUDENTS))) {

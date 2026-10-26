@@ -13,7 +13,7 @@ vi.mock('../../api/services', () => ({
 }))
 
 vi.mock('../../stores/auth', () => ({
-  useAuthStore: () => ({ user: { role: 'STUDENT' } }),
+  useAuthStore: () => ({ user: { roles: ['STUDENT'] } }),
 }))
 
 describe('New idea form layout', () => {

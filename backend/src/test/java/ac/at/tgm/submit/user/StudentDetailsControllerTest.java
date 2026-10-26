@@ -324,18 +324,21 @@ class StudentDetailsControllerTest {
     @Test
     void registrationAndRoleConversionReceiveDefaultClassAndRemainImmediatelyUsable() throws Exception {
         mvc.perform(post("/api/auth/register").contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"username\":\"new-student\",\"password\":\"password-long-enough\",\"displayName\":\"New Student\"}"))
-                .andExpect(status().isCreated()).andExpect(jsonPath("$.role").value("STUDENT"));
+                        .content("{\"username\":\"new-student\",\"password\":\"password-long-enough\","
+                                + "\"displayName\":\"New Student\",\"roles\":[\"TEACHER\",\"ADMIN\"]}"))
+                .andExpect(status().isCreated()).andExpect(jsonPath("$.roles[0]").value("STUDENT"));
         UserAccount registered = users.findByUsername("new-student").orElseThrow();
         assertEquals("No class / unassigned", getJson("/api/users/" + registered.getId() + "/student-details", admin)
                 .path("className").asText());
         mvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
                         .content("{\"username\":\"new-student\",\"password\":\"password-long-enough\"}"))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.user.roles[0]").value("STUDENT"))
+                .andExpect(jsonPath("$.user.roles.length()").value(1));
 
         mvc.perform(patch("/api/users/{id}/role", teacher.getId()).header("Authorization", bearer(admin))
-                        .contentType(MediaType.APPLICATION_JSON).content("{\"role\":\"STUDENT\"}"))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.role").value("STUDENT"));
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"roles\":[\"STUDENT\"]}"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.roles[0]").value("STUDENT"));
         assertNoAutomaticEnrollment(teacher.getId());
         assertEquals("No class / unassigned", getJson("/api/users/" + teacher.getId() + "/student-details", admin)
                 .path("className").asText());
@@ -344,6 +347,27 @@ class StudentDetailsControllerTest {
                         .contentType(MediaType.APPLICATION_JSON).content("{\"classId\":\"" + assignedClass.getId()
                                 + "\",\"electiveSubjectIds\":[]}"))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.classId").value(assignedClass.getId().toString()));
+        ElectiveSubjectEntity assignedSubject = subjects.save(
+                new ElectiveSubjectEntity(UUID.randomUUID(), "Preserved subject"));
+        mvc.perform(put("/api/users/{id}/student-details", teacher.getId()).header("Authorization", bearer(admin))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"classId\":\"" + assignedClass.getId()
+                                + "\",\"electiveSubjectIds\":[\"" + assignedSubject.getId() + "\"]}"))
+                .andExpect(status().isOk());
+        for (String rolePayload : List.of("{\"roles\":[\"TEACHER\",\"ADMIN\"]}",
+                "{\"roles\":[\"TEACHER\"]}", "{\"roles\":[\"STUDENT\"]}")) {
+            mockRoleChange(teacher.getId(), rolePayload);
+        }
+        JsonNode preservedDetails = getJson("/api/users/" + teacher.getId() + "/student-details", admin);
+        assertEquals(assignedClass.getId().toString(), preservedDetails.path("classId").asText());
+        assertEquals(List.of(assignedSubject.getId().toString()),
+                mapper.convertValue(preservedDetails.path("electiveSubjectIds"),
+                        mapper.getTypeFactory().constructCollectionType(List.class, String.class)));
+    }
+
+    private void mockRoleChange(UUID id, String body) throws Exception {
+        mvc.perform(patch("/api/users/{id}/role", id).header("Authorization", bearer(admin))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk());
     }
 
     private void assertNoAutomaticEnrollment(UUID studentId) throws Exception {

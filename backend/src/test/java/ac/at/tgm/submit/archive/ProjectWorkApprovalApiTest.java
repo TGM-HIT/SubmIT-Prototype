@@ -19,6 +19,9 @@ import ac.at.tgm.submit.grading.RubricDtos.CriterionDto;
 import ac.at.tgm.submit.grading.RubricDtos.MetricDefinitionDto;
 import ac.at.tgm.submit.grading.RubricDtos.PublishRubricRequest;
 import ac.at.tgm.submit.grading.RubricDtos.ScaleDto;
+import ac.at.tgm.submit.security.Role;
+import ac.at.tgm.submit.user.UserAccount;
+import ac.at.tgm.submit.user.UserAccountRepository;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.LocalDate;
@@ -26,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -49,6 +53,7 @@ class ProjectWorkApprovalApiTest {
     @Autowired private MockMvc mvc;
     @Autowired private ObjectMapper mapper;
     @Autowired private RecordStore store;
+    @Autowired private UserAccountRepository users;
 
     private String teacher;
     private String admin;
@@ -59,6 +64,9 @@ class ProjectWorkApprovalApiTest {
 
     @BeforeEach
     void setUp() throws Exception {
+        var teacherAccount = users.findByUsername("teacher01").orElseThrow();
+        teacherAccount.setRoles(List.of(Role.TEACHER));
+        users.saveAndFlush(teacherAccount);
         JsonNode teacherLogin = login("teacher01");
         teacher = teacherLogin.path("token").asText();
         teacherId = teacherLogin.path("user").path("id").asText();
@@ -67,6 +75,13 @@ class ProjectWorkApprovalApiTest {
         student = studentLogin.path("token").asText();
         studentId = UUID.fromString(studentLogin.path("user").path("id").asText());
         rubricId = publishRubric();
+    }
+
+    @AfterEach
+    void restoreTeacherSingletonRole() {
+        var teacherAccount = users.findByUsername("teacher01").orElseThrow();
+        teacherAccount.setRoles(List.of(Role.TEACHER));
+        users.saveAndFlush(teacherAccount);
     }
 
     @Test
@@ -177,10 +192,17 @@ class ProjectWorkApprovalApiTest {
     @Test
     void artifactPublicationReviewsPersistNotesAndAllFiveOperationsEmitAuthorizedAuditEvents() throws Exception {
         UUID project = project("IN_PROGRESS");
+        UserAccount teacherAccount = users.findByUsername("teacher01").orElseThrow();
+        teacherAccount.setRoles(List.of(Role.TEACHER, Role.ADMIN));
+        users.saveAndFlush(teacherAccount);
+        teacher = login("teacher01").path("token").asText();
         approveFormalApplicationThroughTeacherReview(project);
 
         UUID approved = uploadArtifact(project);
+        String approvedId = approved.toString();
         reviewArtifact(approved, "SUBMIT", null).andExpect(status().isOk());
+        request(post("/api/artifacts/{id}/publication-review", approvedId), admin,
+                Map.of("decision", "APPROVE")).andExpect(status().isForbidden());
         JsonNode approvedResponse = mapper.readTree(reviewArtifact(approved, "APPROVE", "  Approved with care.  ")
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray());
         assertReviewMetadata(approved, approvedResponse, "Approved with care.");

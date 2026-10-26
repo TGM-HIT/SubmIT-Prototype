@@ -182,9 +182,9 @@ type CatalogueProjectState = { loading: boolean, error?: string, data?: Catalogu
 type StudentLookup = components['schemas']['UserResponse']
 type ClassLookup = components['schemas']['CatalogueEntryResponse']
 const auth = useAuthStore()
-const isStudent = computed(() => auth.user?.role === 'STUDENT')
-const isAdmin = computed(() => auth.user?.role === 'ADMIN')
-const isTeacher = computed(() => auth.user?.role === 'TEACHER')
+const isStudent = computed(() => auth.user?.roles.includes('STUDENT') ?? false)
+const isAdmin = computed(() => auth.user?.roles.includes('ADMIN') ?? false)
+const isTeacher = computed(() => auth.user?.roles.includes('TEACHER') ?? false)
 const task = useTask()
 const periods = ref<Page<Period>>({ content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 })
 const acceptedIdeas = ref<Idea[]>([])
@@ -449,7 +449,7 @@ async function loadEligibilityLookups(): Promise<void> {
     const classPages = await Promise.all(Array.from({ length: Math.max(0, firstClasses.totalPages - 1) },
       (_, index) => studentDetailsApi.classes(index + 1)))
     lookupStudents.value = [...firstStudents.content, ...studentPages.flatMap((page) => page.content)]
-      .filter((student) => student.role === 'STUDENT' && student.id)
+      .filter((student) => student.roles.includes('STUDENT') && student.id)
     lookupClasses.value = [...firstClasses.content, ...classPages.flatMap((page) => page.content)]
       .filter((entry) => entry.id && entry.name)
     lookupsReady.value = true

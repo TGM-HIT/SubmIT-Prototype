@@ -21,6 +21,7 @@ const api = vi.hoisted(() => ({
   updateApplication: vi.fn(),
   withdrawApplication: vi.fn(),
   role: 'ADMIN',
+  dual: false,
 }))
 
 vi.mock('../../api/services', () => ({
@@ -42,7 +43,7 @@ vi.mock('../../api/services', () => ({
 }))
 
 vi.mock('../../stores/auth', () => ({
-  useAuthStore: () => ({ user: { role: api.role } }),
+  useAuthStore: () => ({ user: { roles: api.dual ? ['TEACHER', 'ADMIN'] : [api.role] } }),
 }))
 
 const projectIds = ['project-1', 'project-2', 'project-3']
@@ -81,6 +82,7 @@ describe('application period configuration', () => {
   beforeEach(() => {
     setLanguage('en')
     api.role = 'ADMIN'
+    api.dual = false
     api.myApplication.mockResolvedValue({ preferences: [] })
     api.createApplication.mockResolvedValue({ id: 'application-1', preferences: [] })
     api.updateApplication.mockResolvedValue({ id: 'application-1', preferences: [] })
@@ -230,8 +232,8 @@ describe('application period configuration', () => {
 
   it('loads every student and class lookup page and saves selected cohort IDs using display-name labels', async () => {
     api.users.mockImplementation(async (page: number) => page === 0
-      ? { content: [{ id: 'student-account-a', displayName: 'Alex Student', role: 'STUDENT' }], totalPages: 2 }
-      : { content: [{ id: 'student-account-b', displayName: 'Robin Student', role: 'STUDENT' }], totalPages: 2 })
+      ? { content: [{ id: 'student-account-a', displayName: 'Alex Student', roles: ['STUDENT'] }], totalPages: 2 }
+      : { content: [{ id: 'student-account-b', displayName: 'Robin Student', roles: ['STUDENT'] }], totalPages: 2 })
     api.classes.mockImplementation(async (page: number) => page === 0
       ? { content: [{ id: 'class-id-a', name: 'Testing Class' }], totalPages: 2 }
       : { content: [{ id: 'class-id-b', name: 'Testing Class 2' }], totalPages: 2 })
@@ -273,8 +275,8 @@ describe('application period configuration', () => {
     api.listPeriods.mockResolvedValueOnce({ content: [period], page: 0, size: 20, totalElements: 1, totalPages: 1 })
       .mockResolvedValue({ content: [{ ...period, label: 'Updated cohort' }], page: 0, size: 20, totalElements: 1, totalPages: 1 })
     api.users.mockResolvedValue({ content: [
-      { id: 'student-account-a', displayName: 'Alex Student', role: 'STUDENT' },
-      { id: 'student-account-b', displayName: 'Robin Student', role: 'STUDENT' },
+      { id: 'student-account-a', displayName: 'Alex Student', roles: ['STUDENT'] },
+      { id: 'student-account-b', displayName: 'Robin Student', roles: ['STUDENT'] },
     ], totalPages: 1 })
     api.classes.mockResolvedValue({ content: [{ id: 'class-id-a', name: 'Testing Class' }], totalPages: 1 })
     api.updatePeriod.mockResolvedValue({ ...period, label: 'Updated cohort' })
@@ -414,8 +416,8 @@ describe('application period configuration', () => {
         content: [savedPeriod], page: 0, size: 20, totalElements: 1, totalPages: 1,
       }))
       api.users.mockResolvedValue({ content: [
-        { id: 'student-a', displayName: 'Alex Student', role: 'STUDENT' },
-        { id: 'student-b', displayName: 'Robin Student', role: 'STUDENT' },
+        { id: 'student-a', displayName: 'Alex Student', roles: ['STUDENT'] },
+        { id: 'student-b', displayName: 'Robin Student', roles: ['STUDENT'] },
       ], totalPages: 1 })
       api.classes.mockResolvedValue({ content: [{ id: 'class-a', name: 'Testing Class' }], totalPages: 1 })
       api.updatePeriod.mockImplementation(async (_id: string, request: typeof savedPeriod) => {
@@ -466,7 +468,7 @@ describe('application period configuration', () => {
     api.listPeriods.mockResolvedValueOnce({ content: [period], page: 0, size: 20, totalElements: 1, totalPages: 1 })
       .mockResolvedValue({ content: [{ ...period, label: 'All students now', eligibilityMode: 'ALL_STUDENTS',
         eligibleStudentIds: [], eligibleClassIds: [] }], page: 0, size: 20, totalElements: 1, totalPages: 1 })
-    api.users.mockResolvedValue({ content: [{ id: 'student-account-a', displayName: 'Alex Student', role: 'STUDENT' }], totalPages: 1 })
+    api.users.mockResolvedValue({ content: [{ id: 'student-account-a', displayName: 'Alex Student', roles: ['STUDENT'] }], totalPages: 1 })
     api.classes.mockResolvedValue({ content: [{ id: 'class-id-a', name: 'Testing Class' }], totalPages: 1 })
     api.updatePeriod.mockResolvedValue({ ...period, label: 'All students now', eligibilityMode: 'ALL_STUDENTS',
       eligibleStudentIds: [], eligibleClassIds: [] })
@@ -503,7 +505,7 @@ describe('application period configuration', () => {
     expect(page.get('[role="alert"]').text()).toContain('Eligibility options could not be loaded')
     expect(page.get('button[type="submit"]').attributes('disabled')).toBeDefined()
     api.users.mockResolvedValue({
-      content: [{ id: 'student-account-a', displayName: 'Alex Student', role: 'STUDENT' }],
+      content: [{ id: 'student-account-a', displayName: 'Alex Student', roles: ['STUDENT'] }],
       totalPages: 1,
     })
     await page.get('[role="alert"] button').trigger('click')
@@ -568,8 +570,8 @@ describe('application period configuration', () => {
     }
     api.listPeriods.mockResolvedValue({ content: [period], page: 0, size: 20, totalElements: 1, totalPages: 1 })
     api.users.mockResolvedValue({ content: [
-      { id: 'student-account-a', displayName: 'Alex Student', role: 'STUDENT' },
-      { id: 'student-account-b', displayName: 'Robin Student', role: 'STUDENT' },
+      { id: 'student-account-a', displayName: 'Alex Student', roles: ['STUDENT'] },
+      { id: 'student-account-b', displayName: 'Robin Student', roles: ['STUDENT'] },
     ], totalPages: 1 })
     api.classes.mockResolvedValue({ content: [
       { id: 'class-id-a', name: 'Testing Class' },
@@ -1089,9 +1091,30 @@ describe('student application period lock and deadline', () => {
   }))
   const closesAt = '2026-10-26T15:00:00.000Z'
 
+  it('gives dual-role staff the administration and teacher summary controls, but no student application controls', async () => {
+    api.dual = true
+    api.listPeriods.mockResolvedValue({
+      content: [{
+        id: 'dual-period', label: 'Dual staff period', schoolYear: '2026/2027', status: 'OPEN',
+        opensAt: '2026-10-10T09:00:00Z', closesAt: '2026-10-20T17:00:00Z',
+        projectIds: ['project-1'],
+      }],
+      page: 0, size: 20, totalElements: 1, totalPages: 1,
+    })
+    const page = mountPage()
+    await flushPromises()
+
+    expect(page.text()).toContain('Configure period')
+    expect(page.text()).toContain('View application summary')
+    expect(page.find('.application-catalogue').exists()).toBe(false)
+    expect(page.find('button[type="submit"]').exists()).toBe(false)
+    page.unmount()
+  })
+
   beforeEach(() => {
     setLanguage('en')
     api.role = 'STUDENT'
+    api.dual = false
     api.listIdeas.mockResolvedValue({ content: [] })
     api.years.mockResolvedValue({ content: [] })
     api.listPeriods.mockResolvedValue({ content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 })

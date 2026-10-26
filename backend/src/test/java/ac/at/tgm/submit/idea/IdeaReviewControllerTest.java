@@ -1050,6 +1050,37 @@ class IdeaReviewControllerTest {
                 .andExpect(status().isBadRequest());
     }
 
+    @Test
+    void dualRolePublicSessionCanReviewAndAdminOnlyAccountCannotReviewOrManageCatalogues() throws Exception {
+        String ideaId = submitIdea("Dual-role review authorization");
+        String classRequest = objectMapper.writeValueAsString(Map.of("name", "Role union class"));
+        mockMvc.perform(post("/api/student-classes").header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON).content(classRequest))
+                .andExpect(status().isCreated());
+        mockMvc.perform(post("/api/student-classes").header("Authorization", "Bearer " + teacherToken)
+                        .contentType(MediaType.APPLICATION_JSON).content(classRequest))
+                .andExpect(status().isForbidden());
+        review(ideaId, Map.of("decision", "REQUEST_REVISION", "feedback", "Admin-only cannot review."),
+                adminToken).andExpect(status().isForbidden());
+
+        UserAccount dual = users.findByUsername("teacher02").orElseThrow();
+        try {
+            dual.setRoles(List.of(Role.TEACHER, Role.ADMIN));
+            users.saveAndFlush(dual);
+            String dualToken = login("teacher02");
+            review(ideaId, Map.of("decision", "REQUEST_REVISION", "feedback", "Dual role review."),
+                    dualToken).andExpect(status().isCreated())
+                    .andExpect(jsonPath("$.teacherId").value(dual.getId().toString()));
+            mockMvc.perform(post("/api/student-classes").header("Authorization", "Bearer " + dualToken)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(Map.of("name", "Dual role class"))))
+                    .andExpect(status().isCreated());
+        } finally {
+            dual.setRoles(List.of(Role.TEACHER));
+            users.saveAndFlush(dual);
+        }
+    }
+
     private void assertAudited(String ideaId, String action) {
         boolean recorded = store.repository()
                 .findByTypeAndReferenceTypeAndParentId("audit", "idea", ideaId,

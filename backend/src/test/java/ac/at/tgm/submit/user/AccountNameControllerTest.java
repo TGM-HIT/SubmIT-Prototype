@@ -53,12 +53,12 @@ class AccountNameControllerTest {
         mockMvc.perform(post("/api/auth/register")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"username":"new-student","password":"a-long-password","displayName":"  Jamie Rivera  ","role":"ADMIN"}
+                                {"username":"new-student","password":"a-long-password","displayName":"  Jamie Rivera  ","roles":["ADMIN"]}
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.username").value("new-student"))
                 .andExpect(jsonPath("$.displayName").value("Jamie Rivera"))
-                .andExpect(jsonPath("$.role").value("STUDENT"));
+                .andExpect(jsonPath("$.roles[0]").value("STUDENT"));
         var registered = users.findByUsername("new-student").orElseThrow();
         assertNoAutomaticEnrollment(registered.getId());
         mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
@@ -79,17 +79,17 @@ class AccountNameControllerTest {
     void registrationAlwaysCreatesAStudentRegardlessOfSuppliedRole() throws Exception {
         for (Role suppliedRole : List.of(Role.STUDENT, Role.TEACHER, Role.ADMIN)) {
             String username = "registration-" + suppliedRole.name().toLowerCase(java.util.Locale.ROOT);
-            var request = new java.util.HashMap<String, String>();
+            var request = new java.util.HashMap<String, Object>();
             request.put("username", username);
             request.put("password", "a-long-password");
             request.put("displayName", "Registration Test");
-            request.put("role", suppliedRole.name());
+            request.put("roles", List.of(suppliedRole.name()));
 
             mockMvc.perform(post("/api/auth/register")
                             .contentType(MediaType.APPLICATION_JSON)
                             .content(objectMapper.writeValueAsString(request)))
                     .andExpect(status().isCreated())
-                    .andExpect(jsonPath("$.role").value("STUDENT"));
+                    .andExpect(jsonPath("$.roles[0]").value("STUDENT"));
 
             UserAccount persisted = users.findByUsername(username).orElseThrow();
             org.junit.jupiter.api.Assertions.assertEquals(Role.STUDENT, persisted.getRole(),
@@ -98,7 +98,7 @@ class AccountNameControllerTest {
         }
 
         String username = "registration-omitted-role";
-        var request = new java.util.HashMap<String, String>();
+        var request = new java.util.HashMap<String, Object>();
         request.put("username", username);
         request.put("password", "a-long-password");
         request.put("displayName", "Registration Test");
@@ -106,7 +106,7 @@ class AccountNameControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.role").value("STUDENT"));
+                .andExpect(jsonPath("$.roles[0]").value("STUDENT"));
 
         UserAccount persisted = users.findByUsername(username).orElseThrow();
         org.junit.jupiter.api.Assertions.assertEquals(Role.STUDENT, persisted.getRole(),
@@ -171,7 +171,7 @@ class AccountNameControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.displayName").value("Student Updated"))
                 .andExpect(jsonPath("$.username").value("student"))
-                .andExpect(jsonPath("$.role").value("STUDENT"));
+                .andExpect(jsonPath("$.roles[0]").value("STUDENT"));
         org.junit.jupiter.api.Assertions.assertEquals("Student Updated",
                 users.findById(student.getId()).orElseThrow().getDisplayName());
         update(teacher, teacher, "Teacher Updated")

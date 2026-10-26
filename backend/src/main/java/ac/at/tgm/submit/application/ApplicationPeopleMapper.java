@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import ac.at.tgm.submit.data.StoredRecord;
 import ac.at.tgm.submit.user.StudentDetailsService;
 import ac.at.tgm.submit.user.UserAccountRepository;
+import ac.at.tgm.submit.security.Role;
 import ac.at.tgm.submit.web.ApiDtos.StudentApplicationResponse;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
@@ -27,7 +28,7 @@ class ApplicationPeopleMapper {
     }
 
     StudentApplicationResponse staffDetails(StudentApplicationResponse response) {
-        var student = users.findById(response.studentId()).filter(user -> "STUDENT".equals(user.getRole().name()))
+        var student = users.findById(response.studentId()).filter(user -> user.hasRole(Role.STUDENT))
                 .map(details::response).orElse(null);
         return new StudentApplicationResponse(response.id(), response.studentId(), response.studentDisplayName(),
                 response.periodId(), response.status(), response.preferences(),

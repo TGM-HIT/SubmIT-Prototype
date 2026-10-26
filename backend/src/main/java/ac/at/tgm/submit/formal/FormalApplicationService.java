@@ -117,7 +117,7 @@ public class FormalApplicationService {
     }
 
     private void requireMemberOrTeacher(AuthenticatedUser caller, List<String> members) {
-        if (caller.role() == Role.TEACHER || caller.role() == Role.ADMIN) {
+        if (caller.hasRole(Role.TEACHER) || caller.hasRole(Role.ADMIN)) {
             return;
         }
         if (!members.contains(caller.id().toString())) {

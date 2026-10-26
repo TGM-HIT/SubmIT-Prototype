@@ -75,15 +75,15 @@ const years = ref<string[]>([])
 const periods = ref<Page<Period>>({ content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 })
 const ideas = ref<Page<Idea>>({ content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 })
 const openPeriod = computed(() => periods.value.content.find((item) => item.status === 'OPEN'))
-const isStudent = computed(() => auth.user?.role === 'STUDENT')
-const roleHint = computed(() => String(i18n.global.t(auth.user?.role === 'STUDENT' ? 'dashboard.studentIdeas' : 'dashboard.staffIdeas')))
+const isStudent = computed(() => auth.user?.roles.includes('STUDENT') ?? false)
+const roleHint = computed(() => String(i18n.global.t(isStudent.value ? 'dashboard.studentIdeas' : 'dashboard.staffIdeas')))
 const actions = computed(() => {
   const items = []
-  if (auth.user?.role === 'STUDENT') items.push({ label: String(i18n.global.t('dashboard.continueIdea')), to: '/ideas' })
-  if (auth.user?.role === 'TEACHER') items.push({ label: String(i18n.global.t('dashboard.reviewIdeas')), to: '/ideas' })
-  if (auth.user?.role === 'ADMIN') items.push({ label: String(i18n.global.t('dashboard.reviewAllocation')), to: '/allocation' })
-  if (openPeriod.value && auth.user?.role === 'STUDENT') items.push({ label: String(i18n.global.t('dashboard.rankPreferences')), to: '/applications' })
-  if (auth.user?.role === 'TEACHER') items.push({ label: String(i18n.global.t('dashboard.assessProgress')), to: '/grading' })
+  if (isStudent.value) items.push({ label: String(i18n.global.t('dashboard.continueIdea')), to: '/ideas' })
+  if (auth.user?.roles.includes('TEACHER')) items.push({ label: String(i18n.global.t('dashboard.reviewIdeas')), to: '/ideas' })
+  if (auth.user?.roles.includes('ADMIN')) items.push({ label: String(i18n.global.t('dashboard.reviewAllocation')), to: '/allocation' })
+  if (openPeriod.value && isStudent.value) items.push({ label: String(i18n.global.t('dashboard.rankPreferences')), to: '/applications' })
+  if (auth.user?.roles.includes('TEACHER')) items.push({ label: String(i18n.global.t('dashboard.assessProgress')), to: '/grading' })
   return items
 })
 

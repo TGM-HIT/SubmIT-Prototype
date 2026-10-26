@@ -3,7 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import IdeasPage from './IdeasPage.vue'
 import { setLanguage } from '../../i18n'
 
-const state = vi.hoisted(() => ({ role: 'STUDENT', id: undefined as string | undefined }))
+const state = vi.hoisted(() => ({
+  role: 'STUDENT',
+  extraRoles: [] as string[],
+  id: undefined as string | undefined,
+}))
 const api = vi.hoisted(() => ({
   years: vi.fn(),
   list: vi.fn(),
@@ -47,7 +51,7 @@ vi.mock('../../api/services', () => ({
 }))
 
 vi.mock('../../stores/auth', () => ({
-  useAuthStore: () => ({ user: { role: state.role, id: state.id } }),
+  useAuthStore: () => ({ user: { roles: [state.role, ...state.extraRoles], id: state.id } }),
 }))
 
 const idea = (status: string) => ({
@@ -103,6 +107,7 @@ beforeEach(() => {
   setLanguage('en')
   vi.resetAllMocks()
   state.role = 'STUDENT'
+  state.extraRoles = []
   state.id = undefined
   api.years.mockResolvedValue({ content: ['2026/2027'] })
   api.list.mockResolvedValue(pageIdeas())
@@ -155,6 +160,29 @@ describe("student details in idea identities", () => {
     expect(page.text()).toContain('UNCHANGED_TEACHER_NAME')
     page.unmount()
     setLanguage('en')
+  })
+
+  describe('dual-role idea capabilities', () => {
+    it('shows teacher review and administrator supervision controls without student ownership actions', async () => {
+      const submitted = idea('IDEA_SUBMITTED')
+      state.role = 'TEACHER'
+      state.extraRoles = ['ADMIN']
+      state.id = 'teacher-1'
+      api.list.mockResolvedValue({ ...pageIdeas('IDEA_SUBMITTED'), content: [submitted] })
+      api.get.mockResolvedValue(submitted)
+      const page = mountPage()
+      await flushPromises()
+
+      expect(page.find('#review-button-idea-IDEA_SUBMITTED').exists()).toBe(true)
+      await page.get('#details-button-idea-IDEA_SUBMITTED').trigger('click')
+      await flushPromises()
+      expect(page.find('#review-from-details').exists()).toBe(true)
+      expect(page.find('#teacher-id').exists()).toBe(true)
+      expect(page.find('#preference').exists()).toBe(true)
+      expect(page.find('#details-collaborator-lookup').exists()).toBe(false)
+      expect(page.find('#leave-idea-button').exists()).toBe(false)
+      page.unmount()
+    })
   })
 
   it("shows current class and subjects beside student owner names only to staff", async () => {

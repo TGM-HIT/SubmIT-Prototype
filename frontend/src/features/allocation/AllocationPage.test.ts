@@ -38,7 +38,7 @@ vi.mock('../../api/services', () => ({
 }))
 
 vi.mock('../../stores/auth', () => ({
-  useAuthStore: () => ({ user: { role: state.role } }),
+  useAuthStore: () => ({ user: { roles: [state.role] } }),
 }))
 
 function mountPage() {

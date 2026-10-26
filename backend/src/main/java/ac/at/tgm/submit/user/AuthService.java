@@ -46,7 +46,7 @@ public class AuthService {
                 passwordEncoder.encode(request.password()), Role.STUDENT);
         user.setStudentClass(defaultStudentClass.getOrCreate());
         users.save(user);
-        audit.record(new AuthenticatedUser(user.getId(), user.getUsername(), user.getRole()),
+        audit.record(new AuthenticatedUser(user.getId(), user.getUsername(), user.getRoles()),
                 "USER_REGISTERED", "user", user.getId());
         return toResponse(user);
     }
@@ -58,13 +58,13 @@ public class AuthService {
         if (!passwordEncoder.matches(request.password(), user.getPasswordHash())) {
             throw new ApiException(HttpStatus.UNAUTHORIZED, "Invalid username or password.");
         }
-        AuthenticatedUser principal = new AuthenticatedUser(user.getId(), user.getUsername(), user.getRole());
+        AuthenticatedUser principal = new AuthenticatedUser(user.getId(), user.getUsername(), user.getRoles());
         return new TokenResponse(jwtService.issueToken(principal), "Bearer", TOKEN_LIFETIME_SECONDS,
                 toResponse(user));
     }
 
     public UserResponse toResponse(UserAccount user) {
-        return new UserResponse(user.getId(), user.getUsername(), user.getDisplayName(), user.getRole(),
+        return new UserResponse(user.getId(), user.getUsername(), user.getDisplayName(), user.getRoles(),
                 user.getLanguage(), null, null);
     }
 

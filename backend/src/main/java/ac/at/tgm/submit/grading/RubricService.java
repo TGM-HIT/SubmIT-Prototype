@@ -50,7 +50,7 @@ public class RubricService {
     @Transactional
     @PreAuthorize("hasRole('ADMIN')")
     public RubricResponse publish(AuthenticatedUser caller, PublishRubricRequest body) {
-        if (caller.role() != Role.ADMIN) {
+        if (!caller.hasRole(Role.ADMIN)) {
             throw new AccessDeniedException("Only administrators may publish rubric versions.");
         }
         ObjectNode rubric = RubricValidator.validate(GradingSupport.toNode(body));

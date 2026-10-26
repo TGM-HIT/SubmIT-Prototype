@@ -37,10 +37,10 @@ public class ArtifactProjectAccess {
     }
 
     public void requireProjectAccess(AuthenticatedUser caller, UUID projectId) {
-        if (caller.role() == Role.TEACHER || caller.role() == Role.ADMIN) {
+        if (caller.hasRole(Role.TEACHER) || caller.hasRole(Role.ADMIN)) {
             return;
         }
-        if (caller.role() != Role.STUDENT || !isProjectMember(caller.id(), projectId)) {
+        if (!caller.hasRole(Role.STUDENT) || !isProjectMember(caller.id(), projectId)) {
             throw new AccessDeniedException("Project membership could not be verified; artefact access is denied.");
         }
     }

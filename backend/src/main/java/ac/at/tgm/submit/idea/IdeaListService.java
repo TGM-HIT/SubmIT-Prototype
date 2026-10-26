@@ -43,7 +43,7 @@ class IdeaListService {
                 .filter(idea -> filters.schoolYear() == null
                         || filters.schoolYear().equals(store.parse(idea).path("schoolYear").asText()))
                 .filter(idea -> filters.ownerId() == null || ownership.ownerIds(idea).contains(filters.ownerId()))
-                .filter(idea -> caller.role() != Role.STUDENT || ownership.ownerIds(idea).contains(caller.id()))
+                .filter(idea -> !caller.hasRole(Role.STUDENT) || ownership.ownerIds(idea).contains(caller.id()))
                 .toList();
         int start = Math.min((int) pageRequest.getOffset(), visible.size());
         int end = Math.min(start + pageRequest.getPageSize(), visible.size());

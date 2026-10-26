@@ -4,16 +4,22 @@ import ArchivePage from './ArchivePage.vue'
 import { formatTimestamp, resolveBrowserLanguage, setLanguage } from '../../i18n'
 
 const api = vi.hoisted(() => ({ publicList: vi.fn(), publicContent: vi.fn(), list: vi.fn(), download: vi.fn() }))
+const state = vi.hoisted(() => ({ roles: null as string[] | null }))
 vi.mock('../../api/services', () => ({ archiveApi: api }))
 vi.mock('../../api/client', () => ({ downloadBlob: api.download }))
-vi.mock('../../stores/auth', () => ({ useAuthStore: () => ({ user: null }) }))
+vi.mock('../../stores/auth', () => ({
+  useAuthStore: () => ({ user: state.roles ? { roles: state.roles } : null }),
+}))
 vi.mock('vue-router', () => ({
   useRoute: () => ({ params: { projectId: 'public-project' } }),
   RouterLink: { props: ['to'], template: '<a :href="to"><slot /></a>' },
 }))
 
 describe('G6 anonymous archive privacy boundary', () => {
-  beforeEach(() => setLanguage('en'))
+  beforeEach(() => {
+    setLanguage('en')
+    state.roles = null
+  })
   it('does not render private invitation/roster/consent/cohort values in DOM or links and downloads only approved content', async () => {
     api.publicList.mockResolvedValue({ content: [{ id: 'public-file', type: 'POSTER', size: 18,
       invitation: 'INVITE_PRIVATE_SENTINEL', roster: 'ROSTER_PRIVATE_SENTINEL',
@@ -59,6 +65,7 @@ describe('G6 anonymous archive privacy boundary', () => {
   })
 
   it('localizes authenticated archive UI and known publication status while preserving title, description, review, and submission prose', async () => {
+    state.roles = ['TEACHER']
     api.list.mockResolvedValue({
       content: [{
         id: 'private-file',
@@ -104,6 +111,7 @@ describe('G6 anonymous archive privacy boundary', () => {
   })
 
   it('keeps the private upload-date fallback when uploadedAt is absent', async () => {
+    state.roles = ['TEACHER']
     api.list.mockResolvedValue({
       content: [{ id: 'private-file-no-date', title: 'Private file without date', type: 'POSTER' }],
       page: 0, size: 20, totalElements: 1, totalPages: 1,
@@ -122,6 +130,7 @@ describe('G6 anonymous archive privacy boundary', () => {
   })
 
   it('updates a private uploadedAt display en→de→en without changing the source API timestamp', async () => {
+    state.roles = ['TEACHER']
     const uploadedAt = '2026-10-01T00:00:00Z'
     const artifact = { id: 'private-file-locale', title: 'Locale private file', type: 'POSTER', uploadedAt }
     api.list.mockResolvedValue({
@@ -145,6 +154,35 @@ describe('G6 anonymous archive privacy boundary', () => {
     setLanguage('en')
     await flushPromises()
     expect(wrapper.text()).toContain(formatTimestamp(uploadedAt))
+    wrapper.unmount()
+  })
+
+  it.each([
+    [['TEACHER'], true, true],
+    [['ADMIN'], false, false],
+    [['TEACHER', 'ADMIN'], true, true],
+  ] as const)('%s archive view follows teacher and administrator role membership', async (roles, canUpload, canReview) => {
+    state.roles = [...roles]
+    api.list.mockResolvedValue({
+      content: [{
+        id: 'pending-file', title: 'Pending poster', type: 'POSTER', filename: 'poster.pdf',
+        publicationStatus: 'PENDING_REVIEW', size: 2048,
+      }],
+      page: 0, size: 20, totalElements: 1, totalPages: 1,
+    })
+    const wrapper = mount(ArchivePage, {
+      props: { publicOnly: false },
+      global: { stubs: { AsyncPanel: { template: '<div><slot /></div>' } } },
+    })
+    await wrapper.get('#archive-project').setValue('private-project')
+    await wrapper.get('form.toolbar').trigger('submit')
+    await flushPromises()
+
+    expect(wrapper.find('.panel form.stack').exists()).toBe(canUpload)
+    const buttons = wrapper.findAll('button').map((button) => button.text())
+    expect(buttons.includes('Approve publication')).toBe(canReview)
+    expect(buttons.includes('Reject')).toBe(canReview)
+    expect(wrapper.find('.panel.stack').exists()).toBe(canReview)
     wrapper.unmount()
   })
 })

@@ -14,7 +14,7 @@ const account = (role: 'STUDENT' | 'TEACHER' | 'ADMIN') => ({
   id: `account-${role.toLowerCase()}`,
   username: `${role.toLowerCase()}-username`,
   displayName: 'Current display name',
-  role,
+  roles: [role],
   language: 'en' as const,
 })
 
@@ -87,6 +87,18 @@ describe('authenticated shell profile and settings navigation', () => {
       wrapper.unmount()
     },
   )
+
+  it('shows the union of teacher and administrator navigation for a dual-role account', async () => {
+    setActivePinia(createPinia())
+    useAuthStore().updateUser({ ...account('TEACHER'), roles: ['TEACHER', 'ADMIN'] })
+    const wrapper = await mountAt('/')
+    const navigation = wrapper.get('nav[aria-label="Main navigation"]')
+    expect(navigation.findAll('a').map((link) => link.attributes('href'))).toEqual([
+      '/', '/ideas', '/applications', '/allocation', '/formal-application', '/grading', '/archive', '/admin',
+    ])
+    expect(wrapper.get('.profile').text()).toContain('Teacher, Administrator')
+    wrapper.unmount()
+  })
 
   it.each(['STUDENT', 'TEACHER', 'ADMIN'] as const)(
     'highlights Overview only on the dashboard and retains the current page state for %s',

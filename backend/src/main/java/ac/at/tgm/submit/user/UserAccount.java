@@ -4,6 +4,8 @@ import ac.at.tgm.submit.security.Role;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.EnumType;
+import jakarta.persistence.CollectionTable;
+import jakarta.persistence.ElementCollection;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.Id;
@@ -31,9 +33,11 @@ public class UserAccount {
     @Column(nullable = false)
     private String passwordHash;
 
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "user_account_roles", joinColumns = @JoinColumn(name = "user_id"))
     @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
-    private Role role;
+    @Column(name = "role", nullable = false, length = 20)
+    private List<Role> roles = new ArrayList<>();
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 2, columnDefinition = "varchar(2) default 'en'")
@@ -53,11 +57,15 @@ public class UserAccount {
     }
 
     public UserAccount(UUID id, String username, String displayName, String passwordHash, Role role) {
+        this(id, username, displayName, passwordHash, List.of(role));
+    }
+
+    public UserAccount(UUID id, String username, String displayName, String passwordHash, List<Role> roles) {
         this.id = id;
         this.username = username;
         this.displayName = displayName;
         this.passwordHash = passwordHash;
-        this.role = role;
+        setRoles(roles);
     }
 
     public UUID getId() {
@@ -96,8 +104,16 @@ public class UserAccount {
         return passwordHash;
     }
 
+    public List<Role> getRoles() {
+        return List.copyOf(roles);
+    }
+
+    public boolean hasRole(Role role) {
+        return roles.contains(role);
+    }
+
     public Role getRole() {
-        return role;
+        return roles.get(0);
     }
 
     public AccountLanguage getLanguage() {
@@ -108,7 +124,27 @@ public class UserAccount {
         this.language = language;
     }
 
+    public void setRoles(List<Role> roles) {
+        if (roles == null || roles.isEmpty()) {
+            throw invalidRoleSet();
+        }
+        if (roles.stream().anyMatch(java.util.Objects::isNull)) {
+            throw invalidRoleSet();
+        }
+        if (roles.size() != new java.util.HashSet<>(roles).size()) {
+            throw invalidRoleSet();
+        }
+        if (roles.contains(Role.STUDENT) && roles.size() > 1) {
+            throw invalidRoleSet();
+        }
+        this.roles = new ArrayList<>(java.util.Arrays.stream(Role.values()).filter(roles::contains).toList());
+    }
+
+    private IllegalArgumentException invalidRoleSet() {
+        return new IllegalArgumentException("Invalid account role set.");
+    }
+
     public void setRole(Role role) {
-        this.role = role;
+        setRoles(List.of(role));
     }
 }

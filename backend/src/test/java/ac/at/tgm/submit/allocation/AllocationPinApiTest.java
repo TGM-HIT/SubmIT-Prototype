@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -65,6 +66,13 @@ class AllocationPinApiTest {
         periodId = store.create("application_period", null, null, "CLOSED", period).getId();
     }
 
+    @AfterEach
+    void restoreTeacherSingletonRole() {
+        var teacher = users.findByUsername("teacher01").orElseThrow();
+        teacher.setRoles(List.of(Role.TEACHER));
+        users.saveAndFlush(teacher);
+    }
+
     @Test
     void acknowledgesUnrankedPinRunsItAndExposesOnlyTheOrdinaryStudentAssignment() throws Exception {
         UUID pinnedStudent = users.findByUsername("student13").orElseThrow().getId();
@@ -103,8 +111,21 @@ class AllocationPinApiTest {
         mockMvc.perform(get("/api/application-periods/{periodId}/allocation-pins", periodId))
                 .andExpect(status().isUnauthorized());
 
+        var teacherAccount = users.findByUsername("teacher01").orElseThrow();
+        teacherAccount.setRoles(List.of(Role.TEACHER, Role.ADMIN));
+        users.saveAndFlush(teacherAccount);
+        String dualToken = login("teacher01");
+        mockMvc.perform(get("/api/application-periods/{periodId}/allocation-pins", periodId)
+                        .header("Authorization", bearer(dualToken)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content.length()").value(1));
+        mockMvc.perform(put(pinPath(pinnedStudent)).header("Authorization", bearer(dualToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(pinRequest(projects.get(0), true)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.projectId").value(projects.get(0).toString()));
+
         MvcResult runResponse = mockMvc.perform(post("/api/application-periods/{periodId}/allocation-runs", periodId)
-                        .header("Authorization", bearer(adminToken)))
+                        .header("Authorization", bearer(dualToken)))
                 .andExpect(status().isCreated()).andReturn();
         JsonNode run = mapper.readTree(runResponse.getResponse().getContentAsString());
         String firstRunId = run.path("id").asText();

@@ -93,7 +93,7 @@ describe('Formal proposal presentation and unchanged lifecycle', () => {
     setActivePinia(createPinia())
     api.eligibleProjects.mockResolvedValue(eligiblePage([eligible()]))
     useAuthStore().updateUser({
-      id: studentId, username: 'student01', displayName: 'Student', role: 'STUDENT', language: 'en',
+      id: studentId, username: 'student01', displayName: 'Student', roles: ['STUDENT'], language: 'en',
     })
   })
 
@@ -275,7 +275,7 @@ describe('Formal proposal presentation and unchanged lifecycle', () => {
   })
 
   it.each(['STUDENT', 'TEACHER'] as const)('shows submitted review state with unchanged %s controls', async (role) => {
-    useAuthStore().updateUser({ id: studentId, username: 'reviewer', displayName: role, role, language: 'en' })
+    useAuthStore().updateUser({ id: studentId, username: 'reviewer', displayName: role, roles: [role], language: 'en' })
     const page = role === 'STUDENT' ? await mountStudent('SUBMITTED') : mount(FormalApplicationPage)
     await load(page, 'SUBMITTED')
     expectProposalCopy(page)
@@ -291,6 +291,22 @@ describe('Formal proposal presentation and unchanged lifecycle', () => {
       button(page, 'Record teacher decision')
     }
     expect(api.review).not.toHaveBeenCalled()
+    page.unmount()
+  })
+
+  it('gives dual-role staff the teacher formal-review controls without student proposal controls', async () => {
+    useAuthStore().updateUser({
+      id: studentId, username: 'reviewer', displayName: 'Dual role',
+      roles: ['TEACHER', 'ADMIN'], language: 'en',
+    })
+    const page = mount(FormalApplicationPage)
+    await load(page, 'SUBMITTED')
+
+    expect(page.find('#formal-decision').exists()).toBe(true)
+    button(page, 'Record teacher decision')
+    expect(page.find('#eligible-project').exists()).toBe(false)
+    expect(page.find('#topic').exists()).toBe(false)
+    expect(page.findAll('button').map((entry) => entry.text())).not.toContain('Edit formal proposal')
     page.unmount()
   })
 
@@ -499,7 +515,7 @@ describe('Formal proposal presentation and unchanged lifecycle', () => {
   })
 
   it.each(['TEACHER', 'ADMIN'] as const)('retains the existing %s project-ID lookup workflow', async (role) => {
-    useAuthStore().updateUser({ id: studentId, username: 'staff', displayName: role, role, language: 'en' })
+    useAuthStore().updateUser({ id: studentId, username: 'staff', displayName: role, roles: [role], language: 'en' })
     const page = mount(FormalApplicationPage)
     expect(page.get('label[for="project-id"]').text()).toBe('Allocated project ID')
     expect(page.find('#eligible-project').exists()).toBe(false)
@@ -513,7 +529,7 @@ describe('Formal proposal presentation and unchanged lifecycle', () => {
 
   it('retains teacher review decisions and feedback submission', async () => {
     useAuthStore().updateUser({
-      id: studentId, username: 'teacher01', displayName: 'Teacher', role: 'TEACHER', language: 'en',
+      id: studentId, username: 'teacher01', displayName: 'Teacher', roles: ['TEACHER'], language: 'en',
     })
     const page = mount(FormalApplicationPage)
     await load(page, 'SUBMITTED')

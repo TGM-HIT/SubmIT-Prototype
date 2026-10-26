@@ -71,7 +71,7 @@ class TestingFormalApplicationFixtureTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"username\":\"teacher01\",\"password\":\"testing-password\"}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.user.role").value("TEACHER"))
+                .andExpect(jsonPath("$.user.roles[0]").value("TEACHER"))
                 .andReturn();
         String token = objectMapper.readTree(login.getResponse().getContentAsString()).path("token").asText();
         mockMvc.perform(get("/api/projects/{projectId}/formal-applications",

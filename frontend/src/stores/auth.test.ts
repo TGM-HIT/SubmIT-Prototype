@@ -24,7 +24,7 @@ describe('registration authentication', () => {
 
   it('logs a newly registered student in immediately and stores the returned session', async () => {
     const created = {
-      id: 'student-id', username: 'new-student', displayName: 'Jamie Rivera', role: 'STUDENT', language: 'en',
+      id: 'student-id', username: 'new-student', displayName: 'Jamie Rivera', roles: ['STUDENT'], language: 'en',
     }
     const session = { token: 'student-token', tokenType: 'Bearer', expiresIn: 28800, user: created }
     api.request.mockResolvedValueOnce(created).mockResolvedValueOnce(session)
@@ -46,7 +46,7 @@ describe('registration authentication', () => {
 
   it('restores persisted account language from login and storage and returns to browser language on logout', async () => {
     const user = {
-      id: 'student-id', username: 'student', displayName: 'Student', role: 'STUDENT', language: 'de',
+      id: 'student-id', username: 'student', displayName: 'Student', roles: ['STUDENT'], language: 'de',
     }
     api.request.mockResolvedValueOnce({
       token: 'student-token', tokenType: 'Bearer', expiresIn: 28800, user,
@@ -71,7 +71,7 @@ describe('registration authentication', () => {
   ] as const)('uses account %s language over the browser in both disagreement directions and restores browser locale on logout', async (browserLocale, accountLanguage, expectedBrowserLanguage) => {
     Object.defineProperty(navigator, 'language', { configurable: true, value: browserLocale })
     const user = {
-      id: 'student-id', username: 'student', displayName: 'Student', role: 'STUDENT', language: accountLanguage,
+      id: 'student-id', username: 'student', displayName: 'Student', roles: ['STUDENT'], language: accountLanguage,
     }
     api.request.mockResolvedValueOnce({
       token: 'student-token', tokenType: 'Bearer', expiresIn: 28800, user,

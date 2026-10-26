@@ -100,7 +100,7 @@ public class ArtifactService {
         StoredRecord project = projectAccess.findProject(projectId);
         requireActiveProject(project);
         projectAccess.requireProjectAccess(caller, projectId);
-        if (caller.role() == Role.STUDENT && !caller.id().equals(parseUuid(artifact.getOwnerId()))) {
+        if (caller.hasRole(Role.STUDENT) && !caller.id().equals(parseUuid(artifact.getOwnerId()))) {
             throw new AccessDeniedException("Only the artefact uploader or a teacher can remove it.");
         }
         if (APPROVED.equals(artifactStatus(artifact))) {
@@ -287,7 +287,7 @@ public class ArtifactService {
     }
 
     private void requireTeacher(AuthenticatedUser caller) {
-        if (caller.role() != Role.TEACHER) {
+        if (!caller.hasRole(Role.TEACHER)) {
             throw new AccessDeniedException("Only a teacher may make publication or completion decisions.");
         }
     }

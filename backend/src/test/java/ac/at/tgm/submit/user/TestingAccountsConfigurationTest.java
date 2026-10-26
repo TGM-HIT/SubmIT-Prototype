@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -95,6 +96,7 @@ class TestingAccountsConfigurationTest {
         for (UserAccount account : accounts) {
             assertEquals(expectedDisplayNames.get(account.getUsername()), account.getDisplayName());
             assertEquals(expectedRole(account.getUsername()), account.getRole());
+            assertEquals(List.of(account.getRole()), account.getRoles());
             assertFalse(account.getDisplayName().matches("(?i)^(student|teacher|admin(istrator)?)\\s*[-#:]?\\s*\\d+$"));
             assertNotEquals(TEST_PASSWORD, account.getPasswordHash());
             assertTrue(passwordEncoder.matches(TEST_PASSWORD, account.getPasswordHash()));
@@ -105,7 +107,7 @@ class TestingAccountsConfigurationTest {
                     .andExpect(status().isOk())
                     .andExpect(jsonPath("$.user.username").value(account.getUsername()))
                     .andExpect(jsonPath("$.user.displayName").value(expectedDisplayNames.get(account.getUsername())))
-                    .andExpect(jsonPath("$.user.role").value(account.getRole().name()));
+                    .andExpect(jsonPath("$.user.roles[0]").value(account.getRole().name()));
         }
     }
 
@@ -120,6 +122,69 @@ class TestingAccountsConfigurationTest {
         for (String username : List.of("student01", "teacher01")) {
             mockMvc.perform(get("/api/users?size=100").header("Authorization", "Bearer " + loginToken(username)))
                     .andExpect(status().isForbidden());
+        }
+    }
+
+    @Test
+    void roleChangesKeepIssuedTokenClaimsUntilExpiryAndRefreshAuthoritiesAtPublicSignIn() throws Exception {
+        String teacherId = users.findByUsername("teacher01").orElseThrow().getId().toString();
+        String adminToken = loginToken("admin01");
+        String previouslyIssuedTeacherToken = loginToken("teacher01");
+        String roleChange = objectMapper.writeValueAsString(Map.of("roles", List.of("TEACHER", "ADMIN")));
+
+        mockMvc.perform(get("/api/users?size=100")
+                        .header("Authorization", "Bearer " + previouslyIssuedTeacherToken))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(patch("/api/users/{id}/role", teacherId)
+                        .header("Authorization", "Bearer " + adminToken)
+                        .contentType(MediaType.APPLICATION_JSON).content(roleChange))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.roles[0]").value("TEACHER"))
+                .andExpect(jsonPath("$.roles[1]").value("ADMIN"));
+        mockMvc.perform(get("/api/users?size=100")
+                        .header("Authorization", "Bearer " + previouslyIssuedTeacherToken))
+                .andExpect(status().isForbidden());
+
+        try {
+            MvcResult loginResult = mockMvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(
+                                    Map.of("username", "teacher01", "password", TEST_PASSWORD))))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.user.roles[0]").value("TEACHER"))
+                    .andExpect(jsonPath("$.user.roles[1]").value("ADMIN"))
+                    .andReturn();
+            var login = objectMapper.readTree(loginResult.getResponse().getContentAsByteArray());
+            String freshToken = login.path("token").asText();
+            String encodedClaims = freshToken.split("\\.")[1];
+            var claims = objectMapper.readTree(java.util.Base64.getUrlDecoder().decode(encodedClaims));
+            assertEquals(List.of("TEACHER", "ADMIN"),
+                    objectMapper.convertValue(claims.path("roles"),
+                            objectMapper.getTypeFactory().constructCollectionType(List.class, String.class)));
+            assertFalse(claims.has("role"));
+            mockMvc.perform(get("/api/users?size=100").header("Authorization", "Bearer " + freshToken))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.content.length()").value(32));
+        } finally {
+            mockMvc.perform(patch("/api/users/{id}/role", teacherId)
+                            .header("Authorization", "Bearer " + adminToken)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(Map.of("roles", List.of("TEACHER")))))
+                    .andExpect(status().isOk());
+        }
+    }
+
+    @Test
+    void bootstrapAdministratorProvisioningCreatesAnAdministratorSingletonSet() throws Exception {
+        String username = "feature25-bootstrap-admin";
+        ApplicationRunner bootstrap = new BootstrapAdminConfiguration().createBootstrapAdmin(
+                users, passwordEncoder, username, TEST_PASSWORD);
+        try {
+            bootstrap.run(new DefaultApplicationArguments(new String[0]));
+            UserAccount created = users.findByUsername(username).orElseThrow();
+            assertEquals(List.of(Role.ADMIN), created.getRoles());
+            assertTrue(passwordEncoder.matches(TEST_PASSWORD, created.getPasswordHash()));
+        } finally {
+            users.findByUsername(username).ifPresent(users::delete);
         }
     }
 

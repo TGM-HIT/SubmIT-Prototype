@@ -83,7 +83,7 @@ public class SupervisionService {
         UUID teacherId = UUID.fromString(payload.path("teacherId").asText());
         UserAccount teacher = users.findById(teacherId)
                 .orElseThrow(() -> new EntityNotFoundException("Teacher was not found."));
-        if (teacher.getRole() != Role.TEACHER) {
+        if (!teacher.hasRole(Role.TEACHER)) {
             throw rules.conflict("Only teachers can be confirmed as supervisors.");
         }
         StoredRecord preference = store.repository()

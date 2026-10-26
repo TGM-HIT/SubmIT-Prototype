@@ -5,6 +5,7 @@ import { formatDateOnly, formatTimestamp, i18n, setLanguage } from "../../i18n"
 
 const api = vi.hoisted(() => ({
   role: "ADMIN",
+  extraRoles: [] as string[],
   activeRubric: vi.fn(),
   rubrics: vi.fn(),
   grades: vi.fn(),
@@ -24,7 +25,7 @@ vi.mock("../../api/services", () => ({
   },
 }))
 
-vi.mock("../../stores/auth", () => ({ useAuthStore: () => ({ user: { role: api.role, id: "student-1" } }) }))
+vi.mock("../../stores/auth", () => ({ useAuthStore: () => ({ user: { roles: [api.role, ...api.extraRoles], id: "student-1" } }) }))
 
 function pageResult(content: Record<string, unknown>[] = []) {
   return { content, page: 0, size: 20, totalElements: content.length, totalPages: content.length ? 1 : 0 }
@@ -34,6 +35,7 @@ describe("grading student identities", () => {
   beforeEach(() => {
     vi.resetAllMocks()
     api.role = "ADMIN"
+    api.extraRoles = []
     setLanguage("en")
     api.activeRubric.mockResolvedValue({ name: "Current rubric", categories: [] })
     api.rubrics.mockResolvedValue(pageResult())
@@ -148,6 +150,22 @@ describe("grading student identities", () => {
       expect(page.text()).not.toContain("Record group assessment")
       expect(page.text()).not.toContain("Record a configured project metric")
     }
+    page.unmount()
+  })
+
+  it("combines teacher grading controls and administrator rubric publication for dual-role staff", async () => {
+    api.role = "TEACHER"
+    api.extraRoles = ["ADMIN"]
+    const page = mount(GradingPage)
+    await flushPromises()
+    expect(page.find("#rubric-json").exists()).toBe(true)
+    expect(page.text()).toContain("Publish immutable version")
+
+    await page.get("#project-id").setValue("project-1")
+    expect(page.text()).toContain("Record individual assessment")
+    expect(page.text()).toContain("Record group assessment")
+    expect(page.text()).toContain("Record a configured project metric")
+    expect(page.findAll("form")).toHaveLength(5)
     page.unmount()
   })
 

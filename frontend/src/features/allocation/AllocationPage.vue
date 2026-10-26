@@ -4,11 +4,11 @@
     <div class="panel">
       <div class="toolbar">
         <div class="field"><label class="label" for="period-select">{{ $t('allocation.period') }}</label><select id="period-select" v-model="periodId" class="select" @change="loadPeriodData"><option value="">{{ $t('allocation.selectPeriod') }}</option><option v-for="period in periods" :key="period.id" :value="period.id">{{ period.label || period.schoolYear }} · {{ period.schoolYear }} · {{ periodStatus(period.status) }}</option></select></div>
-        <button v-if="auth.user?.role === 'ADMIN' && selectedPeriod && selectedPeriod.status !== 'FINALIZED' && (selectedPeriod.status === 'OPEN' || deadlinePassed)" id="start-replacement-run" ref="startRunControl" class="button" type="button" :disabled="task.loading.value" @click="startReplacement">{{ deadlinePassed ? $t('allocation.startReplacement') : $t('allocation.startEarly') }}</button>
+        <button v-if="auth.user?.roles.includes('ADMIN') && selectedPeriod && selectedPeriod.status !== 'FINALIZED' && (selectedPeriod.status === 'OPEN' || deadlinePassed)" id="start-replacement-run" ref="startRunControl" class="button" type="button" :disabled="task.loading.value" @click="startReplacement">{{ deadlinePassed ? $t('allocation.startReplacement') : $t('allocation.startEarly') }}</button>
       </div>
       <p v-if="selectedPeriod" class="notice">{{ $t('allocation.selectedPeriod') }} {{ selectedPeriod.label || selectedPeriod.schoolYear }} · {{ $t('allocation.schoolYear', { year: selectedPeriod.schoolYear }) }}</p>
       <p v-if="selectedPeriod && selectedPeriod.status === 'OPEN' && !deadlinePassed" class="notice">{{ $t('allocation.deadlineInfo', { deadline: date(selectedPeriod.closesAt) }) }}</p>
-      <section v-if="selectedPeriod && [`ADMIN`, `TEACHER`].includes(auth.user?.role ?? ``)" class="panel stack" aria-labelledby="pins-heading">
+      <section v-if="selectedPeriod && (auth.user?.roles.includes('ADMIN') || auth.user?.roles.includes('TEACHER'))" class="panel stack" aria-labelledby="pins-heading">
         <div><h2 id="pins-heading" class="section-title">{{ $t('allocation.fixedAssignments') }}</h2><p class="muted">{{ $t('allocation.pinHelp') }}</p></div>
         <p v-if="pinError" class="error-box" role="alert">{{ pinError }} <button class="button button-secondary button-small" type="button" @click="loadPins">{{ $t('allocation.retry') }}</button></p>
         <p v-else-if="pinLoading" class="notice" role="status">{{ $t('allocation.loadingPins') }}</p>
@@ -16,9 +16,9 @@
           <p v-if="pins.length === 0" class="empty">{{ $t('allocation.noPins') }}</p>
           <article v-for="(pin, index) in pins" :key="String(pin.studentId)" class="data-row" tabindex="-1" :ref="(element) => setPinControl(String(pin.studentId), element)">
             <div class="row-main"><h3>{{ pin.studentDisplayName }} → {{ pin.projectTitle }}</h3><p>{{ pin.rankedChoice ? $t('allocation.rankedChoice') : $t('allocation.notRankedChoice') }}</p></div>
-            <div v-if="auth.user?.role === `ADMIN`" class="actions"><button class="button button-secondary button-small" type="button" @click="editPin(pin)">{{ $t('allocation.change') }}</button><button class="button button-secondary button-small" type="button" @click="removePin(pin, index, $event)">{{ $t('allocation.remove') }}</button></div>
+            <div v-if="auth.user?.roles.includes('ADMIN')" class="actions"><button class="button button-secondary button-small" type="button" @click="editPin(pin)">{{ $t('allocation.change') }}</button><button class="button button-secondary button-small" type="button" @click="removePin(pin, index, $event)">{{ $t('allocation.remove') }}</button></div>
           </article>
-          <form v-if="auth.user?.role === `ADMIN`" class="stack" @submit.prevent="savePin">
+          <form v-if="auth.user?.roles.includes('ADMIN')" class="stack" @submit.prevent="savePin">
             <h3 class="form-section-title">{{ pinStudentId ? $t('allocation.changeFixed') : $t('allocation.addFixed') }}</h3>
             <div class="field"><label class="label" for="pin-student">{{ $t('allocation.student') }}</label><input id="pin-student" ref="addPinControl" v-model="studentQuery" class="input" type="search" :placeholder="$t('allocation.searchStudents')" @input="lookupStudents"><select id="pin-student-select" v-model="pinStudentId" class="select" required><option value="">{{ $t('allocation.chooseStudent') }}</option><option v-for="student in studentOptions" :key="String(student.id)" :value="String(student.id)">{{ student.displayName }}</option></select></div>
             <div class="field"><label class="label" for="pin-project">{{ $t('allocation.project') }}</label><select id="pin-project" v-model="pinProjectId" class="select" required><option value="">{{ $t('allocation.chooseProject') }}</option><option v-for="project in catalogueProjects" :key="String(project.id)" :value="String(project.id)">{{ project.title }}</option></select></div>
@@ -32,7 +32,7 @@
         <div v-if="runs.content.length" class="data-list">
           <article v-for="run in runs.content" :key="idOf(run)" class="data-row">
             <div class="row-main"><h3>{{ $t('allocation.run') }} <span class="muted">{{ idOf(run) }}</span></h3><p>{{ runKind(run) }}</p><p>{{ $t('allocation.state') }} <span class="status-badge" :class="`status-${statusOf(run).toLowerCase()}`">{{ statusLabel(run) }}</span> · {{ date(run.createdAt) }}</p><p v-if="run.error" class="field-error">{{ $t('allocation.runError') }}: {{ run.error }}</p></div>
-            <div class="actions"><button class="button button-secondary button-small" @click="loadResult(idOf(run))">{{ $t('allocation.inspect') }}</button><button v-if="auth.user?.role === 'ADMIN' && statusOf(run) === 'COMPLETED' && run.early !== true && selectedPeriod?.status !== 'FINALIZED'" class="button button-small" @click="finalize(idOf(run))">{{ $t('allocation.finalizeResult') }}</button></div>
+            <div class="actions"><button class="button button-secondary button-small" @click="loadResult(idOf(run))">{{ $t('allocation.inspect') }}</button><button v-if="auth.user?.roles.includes('ADMIN') && statusOf(run) === 'COMPLETED' && run.early !== true && selectedPeriod?.status !== 'FINALIZED'" class="button button-small" @click="finalize(idOf(run))">{{ $t('allocation.finalizeResult') }}</button></div>
           </article>
         </div>
         <p v-else class="empty">{{ $t('allocation.noRuns') }}</p>
@@ -317,7 +317,7 @@ async function loadResult(id: string): Promise<void> {
   const result = await task.run(() => allocationApi.getRun(id))
   selectedRun.value = result ?? null
   supervisors.value = {}
-  if (!result || !['ADMIN', 'TEACHER'].includes(auth.user?.role ?? '')) return
+  if (!result || (!auth.user?.roles.includes('ADMIN') && !auth.user?.roles.includes('TEACHER'))) return
   const names = await Promise.all(assignments(result).map(async ({ projectId }) => {
     try {
       const idea = await ideasApi.get(projectId)

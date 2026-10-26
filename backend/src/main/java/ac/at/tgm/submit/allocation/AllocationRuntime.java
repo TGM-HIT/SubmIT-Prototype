@@ -35,7 +35,7 @@ class AllocationRuntime {
     }
 
     boolean isStudent(UUID id) {
-        return users.findById(id).filter(user -> user.getRole() == Role.STUDENT).isPresent();
+        return users.findById(id).filter(user -> user.hasRole(Role.STUDENT)).isPresent();
     }
 
     List<ac.at.tgm.submit.user.UserAccount> eligibleStudents(StoredRecord period) {

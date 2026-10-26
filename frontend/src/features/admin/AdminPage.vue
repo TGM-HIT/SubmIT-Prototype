@@ -27,7 +27,7 @@
       <AsyncPanel :loading="task.loading.value" :error="task.error.value" @retry="loadUsers(users.page)">
         <div v-if="users.content.length" class="data-list">
           <article v-for="user in users.content" :key="user.id" class="data-row">
-            <div class="row-main"><h3>{{ user.displayName }}</h3><p>{{ $t('admin.username') }} {{ user.username }}</p><p>{{ $t('admin.account') }} {{ user.id }}</p><p v-if="user.role === 'STUDENT'">{{ $t('admin.class') }} {{ user.className }} · {{ $t('admin.subjects') }} {{ user.electiveSubjectNames?.join(', ') || $t('admin.none') }}</p><span class="status-badge">{{ user.role ? $t(`admin.userRoles.${user.role}`) : '' }}</span></div>
+            <div class="row-main"><h3>{{ user.displayName }}</h3><p>{{ $t('admin.username') }} {{ user.username }}</p><p>{{ $t('admin.account') }} {{ user.id }}</p><p v-if="user.roles.includes('STUDENT')">{{ $t('admin.class') }} {{ user.className }} · {{ $t('admin.subjects') }} {{ user.electiveSubjectNames?.join(', ') || $t('admin.none') }}</p><span class="status-badge">{{ roleLabels(user.roles) }}</span></div>
             <button :id="`edit-account-${user.id}`" class="button button-secondary button-small" type="button" :aria-label="$t('admin.editAccount', { name: user.displayName, username: user.username })" @click="openEditor(user, $event)">{{ $t('admin.edit') }}</button>
           </article>
         </div>
@@ -87,13 +87,14 @@
         <p class="muted">{{ $t('admin.nameGuidance') }}</p>
         <div class="field">
           <label class="label" for="account-role">{{ $t('admin.role') }}</label>
-          <select id="account-role" v-model="roleDraft" class="select">
-            <option value="STUDENT">{{ $t('admin.userRoles.STUDENT') }}</option>
-            <option value="TEACHER">{{ $t('admin.userRoles.TEACHER') }}</option>
-            <option value="ADMIN">{{ $t('admin.userRoles.ADMIN') }}</option>
-          </select>
+          <fieldset class="field role-choices">
+            <legend class="label">{{ $t('admin.role') }}</legend>
+            <label class="checkbox-row"><input id="account-role-student" type="checkbox" :checked="roleDraft.includes('STUDENT')" @change="toggleRole('STUDENT', $event)">{{ $t('admin.userRoles.STUDENT') }}</label>
+            <label class="checkbox-row"><input id="account-role-teacher" type="checkbox" :checked="roleDraft.includes('TEACHER')" @change="toggleRole('TEACHER', $event)">{{ $t('admin.userRoles.TEACHER') }}</label>
+            <label class="checkbox-row"><input id="account-role-admin" type="checkbox" :checked="roleDraft.includes('ADMIN')" @change="toggleRole('ADMIN', $event)">{{ $t('admin.userRoles.ADMIN') }}</label>
+          </fieldset>
         </div>
-        <template v-if="roleDraft === 'STUDENT'">
+        <template v-if="roleDraft.includes('STUDENT')">
           <div class="field">
             <label class="label" for="student-class">{{ $t('admin.class') }}</label>
             <select id="student-class" v-model="classDraft" class="select" required>
@@ -131,7 +132,7 @@ import { ApiError } from '../../api/client'
 
 type User = components['schemas']['UserResponse']
 type AuditEntry = components['schemas']['AuditEntryResponse']
-type AccountRole = NonNullable<User['role']>
+type AccountRole = User['roles'][number]
 const task = useTask()
 const activeTab = ref<'users' | 'catalogues' | 'audit'>('users')
 const users = ref<Page<User>>(emptyPage())
@@ -144,9 +145,9 @@ const editingUser = ref<User | null>(null)
 const editTrigger = ref<HTMLElement | null>(null)
 const accountsHeading = ref<HTMLElement | null>(null)
 const nameDraft = ref('')
-const roleDraft = ref<AccountRole>('STUDENT')
+const roleDraft = ref<AccountRole[]>(['STUDENT'])
 const originalName = ref('')
-const originalRole = ref<AccountRole>('STUDENT')
+const originalRole = ref<AccountRole[]>(['STUDENT'])
 const editError = ref('')
 const saving = ref(false)
 const classes = ref<components['schemas']['CatalogueEntryResponse'][]>([])
@@ -164,12 +165,31 @@ const catalogueSaving = ref(false)
 let searchDebounce: ReturnType<typeof setTimeout> | undefined
 const hasActiveFilters = computed(() => roleFilter.value !== '' || activeSearch.value !== '')
 const hasChanges = computed(() => nameDraft.value.trim() !== originalName.value
-  || roleDraft.value !== originalRole.value
-  || (roleDraft.value === 'STUDENT'
+  || !sameRoles(roleDraft.value, originalRole.value)
+  || (roleDraft.value.includes('STUDENT')
     && (classDraft.value !== originalClassId.value
       || [...subjectDraft.value].sort().join(',') !== [...originalSubjectIds.value].sort().join(','))))
 
 function emptyPage<T>(): Page<T> { return { content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 } }
+function sameRoles(left: AccountRole[], right: AccountRole[]): boolean {
+  return [...left].sort().join(',') === [...right].sort().join(',')
+}
+function roleLabels(roles: AccountRole[]): string {
+  return roles.map((role) => String(i18n.global.t(`admin.userRoles.${role}`))).join(', ')
+}
+function toggleRole(role: AccountRole, event: Event): void {
+  const selected = (event.target as HTMLInputElement).checked
+  if (role === 'STUDENT') {
+    if (!selected && roleDraft.value.some((value) => value !== 'STUDENT')) {
+      roleDraft.value = roleDraft.value.filter((value) => value !== 'STUDENT')
+    } else if (selected) roleDraft.value = ['STUDENT']
+    return
+  }
+  const staff = new Set(roleDraft.value.filter((value) => value !== 'STUDENT'))
+  if (selected) staff.add(role)
+  else staff.delete(role)
+  if (staff.size) roleDraft.value = [...staff]
+}
 function timestamp(value: string): string {
   if (!value) return String(i18n.global.t('admin.timestampUnavailable'))
   const date = new Date(value)
@@ -235,7 +255,7 @@ async function openEditor(user: User, event: MouseEvent): Promise<void> {
   editingUser.value = user
   editTrigger.value = event.currentTarget as HTMLElement
   originalName.value = user.displayName ?? ''
-  originalRole.value = user.role ?? 'STUDENT'
+  originalRole.value = [...user.roles]
   nameDraft.value = originalName.value
   roleDraft.value = originalRole.value
   classDraft.value = ''
@@ -246,7 +266,7 @@ async function openEditor(user: User, event: MouseEvent): Promise<void> {
   try {
     const [classPage, subjectPage, details] = await Promise.all([
       studentDetailsApi.classes(), studentDetailsApi.subjects(),
-      user.role === 'STUDENT' && user.id ? studentDetailsApi.get(user.id) : Promise.resolve(null),
+      user.roles.includes('STUDENT') && user.id ? studentDetailsApi.get(user.id) : Promise.resolve(null),
     ])
     classes.value = classPage.content
     subjects.value = subjectPage.content
@@ -284,8 +304,8 @@ async function saveAccount(): Promise<void> {
   const account = editingUser.value
   const id = account.id ?? ''
   const nameChanged = displayName !== originalName.value
-  const roleChanged = roleDraft.value !== originalRole.value
-  const assignmentChanged = roleDraft.value === 'STUDENT'
+  const roleChanged = !sameRoles(roleDraft.value, originalRole.value)
+  const assignmentChanged = roleDraft.value.includes('STUDENT')
     && (roleChanged || classDraft.value !== originalClassId.value
       || [...subjectDraft.value].sort().join(',') !== [...originalSubjectIds.value].sort().join(','))
   if (assignmentChanged && (!classDraft.value || subjectDraft.value.length > 4)) {
@@ -293,9 +313,7 @@ async function saveAccount(): Promise<void> {
     return
   }
   if (roleChanged && !confirm(String(i18n.global.t('admin.changeRoleConfirm', {
-    role: i18n.global.locale.value === 'en'
-      ? roleDraft.value
-      : i18n.global.t(`admin.userRoles.${roleDraft.value}`),
+    role: roleLabels(roleDraft.value),
   })))) return
 
   saving.value = true

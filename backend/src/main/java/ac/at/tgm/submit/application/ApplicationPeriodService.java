@@ -6,6 +6,7 @@ import ac.at.tgm.submit.audit.AuditService;
 import ac.at.tgm.submit.data.RecordStore;
 import ac.at.tgm.submit.data.StoredRecord;
 import ac.at.tgm.submit.security.AuthenticatedUser;
+import ac.at.tgm.submit.security.Role;
 import ac.at.tgm.submit.web.ApiDtos;
 import ac.at.tgm.submit.web.ApiException;
 import jakarta.persistence.EntityNotFoundException;
@@ -78,15 +79,15 @@ public class ApplicationPeriodService {
             AuthenticatedUser caller, int page, int size) {
         return mapper.periods(
                 store.page(PERIOD, null, null, org.springframework.data.domain.PageRequest.of(page, size)),
-                STUDENT.equals(caller.role().name()) ? caller.id() : null,
-                ADMIN.equals(caller.role().name()));
+                caller.hasRole(Role.STUDENT) ? caller.id() : null,
+                caller.hasRole(Role.ADMIN));
     }
 
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ApiDtos.ApplicationPeriodResponse get(AuthenticatedUser caller, java.util.UUID id) {
-        var studentView = STUDENT.equals(caller.role().name());
+        var studentView = caller.hasRole(Role.STUDENT);
         return mapper.period(findPeriod(id), studentView, studentView ? caller.id() : null,
-                ADMIN.equals(caller.role().name()));
+                caller.hasRole(Role.ADMIN));
     }
 
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
@@ -189,7 +190,7 @@ public class ApplicationPeriodService {
     @org.springframework.transaction.annotation.Transactional(readOnly = true)
     public ApiDtos.PageResponse<ApiDtos.StudentApplicationResponse> applications(
             AuthenticatedUser caller, java.util.UUID periodId, int page, int size) {
-        if (STUDENT.equals(caller.role().name())) {
+        if (caller.hasRole(Role.STUDENT)) {
             throw new org.springframework.security.access.AccessDeniedException(
                     "Only teachers and administrators can list applications.");
         }
@@ -447,7 +448,7 @@ public class ApplicationPeriodService {
     }
 
     private void requireRole(AuthenticatedUser caller, String roleName) {
-        if (!roleName.equals(caller.role().name())) {
+        if (!caller.hasRole(Role.valueOf(roleName))) {
             throw new org.springframework.security.access.AccessDeniedException(
                     "This operation requires the " + roleName + " role.");
         }

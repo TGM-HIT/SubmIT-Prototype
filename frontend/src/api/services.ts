@@ -308,15 +308,15 @@ export const userApi = {
 }
 
 export const adminApi = {
-  users(page = 0, role?: NonNullable<UserResponse['role']>, query?: string, size = 20): Promise<Page<components['schemas']['PageResponseUserResponse']>> {
+  users(page = 0, role?: UserResponse['roles'][number], query?: string, size = 20): Promise<Page<components['schemas']['PageResponseUserResponse']>> {
     const params = new URLSearchParams(pageQuery(page))
     if (role) params.set('role', role)
     if (query?.trim()) params.set('q', query.trim())
     params.set('size', String(size))
     return json(`/api/users?${params}`)
   },
-  role(id: string, role: UserResponse['role']): Promise<UserResponse> {
-    return json(`/api/users/${encodeURIComponent(id)}/role`, 'PATCH', { role })
+  role(id: string, roles: UserResponse['roles']): Promise<UserResponse> {
+    return json(`/api/users/${encodeURIComponent(id)}/role`, 'PATCH', { roles })
   },
   async audit(page = 0): Promise<Page<components['schemas']['PageResponseAuditEntryResponse']>> {
     const result = await json<components['schemas']['PageResponseAuditEntryResponse']>(

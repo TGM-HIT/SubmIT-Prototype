@@ -260,7 +260,7 @@ class OpenApiContractTest {
             Map.entry("PageResponseEligibleFormalProjectResponse",
                     contract("content,page,size,totalElements,totalPages", "", "")),
             Map.entry("TokenResponse", contract("token,tokenType,expiresIn,user", "", "")),
-            Map.entry("UserResponse", contract("id,username,displayName,role,language",
+            Map.entry("UserResponse", contract("id,username,displayName,roles,language",
                     "className,electiveSubjectNames", "")),
             Map.entry("CatalogueEntryResponse", contract("id,name", "", "")),
             Map.entry("StudentDetailsResponse", contract(
@@ -813,18 +813,18 @@ class OpenApiContractTest {
     @Test
     void registrationRoleIsDocumentedAsIgnored() throws Exception {
         JsonNode schema = apiDocument().path("components").path("schemas").path("RegisterRequest");
-        JsonNode property = schema.path("properties").path("role");
+        JsonNode property = schema.path("properties").path("roles");
 
-        assertTrue(property.isObject(), "RegisterRequest.role must remain a schema property");
-        assertTrue(property.path("type").isTextual(), "RegisterRequest.role type must be a string");
-        assertEquals("string", property.path("type").textValue());
+        assertTrue(property.isObject(), "RegisterRequest.roles must remain a schema property");
+        assertTrue(property.path("type").isTextual(), "RegisterRequest.roles type must be an array");
+        assertEquals("array", property.path("type").textValue());
 
-        JsonNode roleEnum = property.path("enum");
-        assertTrue(roleEnum.isArray(), "RegisterRequest.role enum must remain an array");
-        assertEquals(3, roleEnum.size(), "RegisterRequest.role must retain exactly three enum values");
+        JsonNode roleEnum = property.path("items").path("enum");
+        assertTrue(roleEnum.isArray(), "RegisterRequest.roles item enum must remain an array");
+        assertEquals(3, roleEnum.size(), "RegisterRequest.roles must retain exactly three enum values");
         Set<String> actualValues = new TreeSet<>();
         for (JsonNode value : roleEnum) {
-            assertTrue(value.isTextual(), "Each RegisterRequest.role enum value must be a string");
+            assertTrue(value.isTextual(), "Each RegisterRequest.roles enum value must be a string");
             actualValues.add(value.textValue());
         }
         assertEquals(Set.of("STUDENT", "TEACHER", "ADMIN"), actualValues);
@@ -833,10 +833,10 @@ class OpenApiContractTest {
         assertTrue(required.isArray(), "RegisterRequest.required must remain an array");
         for (JsonNode requiredProperty : required) {
             assertTrue(requiredProperty.isTextual(), "Required property names must be strings");
-            assertFalse("role".equals(requiredProperty.textValue()), "RegisterRequest.role must remain optional");
+            assertFalse("roles".equals(requiredProperty.textValue()), "RegisterRequest.roles must remain optional");
         }
 
-        assertTrue(property.path("description").isTextual(), "RegisterRequest.role must have a description");
+        assertTrue(property.path("description").isTextual(), "RegisterRequest.roles must have a description");
         String description = property.path("description").textValue().toLowerCase(java.util.Locale.ROOT);
         assertTrue(description.contains("ignored"), "Description must state that the supplied role is ignored");
         assertTrue(description.contains("registration") && description.contains("always")

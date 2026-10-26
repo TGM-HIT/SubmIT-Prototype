@@ -7,7 +7,7 @@ const api = vi.hoisted(() => ({
   years: vi.fn(),
   periods: vi.fn(),
   ideas: vi.fn(),
-  role: 'STUDENT',
+  roles: ['STUDENT'],
 }))
 
 vi.mock('../../api/services', () => ({
@@ -16,13 +16,13 @@ vi.mock('../../api/services', () => ({
 }))
 
 vi.mock('../../stores/auth', () => ({
-  useAuthStore: () => ({ user: { role: api.role } }),
+  useAuthStore: () => ({ user: { roles: api.roles } }),
 }))
 
 describe('Overview layout groups', () => {
   beforeEach(() => {
     setLanguage('en')
-    api.role = 'STUDENT'
+    api.roles = ['STUDENT']
     api.years.mockResolvedValue({ content: ['2026/2027'] })
     api.periods.mockResolvedValue({ content: [], totalElements: 0 })
     api.ideas.mockResolvedValue({ content: [], totalElements: 0 })
@@ -57,14 +57,31 @@ describe('Overview layout groups', () => {
   it('does not add student assignment summaries to teacher or administrator Overview', async () => {
     api.periods.mockResolvedValue({ content: [{ id: 'staff', schoolYear: '2026/2027', status: 'FINALIZED',
       studentApplicationStatus: 'SUBMITTED', studentAssignment: { state: 'FINAL', projectTitle: 'Private title' } }], totalElements: 1 })
-    for (const role of ['TEACHER', 'ADMIN']) {
-      api.role = role
+    for (const roles of [['TEACHER'], ['ADMIN'], ['TEACHER', 'ADMIN']]) {
+      api.roles = roles
       const page = mount(DashboardPage, { global: { stubs: { AsyncPanel: { template: '<div><slot /></div>' }, RouterLink: true } } })
       await flushPromises()
       expect(page.find('.student-assignment-summary').exists()).toBe(false)
       expect(page.text()).not.toContain('Private title')
       page.unmount()
     }
+  })
+
+  it('shows the union of teacher and administrator workflow links without student actions', async () => {
+    api.roles = ['TEACHER', 'ADMIN']
+    const page = mount(DashboardPage, {
+      global: {
+        stubs: {
+          AsyncPanel: { template: '<div><slot /></div>' },
+          RouterLink: { template: '<a :href="to"><slot /></a>', props: ['to'] },
+        },
+      },
+    })
+    await flushPromises()
+    const links = page.findAll('.overview-workflow a')
+    expect(links.map((link) => link.attributes('href'))).toEqual(['/ideas', '/allocation', '/grading'])
+    expect(page.find('.student-assignment-summary').exists()).toBe(false)
+    page.unmount()
   })
 
   it('keeps the three summary cards and two workflow panels in their responsive grid groups', async () => {

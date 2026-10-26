@@ -79,7 +79,7 @@ class AccountLanguageControllerTest {
                 .andExpect(jsonPath("$.language").value("de"))
                 .andExpect(jsonPath("$.displayName").value("student"))
                 .andExpect(jsonPath("$.username").value("student"))
-                .andExpect(jsonPath("$.role").value("STUDENT"));
+                .andExpect(jsonPath("$.roles[0]").value("STUDENT"));
 
         UserAccount persisted = users.findById(student.getId()).orElseThrow();
         assertEquals(AccountLanguage.de, persisted.getLanguage());
@@ -118,9 +118,9 @@ class AccountLanguageControllerTest {
         mockMvc.perform(patch("/api/users/{id}/role", student.getId())
                         .header("Authorization", bearer(admin))
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"role\":\"TEACHER\"}"))
+                        .content("{\"roles\":[\"TEACHER\"]}"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.role").value("TEACHER"))
+                .andExpect(jsonPath("$.roles[0]").value("TEACHER"))
                 .andExpect(jsonPath("$.language").value("de"));
         String accountListResponse = mockMvc.perform(get("/api/users?page=0&size=100")
                         .header("Authorization", bearer(admin)))
@@ -141,12 +141,12 @@ class AccountLanguageControllerTest {
         assertEquals(1, studentMatches, "account list must contain exactly one student");
         assertNotNull(listedStudent);
         JsonNode listedDisplayName = listedStudent.path("displayName");
-        JsonNode listedRole = listedStudent.path("role");
+        JsonNode listedRoles = listedStudent.path("roles");
         JsonNode listedLanguage = listedStudent.path("language");
         assertTrue(listedDisplayName.isTextual(), "student displayName must be a string");
         assertEquals("Renamed student", listedDisplayName.textValue());
-        assertTrue(listedRole.isTextual(), "student role must be a string");
-        assertEquals("TEACHER", listedRole.textValue());
+        assertTrue(listedRoles.isArray(), "student roles must be an array");
+        assertEquals("TEACHER", listedRoles.get(0).textValue());
         assertTrue(listedLanguage.isTextual(), "student language must be a string");
         assertEquals("de", listedLanguage.textValue());
         UserAccount persisted = users.findById(student.getId()).orElseThrow();

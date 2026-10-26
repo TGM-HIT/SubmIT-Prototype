@@ -72,7 +72,7 @@
       <h3 class="form-section-title">{{ $t('formal.teacherReview') }}</h3>
       <article v-for="review in current.reviewHistory?.content ?? []" :key="review.id" class="data-row"><div class="row-main"><h3>{{ readable(review.decision) }}</h3><p>{{ review.feedback }}</p></div></article>
       <p v-if="!current.reviewHistory?.content?.length" class="muted">{{ $t('formal.noReviews') }}</p>
-      <form v-if="auth.user?.role === 'TEACHER' && current.id && current.status === 'SUBMITTED'" class="panel stack" @submit.prevent="reviewApplication">
+      <form v-if="auth.user?.roles.includes('TEACHER') && current.id && current.status === 'SUBMITTED'" class="panel stack" @submit.prevent="reviewApplication">
         <h3 class="form-section-title">{{ $t('formal.decision') }}</h3>
         <div class="field"><label class="label" for="formal-decision">{{ $t('formal.decisionLabel') }}</label><select id="formal-decision" v-model="decision" class="select"><option value="APPROVE">{{ $t('formal.approve') }}</option><option value="REQUEST_REVISION">{{ $t('formal.requestRevisions') }}</option><option value="DECLINE">{{ $t('formal.decline') }}</option></select></div>
         <div class="field"><label class="label" for="formal-feedback">{{ $t('formal.feedback') }}</label><textarea id="formal-feedback" v-model="feedback" class="textarea" maxlength="5000" required /></div>
@@ -115,7 +115,7 @@ const form = reactive({
 const concernsUsed = computed(() => form.members.reduce((total, member) => total + member.investigationConcern.length, 0))
 const resultsUsed = computed(() => form.members.reduce((total, member) => total + member.plannedResult.length, 0))
 const editableStatus = computed(() => ['DRAFT', 'NEEDS_REVISION'].includes(current.value?.status ?? ''))
-const isStudent = computed(() => auth.user?.role === 'STUDENT')
+const isStudent = computed(() => auth.user?.roles.includes('STUDENT') ?? false)
 const selectedProject = computed(() =>
   eligibleProjects.value.find((project) => project.projectId === selectedProjectId.value) ?? null)
 

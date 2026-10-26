@@ -38,7 +38,7 @@ class ProjectAccess {
     }
 
     boolean isTeacher(AuthenticatedUser caller) {
-        return caller.role() == Role.TEACHER || caller.role() == Role.ADMIN;
+        return caller.hasRole(Role.TEACHER) || caller.hasRole(Role.ADMIN);
     }
 
     List<String> requireTeacher(AuthenticatedUser caller, UUID projectId) {

@@ -11,6 +11,7 @@ import java.security.GeneralSecurityException;
 import java.time.Instant;
 import java.util.Base64;
 import java.util.UUID;
+import java.util.List;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.springframework.beans.factory.annotation.Value;
@@ -38,9 +39,11 @@ public class JwtService {
             String header = encode(objectMapper.writeValueAsBytes(objectMapper.createObjectNode()
                     .put("alg", "HS256").put("typ", "JWT")));
             long expiresAt = Instant.now().plusSeconds(TOKEN_LIFETIME_SECONDS).getEpochSecond();
-            String payload = encode(objectMapper.writeValueAsBytes(objectMapper.createObjectNode()
-                    .put("sub", user.id().toString()).put("username", user.username())
-                    .put("role", user.role().name()).put("exp", expiresAt)));
+            var payloadClaims = objectMapper.createObjectNode()
+                    .put("sub", user.id().toString()).put("username", user.username());
+            payloadClaims.set("roles", objectMapper.valueToTree(user.roles()));
+            payloadClaims.put("exp", expiresAt);
+            String payload = encode(objectMapper.writeValueAsBytes(payloadClaims));
             String unsigned = header + "." + payload;
             return unsigned + "." + encode(sign(unsigned));
         } catch (JsonProcessingException | GeneralSecurityException exception) {
@@ -64,11 +67,29 @@ public class JwtService {
             if (claims.path("exp").asLong() <= Instant.now().getEpochSecond()) {
                 return null;
             }
+            List<Role> roles = parseRoles(claims.path("roles"));
+            if (roles == null) {
+                return null;
+            }
             return new AuthenticatedUser(UUID.fromString(claims.path("sub").asText()),
-                    claims.path("username").asText(), Role.valueOf(claims.path("role").asText()));
+                    claims.path("username").asText(), roles);
         } catch (IOException | GeneralSecurityException | IllegalArgumentException exception) {
             return null;
         }
+    }
+
+    private List<Role> parseRoles(JsonNode rolesClaim) {
+        if (!rolesClaim.isArray() || rolesClaim.isEmpty()) {
+            return null;
+        }
+        List<Role> roles = new java.util.ArrayList<>();
+        for (JsonNode roleClaim : rolesClaim) {
+            if (!roleClaim.isTextual()) {
+                return null;
+            }
+            roles.add(Role.valueOf(roleClaim.asText()));
+        }
+        return roles;
     }
 
     private byte[] sign(String value) throws GeneralSecurityException {

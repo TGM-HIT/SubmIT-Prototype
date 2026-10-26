@@ -36,7 +36,7 @@ const account = {
   id: 'student-id',
   username: 'student-account',
   displayName: 'Student Account',
-  role: 'STUDENT' as const,
+  roles: ['STUDENT'] as const,
 }
 
 let wrapper: VueWrapper | undefined
@@ -395,7 +395,7 @@ describe('administrator account management', () => {
     expect(document.activeElement).toBe(page.get('[aria-label="Close dialog"]').element)
     expect(page.get('[role="dialog"]').text()).toContain('student-account')
     expect((page.get('#account-name').element as HTMLInputElement).value).toBe('Student Account')
-    expect((page.get('#account-role').element as HTMLSelectElement).value).toBe('STUDENT')
+    expect((page.get('#account-role-student').element as HTMLInputElement).checked).toBe(true)
     expect(page.get('button[type="submit"]').element.hasAttribute('disabled')).toBe(true)
   })
 
@@ -419,14 +419,41 @@ describe('administrator account management', () => {
     const page = pageWith()
     await flushPromises()
     await openEditor(page)
-    await page.get('#account-role').setValue('TEACHER')
+    await page.get('#account-role-teacher').setValue(true)
     await page.get('button[type="submit"]').trigger('click')
     await flushPromises()
 
-    expect(confirm).toHaveBeenCalledWith("Change this account's role to TEACHER?")
-    expect(api.role).toHaveBeenCalledWith('student-id', 'TEACHER')
+    expect(confirm).toHaveBeenCalledWith("Change this account's role to Teacher?")
+    expect(api.role).toHaveBeenCalledWith('student-id', ['TEACHER'])
     expect(api.changeName).not.toHaveBeenCalled()
     expect(page.find('[role="dialog"]').exists()).toBe(false)
+  })
+
+  it('selects the dual staff role set, refreshes role labels, and restores focus to Edit', async () => {
+    let current: components['schemas']['UserResponse'] = { ...account, roles: [...account.roles], language: 'en' }
+    api.users.mockImplementation(async (page = 0) => pageResult([current], page))
+    api.role.mockImplementation(async (_id: string, roles: components['schemas']['UserResponse']['roles']) => {
+      current = { ...current, roles: [...roles] }
+      return current
+    })
+    const page = pageWith()
+    await flushPromises()
+    const trigger = page.get('[aria-label="Edit Student Account (student-account)"]').element
+    await openEditor(page)
+    await page.get('#account-role-teacher').setValue(true)
+    await page.get('#account-role-admin').setValue(true)
+    expect((page.get('#account-role-student').element as HTMLInputElement).checked).toBe(false)
+    expect((page.get('#account-role-teacher').element as HTMLInputElement).checked).toBe(true)
+    expect((page.get('#account-role-admin').element as HTMLInputElement).checked).toBe(true)
+    await page.get('form.edit-account-form button[type="submit"]').trigger('click')
+    await flushPromises()
+
+    expect(api.role).toHaveBeenCalledWith('student-id', ['TEACHER', 'ADMIN'])
+    expect(confirm).toHaveBeenCalledWith("Change this account's role to Teacher, Administrator?")
+    expect(current.roles).toEqual(['TEACHER', 'ADMIN'])
+    expect(page.get('article').text()).toContain('Teacher, Administrator')
+    expect(page.find('[role="dialog"]').exists()).toBe(false)
+    expect(document.activeElement).toBe(trigger)
   })
 
   it('saves both changes and reports partial success without losing values if role update fails', async () => {
@@ -435,16 +462,16 @@ describe('administrator account management', () => {
     await flushPromises()
     await openEditor(page)
     await page.get('#account-name').setValue('Renamed Student')
-    await page.get('#account-role').setValue('ADMIN')
+    await page.get('#account-role-admin').setValue(true)
     await page.get('button[type="submit"]').trigger('click')
     await flushPromises()
 
     expect(api.changeName).toHaveBeenCalledWith('student-id', 'Renamed Student')
-    expect(api.role).toHaveBeenCalledWith('student-id', 'ADMIN')
+    expect(api.role).toHaveBeenCalledWith('student-id', ['ADMIN'])
     expect(page.get('[role="alert"]').text()).toContain('Account name was saved, but the role change failed:')
     expect(page.get('[role="alert"]').text()).toContain('At least one administrator account must remain.')
     expect((page.get('#account-name').element as HTMLInputElement).value).toBe('Renamed Student')
-    expect((page.get('#account-role').element as HTMLSelectElement).value).toBe('ADMIN')
+    expect((page.get('#account-role-admin').element as HTMLInputElement).checked).toBe(true)
     expect(page.find('[role="dialog"]').exists()).toBe(true)
     expect(page.find('[role="status"]').exists()).toBe(false)
   })
@@ -454,7 +481,7 @@ describe('administrator account management', () => {
     await flushPromises()
     await openEditor(page)
     await page.get('#account-name').setValue('Renamed Student')
-    await page.get('#account-role').setValue('TEACHER')
+    await page.get('#account-role-teacher').setValue(true)
     await page.get('button[type="submit"]').trigger('click')
     await flushPromises()
 
@@ -512,11 +539,11 @@ describe('administrator account management', () => {
     expect(api.changeName).not.toHaveBeenCalled()
 
     await page.get('#account-name').setValue('Student Account')
-    await page.get('#account-role').setValue('ADMIN')
+    await page.get('#account-role-admin').setValue(true)
     await page.get('form.edit-account-form').trigger('submit')
     await flushPromises()
     expect(page.get('[role="alert"]').text()).toContain('At least one administrator account must remain.')
-    expect((page.get('#account-role').element as HTMLSelectElement).value).toBe('ADMIN')
+    expect((page.get('#account-role-admin').element as HTMLInputElement).checked).toBe(true)
   })
 
   it("creates and renames shared catalogue entries with current names", async () => {
@@ -568,8 +595,9 @@ describe('administrator account management', () => {
     const page = pageWith()
     await flushPromises()
     await openEditor(page)
-    for (let index = 0; index < 4; index++) await page.findAll("input[type=checkbox]")[index].setValue(true)
-    expect((page.findAll("input[type=checkbox]")[4].element as HTMLInputElement).disabled).toBe(true)
+    const subjectChecks = page.findAll("input[type=checkbox]").filter((check) => check.attributes('value')?.startsWith('subject-'))
+    for (let index = 0; index < 4; index++) await subjectChecks[index].setValue(true)
+    expect((subjectChecks[4].element as HTMLInputElement).disabled).toBe(true)
     await page.get("form.edit-account-form").trigger("submit")
     await flushPromises()
     expect(api.assign).toHaveBeenCalledWith("student-id", {
@@ -581,37 +609,37 @@ describe('administrator account management', () => {
   })
 
   it("promotes a teacher and saves an explicitly selected class", async () => {
-    const teacher = { id: 'teacher-id', username: 'teacher-account', displayName: 'Teacher Account', role: 'TEACHER' as const }
+    const teacher = { id: 'teacher-id', username: 'teacher-account', displayName: 'Teacher Account', roles: ['TEACHER'] as const }
     api.users.mockResolvedValue(pageResult([teacher]))
     api.classes.mockResolvedValue(pageResult([{ id: 'default-class', name: 'No class / unassigned' }, { id: 'class-1', name: 'Class A' }]))
     api.subjects.mockResolvedValue(pageResult([]))
-    api.role.mockResolvedValue({ ...teacher, role: 'STUDENT' })
+    api.role.mockResolvedValue({ ...teacher, roles: ['STUDENT'] })
     const page = pageWith()
     await flushPromises()
     await page.get('[aria-label="Edit Teacher Account (teacher-account)"]').trigger('click')
     await flushPromises()
-    await page.get('#account-role').setValue('STUDENT')
+    await page.get('#account-role-student').setValue(true)
     await page.get('#student-class').setValue('class-1')
     await page.get('form.edit-account-form').trigger('submit')
     await flushPromises()
-    expect(api.role).toHaveBeenCalledWith('teacher-id', 'STUDENT')
+    expect(api.role).toHaveBeenCalledWith('teacher-id', ['STUDENT'])
     expect(api.assign).toHaveBeenCalledWith('teacher-id', { classId: 'class-1', electiveSubjectIds: [] })
   })
 
   it("uses the default class when a teacher is promoted without an explicit class selection", async () => {
-    const teacher = { id: 'teacher-id', username: 'teacher-account', displayName: 'Teacher Account', role: 'TEACHER' as const }
+    const teacher = { id: 'teacher-id', username: 'teacher-account', displayName: 'Teacher Account', roles: ['TEACHER'] as const }
     api.users.mockResolvedValue(pageResult([teacher]))
     api.classes.mockResolvedValue(pageResult([{ id: 'default-class', name: 'No class / unassigned' }]))
     api.subjects.mockResolvedValue(pageResult([]))
-    api.role.mockResolvedValue({ ...teacher, role: 'STUDENT' })
+    api.role.mockResolvedValue({ ...teacher, roles: ['STUDENT'] })
     const page = pageWith()
     await flushPromises()
     await page.get('[aria-label="Edit Teacher Account (teacher-account)"]').trigger('click')
     await flushPromises()
-    await page.get('#account-role').setValue('STUDENT')
+    await page.get('#account-role-student').setValue(true)
     await page.get('form.edit-account-form').trigger('submit')
     await flushPromises()
-    expect(api.role).toHaveBeenCalledWith('teacher-id', 'STUDENT')
+    expect(api.role).toHaveBeenCalledWith('teacher-id', ['STUDENT'])
     expect(api.assign).toHaveBeenCalledWith('teacher-id', {
       classId: 'default-class',
       electiveSubjectIds: [],
@@ -629,7 +657,7 @@ describe('administrator account management', () => {
     await flushPromises()
     expect(page.get('article').text()).toContain('Biology')
     await openEditor(page)
-    await page.get('input[type=checkbox]').setValue(false)
+    await page.get('input[type=checkbox][value="subject-1"]').setValue(false)
     await page.get('form.edit-account-form').trigger('submit')
     await flushPromises()
     expect(api.assign).toHaveBeenCalledWith('student-id', { classId: 'class-1', electiveSubjectIds: [] })

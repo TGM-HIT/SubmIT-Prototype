@@ -87,7 +87,7 @@ public class ApplyingGroupRecords {
     }
 
     public void student(String id) {
-        if (users.findById(UUID.fromString(id)).filter(user -> user.getRole() == Role.STUDENT).isEmpty()) {
+        if (users.findById(UUID.fromString(id)).filter(user -> user.hasRole(Role.STUDENT)).isEmpty()) {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Every accepted member must currently be a student.");
         }
     }

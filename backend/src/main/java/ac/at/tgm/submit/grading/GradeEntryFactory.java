@@ -76,10 +76,10 @@ class GradeEntryFactory {
     }
 
     GradeResponse withStudentDetails(AuthenticatedUser caller, GradeResponse grade) {
-        if (caller.role() == Role.STUDENT || grade.studentId() == null) {
+        if (caller.hasRole(Role.STUDENT) || grade.studentId() == null) {
             return grade;
         }
-        return users.findById(grade.studentId()).filter(user -> user.getRole() == Role.STUDENT)
+        return users.findById(grade.studentId()).filter(user -> user.hasRole(Role.STUDENT))
                 .map(user -> {
                     StudentDetailsResponse details = studentDetails.response(user);
                     return new GradeResponse(grade.id(), grade.status(), grade.createdAt(), grade.projectId(),
