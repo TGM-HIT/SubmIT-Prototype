@@ -31,6 +31,7 @@ export function parseKeyboardArgs(args) {
   for (let index = 0; index < args.length; index += 1) {
     const argument = args[index]
     if (argument === '--help' || argument === '-h') options.help = true
+    else if (argument === '--negative-focus') options.negativeFocus = true
     else if (['--output-dir', '--frontend-port', '--backend-port'].includes(argument)) {
       const value = args[index + 1]
       if (!value || value.startsWith('--')) throw new Error(`${argument} requires a value.`)
@@ -267,6 +268,9 @@ async function editorState(client) {
       focusId: active instanceof HTMLElement ? active.id : '',
       openerFocused: active instanceof HTMLElement && active.matches('button[id^="edit-account-"]'),
       studentRoleChecked: document.querySelector('#account-role-student')?.checked ?? null,
+      teacherRoleChecked: document.querySelector('#account-role-teacher')?.checked ?? null,
+      adminRoleChecked: document.querySelector('#account-role-admin')?.checked ?? null,
+      saveEnabled: document.querySelector('.edit-account-form button[type="submit"]')?.disabled === false,
       visibleUserIds: [...document.querySelectorAll('article.data-row')].filter((row) => row.getClientRects().length > 0).length,
     };
   })()`, 'read account editor keyboard state')
@@ -329,11 +333,19 @@ async function runK2(context) {
   })
   const before = await editorState(client)
   assert.equal(before.studentRoleChecked, true, 'student01 is expected to retain the STUDENT role')
-  await perform(context, 'focus the student role checkbox', () => focus(client, '#account-role-student', 'focus the student role checkbox'))
-  await key(context, 'Space', 'Space toggles the focused student-role draft checkbox')
-  await perform(context, 'Space changes only the editor draft checkbox', () => waitForState(client,
-    'student role draft toggles off',
-    `document.querySelector('#account-role-student')?.checked === false`, true))
+  assert.equal(before.teacherRoleChecked, false, 'original roles exclude TEACHER')
+  assert.equal(before.adminRoleChecked, false, 'original roles exclude ADMIN')
+  assert.equal(before.saveEnabled, false, 'unchanged draft cannot be saved')
+  await perform(context, 'focus the teacher role checkbox', () => focus(client, '#account-role-teacher', 'focus the teacher role checkbox'))
+  await assertFocus(context, '#account-role-teacher')
+  await key(context, 'Space', 'Space selects TEACHER in the role draft')
+  await perform(context, 'Space changes the role draft and enables Save', () => waitForState(client,
+    'teacher role draft selected and draft-derived Save enabled',
+    `({
+      teacher: document.querySelector('#account-role-teacher')?.checked,
+      student: document.querySelector('#account-role-student')?.checked,
+      saveEnabled: document.querySelector('.edit-account-form button[type="submit"]')?.disabled === false,
+    })`, { teacher: true, student: false, saveEnabled: true }))
   await key(context, 'Escape', 'Escape cancels the editor without saving')
   await perform(context, 'Escape closes dialog and restores opener focus', async () => {
     await waitForState(client, 'editor dialog closes after Escape',
@@ -348,9 +360,14 @@ async function runK2(context) {
   await key(context, 'Enter', 'Enter reopens account editor')
   await perform(context, 'reopened editor proves persisted role remained unchanged', async () => {
     await waitForState(client, 'account editor reopens', `Boolean(document.querySelector('[role="dialog"]'))`, true)
-    await waitForState(client, 'student role remains checked after reopening',
-      `document.querySelector('#account-role-student')?.checked === true`, true)
-    return { persistedStudentRoleUnchanged: true }
+    await waitForState(client, 'original roles and unchanged draft restored after reopening',
+      `({
+        student: document.querySelector('#account-role-student')?.checked,
+        teacher: document.querySelector('#account-role-teacher')?.checked,
+        admin: document.querySelector('#account-role-admin')?.checked,
+        saveEnabled: document.querySelector('.edit-account-form button[type="submit"]')?.disabled === false,
+      })`, { student: true, teacher: false, admin: false, saveEnabled: false })
+    return { originalRolesRestored: true, saveEnabled: false }
   })
   await key(context, 'Escape', 'Escape closes the reopened editor')
   await waitForState(client, 'reopened editor closes cleanly', `document.querySelectorAll('[role="dialog"]').length`, 0)
@@ -578,6 +595,35 @@ async function waitForRosterAndProposal(context) {
   return requests
 }
 
+async function readResponse(context, pathname) {
+  const entry = [...context.errors.requests.entries()].reverse().find(([, request]) =>
+    request.method === 'GET' && new URL(request.url).pathname === pathname
+      && request.responseStatus === 200 && request.loadingFinished)
+  assert.ok(entry, 'required completed API response must be available')
+  const response = await context.client.send('Network.getResponseBody', { requestId: entry[0] })
+  return JSON.parse(response.base64Encoded ? Buffer.from(response.body, 'base64').toString('utf8') : response.body)
+}
+
+// Compare in memory only: neither private roster names/IDs nor field contents enter evidence.
+export function assertMemberAssociation({ label, labels, fields, persisted, member, memberIds, values }) {
+  const state = {
+    labelMatchesRosterIdentity: label === member.displayName,
+    labelsOmitActualMemberIds: labels.every((text) => memberIds.every((id) => !text.includes(id))),
+    fieldsMatchIdentity: fields.topic === values.topic && fields.concern === values.concern && fields.result === values.result,
+    persistedValuesMatchIdentity:
+      persisted.individualTopics?.find((entry) => entry.studentId === member.studentId)?.topic === values.topic
+      && persisted.investigationConcerns?.find((entry) => entry.studentId === member.studentId)?.text === values.concern
+      && persisted.plannedResults?.find((entry) => entry.studentId === member.studentId)?.text === values.result,
+  }
+  assert.deepEqual(state, {
+    labelMatchesRosterIdentity: true,
+    labelsOmitActualMemberIds: true,
+    fieldsMatchIdentity: true,
+    persistedValuesMatchIdentity: true,
+  }, 'displayed name and reopened contribution must match the same private roster identity')
+  return state
+}
+
 async function focusSaveThroughTabs(context) {
   for (let index = 0; index < 24; index += 1) {
     const isSave = await evaluatePage(context.client,
@@ -619,6 +665,13 @@ async function runK3(context) {
   })
   const prerequisiteRequests = await waitForRosterAndProposal(context)
   context.observations.push({ step: 'eligible and roster requests', result: prerequisiteRequests })
+  const projectId = await evaluatePage(client, `document.querySelector('#eligible-project').value`, 'read selected project for private response association')
+  const { members: roster } = await readResponse(context, `/api/projects/${projectId}/formal-application-roster`)
+  assert.equal(roster?.length, memberValues.length, 'fixture roster must contain three members')
+  assert.equal(new Set(roster.map((member) => member.studentId)).size, 3, 'roster identities must be unique')
+  assert.equal(new Set(roster.map((member) => member.displayName)).size, 3, 'fixture display names must be distinct')
+  assert.ok(roster.every((member) => typeof member.studentId === 'string' && member.studentId.length > 0
+    && typeof member.displayName === 'string' && member.displayName.length > 0), 'roster identities and names must be nonempty')
   const existingProposal = await perform(context, 'identify whether the isolated project already has a saved draft', () =>
     evaluatePage(client, `Boolean(document.querySelector('section.page .actions button'))`,
       'check for the saved proposal edit control'))
@@ -712,45 +765,54 @@ async function runK3(context) {
     await assertFocus(context, '#member-tab-0', 'reopened proposal starts at the first member tab')
     return true
   })
-  await perform(context, 'verify member labels omit identifiers and saved values map to roster order', async () => {
-    const safeNames = await evaluatePage(client, `(() => {
-      const labels = [...document.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent?.trim() ?? '');
-      return labels.length === 3 && labels.every((label) => label.length > 0
-        && !/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i.test(label));
-    })()`, 'check that rendered member labels contain no identifiers')
-    assert.equal(safeNames, true, 'member names render without student IDs')
-    await assertMemberValues(context, 0, 'reopened member one persisted contribution')
-    await key(context, 'ArrowRight', 'ArrowRight selects the second persisted member tab')
-    await assertTabState(context, 1, 'reopened member two tab state')
-    await assertMemberValues(context, 1, 'reopened member two persisted contribution')
-    await key(context, 'ArrowRight', 'ArrowRight selects the third persisted member tab')
-    await assertTabState(context, 2, 'reopened member three tab state')
-    await assertMemberValues(context, 2, 'reopened member three persisted contribution')
-    return { labelsOmitIds: true, valuesMatchRosterOrder: true, members: 3 }
-  })
+  const persisted = await readResponse(context, `/api/projects/${projectId}/formal-applications`)
+  const reopenedRoster = await readResponse(context, `/api/projects/${projectId}/formal-application-roster`)
+  for (let index = 0; index < roster.length; index += 1) {
+    if (index > 0) await key(context, 'ArrowRight', `ArrowRight selects persisted member ${index + 1}`)
+    await assertTabState(context, index, `reopened member ${index + 1} tab state`)
+    await perform(context, `reopened member ${index + 1} name and values match roster identity`, async () => {
+      const member = reopenedRoster.members[index]
+      const originalIndex = roster.findIndex((entry) => entry.studentId === member.studentId
+        && entry.displayName === member.displayName)
+      assert.ok(originalIndex >= 0, 'reopened roster identity/name must match the original roster')
+      const observed = await evaluatePage(client, `(() => {
+        const labels = [...document.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent?.trim() ?? '');
+        return {
+          label: document.querySelector('#member-tab-${index}')?.textContent?.trim() ?? '',
+          labels,
+          fields: {
+            topic: document.querySelector('#member-topic-${index}')?.value,
+            concern: document.querySelector('#member-concern-${index}')?.value,
+            result: document.querySelector('#member-result-${index}')?.value,
+          },
+        };
+      })()`, 'read private name/value association without retaining it')
+      assert.equal(observed.labels.length, roster.length, 'all roster member labels must be rendered')
+      return assertMemberAssociation({
+        ...observed, member, memberIds: roster.map((entry) => entry.studentId),
+        values: memberValues[originalIndex], persisted,
+      })
+    })
+  }
 }
 
 async function runNegativeAssertion(context) {
   const { client } = context
   await perform(context, 'focus username for deliberate wrong-focus assertion', () => focus(client, '#username', 'focus username'))
-  const wrongExpectation = await perform(context, 'deliberately expect password focus while username is focused', async () => {
-    try {
-      await assertBrowserState(client, {
-        description: 'intentional negative check: password should not be focused',
-        expression: `document.activeElement?.id ?? ''`,
-        expected: 'password',
-        timeoutMs: 250,
-        intervalMs: 25,
-      })
-    } catch (error) {
-      const message = errorDetails(error)
-      assert.match(message, /intentional negative check/)
-      assert.match(message, /expected "password", observed "username"/)
-      return { rejected: true, namedStep: true }
+  await perform(context, 'deliberately expect password focus while username is focused', async () => {
+    const expression = `document.activeElement?.id ?? ''`
+    context.failureState = {
+      expected: 'password',
+      observed: await evaluatePage(client, expression, 'observe focus before deliberate failure'),
     }
-    throw new Error('The intentionally wrong focus expectation unexpectedly passed.')
+    await assertBrowserState(client, {
+      description: 'intentional negative check: password should not be focused',
+      expression,
+      expected: 'password',
+      timeoutMs: 250,
+      intervalMs: 25,
+    })
   })
-  return { negativeAssertion: wrongExpectation }
 }
 
 export async function runBrowserCase(testCase, {
@@ -804,7 +866,6 @@ export async function runBrowserCase(testCase, {
           assert.equal(diagnostics.browserErrorCount, 0,
             `browser console or request errors were observed: ${JSON.stringify(diagnostics)}`)
         } catch (error) {
-          context.failureStep = error instanceof Error ? error.message : String(error)
           await safeScreenshot(client, outputDir, failureScreenshot)
             .then(() => { retainedScreenshot = failureScreenshot })
             .catch(() => undefined)
@@ -823,7 +884,6 @@ export async function runBrowserCase(testCase, {
       keySequence: context.keySequence,
       observations: context.observations,
       browserDiagnostics: networkSummary(context.errors),
-      ...(testCase.negative ? { negativeAssertionRejected: true } : {}),
     }
   } catch (error) {
     return {
@@ -831,6 +891,7 @@ export async function runBrowserCase(testCase, {
       viewport: testCase.viewport,
       status: 'failed',
       failureStep: sanitize(context.failureStep),
+      ...(context.failureState ? { expected: context.failureState.expected, observed: context.failureState.observed } : {}),
       error: errorDetails(error),
       ...(retainedScreenshot ? { screenshot: retainedScreenshot } : {}),
       ...(context.errors ? { browserDiagnostics: networkSummary(context.errors) } : {}),
@@ -856,8 +917,10 @@ export async function runKeyboardSuite(options, dependencies = {}) {
     if (!process.env.PREVIEW_PASSWORD) {
       throw new Error('PREVIEW_PASSWORD is required for documented testing-account browser scenarios.')
     }
-    for (let runNumber = 1; runNumber <= 2; runNumber += 1) {
-      const groups = [
+    for (let runNumber = 1; runNumber <= (options.negativeFocus ? 1 : 2); runNumber += 1) {
+      const groups = options.negativeFocus ? [[{
+        id: 'K1', viewport: 'desktop', path: '/login', negative: true,
+      }]] : [
         scenarios.slice(0, 4),
         [scenarios[4]],
         [scenarios[5]],
@@ -888,10 +951,6 @@ export async function runKeyboardSuite(options, dependencies = {}) {
           runNumber,
           caseNumber: groupIndex * 4 + index + 1,
         }))
-        if (runNumber === 1 && groupIndex === 0) {
-          cases.push({ id: 'K1', viewport: 'desktop', username: undefined, path: '/login',
-            negative: true, runNumber, caseNumber: scenarios.length + 1 })
-        }
         for (const testCase of cases) {
           const report = await execute(testCase, {
             session,
@@ -956,6 +1015,7 @@ function usage() {
 
 Usage:
   npm run test:keyboard -- --output-dir <ignored-evidence-directory> [--frontend-port N --backend-port N]
+  npm run test:keyboard -- --negative-focus --output-dir <separate-ignored-evidence-directory>
 
 Requirements:
   Node supported by the frontend dependencies, installed frontend and backend toolchains, Chrome/Chromium,
@@ -964,17 +1024,20 @@ Requirements:
   and backend ports from the configured base ports: K1/K2 share one session per repetition, while K3 desktop
   and mobile each start from their own fixture state. K3 enables only the existing opt-in Formal fixture.
   Results and text-masked screenshots are retained in the caller's evidence directory.
+  --negative-focus runs only the intentional wrong-focus check in one owned session, separate from
+  the 12-case positive matrix. It must exit nonzero with a named failed step, expected/observed focus
+  in keyboard-results.json, and a text-masked failure-diagnostic screenshot.
 `
 }
 
-async function main() {
+export async function main(args = process.argv.slice(2), dependencies = {}) {
   try {
-    const options = parseKeyboardArgs(process.argv.slice(2))
+    const options = parseKeyboardArgs(args)
     if (options.help) {
       console.log(usage())
       return
     }
-    const results = await runKeyboardSuite(options)
+    const results = await runKeyboardSuite(options, dependencies)
     console.log(`Keyboard browser suite passed: ${results.filter((entry) => entry.status === 'passed').length} scenario/viewport checks. Evidence: ${path.join(options.outputDir, 'keyboard-results.json')}`)
   } catch (error) {
     console.error(`Keyboard browser suite failed: ${errorDetails(error)}`)

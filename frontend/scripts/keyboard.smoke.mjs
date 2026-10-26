@@ -3,7 +3,9 @@ import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
+import { spawnSync } from 'node:child_process'
 import {
+  assertMemberAssociation,
   parseKeyboardArgs,
   runBrowserCase,
   runKeyboardSuite,
@@ -23,7 +25,6 @@ function passingCase(testCase) {
     screenshot: `${testCase.id}-${testCase.viewport}.png`,
     keySequence: [],
     observations: [],
-    ...(testCase.negative ? { negativeAssertionRejected: true } : {}),
   }
 }
 
@@ -35,13 +36,14 @@ test('keyboard CLI requires caller evidence and validates reusable preview ports
     backendPort: 8080,
   })
   assert.throws(() => parseKeyboardArgs([]), /--output-dir is required/)
+  assert.equal(parseKeyboardArgs(['--negative-focus', '--output-dir', '/tmp/evidence']).negativeFocus, true)
   assert.throws(() => parseKeyboardArgs(['--output-dir', '/tmp/evidence', '--frontend-port', 'bad']),
     /positive port/)
   assert.throws(() => parseKeyboardArgs(['--output-dir', '/tmp/evidence', '--frontend-port', '8080']),
     /ports must differ/)
 })
 
-test('suite runs K1-K3 at both viewports twice with proposal state isolated, plus negative assertion', async (context) => {
+test('positive suite runs only K1-K3 at both viewports twice with proposal state isolated', async (context) => {
   const outputDir = await tempEvidence(context)
   const originalPassword = process.env.PREVIEW_PASSWORD
   process.env.PREVIEW_PASSWORD = 'testing-password'
@@ -76,8 +78,8 @@ test('suite runs K1-K3 at both viewports twice with proposal state isolated, plu
     [5173, 8080], [5174, 8081], [5175, 8082],
     [5176, 8083], [5177, 8084], [5178, 8085],
   ])
-  assert.equal(cases.length, 13)
-  assert.equal(results.length, 13)
+  assert.equal(cases.length, 12)
+  assert.equal(results.length, 12)
   assert.deepEqual(cases.filter(({ negative }) => !negative).length, 12)
   for (const id of ['K1', 'K2', 'K3']) {
     for (const viewport of ['desktop', 'mobile']) {
@@ -92,13 +94,85 @@ test('suite runs K1-K3 at both viewports twice with proposal state isolated, plu
       assert.notEqual(desktopSession, mobileSession, 'K3 viewport scenarios start with isolated fixture state')
     }
   }
-  assert.equal(cases.filter(({ negative }) => negative).length, 1)
+  assert.equal(cases.filter(({ negative }) => negative).length, 0)
   const report = JSON.parse(await readFile(path.join(outputDir, 'keyboard-results.json'), 'utf8'))
   assert.equal(report.format, 'submit-frontend-keyboard-results-v1')
-  assert.equal(report.runs.length, 13)
+  assert.equal(report.runs.length, 12)
   assert.equal(JSON.stringify(report).includes('testing-password'), false)
   assert.equal(JSON.stringify(report).includes('student01'), false)
   assert.equal(JSON.stringify(report).includes('admin01'), false)
+})
+
+test('negative-focus command exits nonzero and retains named wrong-focus failure and screenshot', async (context) => {
+  const outputDir = await tempEvidence(context)
+  const moduleUrl = new URL('./keyboard.mjs', import.meta.url).href
+  // Only the CDP transport/session is mocked; execute the real assertion, browser-case, suite and CLI path.
+  const child = spawnSync(process.execPath, ['--input-type=module', '-e', `
+    import { main, runBrowserCase } from ${JSON.stringify(moduleUrl)};
+    const client = { async send(method, params) {
+      if (method === 'Runtime.evaluate') return { result: { value:
+        params.expression === "document.activeElement?.id ?? ''" ? 'username' : true } };
+      if (method === 'Page.captureScreenshot') return { data: Buffer.from('mock-png').toString('base64') };
+      throw new Error('Unexpected mock CDP method: ' + method);
+    }};
+    let starts = 0, stops = 0;
+    await main(['--negative-focus', '--output-dir', ${JSON.stringify(outputDir)}], {
+      startSession: async () => { starts++; return {}; },
+      stopSession: async () => { stops++; },
+      waitForSeeders: async () => {},
+      runCase: (testCase, options) => runBrowserCase(testCase, { ...options,
+        browserRun: async (_options, { capture }) => capture({
+          client, errors: Object.assign([], { requests: new Map() }),
+        }),
+      }),
+    });
+    if (starts !== 1 || stops !== 1) throw new Error('Negative invocation must own and clean up exactly one session');
+  `], { env: { ...process.env, PREVIEW_PASSWORD: 'testing-password' }, encoding: 'utf8' })
+  assert.equal(child.status, 1, child.stderr)
+  assert.match(child.stderr, /deliberately expect password focus while username is focused/)
+  assert.doesNotMatch(child.stdout, /suite passed/)
+  const report = JSON.parse(await readFile(path.join(outputDir, 'keyboard-results.json'), 'utf8'))
+  assert.equal(report.runs.length, 1, 'intentional failure never runs or counts the positive matrix')
+  const failed = report.runs[0]
+  assert.equal(failed.status, 'failed')
+  assert.equal(failed.failureStep, 'deliberately expect password focus while username is focused')
+  assert.equal(failed.expected, 'password')
+  assert.equal(failed.observed, 'username')
+  assert.match(failed.error, /expected "password", observed "username"/)
+  assert.match(failed.screenshot, /K1-desktop-failure-diagnostic\.png$/)
+  assert.equal(await readFile(path.join(outputDir, failed.screenshot), 'utf8'), 'mock-png')
+  assert.doesNotMatch(JSON.stringify(report), /testing-password|student01|admin01/)
+})
+
+test('member association rejects swapped names, identity/value mappings and actual IDs in labels', () => {
+  const member = { studentId: 'private-member-A', displayName: 'Synthetic member A' }
+  const values = { topic: 'topic A', concern: 'concern A', result: 'result A' }
+  const input = {
+    member, memberIds: ['private-member-A', 'private-member-B'],
+    label: member.displayName, labels: [member.displayName, 'Synthetic member B'], fields: values, values,
+    persisted: {
+      individualTopics: [{ studentId: member.studentId, topic: values.topic }],
+      investigationConcerns: [{ studentId: member.studentId, text: values.concern }],
+      plannedResults: [{ studentId: member.studentId, text: values.result }],
+    },
+  }
+  assert.deepEqual(assertMemberAssociation(input), {
+    labelMatchesRosterIdentity: true, labelsOmitActualMemberIds: true,
+    fieldsMatchIdentity: true, persistedValuesMatchIdentity: true,
+  })
+  for (const change of [
+    { label: 'Synthetic member B' },
+    { labels: [...input.labels, 'Synthetic member B private-member-B'] },
+    { fields: { ...values, topic: 'topic B' } },
+    { member: { ...member, studentId: 'private-member-B' } },
+    { persisted: { ...input.persisted, plannedResults: [{ studentId: member.studentId, text: 'result B' }] } },
+  ]) {
+    assert.throws(() => assertMemberAssociation({ ...input, ...change }), (error) => {
+      assert.match(error.message, /same private roster identity/)
+      assert.doesNotMatch(error.message, /private-member-A|private-member-B|Synthetic member|topic A|result B/)
+      return true
+    })
+  }
 })
 
 test('pre-existing session conflict is never stopped as if it belonged to the suite', async (context) => {
