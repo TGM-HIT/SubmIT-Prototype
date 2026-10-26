@@ -112,6 +112,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-54](tickets/done/Dev-54.md) | done | Consolidate duplicate review request schemas |
 | [Dev-55](tickets/Dev-55.md) | to-do | Seed a synthetic grading rubric for testing |
 | [Dev-56](tickets/Dev-56.md) | to-do | Correct the backend Java namespace |
+| [Dev-57](tickets/Dev-57.md) | to-do | Run PostgreSQL and pgAdmin in Docker Compose |
 
 ### Agents
 
