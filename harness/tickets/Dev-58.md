@@ -1,0 +1,54 @@
+# Dev-58. Automate frontend browser keyboard navigation tests
+
+## Intent
+
+Provide repeatable automated tests of actual frontend keyboard navigation in Chrome/Chromium, rather than relying on component-dispatched events or repeated human walkthroughs. Build on the existing Chrome/CDP preview tool, with initial browser regression coverage for ordinary pages, shared dialogs, and student Formal proposal tabs.
+
+## Source
+
+Owner request: "Implement automated keyboard navigation testing of the frontend."
+
+Current prior art is `frontend/scripts/preview.mjs`, `frontend/scripts/preview.smoke.mjs`, `frontend/src/components/ModalDialog.vue`, and `frontend/DEV-GUIDELINES.md`. Ordered keyboard steps currently accept only Tab, Shift+Tab, and Escape. Tab unconditionally checks dialog containment, even on a non-dialog page; Escape unconditionally expects a dialog to close. Existing component tests and mocked preview tests do not establish real-browser interaction. The initial tab scenario reuses the fixture documented by [Bug-31](done/Bug-31.md); this ticket does not reopen that accepted ticket or alter its records.
+
+## Scope and contract
+
+- Extend the existing preview tooling, without adding dependencies or a second browser framework, to send actual CDP keyboard input for Tab, Shift+Tab, Escape, Enter, Space, ArrowLeft, ArrowRight, ArrowUp, ArrowDown, Home, and End. Supply correct key-down/key-up metadata and modifier handling. Validate unsupported input explicitly.
+- Separate generic key dispatch from assertions about page state. Ordinary page Tab/Shift+Tab must not require a dialog, and ordinary Escape must not require a dialog to close. Retain explicit dialog containment/close assertions in the dialog scenarios so this correction does not weaken their coverage. Preserve existing documented preview options and native-select behavior.
+- Add reusable ordered assertions for the actual focused element, selected tab and associated active panel, and expected field values/state. Use existing selectors and stable accessible semantics; bounded waits must accommodate asynchronous rendering. A focus assertion must read browser focus, not set it to make the assertion pass. Setup may focus a starting control and fill synthetic text, but subsequent navigation/activation under test must use keys, not mouse clicks, direct handler calls, synthetic DOM KeyboardEvents, or assignment to selection state.
+- Expose a documented frontend npm command `npm run test:keyboard` that runs the real-browser scenario suite through the existing preview/session lifecycle. Keep `npm test` and `npm run preview:test` runnable without Chrome; do not label their mocked/component checks real-browser evidence. The new command requires Chrome/Chromium and the existing local testing toolchains, returns nonzero on an assertion/setup/browser failure, and reports unavailable prerequisites explicitly rather than skipping or returning success.
+- Initial required suite: the three scenarios K1-K3 below, each at desktop and 390px mobile width. This is reusable frontend keyboard-testing infrastructure with a bounded initial regression suite, not an exhaustive accessibility certification or audit of every frontend screen.
+- Reuse the ordinary documented testing accounts and the existing opt-in Formal proposal fixture. Start isolated disposable testing sessions, wait for seeders and dependent requests, and stop only owned helpers on success or failure. Do not change ordinary seed data, credentials, account counts, production behavior, or authentication policy. Do not require OS-level native select popup permissions for these page-level tests; keep the existing explicit native-popup workflow separate.
+- Record named scenario, viewport, key sequence, expected/observed focus and relevant selection/value state, and failure step. Retain sanitized machine-readable results and useful failure screenshots under the caller's ignored evidence directory. Exclude credentials, authentication payloads, tokens, and private data. Missing selectors, timeouts, failed assertions and unrelated application errors must be explicit failures, not passing screenshot captures.
+- Update `frontend/DEV-GUIDELINES.md` and CLI help with commands, prerequisites, scenario/fixture setup, evidence interpretation, cleanup and the distinction between component, real-browser and genuinely human-only testing. No harness-contract changes, backend/API changes, generated contract changes, new product requirements, or root-route fix are in scope. [Bug-32](Bug-32.md) owns the reported root-page issue; use direct `/login` in K1.
+- Comparison baseline: the pre-implementation preview options and existing application behavior. Hold routes, accounts, fixtures and existing interaction contracts constant; vary only reusable keyboard dispatch/assertion tooling and automated coverage. Required implementation paths are within `frontend/scripts/`, `frontend/package.json`, and `frontend/DEV-GUIDELINES.md`, already permitted by the scope gate.
+
+## Mechanical checks (the Evaluator re-runs)
+
+Durable automated tests (join the build):
+
+- **T1 — dispatch and assertions:** extend `preview.smoke.mjs` under `npm run preview:test` to cover every supported key's CDP down/up metadata, Shift modifier, unsupported-key rejection, explicit failed assertions and bounded timeouts. Cover Tab/Shift+Tab/Escape with no dialog, dialog containment/closing checks, and retained legacy/native-select option semantics. Include a deliberately wrong expected focus/state and prove nonzero failure rather than silent continuation.
+- **T2 — runner lifecycle/reporting:** durable Node tests cover scenario/viewport execution, missing Chrome/setup failure, failed browser assertion, cleanup after success and failure, owned-vs-pre-existing processes, and sanitized result generation. Prove a failing scenario prevents a success result and identifies the precise step; mocks establish runner behavior only.
+- **K1 — ordinary login page:** in a real browser at `/login`, start at username; Tab to password and Shift+Tab back, checking actual focus and no false dialog error. Verify Escape leaves the usable page intact without a false dialog-close error. Fill documented testing credentials without retaining them and activate login by Enter; require successful authentication and the existing authenticated landing state. No root-redirect claim is made.
+- **K2 — shared account editor dialog:** as `admin01` at `/admin`, wait for the users response and use the existing account editor for `student01`. From its opener activate with Enter, assert initial dialog focus, then verify forward/backward wrapping between its first and last focusable controls. Toggle a focused role checkbox with Space and assert its draft state changes. Escape closes without saving, returns focus to the opener and makes no update request; reopening proves the persisted roles were not changed. Use API-returned identity/row selectors, not a hard-coded account UUID.
+- **K3 — Formal proposal member tabs:** as `student01` with `DADB_TESTING_ELIGIBLE_FORMAL_PROJECT_PREVIEW=true`, open `/formal-application`, select **New proposal — 2027/2028** after eligible projects load, and wait for its private roster. Start the proposal and assert initial first-tab focus. ArrowRight/ArrowLeft/Home/End must move focus, selected state and associated panel together. Tab/Shift+Tab must enter/leave the active contribution fields without a dialog assumption. Fill distinct member contributions and verify values survive switching. Save a complete valid draft, assert heading focus and saved status, reload/reselect/reopen, and assert values remain under the right names with no member IDs in rendered labels. The eligible-project, roster and proposal requests must complete successfully; do not bypass a failed prerequisite.
+- Execute K1-K3 through `npm run test:keyboard` at both viewports, checking live browser state rather than only logs/screenshots. Run twice against newly isolated sessions to prove repeatability without previous run state.
+
+Standard project checks:
+
+- From `frontend/`: `npm run preview:test`, `npm run typecheck`, `npm test`, `npm run build`, and `npm run test:keyboard`.
+- Review CLI help and the developer-guide commands against implemented options and execute the documented keyboard command. Run `git diff --check`.
+- Backend tests, Checkstyle and API/type generation are not required for this frontend-tooling-only ticket. No backend changes are authorized.
+
+## One-time manual verification (in addition to automated tests)
+
+- **Implementor-performed:** Run the documented browser suite and inspect its results plus representative desktop/mobile captures. Confirm results show actual key/focus transitions for K1-K3, not merely successful page loads. Intentionally request an incorrect focus expectation through the reusable assertion path; verify failure exit, named failing step and retained diagnostic evidence. This is automation verification, not a requirement for a human to repeat every key sequence.
+- Use the existing testing credentials and fixture activation documented in `backend/DEV-GUIDELINES.md`; no new fixture or manual database setup is necessary. Retain evidence under `harness/runs/<run-id>/evidence/`. If Chrome cannot launch or a setup/request fails, report the exact command and sanitized error/URL; do not replace a real-browser result with a component/mock pass or a different fixture.
+- Static screenshots support visual inspection only. OS-native popup interactions, assistive-technology behavior and personal visual judgments remain outside this initial automated suite.
+
+## Acceptance criteria (the Evaluator judges)
+
+1. The reusable tooling sends the supported keys through real browser input and asserts focus/selection/value outcomes on ordinary pages and dialogs without imposing dialog-only assumptions (T1, K1-K3).
+2. The documented browser command runs and reports all three initial scenarios at both widths, twice from isolated state, with the correct login, dialog cancel/focus, tab navigation, contribution preservation and save/reopen outcomes (K1-K3).
+3. Invalid keys, missing prerequisites, timeouts and wrong expected states fail explicitly with sanitized step-level evidence; success/failure cleanup affects only owned processes (T1, T2 and the deliberate failing assertion).
+4. Existing preview/native-select commands and application/authentication/fixture behavior remain as specified by the comparison baseline; no new dependency, backend change, root-route fix or accepted-run rewrite is introduced (T1, K1-K3, existing suites and scoped diff review).
+5. CLI help, developer guidance and npm commands agree with the resulting tool. All applicable standard checks pass; unavailable browser runs are reported unverified, never passed.
