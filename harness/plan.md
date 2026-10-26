@@ -114,7 +114,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-55](tickets/Dev-55.md) | to-do | Seed a synthetic grading rubric for testing |
 | [Dev-56](tickets/Dev-56.md) | to-do | Correct the backend Java namespace |
 | [Dev-57](tickets/Dev-57.md) | to-do | Run PostgreSQL and pgAdmin in Docker Compose |
-| [Dev-58](tickets/Dev-58.md) | to-do | Automate frontend browser keyboard navigation tests |
+| [Dev-58](tickets/done/Dev-58.md) | done | Automate frontend browser keyboard navigation tests |
 
 ### Agents
 
