@@ -130,6 +130,61 @@ class IdeaOwnershipControllerTest {
     }
 
     @Test
+    void populatedIdeaListsAndDetailsCompareStudentOwnersAndAllStaffRoleSets() throws Exception {
+        var teacherAccount = users.findByUsername("teacher01").orElseThrow();
+        List<ac.at.tgm.submit.security.Role> originalRoles = teacherAccount.getRoles();
+        try {
+            setRoles(teacherAccount.getId().toString(), List.of("TEACHER"));
+            String singletonTeacher = login("teacher01");
+            String uniqueYear = "2098/2099";
+            String firstId = createFor(creatorToken, uniqueYear, List.of(collaboratorId));
+            String secondId = createFor(collaboratorToken, uniqueYear, List.of());
+            Map<String, Object> teacherIdeaRequest = new HashMap<>(idea("Teacher-owned list entry"));
+            teacherIdeaRequest.put("schoolYear", uniqueYear);
+            MvcResult teacherCreated = mockMvc.perform(post("/api/ideas").header("Authorization", bearer(singletonTeacher))
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(teacherIdeaRequest)))
+                    .andExpect(status().isCreated()).andReturn();
+            String teacherIdeaId = objectMapper.readTree(teacherCreated.getResponse().getContentAsByteArray())
+                    .path("id").asText();
+            setRoles(teacherAccount.getId().toString(), List.of("TEACHER", "ADMIN"));
+            String dual = login("teacher01");
+            String studentToAdd = users.findByUsername("student03").orElseThrow().getId().toString();
+            for (org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder denied : List.of(
+                    post("/api/ideas/{id}/owners", teacherIdeaId).contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(Map.of("studentId", studentToAdd))),
+                    delete("/api/ideas/{id}/owners/{studentId}", teacherIdeaId, studentToAdd),
+                    delete("/api/ideas/{id}/owners/me", teacherIdeaId))) {
+                List<String> before = ideaAndAuditSnapshot(teacherIdeaId);
+                mockMvc.perform(denied.header("Authorization", bearer(dual))).andExpect(status().isForbidden());
+                assertEquals(before, ideaAndAuditSnapshot(teacherIdeaId),
+                        "A dual-role idea creator remains barred from student-only owner operations.");
+            }
+
+            Map<String, String> yearFilter = Map.of("size", "100", "schoolYear", uniqueYear);
+            assertEquals(Set.of(firstId), ids(ideaList(creatorToken, yearFilter)));
+            assertEquals(Set.of(firstId, secondId), ids(ideaList(collaboratorToken, yearFilter)));
+            for (String staff : List.of(singletonTeacher, adminToken, dual)) {
+                assertEquals(Set.of(firstId, secondId, teacherIdeaId),
+                        ids(ideaList(staff, yearFilter)));
+                getIdea(firstId, staff).andExpect(status().isOk())
+                        .andExpect(jsonPath("$.id").value(firstId));
+                getIdea(teacherIdeaId, staff).andExpect(status().isOk())
+                        .andExpect(jsonPath("$.id").value(teacherIdeaId));
+            }
+            getIdea(firstId, creatorToken).andExpect(status().isOk());
+            getIdea(firstId, collaboratorToken).andExpect(status().isOk());
+            getIdea(secondId, collaboratorToken).andExpect(status().isOk());
+            getIdea(firstId, outsiderToken).andExpect(status().isForbidden());
+            getIdea(secondId, outsiderToken).andExpect(status().isForbidden());
+            getIdea(teacherIdeaId, creatorToken).andExpect(status().isForbidden());
+        } finally {
+            teacherAccount.setRoles(originalRoles);
+            users.saveAndFlush(teacherAccount);
+        }
+    }
+
+    @Test
     void responseContractEmitsRequiredIdeaFieldsAndNullSpecification() throws Exception {
         String id = create(List.of());
 
@@ -744,6 +799,18 @@ class IdeaOwnershipControllerTest {
                         || hasStoredOwner(record, ownerId))
                 .map(record -> record.getId().toString())
                 .collect(java.util.stream.Collectors.toSet());
+    }
+
+    private List<String> ideaAndAuditSnapshot(String ideaId) {
+        UUID id = UUID.fromString(ideaId);
+        return records.repository().findAll().stream()
+                .filter(record -> ("idea".equals(record.getType()) && id.equals(record.getId()))
+                        || (List.of("idea_owner", "audit").contains(record.getType())
+                                && (ideaId.equals(record.getParentId()) || ideaId.equals(record.getOwnerId()))))
+                .map(record -> record.getType() + "|" + record.getId() + "|" + record.getOwnerId() + "|"
+                        + record.getParentId() + "|" + record.getReferenceType() + "|" + record.getStatus()
+                        + "|" + record.getPayload())
+                .sorted().toList();
     }
 
     private boolean hasStoredOwner(StoredRecord record, UUID ownerId) {

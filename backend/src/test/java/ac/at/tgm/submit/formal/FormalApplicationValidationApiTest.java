@@ -291,6 +291,82 @@ class FormalApplicationValidationApiTest {
     }
 
     @Test
+    void submittedFormalReviewAllowsTeacherAndDualButRejectsAdminAndStudentWithoutEffects() throws Exception {
+        String teacherId = users.findByUsername("teacher01").orElseThrow().getId().toString();
+        setRoles(teacherId, List.of("TEACHER"));
+        String singletonTeacher = login("teacher01");
+        setRoles(teacherId, List.of("TEACHER", "ADMIN"));
+        String dual = login("teacher01");
+
+        for (String caller : List.of(studentToken, adminToken, singletonTeacher, dual)) {
+            UUID projectId = createAllocatedProject();
+            MvcResult created = submitCreate(projectId, validRequest(), studentToken)
+                    .andExpect(status().isCreated()).andReturn();
+            UUID applicationId = UUID.fromString(objectMapper.readTree(created.getResponse().getContentAsByteArray())
+                    .path("id").asText());
+            mockMvc.perform(post("/api/formal-applications/{id}/submit", applicationId)
+                            .header("Authorization", bearer(studentToken)))
+                    .andExpect(status().isOk());
+            List<RecordSnapshot> before = persistedState(projectId, applicationId);
+            List<RecordSnapshot> auditBefore = allAuditSnapshots();
+            int expected = caller.equals(singletonTeacher) || caller.equals(dual) ? 201 : 403;
+            MvcResult result = mockMvc.perform(post("/api/formal-applications/{id}/reviews", applicationId)
+                            .header("Authorization", bearer(caller)).contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(Map.of(
+                                    "decision", "APPROVE", "feedback", "Approved through role matrix."))))
+                    .andExpect(status().is(expected)).andReturn();
+            if (expected == 403) {
+                assertEquals(before, persistedState(projectId, applicationId));
+                assertEquals(auditBefore, allAuditSnapshots());
+                assertEquals("SUBMITTED", records.findById(applicationId).orElseThrow().getStatus());
+            } else {
+                assertEquals("APPROVED", records.findById(applicationId).orElseThrow().getStatus());
+                JsonNode response = objectMapper.readTree(result.getResponse().getContentAsByteArray());
+                assertTrue(response.path("id").isTextual());
+                UUID reviewId = UUID.fromString(response.path("id").textValue());
+                StoredRecord review = records.findById(reviewId).orElseThrow();
+                assertEquals("formal_application_review", review.getType());
+                assertEquals(applicationId.toString(), review.getParentId());
+            }
+        }
+        setRoles(teacherId, List.of("TEACHER"));
+    }
+
+    @Test
+    void formalApplicationProjectReadUsesPersistedMemberRelationshipAndAllStaffRoleSets() throws Exception {
+        UUID projectId = createAllocatedProject();
+        MvcResult created = submitCreate(projectId, validRequest(), studentToken)
+                .andExpect(status().isCreated()).andReturn();
+        JsonNode createResponse = objectMapper.readTree(created.getResponse().getContentAsByteArray());
+        UUID applicationId = UUID.fromString(createResponse.path("id").asText());
+        String teacherId = users.findByUsername("teacher01").orElseThrow().getId().toString();
+        setRoles(teacherId, List.of("TEACHER"));
+        String teacher = login("teacher01");
+        setRoles(teacherId, List.of("TEACHER", "ADMIN"));
+        String dual = login("teacher01");
+
+        List<String> allowed = List.of(studentToken, login("student02"), teacher, adminToken, dual);
+        for (String token : allowed) {
+            JsonNode response = objectMapper.readTree(mockMvc.perform(get(
+                            "/api/projects/{projectId}/formal-applications", projectId)
+                            .header("Authorization", bearer(token)))
+                    .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray());
+            assertEquals(applicationId.toString(), response.path("id").textValue());
+            assertEquals(projectId.toString(), response.path("projectId").textValue());
+            assertEquals("DRAFT", response.path("status").textValue());
+            assertEquals(validRequest().path("topic").textValue(), response.path("topic").textValue());
+            assertEquals(3, response.path("individualTopics").size());
+        }
+        for (String token : List.of(outsiderToken)) {
+            mockMvc.perform(get("/api/projects/{projectId}/formal-applications", projectId)
+                            .header("Authorization", bearer(token)))
+                    .andExpect(status().isForbidden());
+        }
+        assertEquals("DRAFT", records.findById(applicationId).orElseThrow().getStatus());
+        setRoles(teacherId, List.of("TEACHER"));
+    }
+
+    @Test
     @DirtiesContext(methodMode = DirtiesContext.MethodMode.AFTER_METHOD)
     void reviewSchemaConsolidationPreservesTextAndDecisionValidation() throws Exception {
         Map<String, String> invalidStrings = new LinkedHashMap<>();

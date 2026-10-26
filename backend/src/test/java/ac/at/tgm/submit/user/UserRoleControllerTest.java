@@ -13,6 +13,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import ac.at.tgm.submit.security.AuthenticatedUser;
 import ac.at.tgm.submit.security.JwtService;
 import ac.at.tgm.submit.security.Role;
+import ac.at.tgm.submit.data.RecordStore;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -37,6 +38,8 @@ class UserRoleControllerTest {
     private ObjectMapper objectMapper;
     @Autowired
     private StudentClassRepository classes;
+    @Autowired
+    private RecordStore store;
 
     private UserAccount admin;
     private UserAccount anotherAdmin;
@@ -116,25 +119,29 @@ class UserRoleControllerTest {
         mockMvc.perform(get("/api/users").header("Authorization", bearer(admin))).andExpect(status().isOk());
         mockMvc.perform(get("/api/users").header("Authorization", "Bearer " + dualToken)).andExpect(status().isOk());
 
-        List<Role> unchangedStudentRoles = users.findById(student.getId()).orElseThrow().getRoles();
+        List<Role> unchangedTargetRoles = users.findById(anotherAdmin.getId()).orElseThrow().getRoles();
+        List<String> unchangedAudit = auditSnapshot();
         for (String token : List.of(teacherOnlyToken, studentToken)) {
-            mockMvc.perform(patch("/api/users/{id}/role", student.getId())
+            mockMvc.perform(patch("/api/users/{id}/role", anotherAdmin.getId())
                             .header("Authorization", "Bearer " + token).contentType(MediaType.APPLICATION_JSON)
-                            .content(rolesRequest(List.of(Role.TEACHER))))
+                            .content(rolesRequest(List.of(Role.TEACHER, Role.ADMIN))))
                     .andExpect(status().isForbidden());
-            assertEquals(unchangedStudentRoles, users.findById(student.getId()).orElseThrow().getRoles());
+            assertEquals(unchangedTargetRoles, users.findById(anotherAdmin.getId()).orElseThrow().getRoles());
+            assertEquals(unchangedAudit, auditSnapshot());
         }
-        mockMvc.perform(patch("/api/users/{id}/role", student.getId()).header("Authorization", bearer(admin))
-                        .contentType(MediaType.APPLICATION_JSON).content(rolesRequest(List.of(Role.TEACHER))))
-                .andExpect(status().isOk());
-        assertEquals(List.of(Role.TEACHER), users.findById(student.getId()).orElseThrow().getRoles());
-
-        mockMvc.perform(patch("/api/users/{id}/role", anotherAdmin.getId())
-                        .header("Authorization", "Bearer " + dualToken).contentType(MediaType.APPLICATION_JSON)
-                        .content(rolesRequest(List.of(Role.TEACHER, Role.ADMIN))))
-                .andExpect(status().isOk());
+        for (String token : List.of(bearer(admin), "Bearer " + dualToken)) {
+            mockMvc.perform(patch("/api/users/{id}/role", anotherAdmin.getId())
+                            .header("Authorization", token).contentType(MediaType.APPLICATION_JSON)
+                            .content(rolesRequest(List.of(Role.TEACHER, Role.ADMIN))))
+                    .andExpect(status().isOk());
+        }
         assertEquals(List.of(Role.TEACHER, Role.ADMIN),
                 users.findById(anotherAdmin.getId()).orElseThrow().getRoles());
+    }
+
+    private List<String> auditSnapshot() {
+        return store.repository().findAll().stream().filter(record -> "audit".equals(record.getType()))
+                .map(record -> record.getId() + ":" + record.getPayload()).sorted().toList();
     }
 
     @Test

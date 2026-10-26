@@ -38,6 +38,7 @@ class AccountNameControllerTest {
     private UserAccount admin;
     private UserAccount teacher;
     private UserAccount student;
+    private UserAccount otherStudent;
 
     @BeforeEach
     void setUp() {
@@ -45,7 +46,9 @@ class AccountNameControllerTest {
         admin = user("admin", Role.ADMIN);
         teacher = user("teacher", Role.TEACHER);
         student = user("student", Role.STUDENT);
+        otherStudent = user("other-student", Role.STUDENT);
         users.saveAll(List.of(admin, teacher, student));
+        users.save(otherStudent);
     }
 
     @Test
@@ -196,6 +199,31 @@ class AccountNameControllerTest {
     }
 
     @Test
+    void adminAndDualRoleRenameTheSameOtherAccountWhileDeniedRolesLeaveNameAndAuditUnchanged() throws Exception {
+        teacher.setRoles(List.of(Role.TEACHER, Role.ADMIN));
+        users.saveAndFlush(teacher);
+        String teacherOnly = jwtService.issueToken(
+                new AuthenticatedUser(teacher.getId(), teacher.getUsername(), List.of(Role.TEACHER)));
+        String dual = jwtService.issueToken(
+                new AuthenticatedUser(teacher.getId(), teacher.getUsername(), List.of(Role.TEACHER, Role.ADMIN)));
+        for (String token : List.of(bearer(admin), "Bearer " + dual)) {
+            updateWithToken(token, student.getId(), "Equivalent admin rename")
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.displayName").value("Equivalent admin rename"));
+        }
+        int auditBefore = auditCount();
+        String otherStudentToken = bearer(otherStudent);
+        for (String token : List.of("Bearer " + teacherOnly, otherStudentToken)) {
+            updateWithToken(token, student.getId(), "Forbidden rename").andExpect(status().isForbidden());
+            org.junit.jupiter.api.Assertions.assertEquals("Equivalent admin rename",
+                    users.findById(student.getId()).orElseThrow().getDisplayName());
+            org.junit.jupiter.api.Assertions.assertEquals(auditBefore, auditCount());
+        }
+        updateWithToken("Bearer " + dual, teacher.getId(), "Dual own name")
+                .andExpect(status().isOk()).andExpect(jsonPath("$.displayName").value("Dual own name"));
+    }
+
+    @Test
     void invalidUpdateIsRejectedWithoutChangingSavedName() throws Exception {
         update(student, student, " \t ").andExpect(status().isBadRequest());
         update(student, student, "n".repeat(121)).andExpect(status().isBadRequest());
@@ -225,6 +253,17 @@ class AccountNameControllerTest {
             request.header("Authorization", bearer(caller));
         }
         return mockMvc.perform(request);
+    }
+
+    private org.springframework.test.web.servlet.ResultActions updateWithToken(String token, UUID targetId,
+            String name) throws Exception {
+        return mockMvc.perform(patch("/api/users/{id}", targetId).header("Authorization", token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(java.util.Map.of("displayName", name))));
+    }
+
+    private int auditCount() {
+        return (int) records.findAll().stream().filter(record -> "audit".equals(record.getType())).count();
     }
 
     private UserAccount user(String username, Role role) {

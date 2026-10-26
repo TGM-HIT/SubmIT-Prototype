@@ -1,6 +1,7 @@
 package ac.at.tgm.submit.archive;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -239,6 +240,151 @@ class ProjectWorkApprovalApiTest {
         assertArtifactAuditEvent(rejected, "ARTIFACT_PUBLICATION_REJECT");
         assertArtifactAuditEvent(unpublished, "ARTIFACT_PUBLICATION_UNPUBLISH");
         assertArtifactAuditEvent(removed, "ARTIFACT_REMOVED");
+    }
+
+    @Test
+    void artifactRoutesUseProjectMembershipAndUploaderConditionsWithPopulatedFixtures() throws Exception {
+        UUID project = project("IN_PROGRESS");
+        String secondToken = login("student02").path("token").asText();
+        UUID secondStudent = UUID.fromString(login("student02").path("user").path("id").asText());
+        UUID outsiderId = UUID.fromString(login("student04").path("user").path("id").asText());
+        StoredRecord group = store.repository().findFirstByTypeAndParentIdOrderByCreatedAtDesc(
+                "project_group", project.toString()).orElseThrow();
+        var groupPayload = store.parse(group);
+        groupPayload.putArray("studentIds").add(studentId.toString()).add(secondStudent.toString());
+        store.update(group, group.getStatus(), groupPayload);
+        store.create("formal_application", studentId.toString(), project.toString(), "APPROVED", store.object());
+        StoredRecord readableArtifact = createStudentArtifact(project, studentId);
+        String artifactId = readableArtifact.getId().toString();
+
+        var teacherAccount = users.findByUsername("teacher01").orElseThrow();
+        teacherAccount.setRoles(List.of(Role.TEACHER, Role.ADMIN));
+        users.saveAndFlush(teacherAccount);
+        String dual = login("teacher01").path("token").asText();
+        List<String> staff = List.of(teacher, admin, dual);
+
+        JsonNode metadata = read(get("/api/artifacts/{id}", artifactId), secondToken);
+        assertText(metadata, "id", artifactId);
+        MvcResult nonUploaderContent = mvc.perform(bearer(get("/api/artifacts/{id}/content", artifactId), secondToken))
+                .andExpect(status().isOk()).andReturn();
+        assertArrayEquals(FILE, nonUploaderContent.getResponse().getContentAsByteArray());
+        JsonNode memberList = read(get("/api/projects/{id}/artifacts", project), secondToken);
+        assertTrue(containsRecordId(memberList.path("content"), artifactId),
+                "A project member who did not upload the artifact sees the populated project list.");
+        for (String token : staff) {
+            assertText(read(get("/api/artifacts/{id}", artifactId), token), "id", artifactId);
+            assertArrayEquals(FILE, mvc.perform(bearer(get("/api/artifacts/{id}/content", artifactId), token))
+                    .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray());
+            assertTrue(containsRecordId(read(get("/api/projects/{id}/artifacts", project), token)
+                    .path("content"), artifactId));
+        }
+        for (String path : List.of("/api/artifacts/" + artifactId,
+                "/api/artifacts/" + artifactId + "/content",
+                "/api/projects/" + project + "/artifacts")) {
+            mvc.perform(bearer(get(path), login("student04").path("token").asText()))
+                    .andExpect(status().isForbidden());
+        }
+
+        for (String token : List.of(secondToken, teacher, admin, dual)) {
+            String uploadedId = createdId(artifactUpload(project, token));
+            JsonNode listed = read(get("/api/projects/{id}/artifacts", project), token);
+            assertTrue(containsRecordId(listed.path("content"), uploadedId),
+                    "A permitted member/staff upload must be visible in the project artifact list.");
+        }
+        Map<String, List<String>> beforeDeniedUpload = projectSnapshot(project);
+        artifactUpload(project, login("student04").path("token").asText())
+                .andExpect(status().isForbidden());
+        assertEquals(beforeDeniedUpload, projectSnapshot(project),
+                "A non-member upload must not create an artifact or audit event.");
+
+        Map<String, List<String>> beforeDeniedDelete = projectSnapshot(project);
+        for (String token : List.of(secondToken, login("student04").path("token").asText())) {
+            mvc.perform(bearer(delete("/api/artifacts/{id}", artifactId), token))
+                    .andExpect(status().isForbidden());
+            assertEquals(beforeDeniedDelete, projectSnapshot(project),
+                    "A non-uploader member or nonmember delete must preserve artifact and audit state.");
+        }
+        mvc.perform(bearer(delete("/api/artifacts/{id}", artifactId), student))
+                .andExpect(status().isNoContent());
+        assertTrue(store.repository().findById(readableArtifact.getId()).isEmpty());
+        for (String token : staff) {
+            StoredRecord staffDeletable = createStudentArtifact(project, studentId);
+            mvc.perform(bearer(delete("/api/artifacts/{id}", staffDeletable.getId()), token))
+                    .andExpect(status().isNoContent());
+            assertTrue(store.repository().findById(staffDeletable.getId()).isEmpty());
+        }
+    }
+
+    @Test
+    void artifactPublicationSubmitUsesProjectAccessWhileTeacherDecisionsRequireTeacherMembership() throws Exception {
+        UUID project = project("IN_PROGRESS");
+        approveFormalApplicationThroughTeacherReview(project);
+        var teacherAccount = users.findByUsername("teacher01").orElseThrow();
+        teacherAccount.setRoles(List.of(Role.TEACHER, Role.ADMIN));
+        users.saveAndFlush(teacherAccount);
+        String dual = login("teacher01").path("token").asText();
+
+        for (String caller : List.of(student, teacher, admin, dual)) {
+            StoredRecord artifact = createStudentArtifact(project, studentId);
+            MvcResult submitted = request(post("/api/artifacts/{id}/publication-review", artifact.getId()),
+                    caller, Map.of("decision", "SUBMIT")).andExpect(status().isOk()).andReturn();
+            assertEquals("PENDING_REVIEW", mapper.readTree(submitted.getResponse().getContentAsByteArray())
+                    .path("publicationStatus").textValue());
+            assertEquals("PENDING_REVIEW", store.repository().findById(artifact.getId()).orElseThrow().getStatus());
+        }
+
+        for (String decision : List.of("APPROVE", "REJECT", "UNPUBLISH")) {
+            String initialStatus = "UNPUBLISH".equals(decision) ? "APPROVED" : "PENDING_REVIEW";
+            String expectedStatus = switch (decision) {
+                case "APPROVE" -> "APPROVED";
+                case "REJECT" -> "REJECTED";
+                case "UNPUBLISH" -> "PRIVATE";
+                default -> throw new IllegalArgumentException(decision);
+            };
+            for (String denied : List.of(admin, student)) {
+                StoredRecord artifact = createArtifact(project, ArtifactType.POSTER, initialStatus);
+                Map<String, List<String>> before = projectSnapshot(project);
+                MvcResult result = request(post("/api/artifacts/{id}/publication-review", artifact.getId()),
+                        denied, Map.of("decision", decision)).andExpect(status().isForbidden()).andReturn();
+                assertError(result, 403);
+                assertEquals(before, projectSnapshot(project),
+                        decision + " denial must preserve artifact payload/status and complete audit history.");
+            }
+            for (String allowed : List.of(teacher, dual)) {
+                StoredRecord artifact = createArtifact(project, ArtifactType.POSTER, initialStatus);
+                JsonNode response = mapper.readTree(request(
+                        post("/api/artifacts/{id}/publication-review", artifact.getId()), allowed,
+                        Map.of("decision", decision)).andExpect(status().isOk()).andReturn()
+                        .getResponse().getContentAsByteArray());
+                assertEquals(expectedStatus, response.path("publicationStatus").textValue());
+                assertEquals(expectedStatus, store.repository().findById(artifact.getId()).orElseThrow().getStatus());
+            }
+        }
+    }
+
+    @Test
+    void validProjectCompletionIsTeacherAndDualOnlyWithDeniedStateAndAuditPreserved() throws Exception {
+        var teacherAccount = users.findByUsername("teacher01").orElseThrow();
+        teacherAccount.setRoles(List.of(Role.TEACHER, Role.ADMIN));
+        users.saveAndFlush(teacherAccount);
+        String dual = login("teacher01").path("token").asText();
+        for (String caller : List.of(student, admin, teacher, dual)) {
+            UUID project = project("IN_PROGRESS");
+            prepare("complete", project);
+            approveFormalApplicationThroughTeacherReview(project);
+            Map<String, List<String>> before = projectSnapshot(project);
+            int expected = caller.equals(student) || caller.equals(admin) ? 403 : 200;
+            MvcResult result = mvc.perform(bearer(post("/api/projects/{id}/complete", project), caller))
+                    .andExpect(status().is(expected)).andReturn();
+            if (expected == 403) {
+                assertError(result, 403);
+                assertEquals(before, projectSnapshot(project));
+            } else {
+                assertEquals("PROJECT_COMPLETED", store.repository().findById(project).orElseThrow().getStatus());
+                assertEquals("PROJECT_COMPLETED", mapper.readTree(result.getResponse().getContentAsByteArray())
+                        .path("status").textValue());
+            }
+        }
     }
 
     private UUID uploadArtifact(UUID project) throws Exception {
@@ -513,6 +659,26 @@ class ProjectWorkApprovalApiTest {
                 .put("publicationStatus", publicationStatus).put("filename", "fixture.bin")
                 .put("description", "Fixture").put("uploadedAt", java.time.Instant.now().toString());
         return store.create("artifact", teacherId, project.toString(), publicationStatus, payload);
+    }
+
+    private StoredRecord createStudentArtifact(UUID project, UUID uploader) {
+        var payload = store.object().put("type", ArtifactType.POSTER.name()).put("title", "Member poster")
+                .put("content", java.util.Base64.getEncoder().encodeToString(FILE))
+                .put("contentType", MediaType.IMAGE_PNG_VALUE).put("size", FILE.length)
+                .put("publicationStatus", "PRIVATE").put("filename", "member-poster.png")
+                .put("description", "Membership authorization fixture")
+                .put("uploadedAt", Instant.now().toString());
+        return store.create("artifact", uploader.toString(), project.toString(), "PRIVATE", payload);
+    }
+
+    private boolean containsRecordId(JsonNode entries, String expectedId) {
+        assertTrue(entries.isArray(), "Artifact content must be a populated array.");
+        for (JsonNode entry : entries) {
+            if (entry.path("id").isTextual() && expectedId.equals(entry.path("id").textValue())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private UUID project(String status) {

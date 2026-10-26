@@ -305,13 +305,28 @@ class ApplyingGroupApiTest {
             perform(get(path()), actors[i], null, i == 7 ? 401 : 200);
             perform(get(path() + "/" + id), actors[i], null, read[i]);
             perform(get(path() + "/" + id + "/invitations"), actors[i], null, invites[i]);
-            String beforeDeniedAction = stored(id).getPayload();
-            long auditsBeforeDeniedAction = auditCount();
-            perform(post(path() + "/" + id + "/actions/APPROVE"), actors[i],
-                    Map.of("revision", revision(id)), approve[i]);
-            if (i >= 4 && i <= 6) {
-                assertEquals(beforeDeniedAction, stored(id).getPayload());
-                assertEquals(auditsBeforeDeniedAction, auditCount());
+            if (i <= 3) {
+                perform(post(path() + "/" + id + "/actions/APPROVE"), actors[i],
+                        Map.of("revision", revision(id)), approve[i]);
+            } else {
+                for (String action : List.of("INVITE", "REVOKE", "ACCEPT", "DECLINE", "APPROVE",
+                        "RANK", "SUBMIT", "WITHDRAW", "LEAVE", "TRANSFER", "DISSOLVE")) {
+                    Map<String, Object> payload = switch (action) {
+                        case "INVITE", "REVOKE", "TRANSFER" ->
+                                Map.of("revision", revision(id), "studentId", student(4));
+                        case "RANK" -> Map.of("revision", revision(id), "projectIds", projects);
+                        case "SUBMIT", "DISSOLVE" -> Map.of("revision", revision(id), "confirm", true);
+                        default -> Map.of("revision", revision(id));
+                    };
+                    String beforeDeniedAction = stored(id).getPayload();
+                    long auditsBeforeDeniedAction = auditCount();
+                    perform(post(path() + "/" + id + "/actions/" + action), actors[i], payload,
+                            i == 7 ? 401 : 403);
+                    assertEquals(beforeDeniedAction, stored(id).getPayload(),
+                            "Denied " + action + " must not alter the group payload.");
+                    assertEquals(auditsBeforeDeniedAction, auditCount(),
+                            "Denied " + action + " must not add an audit event.");
+                }
             }
             if (i >= 4) perform(post(path()), actors[i], null, i == 7 ? 401 : 403);
         }

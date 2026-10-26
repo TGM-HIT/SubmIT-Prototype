@@ -1081,6 +1081,167 @@ class IdeaReviewControllerTest {
         }
     }
 
+    @Test
+    void dualRoleAuthorUsesEveryIdeaAndSpecificationLifecycleRouteWithIsolatedDenials() throws Exception {
+        UserAccount author = users.findByUsername("teacher01").orElseThrow();
+        List<Role> originalRoles = author.getRoles();
+        try {
+            author.setRoles(List.of(Role.TEACHER, Role.ADMIN));
+            users.saveAndFlush(author);
+            String dualToken = login("teacher01");
+            long ideaCount = store.repository().findByType("idea", org.springframework.data.domain.PageRequest.of(0, 1000))
+                    .getTotalElements();
+            List<String> auditsBeforeCreateDenial = store.repository().findAll().stream()
+                    .filter(record -> "audit".equals(record.getType()))
+                    .map(record -> record.getId() + ":" + record.getPayload()).sorted().toList();
+            mockMvc.perform(post("/api/ideas").header("Authorization", "Bearer " + adminToken)
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(ideaRequest("Admin cannot author"))))
+                    .andExpect(status().isForbidden());
+            assertEquals(ideaCount, store.repository().findByType("idea",
+                    org.springframework.data.domain.PageRequest.of(0, 1000)).getTotalElements());
+            assertEquals(auditsBeforeCreateDenial, store.repository().findAll().stream()
+                    .filter(record -> "audit".equals(record.getType()))
+                    .map(record -> record.getId() + ":" + record.getPayload()).sorted().toList());
+
+            String lifecycleIdea = createIdea("Dual author lifecycle", dualToken);
+            String validEdit = objectMapper.writeValueAsString(ideaRequest("Dual author edited"));
+            for (String denied : List.of(adminToken, otherTeacherToken)) {
+                List<String> before = decisionState(lifecycleIdea);
+                mockMvc.perform(put("/api/ideas/{id}", lifecycleIdea)
+                                .header("Authorization", "Bearer " + denied)
+                                .contentType(MediaType.APPLICATION_JSON).content(validEdit))
+                        .andExpect(status().isForbidden());
+                assertEquals(before, decisionState(lifecycleIdea));
+            }
+            mockMvc.perform(put("/api/ideas/{id}", lifecycleIdea).header("Authorization", "Bearer " + dualToken)
+                            .contentType(MediaType.APPLICATION_JSON).content(validEdit))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.title").value("Dual author edited"));
+            for (String denied : List.of(adminToken, otherTeacherToken)) {
+                List<String> before = decisionState(lifecycleIdea);
+                mockMvc.perform(post("/api/ideas/{id}/submit", lifecycleIdea)
+                                .header("Authorization", "Bearer " + denied))
+                        .andExpect(status().isForbidden());
+                assertEquals(before, decisionState(lifecycleIdea));
+            }
+            mockMvc.perform(post("/api/ideas/{id}/submit", lifecycleIdea)
+                            .header("Authorization", "Bearer " + dualToken))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("IDEA_SUBMITTED"));
+            for (String denied : List.of(adminToken, otherTeacherToken)) {
+                List<String> before = decisionState(lifecycleIdea);
+                mockMvc.perform(post("/api/ideas/{id}/withdraw", lifecycleIdea)
+                                .header("Authorization", "Bearer " + denied))
+                        .andExpect(status().isForbidden());
+                assertEquals(before, decisionState(lifecycleIdea));
+            }
+            mockMvc.perform(post("/api/ideas/{id}/withdraw", lifecycleIdea)
+                            .header("Authorization", "Bearer " + dualToken))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("WITHDRAWN"));
+
+            String specificationIdea = createIdea("Dual author specification lifecycle", dualToken);
+            mockMvc.perform(post("/api/ideas/{id}/submit", specificationIdea)
+                            .header("Authorization", "Bearer " + dualToken))
+                    .andExpect(status().isOk());
+            review(specificationIdea, Map.of("decision", "APPROVE_FOR_SPECIFICATION", "feedback", "Proceed."),
+                    otherTeacherToken).andExpect(status().isCreated());
+            String specification = objectMapper.writeValueAsString(specificationRequest("Dual-author scope"));
+            for (String denied : List.of(adminToken, otherTeacherToken)) {
+                List<String> before = decisionState(specificationIdea);
+                mockMvc.perform(put("/api/ideas/{id}/specification", specificationIdea)
+                                .header("Authorization", "Bearer " + denied)
+                                .contentType(MediaType.APPLICATION_JSON).content(specification))
+                        .andExpect(status().isForbidden());
+                assertEquals(before, decisionState(specificationIdea));
+            }
+            mockMvc.perform(put("/api/ideas/{id}/specification", specificationIdea)
+                            .header("Authorization", "Bearer " + dualToken)
+                            .contentType(MediaType.APPLICATION_JSON).content(specification))
+                    .andExpect(status().isOk());
+            for (String denied : List.of(adminToken, otherTeacherToken)) {
+                List<String> before = decisionState(specificationIdea);
+                mockMvc.perform(post("/api/ideas/{id}/specification/submit", specificationIdea)
+                                .header("Authorization", "Bearer " + denied))
+                        .andExpect(status().isForbidden());
+                assertEquals(before, decisionState(specificationIdea));
+            }
+            mockMvc.perform(post("/api/ideas/{id}/specification/submit", specificationIdea)
+                            .header("Authorization", "Bearer " + dualToken))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.status").value("SPECIFICATION_SUBMITTED"));
+        } finally {
+            author.setRoles(originalRoles);
+            users.saveAndFlush(author);
+        }
+    }
+
+    @Test
+    void teacherDecisionAndSupervisionRoutesCompareAllApplicableRoleSets() throws Exception {
+        UserAccount dualAccount = users.findByUsername("teacher01").orElseThrow();
+        List<Role> originalRoles = dualAccount.getRoles();
+        try {
+            dualAccount.setRoles(List.of(Role.TEACHER, Role.ADMIN));
+            users.saveAndFlush(dualAccount);
+            String dualToken = login("teacher01");
+
+            for (String caller : List.of(studentToken, adminToken, teacherToken, dualToken)) {
+                String ideaId = submitIdea("Idea review role matrix " + UUID.randomUUID());
+                List<String> before = decisionState(ideaId);
+                int expected = caller.equals(teacherToken) || caller.equals(dualToken) ? 201 : 403;
+                MvcResult result = review(ideaId,
+                        Map.of("decision", "REQUEST_REVISION", "feedback", "Role-matrix review."),
+                        caller).andExpect(status().is(expected)).andReturn();
+                if (expected == 403) {
+                    assertEquals(before, decisionState(ideaId));
+                } else {
+                    JsonNode response = objectMapper.readTree(result.getResponse().getContentAsByteArray());
+                    assertTrue(response.path("id").isTextual());
+                    assertReviewAudit(UUID.fromString(response.path("id").textValue()), ideaId);
+                }
+            }
+
+            for (String caller : List.of(studentToken, adminToken, teacherToken, dualToken)) {
+                String ideaId = submitSpecificationIdea("Specification review role matrix " + UUID.randomUUID());
+                List<String> before = decisionState(ideaId);
+                int expected = caller.equals(teacherToken) || caller.equals(dualToken) ? 201 : 403;
+                MvcResult result = specificationReview(ideaId,
+                        specificationReviewRequest("ACCEPT_FOR_APPLICATIONS", "Role-matrix decision."),
+                        caller).andExpect(status().is(expected)).andReturn();
+                if (expected == 403) {
+                    assertEquals(before, decisionState(ideaId));
+                } else {
+                    JsonNode response = objectMapper.readTree(result.getResponse().getContentAsByteArray());
+                    assertTrue(response.path("id").isTextual());
+                    assertReviewAudit(UUID.fromString(response.path("id").textValue()), ideaId);
+                }
+            }
+
+            String preferenceIdea = submitIdea("Supervision preference role matrix");
+            Map<String, Object> preference = Map.of("preference", "WANTS_TO_SUPERVISE", "note", "Available.");
+            for (String denied : List.of(studentToken, adminToken)) {
+                List<String> before = decisionState(preferenceIdea);
+                preference(preferenceIdea, denied, preference.get("preference").toString(),
+                        preference.get("note").toString()).andExpect(status().isForbidden());
+                assertEquals(before, decisionState(preferenceIdea));
+            }
+            preference(preferenceIdea, teacherToken, "WANTS_TO_SUPERVISE", "Available.")
+                    .andExpect(status().isOk());
+            preference(preferenceIdea, dualToken, "WANTS_TO_SUPERVISE", "Available.")
+                    .andExpect(status().isOk());
+
+            String supervisorIdea = submitIdea("Supervisor assignment role matrix");
+            String supervisorId = users.findByUsername("teacher03").orElseThrow().getId().toString();
+            for (String denied : List.of(studentToken, teacherToken)) {
+                List<String> before = decisionState(supervisorIdea);
+                assignSupervisor(supervisorIdea, denied, supervisorId).andExpect(status().isForbidden());
+                assertEquals(before, decisionState(supervisorIdea));
+            }
+            assignSupervisor(supervisorIdea, adminToken, supervisorId).andExpect(status().isOk());
+            assignSupervisor(supervisorIdea, dualToken, supervisorId).andExpect(status().isOk());
+        } finally {
+            dualAccount.setRoles(originalRoles);
+            users.saveAndFlush(dualAccount);
+        }
+    }
+
     private void assertAudited(String ideaId, String action) {
         boolean recorded = store.repository()
                 .findByTypeAndReferenceTypeAndParentId("audit", "idea", ideaId,

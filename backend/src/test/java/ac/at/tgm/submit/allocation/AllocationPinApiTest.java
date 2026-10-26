@@ -499,6 +499,78 @@ class AllocationPinApiTest {
                 .andExpect(status().isConflict());
     }
 
+    @Test
+    void putDeleteAndListPinRoutesCompareAllApplicableRoleSetsOnTheSamePopulatedPin() throws Exception {
+        UUID student = users.findByUsername("student13").orElseThrow().getId();
+        String path = pinPath(student);
+        String body = pinRequest(projects.get(0), true);
+        var pinRecords = store.repository().findByTypeAndParentIdAndOwnerId(
+                "allocation_pin", periodId.toString(), student.toString());
+        assertTrue(pinRecords.isEmpty());
+        List<String> emptyAudit = auditSnapshot();
+
+        for (String denied : List.of(studentToken, teacherToken)) {
+            mockMvc.perform(put(path).header("Authorization", bearer(denied))
+                            .contentType(MediaType.APPLICATION_JSON).content(body))
+                    .andExpect(status().isForbidden());
+            assertTrue(store.repository().findByTypeAndParentIdAndOwnerId(
+                    "allocation_pin", periodId.toString(), student.toString()).isEmpty());
+            assertEquals(emptyAudit, auditSnapshot());
+        }
+
+        mockMvc.perform(put(path).header("Authorization", bearer(adminToken))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk());
+        assertTrue(store.repository().findByTypeAndParentIdAndOwnerId(
+                "allocation_pin", periodId.toString(), student.toString()).isPresent());
+        var teacherAccount = users.findByUsername("teacher01").orElseThrow();
+        teacherAccount.setRoles(List.of(Role.TEACHER, Role.ADMIN));
+        users.saveAndFlush(teacherAccount);
+        String dualToken = login("teacher01");
+        mockMvc.perform(put(path).header("Authorization", bearer(dualToken))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk());
+        String pinId = store.repository().findByTypeAndParentIdAndOwnerId(
+                "allocation_pin", periodId.toString(), student.toString()).orElseThrow().getId().toString();
+
+        for (String staff : List.of(teacherToken, adminToken, dualToken)) {
+            JsonNode page = mapper.readTree(mockMvc.perform(get(
+                            "/api/application-periods/{periodId}/allocation-pins", periodId)
+                            .header("Authorization", bearer(staff)))
+                    .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+            assertEquals(1, page.path("content").size());
+            assertEquals(student.toString(), page.path("content").get(0).path("studentId").textValue());
+            assertEquals(projects.get(0).toString(), page.path("content").get(0).path("projectId").textValue());
+        }
+        mockMvc.perform(get("/api/application-periods/{periodId}/allocation-pins", periodId)
+                        .header("Authorization", bearer(studentToken)))
+                .andExpect(status().isForbidden());
+
+        List<String> populatedAudit = auditSnapshot();
+        for (String denied : List.of(studentToken, teacherToken)) {
+            mockMvc.perform(delete(path).header("Authorization", bearer(denied))).andExpect(status().isForbidden());
+            var stillPinned = store.repository().findByTypeAndParentIdAndOwnerId(
+                    "allocation_pin", periodId.toString(), student.toString()).orElseThrow();
+            assertEquals(pinId, stillPinned.getId().toString());
+            assertEquals(populatedAudit, auditSnapshot());
+        }
+
+        mockMvc.perform(delete(path).header("Authorization", bearer(adminToken))).andExpect(status().isNoContent());
+        assertTrue(store.repository().findByTypeAndParentIdAndOwnerId(
+                "allocation_pin", periodId.toString(), student.toString()).isEmpty());
+        mockMvc.perform(put(path).header("Authorization", bearer(adminToken))
+                        .contentType(MediaType.APPLICATION_JSON).content(body))
+                .andExpect(status().isOk());
+        mockMvc.perform(delete(path).header("Authorization", bearer(dualToken))).andExpect(status().isNoContent());
+        assertTrue(store.repository().findByTypeAndParentIdAndOwnerId(
+                "allocation_pin", periodId.toString(), student.toString()).isEmpty());
+    }
+
+    private List<String> auditSnapshot() {
+        return store.repository().findAll().stream().filter(record -> "audit".equals(record.getType()))
+                .map(record -> record.getId() + ":" + record.getPayload()).sorted().toList();
+    }
+
     private void addApplication(UUID student, UUID... projectIds) {
         var period = store.repository().findById(periodId).orElseThrow();
         ObjectNode periodData = store.parse(period);

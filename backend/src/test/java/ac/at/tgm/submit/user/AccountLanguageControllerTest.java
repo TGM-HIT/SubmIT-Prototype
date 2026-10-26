@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import ac.at.tgm.submit.security.AuthenticatedUser;
 import ac.at.tgm.submit.security.JwtService;
 import ac.at.tgm.submit.security.Role;
+import ac.at.tgm.submit.data.StoredRecordRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
@@ -35,6 +36,8 @@ class AccountLanguageControllerTest {
     private JwtService jwtService;
     @Autowired
     private ObjectMapper objectMapper;
+    @Autowired
+    private StoredRecordRepository records;
 
     private UserAccount admin;
     private UserAccount teacher;
@@ -206,6 +209,39 @@ class AccountLanguageControllerTest {
                         .contentType(MediaType.APPLICATION_JSON).content("{\"language\":\"en\"}"))
                 .andExpect(status().isUnauthorized());
         assertEquals(AccountLanguage.de, users.findById(student.getId()).orElseThrow().getLanguage());
+    }
+
+    @Test
+    void dualRoleOwnerCanChangeLanguageButOtherRolesCannotChangeThatSameAccount() throws Exception {
+        teacher.setRoles(List.of(Role.TEACHER, Role.ADMIN));
+        users.saveAndFlush(teacher);
+        String dualToken = jwtService.issueToken(new AuthenticatedUser(teacher.getId(), teacher.getUsername(),
+                List.of(Role.TEACHER, Role.ADMIN)));
+        String teacherOnlyToken = jwtService.issueToken(
+                new AuthenticatedUser(admin.getId(), admin.getUsername(), List.of(Role.TEACHER)));
+        updateWithToken(dualToken, teacher.getId(), "de").andExpect(status().isOk())
+                .andExpect(jsonPath("$.language").value("de"));
+        int audits = auditCount();
+
+        for (String token : List.of(bearer(admin), teacherOnlyToken, bearer(student))) {
+            updateWithToken(token, teacher.getId(), "en").andExpect(status().isForbidden());
+            UserAccount unchanged = users.findById(teacher.getId()).orElseThrow();
+            assertEquals(AccountLanguage.de, unchanged.getLanguage());
+            assertEquals("teacher", unchanged.getDisplayName());
+            assertEquals(audits, auditCount());
+        }
+    }
+
+    private org.springframework.test.web.servlet.ResultActions updateWithToken(String token, UUID target,
+            String language) throws Exception {
+        return mockMvc.perform(patch("/api/users/{id}/language", target)
+                .header("Authorization", token.startsWith("Bearer ") ? token : "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(Map.of("language", language))));
+    }
+
+    private int auditCount() {
+        return (int) records.findAll().stream().filter(record -> "audit".equals(record.getType())).count();
     }
 
     private org.springframework.test.web.servlet.ResultActions update(UserAccount caller, UUID target,

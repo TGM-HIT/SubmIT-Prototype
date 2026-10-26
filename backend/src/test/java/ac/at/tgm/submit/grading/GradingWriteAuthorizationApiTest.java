@@ -175,6 +175,41 @@ class GradingWriteAuthorizationApiTest {
                 projectId, studentId), adminToken)).andExpect(status().isOk()).andReturn());
         assertFinalGrade(adminStudentFinal, studentFinalWrite, 3, "Individual assessments considered.");
 
+        String nonmemberToken = login("student02").token();
+        for (String token : List.of(studentToken, teacherToken, adminToken, dualToken)) {
+            JsonNode individualRead = body(mockMvc.perform(bearer(
+                    get("/api/projects/{projectId}/student-grades", projectId), token))
+                    .andExpect(status().isOk()).andReturn());
+            assertNumber(findById(array(individualRead, "content"), revisionId), "grade", 3);
+            JsonNode groupRead = body(mockMvc.perform(bearer(
+                    get("/api/projects/{projectId}/group-grades", projectId), token))
+                    .andExpect(status().isOk()).andReturn());
+            assertNumber(findById(array(groupRead, "content"), text(groupResponse, "id")), "grade", 4);
+            JsonNode metricsRead = body(mockMvc.perform(bearer(
+                    get("/api/projects/{projectId}/metrics", projectId), token))
+                    .andExpect(status().isOk()).andReturn());
+            assertNumber(findById(array(metricsRead, "content"), text(metricResponse, "id")), "value", 12);
+            assertFinalGrade(body(mockMvc.perform(bearer(
+                    get("/api/projects/{projectId}/final-grade", projectId), token))
+                    .andExpect(status().isOk()).andReturn()), projectFinalWrite, 4,
+                    "Project rubric and metric inputs considered.");
+            assertFinalGrade(body(mockMvc.perform(bearer(get(
+                    "/api/projects/{projectId}/students/{studentId}/final-grade",
+                    projectId, studentId), token)).andExpect(status().isOk()).andReturn()),
+                    studentFinalWrite, 3, "Individual assessments considered.");
+        }
+        for (String path : List.of(
+                "/api/projects/" + projectId + "/student-grades",
+                "/api/projects/" + projectId + "/group-grades",
+                "/api/projects/" + projectId + "/metrics",
+                "/api/projects/" + projectId + "/final-grade",
+                "/api/projects/" + projectId + "/students/" + studentId + "/final-grade")) {
+            mockMvc.perform(bearer(get(path), nonmemberToken)).andExpect(status().isForbidden());
+        }
+        mockMvc.perform(bearer(get("/api/projects/{projectId}/students/{studentId}/final-grade",
+                        projectId, users.findByUsername("student02").orElseThrow().getId()),
+                        studentToken)).andExpect(status().isForbidden());
+
         assertAudit("student_grade", gradeId, "STUDENT_GRADE_RECORDED");
         assertAudit("student_grade", revisionId, "STUDENT_GRADE_REVISED");
         assertAudit("group_grade", text(groupResponse, "id"), "GROUP_GRADE_RECORDED");
@@ -250,6 +285,40 @@ class GradingWriteAuthorizationApiTest {
 
         assertNotNull(publishRubric("admin-matrix-" + UUID.randomUUID(), adminToken));
         assertNotNull(publishRubric("dual-matrix-" + UUID.randomUUID(), dualToken));
+    }
+
+    @Test
+    void publishedRubricListActiveAndDetailArePopulatedForEverySupportedRoleSet() throws Exception {
+        var teacherAccount = users.findByUsername("teacher01").orElseThrow();
+        teacherAccount.setRoles(List.of(Role.TEACHER, Role.ADMIN));
+        users.saveAndFlush(teacherAccount);
+        String dualToken = login("teacher01").token();
+        List<String> tokens = List.of(studentToken, teacherToken, adminToken, dualToken);
+
+        for (String token : tokens) {
+            JsonNode page = body(mockMvc.perform(get("/api/grading-rubrics")
+                            .header("Authorization", bearerValue(token)))
+                    .andExpect(status().isOk()).andReturn());
+            JsonNode summaries = array(page, "content");
+            boolean found = false;
+            for (JsonNode summary : summaries) {
+                found |= rubricId.toString().equals(text(summary, "id"));
+            }
+            assertTrue(found, "List must contain the same published rubric.");
+
+            JsonNode active = body(mockMvc.perform(get("/api/grading-rubrics/active")
+                            .header("Authorization", bearerValue(token)))
+                    .andExpect(status().isOk()).andReturn());
+            assertEquals(rubricId.toString(), text(active, "id"));
+            assertTrue(!text(active, "version").isBlank());
+
+            JsonNode detail = body(mockMvc.perform(get("/api/grading-rubrics/{id}", rubricId)
+                            .header("Authorization", bearerValue(token)))
+                    .andExpect(status().isOk()).andReturn());
+            assertEquals(rubricId.toString(), text(detail, "id"));
+            assertEquals(text(active, "version"), text(detail, "version"));
+            assertTrue(detail.path("categories").isArray() && !detail.path("categories").isEmpty());
+        }
     }
 
     private void assertForbiddenWithoutMutation(

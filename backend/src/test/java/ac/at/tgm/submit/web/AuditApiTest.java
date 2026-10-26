@@ -451,6 +451,34 @@ class AuditApiTest {
     }
 
     @Test
+    void populatedAuditListsAreStaffOnlyAndDualRoleReadsBothEndpoints() throws Exception {
+        Instant before = Instant.now();
+        String subjectName = "Dual audit matrix " + UUID.randomUUID();
+        UUID subjectId = createSubject(subjectName);
+        Instant after = Instant.now();
+        String action = "ELECTIVE_SUBJECT_CREATED";
+        String entityPath = "/api/audit/elective_subject/" + subjectId;
+        String dualToken = token(teacher, List.of(Role.TEACHER, Role.ADMIN));
+
+        for (String staffToken : List.of(teacherToken, adminToken, dualToken)) {
+            JsonNode listEntry = findEntryAcrossPages(staffToken, new AuditEvent(action, "elective_subject",
+                    subjectId, admin.getId(), admin.getUsername(), subjectName, before, after));
+
+            JsonNode entity = request(entityPath, staffToken);
+            assertEquals(1, entity.path("totalElements").intValue());
+            assertEquals(1, entity.path("content").size());
+            JsonNode entityEntry = findEntry(entity.path("content"), action, subjectId);
+            assertTrue(entityEntry != null, "Entity audit route must return the exact persisted event.");
+            assertEquals("elective_subject", entityEntry.path("entityType").textValue());
+            assertEquals(subjectId.toString(), entityEntry.path("entityId").textValue());
+        }
+        for (String path : List.of("/api/audit", entityPath)) {
+            mockMvc.perform(get(path).header("Authorization", bearer(studentToken)))
+                    .andExpect(status().isForbidden());
+        }
+    }
+
+    @Test
     void contextEnrichmentIsBoundedAndPrivate() throws Exception {
         String firstName = "Bounded context first " + UUID.randomUUID();
         String secondName = "Bounded context second " + UUID.randomUUID();
@@ -670,6 +698,10 @@ class AuditApiTest {
 
     private String token(UserAccount account, Role role) {
         return jwt.issueToken(new AuthenticatedUser(account.getId(), account.getUsername(), role));
+    }
+
+    private String token(UserAccount account, List<Role> roles) {
+        return jwt.issueToken(new AuthenticatedUser(account.getId(), account.getUsername(), roles));
     }
 
     private String bearer(String token) {

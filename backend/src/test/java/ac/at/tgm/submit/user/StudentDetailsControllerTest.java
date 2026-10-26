@@ -157,6 +157,137 @@ class StudentDetailsControllerTest {
     }
 
     @Test
+    void populatedStudentDetailsAndCatalogueRoutesApplyRoleSetPoliciesWithEquivalentRequests() throws Exception {
+        StudentClassEntity classEntry = classes.save(new StudentClassEntity(UUID.randomUUID(), "Role matrix class"));
+        ElectiveSubjectEntity subjectEntry = subjects.save(
+                new ElectiveSubjectEntity(UUID.randomUUID(), "Role matrix subject"));
+        String details = "{\"classId\":\"" + classEntry.getId() + "\",\"electiveSubjectIds\":[\""
+                + subjectEntry.getId() + "\"]}";
+        mvc.perform(put("/api/users/{id}/student-details", student.getId())
+                        .header("Authorization", bearer(admin)).contentType(MediaType.APPLICATION_JSON)
+                        .content(details))
+                .andExpect(status().isOk());
+
+        teacher.setRoles(List.of(Role.TEACHER, Role.ADMIN));
+        users.saveAndFlush(teacher);
+        String teacherOnly = bearerRoles(teacher, List.of(Role.TEACHER));
+        String dual = bearerRoles(teacher, List.of(Role.TEACHER, Role.ADMIN));
+        for (UserAccount caller : List.of(teacher, admin)) {
+            JsonNode detail = getJson("/api/users/" + student.getId() + "/student-details", caller);
+            assertEquals("Role matrix class", detail.path("className").textValue());
+            assertEquals(subjectEntry.getId().toString(), detail.path("electiveSubjectIds").get(0).textValue());
+            for (String path : List.of("/api/student-classes", "/api/elective-subjects")) {
+                JsonNode page = getJson(path, caller);
+                assertTrue(page.path("totalElements").intValue() > 0);
+                assertTrue(page.path("content").isArray() && !page.path("content").isEmpty());
+            }
+        }
+        for (String path : List.of("/api/users/" + student.getId() + "/student-details",
+                "/api/student-classes", "/api/elective-subjects")) {
+            mvc.perform(get(path).header("Authorization", bearer(student))).andExpect(status().isForbidden());
+        }
+        for (String token : List.of(teacherOnly, dual)) {
+            String path = "/api/users/" + student.getId() + "/student-details";
+            mvc.perform(get(path).header("Authorization", token.startsWith("Bearer ")
+                            ? token : "Bearer " + token)).andExpect(status().isOk())
+                    .andExpect(jsonPath("$.className").value("Role matrix class"))
+                    .andExpect(jsonPath("$.electiveSubjectIds[0]").value(subjectEntry.getId().toString()));
+        }
+        for (String path : List.of("/api/student-classes", "/api/elective-subjects")) {
+            for (String token : List.of(teacherOnly, dual)) {
+                JsonNode page = mapper.readTree(mvc.perform(get(path).header("Authorization",
+                                token.startsWith("Bearer ") ? token : "Bearer " + token))
+                        .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+                assertTrue(page.path("totalElements").intValue() > 0 && !page.path("content").isEmpty());
+            }
+        }
+
+        for (String token : List.of(bearer(student), bearer(admin), dual)) {
+            JsonNode lookup = mapper.readTree(mvc.perform(get("/api/users/students")
+                            .header("Authorization", token.startsWith("Bearer ") ? token : "Bearer " + token)
+                            .param("q", "student"))
+                    .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+            assertTrue(lookup.path("content").isArray() && !lookup.path("content").isEmpty());
+            JsonNode foundStudent = null;
+            for (JsonNode item : lookup.path("content")) {
+                if (student.getId().toString().equals(item.path("id").asText())) {
+                    foundStudent = item;
+                }
+            }
+            assertTrue(foundStudent != null, "Student lookup should include the populated student result.");
+            assertEquals("student", foundStudent.path("displayName").textValue());
+        }
+        mvc.perform(get("/api/users/students").header("Authorization", teacherOnly))
+                .andExpect(status().isForbidden());
+
+        int auditBefore = auditCount();
+        for (String token : List.of(bearer(student), teacherOnly)) {
+            mvc.perform(put("/api/users/{id}/student-details", student.getId())
+                            .header("Authorization", token.startsWith("Bearer ") ? token : "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON).content(details))
+                    .andExpect(status().isForbidden());
+            JsonNode unchanged = getJson("/api/users/" + student.getId() + "/student-details", admin);
+            assertEquals("Role matrix class", unchanged.path("className").textValue());
+            assertEquals(1, unchanged.path("electiveSubjectIds").size());
+            assertEquals(subjectEntry.getId().toString(), unchanged.path("electiveSubjectIds").get(0).textValue());
+            assertEquals(List.of(Role.STUDENT), users.findById(student.getId()).orElseThrow().getRoles());
+            assertEquals(auditBefore, auditCount());
+        }
+        for (String token : List.of(bearer(admin), dual)) {
+            mvc.perform(put("/api/users/{id}/student-details", student.getId())
+                            .header("Authorization", token.startsWith("Bearer ") ? token : "Bearer " + token)
+                            .contentType(MediaType.APPLICATION_JSON).content(details))
+                    .andExpect(status().isOk());
+        }
+
+        List<String> catalogues = List.of("/api/student-classes", "/api/elective-subjects");
+        List<String> patchedIds = List.of(classEntry.getId().toString(), subjectEntry.getId().toString());
+        for (int index = 0; index < catalogues.size(); index++) {
+            String path = catalogues.get(index);
+            String patch = "{\"name\":\"Role matrix renamed " + index + "\"}";
+            for (String token : List.of(bearer(admin), dual)) {
+                mvc.perform(patch(path + "/{id}", patchedIds.get(index))
+                                .header("Authorization", token.startsWith("Bearer ")
+                                        ? token : "Bearer " + token)
+                                .contentType(MediaType.APPLICATION_JSON).content(patch))
+                        .andExpect(status().isOk());
+            }
+            JsonNode catalogueBeforeDenied = getJson(path, admin);
+            int beforeAudit = auditCount();
+            for (String token : List.of(bearer(student), teacherOnly)) {
+                mvc.perform(patch(path + "/{id}", patchedIds.get(index))
+                                .header("Authorization", token.startsWith("Bearer ")
+                                        ? token : "Bearer " + token)
+                                .contentType(MediaType.APPLICATION_JSON).content(
+                                        "{\"name\":\"Denied catalogue rename " + index + "\"}"))
+                        .andExpect(status().isForbidden());
+                assertEquals(catalogueBeforeDenied, getJson(path, admin));
+                assertEquals(beforeAudit, auditCount());
+            }
+            for (String token : List.of(bearer(admin), dual)) {
+                mvc.perform(post(path).header("Authorization", token.startsWith("Bearer ")
+                                        ? token : "Bearer " + token)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"name\":\"Role matrix create " + index + " "
+                                        + UUID.randomUUID() + "\"}"))
+                        .andExpect(status().isCreated());
+            }
+            JsonNode catalogueAfterAllowed = getJson(path, admin);
+            int auditAfterAllowed = auditCount();
+            for (String token : List.of(bearer(student), teacherOnly)) {
+                mvc.perform(post(path).header("Authorization", token.startsWith("Bearer ")
+                                        ? token : "Bearer " + token)
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"name\":\"Denied catalogue create " + index + " "
+                                        + UUID.randomUUID() + "\"}"))
+                        .andExpect(status().isForbidden());
+                assertEquals(catalogueAfterAllowed, getJson(path, admin));
+                assertEquals(auditAfterAllowed, auditCount());
+            }
+        }
+    }
+
+    @Test
     void catalogueNameBoundariesAndTrimmingAreEnforced() throws Exception {
         for (String path : List.of("/api/student-classes", "/api/elective-subjects")) {
             Map<String, String> persisted = new LinkedHashMap<>();
@@ -456,5 +587,13 @@ class StudentDetailsControllerTest {
 
     private String bearer(UserAccount user) {
         return "Bearer " + jwt.issueToken(new AuthenticatedUser(user.getId(), user.getUsername(), user.getRole()));
+    }
+
+    private String bearerRoles(UserAccount user, List<Role> roles) {
+        return "Bearer " + jwt.issueToken(new AuthenticatedUser(user.getId(), user.getUsername(), roles));
+    }
+
+    private int auditCount() {
+        return (int) records.findAll().stream().filter(record -> "audit".equals(record.getType())).count();
     }
 }

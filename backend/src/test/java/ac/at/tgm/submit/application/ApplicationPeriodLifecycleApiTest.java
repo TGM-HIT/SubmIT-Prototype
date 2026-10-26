@@ -310,6 +310,62 @@ class ApplicationPeriodLifecycleApiTest {
     }
 
     @Test
+    void populatedPeriodListAndDetailExposeStudentStaffAndAdministratorRoleSetProjections() throws Exception {
+        StoredRecord persisted = store.repository().findById(periodId).orElseThrow();
+        var periodPayload = store.parse(persisted).put("eligibilityMode", "SELECTED");
+        periodPayload.set("eligibleStudentIds", mapper.valueToTree(List.of(
+                users.findByUsername("student01").orElseThrow().getId().toString())));
+        periodPayload.putArray("eligibleClassIds");
+        store.update(persisted, "OPEN", periodPayload);
+        var application = store.object();
+        application.putArray("preferences").addObject().put("projectId", projectIds.get(0).toString()).put("rank", 1);
+        store.create("student_application", users.findByUsername("student01").orElseThrow().getId().toString(),
+                periodId.toString(), "SUBMITTED", application);
+        clock.set(OPENS_AT.plusSeconds(1));
+
+        String teacherId = users.findByUsername("teacher01").orElseThrow().getId().toString();
+        setRoles(teacherId, List.of("TEACHER"));
+        String teacher = login("teacher01");
+        setRoles(teacherId, List.of("TEACHER", "ADMIN"));
+        String dual = login("teacher01");
+        List<String> tokens = List.of(student01, teacher, admin, dual);
+
+        for (int index = 0; index < tokens.size(); index++) {
+            JsonNode list = getJson("/api/application-periods?page=0&size=100", tokens.get(index));
+            JsonNode listed = findPeriod(list);
+            JsonNode detail = getJson("/api/application-periods/" + periodId, tokens.get(index));
+            for (JsonNode view : List.of(listed, detail)) {
+                assertEquals(periodId.toString(), view.path("id").textValue());
+                assertEquals("Lifecycle", view.path("label").textValue());
+                assertEquals("OPEN", view.path("status").textValue());
+                assertEquals(projectIds.get(0).toString(), view.path("projectIds").get(0).textValue());
+            }
+            if (index == 0) {
+                for (JsonNode view : List.of(listed, detail)) {
+                    assertEquals("SUBMITTED", view.path("studentApplicationStatus").textValue());
+                    assertTrue(view.path("projectTitles").isArray() && !view.path("projectTitles").isEmpty());
+                    assertFalse(view.has("eligibilityMode"));
+                    assertFalse(view.has("eligibleStudentIds"));
+                }
+            } else {
+                for (JsonNode view : List.of(listed, detail)) {
+                    assertFalse(view.has("studentApplicationStatus"));
+                    assertFalse(view.has("projectTitles"));
+                }
+                if (index == 1) {
+                    assertFalse(detail.has("eligibilityMode"));
+                    assertFalse(detail.has("eligibleStudentIds"));
+                } else {
+                    assertEquals("SELECTED", detail.path("eligibilityMode").textValue());
+                    assertEquals(users.findByUsername("student01").orElseThrow().getId().toString(),
+                            detail.path("eligibleStudentIds").get(0).textValue());
+                }
+            }
+        }
+        setRoles(teacherId, List.of("TEACHER"));
+    }
+
+    @Test
     void studentCatalogueAndApplicationRoutesEnforceStudentAndStaffRoleSets() throws Exception {
         clock.set(Instant.now());
         String teacherId = users.findByUsername("teacher01").orElseThrow().getId().toString();
