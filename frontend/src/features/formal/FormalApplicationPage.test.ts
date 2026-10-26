@@ -87,6 +87,20 @@ function expectProposalCopy(page: VueWrapper) {
   expect(page.text()).not.toMatch(/group application|formal (?:project )?application|edit application|this application/i)
 }
 
+function expectMemberPanelShape(page: VueWrapper) {
+  const panels = page.findAll('[role="tabpanel"]')
+  expect(panels).toHaveLength(rosterMembers.length)
+  panels.forEach((panel, index) => {
+    expect(panel.findAll(`#member-topic-${index}`)).toHaveLength(1)
+    expect(panel.findAll(`#member-concern-${index}`)).toHaveLength(1)
+    expect(panel.findAll(`#member-result-${index}`)).toHaveLength(1)
+  })
+  for (const fieldId of ['topic', 'situation', 'objective', 'partner', 'milestone-0', 'milestone-date-0']) {
+    const field = page.get(`#${fieldId}`)
+    expect(field.element.closest('[role="tabpanel"]')).toBeNull()
+  }
+}
+
 async function mountStudent(status: EligibleProject['formalProposalStatus'] = 'DRAFT', attach = false): Promise<VueWrapper> {
   api.eligibleProjects.mockResolvedValue(eligiblePage([eligible(status)]))
   const page = mount(FormalApplicationPage, attach ? { attachTo: document.body } : undefined)
@@ -244,6 +258,7 @@ describe('Formal proposal presentation and unchanged lifecycle', () => {
     expect(page.get('h2').text()).toBe('Formal proposal')
     expect(page.get('.status-badge').text()).toBe('Draft')
     expectProposalCopy(page)
+    expectMemberPanelShape(page)
     await page.get('#topic').setValue(input.topic)
     await page.get('#situation').setValue(input.initialSituation)
     await page.get('#objective').setValue(input.objective)
@@ -288,6 +303,7 @@ describe('Formal proposal presentation and unchanged lifecycle', () => {
 
     const tabs = page.findAll('[role="tab"]')
     expect(tabs.map((tab) => tab.text())).toEqual(['Jordan Lee (1)', 'Jordan Lee (2)', 'Morgan Chen'])
+    expectMemberPanelShape(page)
     for (const [index, tab] of tabs.entries()) {
       expect(tab.attributes('aria-controls')).toBe(`member-panel-${index}`)
       expect(page.get(`#member-panel-${index}`).attributes('aria-labelledby')).toBe(`member-tab-${index}`)
@@ -363,7 +379,24 @@ describe('Formal proposal presentation and unchanged lifecycle', () => {
       { studentId: secondStudentId, displayName: 'Jordan Lee' },
       { studentId: thirdStudentId, displayName: 'Morgan Chen' },
     ] })
-    api.get.mockResolvedValue(record())
+    api.get.mockResolvedValue({
+      ...record(),
+      individualTopics: [
+        { studentId: thirdStudentId, topic: 'Saved topic for Casey' },
+        { studentId, topic: 'Saved topic for Jordan one' },
+        { studentId: secondStudentId, topic: 'Saved topic for Jordan two' },
+      ],
+      investigationConcerns: [
+        { studentId: secondStudentId, text: 'Saved concern for Jordan two' },
+        { studentId: thirdStudentId, text: 'Saved concern for Casey' },
+        { studentId, text: 'Saved concern for Jordan one' },
+      ],
+      plannedResults: [
+        { studentId, text: 'Saved result for Jordan one' },
+        { studentId: thirdStudentId, text: 'Saved result for Casey' },
+        { studentId: secondStudentId, text: 'Saved result for Jordan two' },
+      ],
+    })
     const page = await mountStudent('DRAFT')
     await page.get('#eligible-project').setValue(projectId)
     await flushPromises()
@@ -375,16 +408,36 @@ describe('Formal proposal presentation and unchanged lifecycle', () => {
     expect(page.text()).not.toContain(secondStudentId)
     expect(page.text()).not.toContain(thirdStudentId)
     expect(page.findAll('[role="tab"]').every((tab) => !tab.attributes('aria-label'))).toBe(true)
-    expect((page.get('#member-topic-0').element as HTMLInputElement).value).toBe('Individual topic')
-    expect((page.get('#member-topic-1').element as HTMLInputElement).value).toBe('Second topic')
-    expect((page.get('#member-topic-2').element as HTMLInputElement).value).toBe('Third topic')
-    expect((page.get('#member-concern-0').element as HTMLTextAreaElement).value).toBe('Investigation')
-    expect((page.get('#member-concern-1').element as HTMLTextAreaElement).value).toBe('Second investigation')
-    expect((page.get('#member-result-2').element as HTMLTextAreaElement).value).toBe('Third result')
+    expect((page.get('#member-topic-0').element as HTMLInputElement).value).toBe('Saved topic for Jordan one')
+    expect((page.get('#member-topic-1').element as HTMLInputElement).value).toBe('Saved topic for Jordan two')
+    expect((page.get('#member-topic-2').element as HTMLInputElement).value).toBe('Saved topic for Casey')
+    expect((page.get('#member-concern-0').element as HTMLTextAreaElement).value).toBe('Saved concern for Jordan one')
+    expect((page.get('#member-concern-1').element as HTMLTextAreaElement).value).toBe('Saved concern for Jordan two')
+    expect((page.get('#member-concern-2').element as HTMLTextAreaElement).value).toBe('Saved concern for Casey')
+    expect((page.get('#member-result-0').element as HTMLTextAreaElement).value).toBe('Saved result for Jordan one')
+    expect((page.get('#member-result-1').element as HTMLTextAreaElement).value).toBe('Saved result for Jordan two')
+    expect((page.get('#member-result-2').element as HTMLTextAreaElement).value).toBe('Saved result for Casey')
     api.update.mockResolvedValue(record())
     await page.get('form.panel').trigger('submit')
     await flushPromises()
-    expect(api.update).toHaveBeenCalledExactlyOnceWith(applicationId, input)
+    expect(api.update).toHaveBeenCalledExactlyOnceWith(applicationId, {
+      ...input,
+      individualTopics: [
+        { studentId, topic: 'Saved topic for Jordan one' },
+        { studentId: secondStudentId, topic: 'Saved topic for Jordan two' },
+        { studentId: thirdStudentId, topic: 'Saved topic for Casey' },
+      ],
+      investigationConcerns: [
+        { studentId, text: 'Saved concern for Jordan one' },
+        { studentId: secondStudentId, text: 'Saved concern for Jordan two' },
+        { studentId: thirdStudentId, text: 'Saved concern for Casey' },
+      ],
+      plannedResults: [
+        { studentId, text: 'Saved result for Jordan one' },
+        { studentId: secondStudentId, text: 'Saved result for Jordan two' },
+        { studentId: thirdStudentId, text: 'Saved result for Casey' },
+      ],
+    })
     page.unmount()
   })
 
@@ -669,7 +722,7 @@ describe('Formal proposal presentation and unchanged lifecycle', () => {
     const pending = deferred<FormalApplication>()
     api[operation].mockReturnValueOnce(pending.promise)
     vi.spyOn(window, 'confirm').mockReturnValue(true)
-    const page = mount(FormalApplicationPage)
+    const page = mount(FormalApplicationPage, { attachTo: document.body })
     await flushPromises()
     await page.get('#eligible-project').setValue(projectId)
     await flushPromises()
@@ -692,7 +745,9 @@ describe('Formal proposal presentation and unchanged lifecycle', () => {
     const saved = { ...record(status), topic: 'Saved topic' }
     pending.resolve(saved)
     await flushPromises()
+    const proposalHeading = page.get('section.panel h2').element
     expect(page.get('#eligible-project').attributes('disabled')).toBeUndefined()
+    expect(document.activeElement).toBe(proposalHeading)
     expect(page.get('#eligible-project option:checked').text()).toContain(operation === 'submit' ? 'Submitted' : 'Draft')
     expect(page.get('#eligible-project option:checked').text()).not.toContain('No proposal')
     await page.get('#eligible-project').setValue(otherProjectId)
@@ -712,6 +767,7 @@ describe('Formal proposal presentation and unchanged lifecycle', () => {
       await page.get('form.panel').trigger('submit')
       await flushPromises()
       expect(api.update).toHaveBeenLastCalledWith(applicationId, { ...input, topic: 'Saved topic' })
+      expect(document.activeElement).toBe(page.get('section.panel h2').element)
       expect(api.create).toHaveBeenCalledTimes(operation === 'create' ? 1 : 0)
     }
     page.unmount()
