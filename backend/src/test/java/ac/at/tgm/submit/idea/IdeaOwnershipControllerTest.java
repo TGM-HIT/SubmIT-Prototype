@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -55,8 +56,10 @@ class IdeaOwnershipControllerTest {
         creatorToken = login("student01");
         collaboratorToken = login("student02");
         outsiderToken = login("student03");
-        teacherToken = login("teacher01");
         adminToken = login("admin01");
+        String teacherId = users.findByUsername("teacher01").orElseThrow().getId().toString();
+        setRoles(teacherId, List.of("TEACHER"));
+        teacherToken = login("teacher01");
         creatorId = users.findByUsername("student01").orElseThrow().getId().toString();
         collaboratorId = users.findByUsername("student02").orElseThrow().getId().toString();
     }
@@ -519,20 +522,32 @@ class IdeaOwnershipControllerTest {
     void ownerOperationsRejectOtherRolesNonOwnersAndUnauthenticatedCallers() throws Exception {
         String id = create(List.of(collaboratorId));
         String student04 = users.findByUsername("student04").orElseThrow().getId().toString();
-        for (String token : List.of(outsiderToken, teacherToken, adminToken)) {
+        String teacherId = users.findByUsername("teacher01").orElseThrow().getId().toString();
+        setRoles(teacherId, List.of("TEACHER", "ADMIN"));
+        String dualToken = login("teacher01");
+        String originalPayload = records.get("idea", UUID.fromString(id)).getPayload();
+        long originalAuditCount = auditCount();
+        for (String token : List.of(outsiderToken, teacherToken, adminToken, dualToken)) {
             mockMvc.perform(post("/api/ideas/{id}/owners", id).header("Authorization", bearer(token))
                             .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsString(Map.of("studentId", student04))))
                     .andExpect(status().isForbidden());
+            assertEquals(originalPayload, records.get("idea", UUID.fromString(id)).getPayload());
+            assertEquals(originalAuditCount, auditCount());
             mockMvc.perform(delete("/api/ideas/{id}/owners/{studentId}", id, collaboratorId)
                             .header("Authorization", bearer(token))).andExpect(status().isForbidden());
+            assertEquals(originalPayload, records.get("idea", UUID.fromString(id)).getPayload());
+            assertEquals(originalAuditCount, auditCount());
             mockMvc.perform(delete("/api/ideas/{id}/owners/me", id).header("Authorization", bearer(token)))
                     .andExpect(status().isForbidden());
+            assertEquals(originalPayload, records.get("idea", UUID.fromString(id)).getPayload());
+            assertEquals(originalAuditCount, auditCount());
         }
         getIdea(id, outsiderToken).andExpect(status().isForbidden());
         getIdea(id, null).andExpect(status().isUnauthorized());
         mockMvc.perform(post("/api/ideas/{id}/owners", id).contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of("studentId", student04))))
                 .andExpect(status().isUnauthorized());
+        setRoles(teacherId, List.of("TEACHER"));
         mockMvc.perform(delete("/api/ideas/{id}/owners/{studentId}", id, collaboratorId)).andExpect(status().isUnauthorized());
         mockMvc.perform(delete("/api/ideas/{id}/owners/me", id)).andExpect(status().isUnauthorized());
     }
@@ -767,5 +782,16 @@ class IdeaOwnershipControllerTest {
                         .content(objectMapper.writeValueAsString(Map.of("username", username, "password", "testing-password"))))
                 .andExpect(status().isOk()).andReturn();
         return objectMapper.readTree(result.getResponse().getContentAsString()).path("token").asText();
+    }
+
+    private void setRoles(String id, List<String> roles) throws Exception {
+        mockMvc.perform(patch("/api/users/{id}/role", id).header("Authorization", bearer(adminToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("roles", roles))))
+                .andExpect(status().isOk());
+    }
+
+    private long auditCount() {
+        return records.repository().findByType("audit", PageRequest.of(0, 1000)).getTotalElements();
     }
 }

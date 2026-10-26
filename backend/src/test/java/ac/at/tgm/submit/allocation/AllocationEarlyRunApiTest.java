@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -55,6 +56,11 @@ class AllocationEarlyRunApiTest {
     @BeforeEach
     void setUp() throws Exception {
         adminToken = login("admin01");
+        mockMvc.perform(patch("/api/users/{id}/role",
+                        users.findByUsername("teacher01").orElseThrow().getId())
+                        .header("Authorization", bearer(adminToken)).contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(Map.of("roles", List.of("TEACHER")))))
+                .andExpect(status().isOk());
         teacherToken = login("teacher01");
         for (int number = 1; number <= 5; number++) {
             String username = String.format("student%02d", number);
@@ -184,6 +190,81 @@ class AllocationEarlyRunApiTest {
         mockMvc.perform(post("/api/allocation-runs/{id}/finalize", replacementRun.path("id").asText())
                         .header("Authorization", bearer(adminToken)))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void allocationRunStartAndFinalizeEnforceAdministratorRoleSetsOnEquivalentFixtures() throws Exception {
+        String teacherOnly = teacherToken;
+        String teacherId = users.findByUsername("teacher01").orElseThrow().getId().toString();
+        mockMvc.perform(patch("/api/users/{id}/role", teacherId).header("Authorization", bearer(adminToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(Map.of("roles", List.of("TEACHER", "ADMIN")))))
+                .andExpect(status().isOk());
+        String dual = login("teacher01");
+
+        int runsBeforeDeniedStart = store.repository().findByTypeAndParentId(
+                "allocation_run", periodId.toString()).size();
+        long auditBeforeDeniedStart = auditCount();
+        for (String forbidden : List.of(studentTokens.getFirst(), teacherOnly)) {
+            mockMvc.perform(post("/api/application-periods/{id}/allocation-runs", periodId)
+                            .header("Authorization", bearer(forbidden)))
+                    .andExpect(status().isForbidden());
+            assertEquals(runsBeforeDeniedStart, store.repository().findByTypeAndParentId(
+                    "allocation_run", periodId.toString()).size());
+            assertEquals("OPEN", store.get("application_period", periodId).getStatus());
+            assertEquals(auditBeforeDeniedStart, auditCount());
+        }
+        for (String allowed : List.of(adminToken, dual)) {
+            mockMvc.perform(post("/api/application-periods/{id}/allocation-runs", periodId)
+                            .header("Authorization", bearer(allowed)))
+                    .andExpect(status().isCreated());
+        }
+        assertEquals(runsBeforeDeniedStart + 2, store.repository().findByTypeAndParentId(
+                "allocation_run", periodId.toString()).size());
+        assertEquals(auditBeforeDeniedStart + 2, auditCount());
+
+        assertFinalizeRoleMatrix(adminToken, teacherOnly, studentTokens.getFirst());
+        assertFinalizeRoleMatrix(dual, teacherOnly, studentTokens.getFirst());
+        mockMvc.perform(patch("/api/users/{id}/role", teacherId).header("Authorization", bearer(adminToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(Map.of("roles", List.of("TEACHER")))))
+                .andExpect(status().isOk());
+    }
+
+    private void assertFinalizeRoleMatrix(String allowedToken, String teacherOnly, String studentOnly)
+            throws Exception {
+        UUID period = createPeriod("CLOSED", Instant.now().minusSeconds(60));
+        JsonNode completed = mapper.readTree(mockMvc.perform(
+                        post("/api/application-periods/{id}/allocation-runs", period)
+                                .header("Authorization", bearer(adminToken)))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString());
+        String runId = completed.path("id").asText();
+        assertEquals("COMPLETED", completed.path("status").asText());
+        StoredRecord runBefore = store.repository().findById(UUID.fromString(runId)).orElseThrow();
+        StoredRecord periodBefore = store.repository().findById(period).orElseThrow();
+        long auditsBefore = auditCount();
+        for (String forbidden : List.of(teacherOnly, studentOnly)) {
+            mockMvc.perform(post("/api/allocation-runs/{id}/finalize", runId)
+                            .header("Authorization", bearer(forbidden)))
+                    .andExpect(status().isForbidden());
+            assertEquals(runBefore.getPayload(),
+                    store.repository().findById(UUID.fromString(runId)).orElseThrow().getPayload());
+            assertEquals(runBefore.getStatus(),
+                    store.repository().findById(UUID.fromString(runId)).orElseThrow().getStatus());
+            assertEquals(periodBefore.getStatus(), store.repository().findById(period).orElseThrow().getStatus());
+            assertEquals(auditsBefore, auditCount());
+        }
+        mockMvc.perform(post("/api/allocation-runs/{id}/finalize", runId)
+                        .header("Authorization", bearer(allowedToken)))
+                .andExpect(status().isOk());
+        assertEquals("FINALIZED", store.repository().findById(UUID.fromString(runId)).orElseThrow().getStatus());
+        assertEquals("FINALIZED", store.repository().findById(period).orElseThrow().getStatus());
+        assertEquals(auditsBefore + 1, auditCount());
+    }
+
+    private long auditCount() {
+        return store.repository().findByType("audit", org.springframework.data.domain.PageRequest.of(0, 1000))
+                .getTotalElements();
     }
 
     @Test

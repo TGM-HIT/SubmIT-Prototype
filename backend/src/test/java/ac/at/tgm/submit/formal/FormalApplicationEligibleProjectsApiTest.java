@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -60,10 +61,15 @@ class FormalApplicationEligibleProjectsApiTest {
 
     @BeforeEach
     void setUp() throws Exception {
+        adminToken = login("admin01");
+        String teacherId = users.findByUsername("teacher01").orElseThrow().getId().toString();
+        mockMvc.perform(patch("/api/users/{id}/role", teacherId).header("Authorization", bearer(adminToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(java.util.Map.of("roles", List.of("TEACHER")))))
+                .andExpect(status().isOk());
         studentToken = login("student01");
         otherStudentId = users.findByUsername("student02").orElseThrow().getId().toString();
         teacherToken = login("teacher01");
-        adminToken = login("admin01");
         emptyStudentToken = login("student25");
         eligibleProjects = new ArrayList<>();
         proposals.clear();
@@ -87,6 +93,19 @@ class FormalApplicationEligibleProjectsApiTest {
                 .andExpect(status().isForbidden());
         request("/api/formal-applications/eligible-projects", adminToken, 0, 20)
                 .andExpect(status().isForbidden());
+        String teacherId = users.findByUsername("teacher01").orElseThrow().getId().toString();
+        mockMvc.perform(patch("/api/users/{id}/role", teacherId).header("Authorization", bearer(adminToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(java.util.Map.of(
+                                "roles", List.of("TEACHER", "ADMIN")))))
+                .andExpect(status().isOk());
+        String dualToken = login("teacher01");
+        request("/api/formal-applications/eligible-projects", dualToken, 0, 20)
+                .andExpect(status().isForbidden());
+        mockMvc.perform(patch("/api/users/{id}/role", teacherId).header("Authorization", bearer(adminToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(java.util.Map.of("roles", List.of("TEACHER")))))
+                .andExpect(status().isOk());
 
         JsonNode document = apiDocument();
         JsonNode operation = document.path("paths").path("/api/formal-applications/eligible-projects").path("get");
@@ -442,6 +461,10 @@ class FormalApplicationEligibleProjectsApiTest {
             throws Exception {
         return mockMvc.perform(get(path).param("page", Integer.toString(page)).param("size", Integer.toString(size))
                 .header("Authorization", "Bearer " + token));
+    }
+
+    private String bearer(String token) {
+        return "Bearer " + token;
     }
 
     private JsonNode response(MvcResult result) throws Exception {

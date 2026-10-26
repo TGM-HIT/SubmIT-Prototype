@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -73,6 +74,7 @@ class ApplicationPeriodLifecycleApiTest {
         student02 = login("student02");
         student04 = login("student04");
         admin = login("admin01");
+        setRoles(users.findByUsername("teacher01").orElseThrow().getId().toString(), List.of("TEACHER"));
         String owner = users.findByUsername("student03").orElseThrow().getId().toString();
         projectIds = List.of("Lifecycle One", "Lifecycle Two", "Lifecycle Three").stream()
                 .map(title -> store.create("idea", owner, null, "ACCEPTED_FOR_APPLICATIONS",
@@ -250,6 +252,145 @@ class ApplicationPeriodLifecycleApiTest {
                 "Non-OPEN-period rejections must not create applications or alter application, revision, or audit data.");
     }
 
+    @Test
+    void periodCreateAndUpdateApplyTheAdministratorRoleSetToEquivalentPublicRequests() throws Exception {
+        String teacherId = users.findByUsername("teacher01").orElseThrow().getId().toString();
+        setRoles(teacherId, List.of("TEACHER"));
+        String teacher = login("teacher01");
+        String student = login("student03");
+        setRoles(teacherId, List.of("TEACHER", "ADMIN"));
+        String dual = login("teacher01");
+        var payload = mapper.createObjectNode().put("label", "Authorization matrix")
+                .put("schoolYear", "2026/2027").put("opensAt", Instant.now().plusSeconds(600).toString())
+                .put("closesAt", Instant.now().plusSeconds(3600).toString())
+                .put("eligibilityMode", "ALL_STUDENTS");
+        payload.set("projectIds", mapper.valueToTree(projectIds));
+        long periodsBefore = store.repository().findByType("application_period",
+                org.springframework.data.domain.PageRequest.of(0, 100)).getTotalElements();
+        long auditsBefore = auditCount();
+
+        mockMvc.perform(post("/api/application-periods").header("Authorization", bearer(admin))
+                        .contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsString(payload)))
+                .andExpect(status().isCreated());
+        mockMvc.perform(post("/api/application-periods").header("Authorization", bearer(dual))
+                        .contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsString(payload)))
+                .andExpect(status().isCreated());
+        assertEquals(periodsBefore + 2, store.repository().findByType("application_period",
+                org.springframework.data.domain.PageRequest.of(0, 100)).getTotalElements());
+
+        var update = payload.deepCopy().put("label", "Updated by authorized role set");
+        String targetId = periodId.toString();
+        mockMvc.perform(put("/api/application-periods/{id}", targetId).header("Authorization", bearer(admin))
+                        .contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsString(update)))
+                .andExpect(status().isOk());
+        mockMvc.perform(put("/api/application-periods/{id}", targetId).header("Authorization", bearer(dual))
+                        .contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsString(update)))
+                .andExpect(status().isOk());
+
+        StoredRecord beforeDenied = store.repository().findById(periodId).orElseThrow();
+        String payloadBeforeDenied = beforeDenied.getPayload();
+        String statusBeforeDenied = beforeDenied.getStatus();
+        long auditsBeforeDenied = auditCount();
+        for (String token : List.of(teacher, student)) {
+            mockMvc.perform(post("/api/application-periods").header("Authorization", bearer(token))
+                            .contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsString(payload)))
+                    .andExpect(status().isForbidden());
+            mockMvc.perform(put("/api/application-periods/{id}", periodId).header("Authorization", bearer(token))
+                            .contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsString(update)))
+                    .andExpect(status().isForbidden());
+            StoredRecord afterDenied = store.repository().findById(periodId).orElseThrow();
+            assertEquals(payloadBeforeDenied, afterDenied.getPayload());
+            assertEquals(statusBeforeDenied, afterDenied.getStatus());
+            assertEquals(periodsBefore + 2, store.repository().findByType("application_period",
+                    org.springframework.data.domain.PageRequest.of(0, 100)).getTotalElements());
+            assertEquals(auditsBeforeDenied, auditCount());
+        }
+        assertEquals(auditsBefore + 4, auditCount());
+        setRoles(teacherId, List.of("TEACHER"));
+    }
+
+    @Test
+    void studentCatalogueAndApplicationRoutesEnforceStudentAndStaffRoleSets() throws Exception {
+        clock.set(Instant.now());
+        String teacherId = users.findByUsername("teacher01").orElseThrow().getId().toString();
+        setRoles(teacherId, List.of("TEACHER"));
+        String teacherOnly = login("teacher01");
+        setRoles(teacherId, List.of("TEACHER", "ADMIN"));
+        String dual = login("teacher01");
+        StoredRecord period = store.repository().findById(periodId).orElseThrow();
+        var openPayload = store.parse(period).put("opensAt", Instant.now().minusSeconds(60).toString())
+                .put("closesAt", Instant.now().plusSeconds(3600).toString());
+        store.update(period, "OPEN", openPayload);
+
+        mockMvc.perform(get(cataloguePath()).header("Authorization", bearer(student01)))
+                .andExpect(status().isOk());
+        for (String staff : List.of(teacherOnly, admin, dual)) {
+            mockMvc.perform(get(cataloguePath()).header("Authorization", bearer(staff)))
+                    .andExpect(status().isForbidden());
+        }
+
+        long auditBeforeCreate = auditCount();
+        int applicationsBeforeCreate = store.repository().findByTypeAndParentId(
+                "student_application", periodId.toString()).size();
+        for (String staff : List.of(teacherOnly, admin, dual)) {
+            mockMvc.perform(post(applicationPath()).header("Authorization", bearer(staff))
+                            .contentType(MediaType.APPLICATION_JSON).content(applicationRequest()))
+                    .andExpect(status().isForbidden());
+            assertEquals(applicationsBeforeCreate, store.repository().findByTypeAndParentId(
+                    "student_application", periodId.toString()).size());
+            assertEquals(auditBeforeCreate, auditCount());
+        }
+        MvcResult created = mockMvc.perform(post(applicationPath()).header("Authorization", bearer(student01))
+                        .contentType(MediaType.APPLICATION_JSON).content(applicationRequest()))
+                .andExpect(status().isCreated()).andReturn();
+        UUID ownedApplication = UUID.fromString(mapper.readTree(created.getResponse().getContentAsString())
+                .path("id").asText());
+        String ownPath = "/api/application-periods/" + periodId + "/applications/me";
+        JsonNode ownApplication = getJson(ownPath, student01);
+        assertEquals(ownedApplication.toString(), ownApplication.path("id").asText());
+        for (String staff : List.of(teacherOnly, admin, dual)) {
+            mockMvc.perform(get(ownPath).header("Authorization", bearer(staff))).andExpect(status().isForbidden());
+        }
+
+        for (String staff : List.of(teacherOnly, admin, dual)) {
+            MvcResult listed = mockMvc.perform(get("/api/application-periods/{id}/applications", periodId)
+                            .header("Authorization", bearer(staff)))
+                    .andExpect(status().isOk()).andReturn();
+            JsonNode page = mapper.readTree(listed.getResponse().getContentAsString());
+            assertEquals(ownedApplication.toString(), page.path("content").get(0).path("id").asText());
+        }
+        mockMvc.perform(get("/api/application-periods/{id}/applications", periodId)
+                        .header("Authorization", bearer(student01)))
+                .andExpect(status().isForbidden());
+
+        String updatePath = "/api/applications/" + ownedApplication;
+        String beforeUpdate = store.repository().findById(ownedApplication).orElseThrow().getPayload();
+        long auditBeforeUpdate = auditCount();
+        for (String staff : List.of(teacherOnly, admin, dual)) {
+            mockMvc.perform(put(updatePath).header("Authorization", bearer(staff))
+                            .contentType(MediaType.APPLICATION_JSON).content(applicationRequest()))
+                    .andExpect(status().isForbidden());
+            assertEquals(beforeUpdate, store.repository().findById(ownedApplication).orElseThrow().getPayload());
+            assertEquals(auditBeforeUpdate, auditCount());
+        }
+        mockMvc.perform(put(updatePath).header("Authorization", bearer(student01))
+                        .contentType(MediaType.APPLICATION_JSON).content(applicationRequest()))
+                .andExpect(status().isOk());
+        String beforeWithdraw = store.repository().findById(ownedApplication).orElseThrow().getPayload();
+        long auditBeforeWithdraw = auditCount();
+        for (String staff : List.of(teacherOnly, admin, dual)) {
+            mockMvc.perform(delete(updatePath).header("Authorization", bearer(staff)))
+                    .andExpect(status().isForbidden());
+            assertEquals("SUBMITTED", store.repository().findById(ownedApplication).orElseThrow().getStatus());
+            assertEquals(beforeWithdraw, store.repository().findById(ownedApplication).orElseThrow().getPayload());
+            assertEquals(auditBeforeWithdraw, auditCount());
+        }
+        mockMvc.perform(delete(updatePath).header("Authorization", bearer(student01)))
+                .andExpect(status().isNoContent());
+        assertEquals("WITHDRAWN", store.repository().findById(ownedApplication).orElseThrow().getStatus());
+        setRoles(teacherId, List.of("TEACHER"));
+    }
+
     private void rejectSoloMutations(String token, UUID application) throws Exception {
         mockMvc.perform(post(applicationPath()).header("Authorization", bearer(token))
                         .contentType(MediaType.APPLICATION_JSON).content(applicationRequest()))
@@ -325,6 +466,18 @@ class ApplicationPeriodLifecycleApiTest {
                                 "password", "testing-password"))))
                 .andExpect(status().isOk()).andReturn();
         return mapper.readTree(result.getResponse().getContentAsString()).path("token").asText();
+    }
+
+    private void setRoles(String id, List<String> roles) throws Exception {
+        mockMvc.perform(patch("/api/users/{id}/role", id).header("Authorization", bearer(admin))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsString(Map.of("roles", roles))))
+                .andExpect(status().isOk());
+    }
+
+    private long auditCount() {
+        return store.repository().findByType("audit", org.springframework.data.domain.PageRequest.of(0, 1000))
+                .getTotalElements();
     }
 
     private String bearer(String token) {

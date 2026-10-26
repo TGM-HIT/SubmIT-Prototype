@@ -46,6 +46,8 @@ class ApplyingGroupApiTest {
     void prepare() throws Exception {
         for (int i = 1; i <= 7; i++) tokens.put(i, login("student%02d".formatted(i)));
         admin = login("admin01");
+        perform(patch("/api/users/" + users.findByUsername("teacher01").orElseThrow().getId() + "/role"),
+                admin, Map.of("roles", List.of("TEACHER")), 200);
         teacher = login("teacher01");
         projects = new ArrayList<>();
         for (int i = 0; i < 3; i++) {
@@ -65,6 +67,10 @@ class ApplyingGroupApiTest {
 
     @Test
     void G1_atomicUnanimousRevisionBoundReplacementAndAuthorization() throws Exception {
+        String teacherOnly = teacher;
+        setRoles(users.findByUsername("teacher01").orElseThrow().getId().toString(),
+                List.of("TEACHER", "ADMIN"));
+        teacher = login("teacher01");
         String solo1 = solo(1).path("id").asText();
         String solo2 = solo(2).path("id").asText();
         JsonNode group = create(1);
@@ -112,6 +118,28 @@ class ApplyingGroupApiTest {
             perform(post(path() + "/" + id + "/actions/" + action), teacher, Map.of("revision", current), 403);
             perform(post(path() + "/" + id + "/actions/" + action), admin, Map.of("revision", current), 403);
             perform(post(path() + "/" + id + "/actions/" + action), null, Map.of("revision", current), 401);
+            assertEquals(before, stored(id).getPayload());
+        }
+        long groupCountBeforeCreateDenials = store.repository().findByType("applying_group",
+                org.springframework.data.domain.PageRequest.of(0, 1000)).getTotalElements();
+        long auditCountBeforeCreateDenials = auditCount();
+        for (String staff : List.of(teacherOnly, admin, teacher)) {
+            perform(post(path()), staff, null, 403);
+            assertEquals(groupCountBeforeCreateDenials, store.repository().findByType("applying_group",
+                    org.springframework.data.domain.PageRequest.of(0, 1000)).getTotalElements());
+            assertEquals(auditCountBeforeCreateDenials, auditCount());
+        }
+        setRoles(users.findByUsername("teacher01").orElseThrow().getId().toString(), List.of("TEACHER"));
+        for (String action : List.of("INVITE", "REVOKE", "ACCEPT", "DECLINE", "APPROVE", "RANK",
+                "SUBMIT", "WITHDRAW", "LEAVE", "TRANSFER", "DISSOLVE")) {
+            String before = stored(id).getPayload();
+            for (String staff : List.of(teacherOnly, teacher)) {
+                long auditsBeforeAction = auditCount();
+                perform(post(path() + "/" + id + "/actions/" + action), staff,
+                        Map.of("revision", current), 403);
+                assertEquals(auditsBeforeAction, auditCount(),
+                        "A forbidden " + action + " must not emit an audit record.");
+            }
             assertEquals(before, stored(id).getPayload());
         }
     }
@@ -1064,6 +1092,15 @@ class ApplyingGroupApiTest {
 
     private String login(String username) throws Exception {
         return text(perform(post("/api/auth/login"), null, Map.of("username", username, "password", "testing-password"), 200), "token");
+    }
+
+    private void setRoles(String id, List<String> roles) throws Exception {
+        perform(patch("/api/users/" + id + "/role"), admin, Map.of("roles", roles), 200);
+    }
+
+    private long auditCount() {
+        return store.repository().findByType("audit", org.springframework.data.domain.PageRequest.of(0, 1000))
+                .getTotalElements();
     }
 
     private JsonNode perform(MockHttpServletRequestBuilder request, String token, Object body, int expected) throws Exception {

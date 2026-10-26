@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -60,10 +61,12 @@ class FormalApplicationValidationApiTest {
 
     @BeforeEach
     void setUp() throws Exception {
+        adminToken = login("admin01");
+        String teacherId = users.findByUsername("teacher01").orElseThrow().getId().toString();
+        setRoles(teacherId, List.of("TEACHER"));
         studentToken = login("student01");
         outsiderToken = login("student04");
         teacherToken = login("teacher01");
-        adminToken = login("admin01");
         memberIds = MEMBER_USERNAMES.stream()
                 .map(username -> users.findByUsername(username).orElseThrow().getId().toString())
                 .toList();
@@ -165,6 +168,61 @@ class FormalApplicationValidationApiTest {
                 .andExpect(status().isCreated());
         assertEquals("APPROVED", records.findById(applicationId).orElseThrow().getStatus());
         assertEquals(2, records.findByTypeAndParentId("formal_application_revision", applicationId.toString()).size());
+    }
+
+    @Test
+    void formalApplicationCreateUpdateAndSubmitAreStudentOnlyForAllSupportedRoleSets() throws Exception {
+        String teacherId = users.findByUsername("teacher01").orElseThrow().getId().toString();
+        setRoles(teacherId, List.of("TEACHER"));
+        String teacherOnlyToken = login("teacher01");
+        mockMvc.perform(patch("/api/users/{id}/role", teacherId).header("Authorization", bearer(adminToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("roles", List.of("TEACHER", "ADMIN")))))
+                .andExpect(status().isOk());
+        String dualToken = login("teacher01");
+        UUID projectId = createAllocatedProject();
+        ObjectNode request = validRequest();
+        List<String> deniedTokens = List.of(teacherOnlyToken, adminToken, dualToken);
+        List<RecordSnapshot> beforeCreate = persistedState(projectId, UUID.randomUUID());
+        List<RecordSnapshot> auditBeforeCreate = allAuditSnapshots();
+        for (String token : deniedTokens) {
+            submitCreate(projectId, request, token).andExpect(status().isForbidden());
+            assertTrue(records.findByTypeAndParentId("formal_application", projectId.toString()).isEmpty());
+            assertEquals(beforeCreate, persistedState(projectId, UUID.randomUUID()));
+            assertEquals(auditBeforeCreate, allAuditSnapshots());
+        }
+        MvcResult created = submitCreate(projectId, request, studentToken).andExpect(status().isCreated()).andReturn();
+        UUID applicationId = UUID.fromString(objectMapper.readTree(created.getResponse().getContentAsByteArray())
+                .path("id").asText());
+
+        List<RecordSnapshot> beforeUpdate = persistedState(projectId, applicationId);
+        List<RecordSnapshot> auditBeforeUpdate = allAuditSnapshots();
+        for (String token : deniedTokens) {
+            mockMvc.perform(put("/api/formal-applications/{id}", applicationId)
+                            .header("Authorization", bearer(token)).contentType(MediaType.APPLICATION_JSON)
+                            .content(objectMapper.writeValueAsString(request)))
+                    .andExpect(status().isForbidden());
+            assertEquals(beforeUpdate, persistedState(projectId, applicationId));
+            assertEquals(auditBeforeUpdate, allAuditSnapshots());
+        }
+        mockMvc.perform(put("/api/formal-applications/{id}", applicationId)
+                        .header("Authorization", bearer(studentToken)).contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk());
+
+        List<RecordSnapshot> beforeSubmit = persistedState(projectId, applicationId);
+        List<RecordSnapshot> auditBeforeSubmit = allAuditSnapshots();
+        for (String token : deniedTokens) {
+            mockMvc.perform(post("/api/formal-applications/{id}/submit", applicationId)
+                            .header("Authorization", bearer(token)))
+                    .andExpect(status().isForbidden());
+            assertEquals(beforeSubmit, persistedState(projectId, applicationId));
+            assertEquals(auditBeforeSubmit, allAuditSnapshots());
+        }
+        mockMvc.perform(post("/api/formal-applications/{id}/submit", applicationId)
+                        .header("Authorization", bearer(studentToken)))
+                .andExpect(status().isOk());
+        setRoles(teacherId, List.of("TEACHER"));
     }
 
     @Test
@@ -813,6 +871,13 @@ class FormalApplicationValidationApiTest {
                                 "username", username, "password", "testing-password"))))
                 .andExpect(status().isOk()).andReturn();
         return objectMapper.readTree(result.getResponse().getContentAsString()).path("token").asText();
+    }
+
+    private void setRoles(String id, List<String> roles) throws Exception {
+        mockMvc.perform(patch("/api/users/{id}/role", id).header("Authorization", bearer(adminToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("roles", roles))))
+                .andExpect(status().isOk());
     }
 
     private String bearer(String token) {
