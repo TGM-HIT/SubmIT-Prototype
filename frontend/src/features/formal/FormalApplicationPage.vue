@@ -32,6 +32,73 @@
           <button class="button" type="button" @click="newApplication">{{ $t('formal.startProposal') }}</button>
         </div>
       </div>
+      <template v-else-if="isTeacher">
+        <div class="stack">
+          <h2 ref="proposalListHeading" tabindex="-1" class="section-title">{{ $t('formal.listTitle') }}</h2>
+          <form class="toolbar" @submit.prevent="searchTeacherProposals">
+            <div class="field">
+              <label class="label" for="formal-proposal-search">{{ $t('formal.searchLabel') }}</label>
+              <input id="formal-proposal-search" v-model="searchDraft" class="input" type="search" />
+            </div>
+            <button class="button button-secondary" :disabled="proposalListLoading">{{ $t('formal.search') }}</button>
+          </form>
+          <label class="field checkbox-field" for="formal-supervised-only">
+            <input id="formal-supervised-only" v-model="supervisedOnly" type="checkbox"
+              :disabled="proposalListLoading" @change="changeSupervisedFilter" />
+            <span>{{ $t('formal.supervisedOnly') }}</span>
+          </label>
+          <p v-if="proposalListLoading" class="notice" role="status">{{ $t('formal.loadingList') }}</p>
+          <div v-if="proposalListError" class="error-box" role="alert">
+            <p>{{ proposalListError }}</p>
+            <button class="button button-secondary" type="button" @click="loadTeacherProposals">
+              {{ $t('formal.retryList') }}
+            </button>
+          </div>
+          <p v-if="proposalLoading" class="notice" role="status">{{ $t('formal.loadingProposal') }}</p>
+          <button v-if="proposalLoading" class="button button-secondary" type="button"
+            @click="cancelTeacherProposalLoad">{{ $t('formal.cancelLoading') }}</button>
+          <div v-if="proposalError" class="error-box" role="alert">
+            <p>{{ proposalError }}</p>
+            <button class="button button-secondary" type="button" @click="retryTeacherProposal">
+              {{ $t('formal.retryProposal') }}
+            </button>
+          </div>
+          <p v-if="!proposalListLoading && !proposalListError && proposalSummaries.length === 0"
+            class="notice" role="status">{{ $t('formal.noSearchResults') }}</p>
+          <div v-if="proposalSummaries.length" class="stack" role="list"
+            :aria-label="$t('formal.proposalResults')">
+            <article v-for="summary in proposalSummaries" :key="summary.formalApplicationId"
+              class="data-row" role="listitem">
+              <button class="proposal-result" type="button"
+                :ref="(element) => setProposalResultButton(summary.formalApplicationId, element)"
+                :aria-pressed="teacherSelection?.formalApplicationId === summary.formalApplicationId"
+                :disabled="proposalLoading || proposalListLoading || task.loading.value"
+                @click="selectTeacherProposal(summary)">
+                <span class="proposal-result-title">{{ summary.projectTitle }}</span>
+                <span>{{ summary.studentNames.join(', ') }}</span>
+                <span>{{ summary.periodLabel }} · {{ summary.schoolYear }}</span>
+                <span class="status-badge">{{ readable(summary.status) }}</span>
+              </button>
+            </article>
+          </div>
+          <div class="toolbar" :aria-label="$t('formal.pagination')">
+            <button class="button button-secondary" type="button"
+              :disabled="proposalListLoading || proposalListPage === 0" @click="changeProposalPage(-1)">
+              {{ $t('formal.previousPage') }}
+            </button>
+            <span role="status">{{ $t('formal.pageSummary', {
+              current: proposalListPage + 1,
+              total: Math.max(proposalListTotalPages, 1),
+              count: proposalListTotalElements,
+            }) }}</span>
+            <button class="button button-secondary" type="button"
+              :disabled="proposalListLoading || proposalListPage + 1 >= proposalListTotalPages"
+              @click="changeProposalPage(1)">
+              {{ $t('formal.nextPage') }}
+            </button>
+          </div>
+        </div>
+      </template>
       <template v-else>
         <form class="toolbar" @submit.prevent="loadApplication">
           <div class="field"><label class="label" for="project-id">{{ $t('formal.projectId') }}</label><input id="project-id" v-model.trim="projectId" class="input" required aria-describedby="project-hint" /><small id="project-hint" class="muted">{{ $t('formal.projectHint') }}</small></div>
@@ -87,11 +154,14 @@
       <div class="actions"><button class="button" :disabled="task.loading.value || concernsUsed > 2400 || resultsUsed > 2400">{{ $t('formal.saveDraft') }}</button><button v-if="current.status === 'DRAFT' || current.status === 'NEEDS_REVISION'" class="button button-secondary" type="button" :disabled="task.loading.value" @click="submitApplication">{{ $t('formal.submitReview') }}</button><button class="button button-secondary" type="button" @click="closeEditor">{{ $t('formal.closeEditor') }}</button></div>
     </form>
     <section v-if="current && !editing" class="panel stack">
-      <div class="page-heading"><div><h2 ref="savedHeading" tabindex="-1" class="section-title">{{ current.topic }}</h2><p v-if="isStudent && selectedProject" class="muted">{{ selectedProject.projectTitle }} · {{ selectedProject.periodLabel }} ({{ selectedProject.schoolYear }}) · {{ readable(current.status) }}</p><p v-else class="muted">{{ $t('formal.project') }} {{ current.projectId }} · {{ readable(current.status) }}</p></div><span class="status-badge">{{ readable(current.status) }}</span></div>
+      <div class="page-heading"><div><h2 ref="savedHeading" tabindex="-1" class="section-title">{{ current.topic }}</h2><p v-if="isStudent && selectedProject" class="muted">{{ selectedProject.projectTitle }} · {{ selectedProject.periodLabel }} ({{ selectedProject.schoolYear }}) · {{ readable(current.status) }}</p><p v-else-if="isTeacher && teacherSelection" class="muted">{{ teacherSelection.projectTitle }} · {{ teacherSelection.studentNames.join(', ') }} · {{ teacherSelection.periodLabel }} · {{ teacherSelection.schoolYear }}</p><p v-else class="muted">{{ $t('formal.project') }} {{ current.projectId }} · {{ readable(current.status) }}</p></div><span class="status-badge">{{ readable(current.status) }}</span></div>
+      <button v-if="isTeacher" class="button button-secondary" type="button" @click="returnToTeacherList">
+        {{ $t('formal.backToList') }}
+      </button>
       <p><strong>{{ $t('formal.initialSituation') }}</strong><br />{{ current.initialSituation }}</p>
       <p><strong>{{ $t('formal.objectiveDisplay') }}</strong><br />{{ current.objective }}</p>
       <div class="notice">{{ current.status === 'APPROVED' ? $t('formal.approvedNotice') : $t('formal.notApprovedNotice') }}</div>
-      <div v-if="editableStatus" class="actions"><button ref="editProposalButton" class="button" @click="openEditor">{{ $t('formal.editProposal') }}</button></div>
+      <div v-if="editableStatus && !isTeacher" class="actions"><button ref="editProposalButton" class="button" @click="openEditor">{{ $t('formal.editProposal') }}</button></div>
       <h3 class="form-section-title">{{ $t('formal.teacherReview') }}</h3>
       <article v-for="review in current.reviewHistory?.content ?? []" :key="review.id" class="data-row"><div class="row-main"><h3>{{ readable(review.decision) }}</h3><p>{{ review.feedback }}</p></div></article>
       <p v-if="!current.reviewHistory?.content?.length" class="muted">{{ $t('formal.noReviews') }}</p>
@@ -116,6 +186,7 @@ import { useTask } from '../../composables/useTask'
 import { formatNumber, i18n } from '../../i18n'
 
 type FormalApplication = components['schemas']['FormalApplicationResponse']
+type FormalApplicationSummary = components['schemas']['FormalApplicationSummaryResponse']
 type EligibleProject = components['schemas']['EligibleFormalProjectResponse']
 type RosterMember = components['schemas']['FormalApplicationRosterMember']
 type MemberDraft = { studentId: string; topic: string; investigationConcern: string; plannedResult: string }
@@ -132,10 +203,24 @@ const rosterLoading = ref(false)
 const rosterError = ref('')
 const proposalLoading = ref(false)
 const proposalError = ref('')
+const proposalSummaries = ref<FormalApplicationSummary[]>([])
+const proposalListLoading = ref(false)
+const proposalListError = ref('')
+const proposalListPage = ref(0)
+const proposalListTotalPages = ref(0)
+const proposalListTotalElements = ref(0)
+const proposalListVersion = ref(0)
+const proposalDetailVersion = ref(0)
+const searchDraft = ref('')
+const searchQuery = ref('')
+const supervisedOnly = ref(true)
+const teacherSelection = ref<FormalApplicationSummary | null>(null)
 const activeMemberTab = ref(0)
 const selectionVersion = ref(0)
 const savedHeading = ref<HTMLElement | null>(null)
+const proposalListHeading = ref<HTMLElement | null>(null)
 const editProposalButton = ref<HTMLButtonElement | null>(null)
+const proposalResultButtons = new Map<string, HTMLButtonElement>()
 const current = ref<FormalApplication | null>(null)
 const editing = ref(false)
 const decision = ref('APPROVE')
@@ -149,6 +234,7 @@ const concernsUsed = computed(() => form.members.reduce((total, member) => total
 const resultsUsed = computed(() => form.members.reduce((total, member) => total + member.plannedResult.length, 0))
 const editableStatus = computed(() => ['DRAFT', 'NEEDS_REVISION'].includes(current.value?.status ?? ''))
 const isStudent = computed(() => auth.user?.roles.includes('STUDENT') ?? false)
+const isTeacher = computed(() => auth.user?.roles.includes('TEACHER') ?? false)
 const selectedProject = computed(() =>
   eligibleProjects.value.find((project) => project.projectId === selectedProjectId.value) ?? null)
 
@@ -209,6 +295,100 @@ async function loadApplication(): Promise<void> {
   const result = await task.run(() => formalApi.get(projectId.value))
   if (result) { current.value = result; hydrate(result); editing.value = false }
   else if (task.error.value.includes('404') || task.error.value.toLowerCase().includes('not found')) { task.error.value = ''; clearForm() }
+}
+async function loadTeacherProposals(): Promise<void> {
+  const version = ++proposalListVersion.value
+  proposalListLoading.value = true
+  proposalListError.value = ''
+  try {
+    const result = await formalApi.list(searchQuery.value, supervisedOnly.value, proposalListPage.value, 20)
+    if (version !== proposalListVersion.value) return
+    proposalSummaries.value = result.content
+    proposalListTotalPages.value = result.totalPages
+    proposalListTotalElements.value = result.totalElements
+  } catch {
+    if (version === proposalListVersion.value) {
+      proposalListError.value = String(i18n.global.t('formal.listFailed'))
+    }
+  } finally {
+    if (version === proposalListVersion.value) proposalListLoading.value = false
+  }
+}
+function searchTeacherProposals(): void {
+  searchDraft.value = searchDraft.value.trim()
+  searchQuery.value = searchDraft.value
+  proposalListPage.value = 0
+  void loadTeacherProposals()
+}
+function changeSupervisedFilter(): void {
+  proposalListPage.value = 0
+  void loadTeacherProposals()
+}
+function changeProposalPage(offset: number): void {
+  const next = proposalListPage.value + offset
+  if (next < 0 || next >= proposalListTotalPages.value || proposalListLoading.value) return
+  proposalListPage.value = next
+  void loadTeacherProposals()
+}
+function setProposalResultButton(id: string, element: unknown): void {
+  if (element instanceof HTMLButtonElement) proposalResultButtons.set(id, element)
+  else proposalResultButtons.delete(id)
+}
+async function selectTeacherProposal(summary: FormalApplicationSummary): Promise<void> {
+  if (proposalLoading.value || task.loading.value) return
+  const version = ++proposalDetailVersion.value
+  teacherSelection.value = summary
+  projectId.value = summary.projectId
+  proposalError.value = ''
+  proposalLoading.value = true
+  current.value = null
+  editing.value = false
+  task.error.value = ''
+  task.success.value = ''
+  try {
+    const result = await formalApi.get(summary.projectId)
+    if (version !== proposalDetailVersion.value || teacherSelection.value?.formalApplicationId !== summary.formalApplicationId) return
+    current.value = result
+    hydrate(result)
+    editing.value = false
+    await nextTick()
+    savedHeading.value?.focus()
+  } catch {
+    if (version === proposalDetailVersion.value
+      && teacherSelection.value?.formalApplicationId === summary.formalApplicationId) {
+      proposalError.value = String(i18n.global.t('formal.proposalFailed'))
+    }
+  } finally {
+    if (version === proposalDetailVersion.value) proposalLoading.value = false
+  }
+}
+function retryTeacherProposal(): void {
+  if (teacherSelection.value) void selectTeacherProposal(teacherSelection.value)
+}
+function cancelTeacherProposalLoad(): void {
+  ++proposalDetailVersion.value
+  proposalLoading.value = false
+  current.value = null
+  editing.value = false
+  proposalError.value = ''
+  void nextTick(() => {
+    const selected = teacherSelection.value
+    const resultButton = selected ? proposalResultButtons.get(selected.formalApplicationId) : undefined
+    if (resultButton?.isConnected && !resultButton.disabled) resultButton.focus()
+    else proposalListHeading.value?.focus()
+  })
+}
+function returnToTeacherList(): void {
+  ++proposalDetailVersion.value
+  current.value = null
+  editing.value = false
+  proposalError.value = ''
+  void nextTick(() => {
+    const selected = teacherSelection.value
+    const resultButton = selected ? proposalResultButtons.get(selected.formalApplicationId) : undefined
+    if (resultButton?.isConnected && !resultButton.disabled) resultButton.focus()
+    else proposalListHeading.value?.focus()
+  })
 }
 async function loadEligibleProjects(): Promise<void> {
   eligibleProjectsLoading.value = true
@@ -366,14 +546,41 @@ async function submitApplication(): Promise<void> {
   if (result) acceptProposal(result, isStudent.value)
 }
 async function reviewApplication(): Promise<void> {
-  if (!current.value?.id || !confirm(String(i18n.global.t('formal.recordConfirm')))) return
+  if (!current.value?.id || task.loading.value || !confirm(String(i18n.global.t('formal.recordConfirm')))) return
   const result = await task.run(() => formalApi.review(current.value!.id!, {
     decision: decision.value,
     feedback: feedback.value,
   }), String(i18n.global.t('formal.decisionRecorded')))
-  if (result) await loadApplication()
+  if (!result) return
+  if (!isTeacher.value || !teacherSelection.value) {
+    await loadApplication()
+    return
+  }
+  const selected = teacherSelection.value
+  const version = ++proposalDetailVersion.value
+  proposalLoading.value = true
+  proposalError.value = ''
+  try {
+    const refreshed = await formalApi.get(selected.projectId)
+    if (version !== proposalDetailVersion.value
+      || teacherSelection.value?.formalApplicationId !== selected.formalApplicationId) return
+    current.value = refreshed
+    hydrate(refreshed)
+    await loadTeacherProposals()
+    await nextTick()
+    savedHeading.value?.focus()
+  } catch {
+    if (version === proposalDetailVersion.value) {
+      proposalError.value = String(i18n.global.t('formal.proposalFailed'))
+    }
+  } finally {
+    if (version === proposalDetailVersion.value) proposalLoading.value = false
+  }
 }
-if (isStudent.value) onMounted(loadEligibleProjects)
+onMounted(() => {
+  if (isStudent.value) void loadEligibleProjects()
+  else if (isTeacher.value) void loadTeacherProposals()
+})
 </script>
 
 <style scoped>
@@ -401,6 +608,32 @@ if (isStudent.value) onMounted(loadEligibleProjects)
 }
 .member-panel {
   min-width: 0;
+}
+.checkbox-field {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+.proposal-result {
+  display: grid;
+  width: 100%;
+  gap: 0.35rem;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  text-align: left;
+  cursor: pointer;
+}
+.proposal-result:focus {
+  outline: 3px solid var(--focus, #2563eb);
+  outline-offset: 3px;
+}
+.proposal-result:disabled {
+  cursor: wait;
+}
+.proposal-result-title {
+  font-weight: 700;
 }
 @media (max-width: 480px) {
   .member-tab {

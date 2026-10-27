@@ -934,6 +934,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/formal-applications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List formal applications for teachers.
+         * @description Returns current proposal context. Search is a trimmed, case-insensitive substring match over project title, allocated member display names, application-period label, and school year. Search and the confirmed-supervisor filter are applied before pagination. Teachers may list, read, and review proposals regardless of supervision assignment.
+         */
+        get: operations["list_6"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/formal-applications/eligible-projects": {
         parameters: {
             query?: never;
@@ -945,7 +965,7 @@ export interface paths {
          * List finalized projects eligible for the authenticated student's Formal proposal.
          * @description Returns only projects in persisted finalized allocation groups containing the caller. The response excludes group members and other allocation data. Pagination uses zero-based page (default 0) and size (default 20, normalized to 1–100).
          */
-        get: operations["list_6"];
+        get: operations["list_7"];
         put?: never;
         post?: never;
         delete?: never;
@@ -962,7 +982,7 @@ export interface paths {
             cookie?: never;
         };
         /** List audit events visible to the authenticated user. */
-        get: operations["list_7"];
+        get: operations["list_8"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1102,7 +1122,7 @@ export interface paths {
             cookie?: never;
         };
         /** List project pins for an application period. */
-        get: operations["list_8"];
+        get: operations["list_9"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3140,6 +3160,55 @@ export interface components {
             effectiveTo: string | null;
             /** @description Instant when the rubric was published. */
             publishedAt: string;
+        };
+        FormalApplicationSummaryResponse: {
+            /**
+             * Format: uuid
+             * @description Formal-application UUID used internally for existing review actions.
+             */
+            formalApplicationId: string;
+            /**
+             * Format: uuid
+             * @description Project UUID used internally to load the existing proposal.
+             */
+            projectId: string;
+            /** @description Current project title, or Unknown project when the project no longer resolves. */
+            projectTitle: string;
+            /** @description Current display names of allocated group members in group order. */
+            studentNames: string[];
+            /** @description Current associated application-period label; legacy periods without a label use their school year, and unresolved periods use Unknown period. */
+            periodLabel: string;
+            /** @description School year of the associated application period, or Unknown school year when the period does not resolve. */
+            schoolYear: string;
+            /**
+             * @description Current Formal proposal status.
+             * @enum {string}
+             */
+            status: "DRAFT" | "NEEDS_REVISION" | "SUBMITTED" | "APPROVED" | "DECLINED";
+        };
+        PageResponseFormalApplicationSummaryResponse: {
+            /** @description Items returned in this page. */
+            content: components["schemas"]["FormalApplicationSummaryResponse"][];
+            /**
+             * Format: int32
+             * @description Zero-based index of this page.
+             */
+            page: number;
+            /**
+             * Format: int32
+             * @description Maximum number of items requested per page.
+             */
+            size: number;
+            /**
+             * Format: int64
+             * @description Total number of matching items across all pages.
+             */
+            totalElements: number;
+            /**
+             * Format: int32
+             * @description Number of pages containing all matching items.
+             */
+            totalPages: number;
         };
         EligibleFormalProjectResponse: {
             /**
@@ -7852,6 +7921,53 @@ export interface operations {
     list_6: {
         parameters: {
             query?: {
+                /** @description Optional case-insensitive substring in project title, member display name, period label, or school year; surrounding whitespace is trimmed and blank is ignored. */
+                q?: string;
+                /** @description Limit results to projects with a current confirmed supervisor assignment to the caller. Defaults to true. */
+                supervisedOnly?: boolean;
+                /** @description Zero-based page index; defaults to 0. */
+                page?: number;
+                /** @description Page size; defaults to 20 and is normalized to the inclusive range 1–100. */
+                size?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["PageResponseFormalApplicationSummaryResponse"];
+                };
+            };
+            /** @description Missing or invalid bearer authentication credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description The caller lacks the TEACHER role required to list formal applications. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    list_7: {
+        parameters: {
+            query?: {
                 /** @description Zero-based page index; defaults to 0. */
                 page?: number;
                 /** @description Page size; defaults to 20 and is normalized to the inclusive range 1–100. */
@@ -7892,7 +8008,7 @@ export interface operations {
             };
         };
     };
-    list_7: {
+    list_8: {
         parameters: {
             query?: {
                 /** @description Zero-based page index; negative values are normalized to zero. */
@@ -8420,7 +8536,7 @@ export interface operations {
             };
         };
     };
-    list_8: {
+    list_9: {
         parameters: {
             query?: {
                 /** @description Zero-based page index; negative values are normalized to zero. */

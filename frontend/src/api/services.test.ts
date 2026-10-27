@@ -112,6 +112,34 @@ describe('ideas API service', () => {
       configureApi({ getToken: () => null, onUnauthorized: () => undefined })
     })
 
+    describe('Formal proposal list transport', () => {
+      afterEach(() => {
+        vi.unstubAllGlobals()
+        configureApi({ getToken: () => null, onUnauthorized: () => undefined })
+      })
+
+      it('trims optional search and sends supervisor scope and pagination parameters', async () => {
+        const response = { content: [], page: 2, size: 10, totalElements: 0, totalPages: 0 }
+        const fetchMock = vi.fn()
+          .mockResolvedValueOnce(new Response(JSON.stringify(response), {
+            status: 200, headers: { 'Content-Type': 'application/json' },
+          }))
+          .mockResolvedValueOnce(new Response(JSON.stringify({
+            content: [], page: 0, size: 20, totalElements: 0, totalPages: 0,
+          }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+        vi.stubGlobal('fetch', fetchMock)
+
+        await expect(formalApi.list('  River Lab  ', false, 2, 10)).resolves.toEqual(response)
+        await expect(formalApi.list('   ')).resolves.toEqual({
+          content: [], page: 0, size: 20, totalElements: 0, totalPages: 0,
+        })
+        expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+          '/api/formal-applications?page=2&size=10&q=River+Lab&supervisedOnly=false',
+          '/api/formal-applications?page=0&size=20&supervisedOnly=true',
+        ])
+      })
+    })
+
     it('review schema consolidation preserves transport', async () => {
       const fetchMock = vi.fn().mockImplementation(() => new Response('{}', {
         status: 200, headers: { 'Content-Type': 'application/json' },

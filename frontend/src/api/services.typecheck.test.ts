@@ -46,6 +46,8 @@ test('review operations use the canonical generated request shape', () => {
 })
 
 test('collection service content items retain their generated component types', () => {
+  expectTypeOf<ContentItem<typeof formalApi.list>>()
+    .toEqualTypeOf<components['schemas']['FormalApplicationSummaryResponse']>()
   expectTypeOf<ContentItem<typeof ideasApi.list>>()
     .toEqualTypeOf<components['schemas']['IdeaResponse']>()
   expectTypeOf<ContentItem<typeof ideasApi.lookupStudents>>()
@@ -79,6 +81,13 @@ test('collection service content items retain their generated component types', 
     .toEqualTypeOf<components['schemas']['CatalogueEntryResponse']>()
   expectTypeOf<ContentItem<typeof studentDetailsApi.subjects>>()
     .toEqualTypeOf<components['schemas']['CatalogueEntryResponse']>()
+})
+
+test('Formal proposal list service uses its generated query and paginated response types', () => {
+  expectTypeOf<Parameters<typeof formalApi.list>>()
+    .toEqualTypeOf<[query?: string, supervisedOnly?: boolean, page?: number, size?: number]>()
+  expectTypeOf<Awaited<ReturnType<typeof formalApi.list>>>()
+    .toEqualTypeOf<Page<components['schemas']['FormalApplicationSummaryResponse']>>()
 })
 
 test('in-scope service requests and responses retain their generated component types', () => {

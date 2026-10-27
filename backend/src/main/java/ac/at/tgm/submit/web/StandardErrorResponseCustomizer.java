@@ -317,6 +317,8 @@ public class StandardErrorResponseCustomizer implements OpenApiCustomizer {
     }
 
     private static void addIdeaAndApplicationErrors(Map<Route, Map<String, String>> result) {
+        add(result, GET, "/api/formal-applications",
+                FORBIDDEN, "The caller lacks the TEACHER role required to list formal applications.");
         add(result, GET, "/api/ideas/{id}",
                 BAD_REQUEST, IDEA_ID_INVALID,
                 FORBIDDEN, "The caller is not permitted to view this idea.",

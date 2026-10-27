@@ -17,6 +17,7 @@ import java.time.Instant;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
@@ -86,6 +87,92 @@ class OpenApiContractTest {
         assertFalse(assignment.has("studentId"));
         JsonNode assignmentMember = schemas.path("StudentGroupMemberResponse").path("properties");
         assertFalse(assignmentMember.has("studentId"));
+    }
+
+    @Test
+    void teacherFormalProposalListHasTheDocumentedAuthenticatedQueryAndExactSummaryContract() throws Exception {
+        JsonNode document = apiDocument();
+        JsonNode operation = document.path("paths").path("/api/formal-applications").path("get");
+        assertTrue(operation.isObject());
+        assertTrue(operation.path("security").isArray());
+        assertTrue(operation.path("security").get(0).path("bearerAuth").isArray());
+        assertTrue(operation.path("responses").has("401"));
+        assertTrue(operation.path("responses").has("403"));
+        assertEquals("#/components/schemas/PageResponseFormalApplicationSummaryResponse",
+                operation.path("responses").path("200").path("content").path("*/*")
+                        .path("schema").path("$ref").asText());
+
+        JsonNode parameters = operation.path("parameters");
+        assertTrue(parameters.isArray());
+        assertEquals(Set.of("q", "supervisedOnly", "page", "size"), parameterNames(parameters));
+        JsonNode query = parameter(parameters, "q");
+        assertEquals("query", query.path("in").asText());
+        assertFalse(query.path("required").asBoolean());
+        assertEquals("string", query.path("schema").path("type").asText());
+        assertTrue(query.path("description").asText().contains("trimmed"));
+        assertTrue(query.path("description").asText().contains("period label"));
+        JsonNode supervised = parameter(parameters, "supervisedOnly");
+        assertFalse(supervised.path("required").asBoolean());
+        assertEquals("boolean", supervised.path("schema").path("type").asText());
+        assertEquals("true", supervised.path("schema").path("default").asText());
+        assertTrue(supervised.path("description").asText().contains("confirmed supervisor assignment"));
+        JsonNode page = parameter(parameters, "page");
+        assertFalse(page.path("required").asBoolean());
+        assertEquals("integer", page.path("schema").path("type").asText());
+        assertEquals("0", page.path("schema").path("default").asText());
+        JsonNode size = parameter(parameters, "size");
+        assertFalse(size.path("required").asBoolean());
+        assertEquals("integer", size.path("schema").path("type").asText());
+        assertEquals("20", size.path("schema").path("default").asText());
+        assertEquals(1, size.path("schema").path("minimum").asInt());
+        assertEquals(100, size.path("schema").path("maximum").asInt());
+
+        JsonNode schemas = document.path("components").path("schemas");
+        JsonNode pageSchema = schemas.path("PageResponseFormalApplicationSummaryResponse");
+        assertEquals(Set.of("content", "page", "size", "totalElements", "totalPages"),
+                fieldNames(pageSchema.path("properties")));
+        assertEquals(Set.of("content", "page", "size", "totalElements", "totalPages"),
+                textualMembers(pageSchema.path("required")));
+        assertEquals("array", pageSchema.path("properties").path("content").path("type").asText());
+        assertEquals("#/components/schemas/FormalApplicationSummaryResponse",
+                pageSchema.path("properties").path("content").path("items").path("$ref").asText());
+
+        JsonNode summary = schemas.path("FormalApplicationSummaryResponse");
+        Set<String> fields = Set.of("formalApplicationId", "projectId", "projectTitle", "studentNames",
+                "periodLabel", "schoolYear", "status");
+        assertEquals(fields, fieldNames(summary.path("properties")));
+        assertEquals(fields, textualMembers(summary.path("required")));
+        JsonNode summaryProperties = summary.path("properties");
+        for (String idField : List.of("formalApplicationId", "projectId")) {
+            JsonNode id = summaryProperties.path(idField);
+            assertEquals("string", id.path("type").asText());
+            assertEquals("uuid", id.path("format").asText());
+        }
+        for (String textField : List.of("projectTitle", "periodLabel", "schoolYear")) {
+            assertEquals("string", summaryProperties.path(textField).path("type").asText());
+        }
+        JsonNode namesProperty = summaryProperties.path("studentNames");
+        assertEquals("array", namesProperty.path("type").asText());
+        assertEquals("string", namesProperty.path("items").path("type").asText());
+        JsonNode status = summaryProperties.path("status");
+        assertEquals("string", status.path("type").asText());
+        assertEquals(Set.of("DRAFT", "NEEDS_REVISION", "SUBMITTED", "APPROVED", "DECLINED"),
+                textualMembers(status.path("enum")));
+    }
+
+    private static Set<String> parameterNames(JsonNode parameters) {
+        Set<String> names = new HashSet<>();
+        parameters.forEach(parameter -> names.add(parameter.path("name").asText()));
+        return names;
+    }
+
+    private static JsonNode parameter(JsonNode parameters, String name) {
+        for (JsonNode candidate : parameters) {
+            if (name.equals(candidate.path("name").asText())) {
+                return candidate;
+            }
+        }
+        throw new AssertionError("Missing query parameter " + name);
     }
 
     @Test
@@ -667,7 +754,7 @@ class OpenApiContractTest {
 
         List<String> failures = new ArrayList<>();
         int operations = checkOperations(document.path("paths"), failures);
-        assertEquals(85, operations, "The generated API operation count should be reviewed when endpoints change.");
+        assertEquals(86, operations, "The generated API operation count should be reviewed when endpoints change.");
         JsonNode schemas = document.path("components").path("schemas");
         checkComponentSchemas(schemas, failures);
         checkResponseRequiredness(schemas, failures);
@@ -965,14 +1052,14 @@ class OpenApiContractTest {
                     if (!"20".equals(schema.path("default").asText())) {
                         failures.add(location + " does not have default 20: " + schema.path("default"));
                     }
-                    if (schema.has("maximum")) {
+                    if (schema.has("maximum") && schema.path("maximum").asInt() != 100) {
                         failures.add(location + " incorrectly declares schema maximum " + schema.path("maximum"));
                     }
                 }
             }
         });
 
-        assertEquals(22, sizeParameters[0], "All collection size parameters should be covered.");
+        assertEquals(23, sizeParameters[0], "All collection size parameters should be covered.");
         assertTrue(failures.isEmpty(), () -> String.join(System.lineSeparator(), failures));
     }
 
@@ -1022,7 +1109,7 @@ class OpenApiContractTest {
             }
         });
 
-        assertEquals(22, pageParameters[0], "All 22 baseline collection page parameters should be covered.");
+        assertEquals(23, pageParameters[0], "All collection page parameters should be covered.");
         assertTrue(failures.isEmpty(), () -> String.join(System.lineSeparator(), failures));
     }
 
@@ -1301,8 +1388,8 @@ class OpenApiContractTest {
                 }
             }
         }
-        assertEquals(85, operationCount);
-        assertEquals(81, protectedCount);
+        assertEquals(86, operationCount);
+        assertEquals(82, protectedCount);
         assertTrue(failures.isEmpty(), () -> String.join(System.lineSeparator(), failures));
     }
 
@@ -1310,7 +1397,7 @@ class OpenApiContractTest {
     void operationsDocumentApplicableStandardErrorResponses() throws Exception {
         JsonNode paths = apiDocument().path("paths");
         List<String> failures = new ArrayList<>();
-        assertEquals(79, TICKET_ERROR_CODES.size(), "The independent ticket oracle must list all operations.");
+        assertEquals(80, TICKET_ERROR_CODES.size(), "The independent ticket oracle must list all operations.");
         Set<String> actualOperations = new java.util.TreeSet<>();
         paths.properties().forEach(path -> path.getValue().properties().forEach(method -> {
             if (HTTP_METHODS.contains(method.getKey())) {
@@ -1585,7 +1672,7 @@ class OpenApiContractTest {
             }
             baselineCodes.computeIfAbsent(location, unused -> new TreeSet<>()).add(expected.status());
         }
-        assertEquals(80, BASELINE_SUCCESS_RESPONSES.size(), "The checked-in baseline must cover all operations.");
+        assertEquals(81, BASELINE_SUCCESS_RESPONSES.size(), "The checked-in baseline must cover all operations.");
 
         for (Map.Entry<String, Set<String>> route : TICKET_ERROR_CODES.entrySet()) {
             String[] parts = route.getKey().split(" ", 2);
@@ -1695,6 +1782,7 @@ class OpenApiContractTest {
                 post|/api/projects/{projectId}/metrics|400,403,404,409
                 get|/api/projects/{projectId}/group-grades|400,403,404
                 post|/api/projects/{projectId}/group-grades|400,403,404,409
+                get|/api/formal-applications|403
                 get|/api/formal-applications/eligible-projects|403
                 get|/api/projects/{projectId}/formal-application-roster|400,403
                 get|/api/projects/{projectId}/formal-applications|400,403,404,409
@@ -1811,6 +1899,7 @@ class OpenApiContractTest {
                 post|/api/projects/{projectId}/group-grades|403|required role or project access
                 post|/api/projects/{projectId}/group-grades|404|project, group, or requested rubric
                 post|/api/projects/{projectId}/group-grades|409|formal application is not approved;rubric binding is ineffective;transition;required reason
+                get|/api/formal-applications|403|TEACHER role required
                 get|/api/formal-applications/eligible-projects|403|student role required
                 get|/api/projects/{projectId}/formal-applications|400|project ID;UUID
                 get|/api/projects/{projectId}/formal-application-roster|400|project ID;UUID
@@ -2180,6 +2269,7 @@ class OpenApiContractTest {
                 post|/api/projects/{projectId}/metrics|201|#/components/schemas/MetricResponse
                 get|/api/projects/{projectId}/group-grades|200|#/components/schemas/PageResponseGradeResponse
                 post|/api/projects/{projectId}/group-grades|201|#/components/schemas/GradeResponse
+                get|/api/formal-applications|200|#/components/schemas/PageResponseFormalApplicationSummaryResponse
                 get|/api/formal-applications/eligible-projects|200|#/components/schemas/PageResponseEligibleFormalProjectResponse
                 get|/api/projects/{projectId}/formal-application-roster|200|#/components/schemas/FormalApplicationRosterResponse
                 get|/api/projects/{projectId}/formal-applications|200|#/components/schemas/FormalApplicationResponse

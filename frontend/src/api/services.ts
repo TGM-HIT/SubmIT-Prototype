@@ -209,6 +209,17 @@ export const allocationApi = {
 }
 
 export const formalApi = {
+  list(
+    query = '',
+    supervisedOnly = true,
+    page = 0,
+    size = 20,
+  ): Promise<Page<components['schemas']['PageResponseFormalApplicationSummaryResponse']>> {
+    const params = new URLSearchParams(pageQuery(page, size))
+    if (query.trim()) params.set('q', query.trim())
+    params.set('supervisedOnly', String(supervisedOnly))
+    return json(`/api/formal-applications?${params}`)
+  },
   eligibleProjects(page = 0, size = 100): Promise<Page<components['schemas']['PageResponseEligibleFormalProjectResponse']>> {
     return json(`/api/formal-applications/eligible-projects?${pageQuery(page, size)}`)
   },

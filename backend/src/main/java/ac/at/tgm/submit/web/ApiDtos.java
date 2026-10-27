@@ -935,6 +935,30 @@ public final class ApiDtos {
             @Schema(description = "Paginated formal-review history.") PageResponse<FormalReviewResponse> reviewHistory) {
     }
 
+    @Schema(requiredProperties = {"formalApplicationId", "projectId", "projectTitle", "studentNames",
+            "periodLabel", "schoolYear", "status"})
+    public record FormalApplicationSummaryResponse(
+            @NotNull @Schema(description = "Formal-application UUID used internally for existing review actions.",
+                    format = "uuid", requiredMode = Schema.RequiredMode.REQUIRED) UUID formalApplicationId,
+            @NotNull @Schema(description = "Project UUID used internally to load the existing proposal.",
+                    format = "uuid", requiredMode = Schema.RequiredMode.REQUIRED) UUID projectId,
+            @NotNull @Schema(description = "Current project title, or Unknown project when the project no longer resolves.",
+                    requiredMode = Schema.RequiredMode.REQUIRED) String projectTitle,
+            @NotNull @ArraySchema(arraySchema = @Schema(
+                    description = "Current display names of allocated group members in group order.",
+                    requiredMode = Schema.RequiredMode.REQUIRED))
+            List<String> studentNames,
+            @NotNull @Schema(description = "Current associated application-period label; legacy periods without a "
+                    + "label use their school year, and unresolved periods use Unknown period.",
+                    requiredMode = Schema.RequiredMode.REQUIRED) String periodLabel,
+            @NotNull @Schema(description = "School year of the associated application period, or Unknown school year "
+                    + "when the period does not resolve.", requiredMode = Schema.RequiredMode.REQUIRED)
+            String schoolYear,
+            @NotNull @Schema(description = "Current Formal proposal status.",
+                    allowableValues = {"DRAFT", "NEEDS_REVISION", "SUBMITTED", "APPROVED", "DECLINED"},
+                    requiredMode = Schema.RequiredMode.REQUIRED) String status) {
+    }
+
     @Schema(requiredProperties = {"projectId", "projectTitle", "periodId", "periodLabel", "schoolYear",
             "formalProposalId", "formalProposalStatus"})
     public record EligibleFormalProjectResponse(

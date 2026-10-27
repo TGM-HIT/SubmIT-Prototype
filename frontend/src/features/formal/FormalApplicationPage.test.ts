@@ -1,17 +1,19 @@
 import { flushPromises, mount, type VueWrapper } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { nextTick } from 'vue'
 import type { components } from '../../api/schema'
 import { useAuthStore } from '../../stores/auth'
 import FormalApplicationPage from './FormalApplicationPage.vue'
 import { setLanguage } from '../../i18n'
 
 const api = vi.hoisted(() => ({
-  eligibleProjects: vi.fn(), roster: vi.fn(), get: vi.fn(), create: vi.fn(), update: vi.fn(), submit: vi.fn(), review: vi.fn(),
+  list: vi.fn(), eligibleProjects: vi.fn(), roster: vi.fn(), get: vi.fn(), create: vi.fn(), update: vi.fn(), submit: vi.fn(), review: vi.fn(),
 }))
 vi.mock('../../api/services', () => ({ formalApi: api }))
 
 type FormalApplication = components['schemas']['FormalApplicationResponse']
+type FormalApplicationSummary = components['schemas']['FormalApplicationSummaryResponse']
 type EligibleProject = components['schemas']['EligibleFormalProjectResponse']
 const projectId = '03a00000-0000-4000-8000-000000000001'
 const otherProjectId = '03a00000-0000-4000-8000-000000000003'
@@ -50,6 +52,31 @@ const input: components['schemas']['FormalApplicationRequest'] = {
 const record = (status: FormalApplication['status'] = 'DRAFT'): FormalApplication => ({
   ...input, cooperationPartner: input.cooperationPartner ?? null, id: applicationId, projectId, status,
   reviewHistory: { content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 },
+})
+const summary = (
+  id = applicationId,
+  idForProject = projectId,
+  title = 'River Lab Project',
+  status: FormalApplicationSummary['status'] = 'SUBMITTED',
+  names = ['Avery Student', 'Blake Student', 'Casey Student'],
+  label = 'Final allocation period',
+  schoolYear = '2026/2027',
+): FormalApplicationSummary => ({
+  formalApplicationId: id,
+  projectId: idForProject,
+  projectTitle: title,
+  studentNames: names,
+  periodLabel: label,
+  schoolYear,
+  status,
+})
+const summaryPage = (
+  content: FormalApplicationSummary[],
+  page = 0,
+  totalPages = content.length ? 1 : 0,
+  totalElements = content.length,
+): components['schemas']['PageResponseFormalApplicationSummaryResponse'] => ({
+  content, page, size: 20, totalElements, totalPages,
 })
 const eligible = (status: EligibleProject['formalProposalStatus'] = 'DRAFT',
   id = projectId, title = 'Allocated project'): EligibleProject => ({
@@ -108,6 +135,22 @@ async function mountStudent(status: EligibleProject['formalProposalStatus'] = 'D
   return page
 }
 
+async function mountTeacher(
+  content: FormalApplicationSummary[] = [summary()],
+  attach = false,
+  language: 'en' | 'de' = 'en',
+  initialResponse?: Promise<components['schemas']['PageResponseFormalApplicationSummaryResponse']>,
+): Promise<VueWrapper> {
+  api.list.mockReturnValue(initialResponse ?? Promise.resolve(summaryPage(content)))
+  setLanguage(language)
+  useAuthStore().updateUser({
+    id: studentId, username: 'teacher01', displayName: 'Teacher', roles: ['TEACHER'], language,
+  })
+  const page = mount(FormalApplicationPage, attach ? { attachTo: document.body } : undefined)
+  await flushPromises()
+  return page
+}
+
 async function load(page: VueWrapper, status: FormalApplication['status'] = 'DRAFT') {
   api.get.mockResolvedValue(record(status))
   if (page.find('#eligible-project').exists()) {
@@ -116,6 +159,13 @@ async function load(page: VueWrapper, status: FormalApplication['status'] = 'DRA
     await page.get('#project-id').setValue(projectId)
     await page.get('form.toolbar').trigger('submit')
   }
+  await flushPromises()
+  expect(api.get).toHaveBeenCalledExactlyOnceWith(projectId)
+}
+
+async function loadTeacherProposal(page: VueWrapper, status: FormalApplication['status'] = 'SUBMITTED') {
+  api.get.mockResolvedValue(record(status))
+  await page.get('.proposal-result').trigger('click')
   await flushPromises()
   expect(api.get).toHaveBeenCalledExactlyOnceWith(projectId)
 }
@@ -570,8 +620,9 @@ describe('Formal proposal presentation and unchanged lifecycle', () => {
 
   it.each(['STUDENT', 'TEACHER'] as const)('shows submitted review state with unchanged %s controls', async (role) => {
     useAuthStore().updateUser({ id: studentId, username: 'reviewer', displayName: role, roles: [role], language: 'en' })
-    const page = role === 'STUDENT' ? await mountStudent('SUBMITTED') : mount(FormalApplicationPage)
-    await load(page, 'SUBMITTED')
+    const page = role === 'STUDENT' ? await mountStudent('SUBMITTED') : await mountTeacher()
+    if (role === 'STUDENT') await load(page, 'SUBMITTED')
+    else await loadTeacherProposal(page, 'SUBMITTED')
     expectProposalCopy(page)
     expect(page.get('section.panel .notice').text()).toBe(
       'Project work is not yet approved to begin. Wait for the teacher’s decision on this formal proposal.',
@@ -593,8 +644,10 @@ describe('Formal proposal presentation and unchanged lifecycle', () => {
       id: studentId, username: 'reviewer', displayName: 'Dual role',
       roles: ['TEACHER', 'ADMIN'], language: 'en',
     })
+    api.list.mockResolvedValue(summaryPage([summary()]))
     const page = mount(FormalApplicationPage)
-    await load(page, 'SUBMITTED')
+    await flushPromises()
+    await loadTeacherProposal(page, 'SUBMITTED')
 
     expect(page.find('#formal-decision').exists()).toBe(true)
     button(page, 'Record teacher decision')
@@ -811,27 +864,254 @@ describe('Formal proposal presentation and unchanged lifecycle', () => {
     page.unmount()
   })
 
-  it.each(['TEACHER', 'ADMIN'] as const)('retains the existing %s project-ID lookup workflow', async (role) => {
-    useAuthStore().updateUser({ id: studentId, username: 'staff', displayName: role, roles: [role], language: 'en' })
+  it('retains the administrator project-ID lookup workflow', async () => {
+    useAuthStore().updateUser({ id: studentId, username: 'admin01', displayName: 'ADMIN', roles: ['ADMIN'], language: 'en' })
     const page = mount(FormalApplicationPage)
     expect(page.get('label[for="project-id"]').text()).toBe('Allocated project ID')
     expect(page.find('#eligible-project').exists()).toBe(false)
+    expect(api.list).not.toHaveBeenCalled()
     expect(api.eligibleProjects).not.toHaveBeenCalled()
     await load(page, 'SUBMITTED')
     expect(page.get('section.panel h2').text()).toBe(input.topic)
-    expect(page.find('#formal-decision').exists()).toBe(role === 'TEACHER')
+    expect(page.find('#formal-decision').exists()).toBe(false)
     expect(api.get).toHaveBeenCalledExactlyOnceWith(projectId)
     page.unmount()
   })
 
-  it('retains teacher review decisions and feedback submission', async () => {
-    useAuthStore().updateUser({
-      id: studentId, username: 'teacher01', displayName: 'Teacher', roles: ['TEACHER'], language: 'en',
+  it.each([
+    ['en', 'Formal proposals', 'Only projects I currently supervise', 'Search projects, group members, or application periods'],
+    ['de', 'Formelle Projektanträge', 'Nur Projekte, die ich derzeit betreue', 'Projekte, Gruppenmitglieder oder Bewerbungszeiträume suchen'],
+  ] as const)('renders the teacher proposal list in %s with translated accessible controls', async (
+    language, title, filterLabel, searchLabel,
+  ) => {
+    const page = await mountTeacher([summary()], false, language)
+    expect(page.get('h2').text()).toBe(title)
+    expect(page.get('label[for="formal-proposal-search"]').text()).toBe(searchLabel)
+    expect(page.get('label[for="formal-supervised-only"]').text()).toContain(filterLabel)
+    expect(page.get('.proposal-result').text()).toContain('River Lab Project')
+    expect(page.get('.proposal-result').text()).toContain('Avery Student, Blake Student, Casey Student')
+    expect(page.get('.proposal-result').text()).toContain('Final allocation period · 2026/2027')
+    expect(page.get('.proposal-result').text()).toContain(language === 'en' ? 'Submitted' : 'Eingereicht')
+    expect(api.list).toHaveBeenCalledExactlyOnceWith('', true, 0, 20)
+    page.unmount()
+  })
+
+  it('starts supervised, clears the filter for all proposals, and submits all four trimmed search terms', async () => {
+    const first = summary()
+    const second = summary('other-formal-id', otherProjectId, 'Wind Garden Project', 'APPROVED',
+      ['Taylor Student', 'Morgan Student'], 'Wind Garden Period', '2027/2028')
+    const page = await mountTeacher([first])
+    expect(page.get('#formal-supervised-only').element).toHaveProperty('checked', true)
+    expect(page.findAll('.proposal-result')).toHaveLength(1)
+    expect(page.text()).not.toContain('Wind Garden Project')
+
+    for (const [query, expected] of [
+      ['  River Lab  ', 'River Lab'],
+      ['  Avery Student  ', 'Avery Student'],
+      ['  Final allocation period  ', 'Final allocation period'],
+      ['  2026/2027  ', '2026/2027'],
+    ]) {
+      await page.get('#formal-proposal-search').setValue(query)
+      await page.get('form.toolbar').trigger('submit')
+      await flushPromises()
+      expect(api.list).toHaveBeenLastCalledWith(expected, true, 0, 20)
+    }
+
+    api.list.mockResolvedValue(summaryPage([first, second]))
+    await page.get('#formal-supervised-only').setValue(false)
+    await flushPromises()
+    expect(api.list).toHaveBeenLastCalledWith('2026/2027', false, 0, 20)
+    expect(page.findAll('.proposal-result')).toHaveLength(2)
+    expect(page.text()).toContain('Wind Garden Project')
+    page.unmount()
+  })
+
+  it('paginates teacher results and preserves page/filter/query while loading proposal details and review history', async () => {
+    const second = summary('second-formal-id', otherProjectId, 'Later Page Project', 'SUBMITTED',
+      ['Jordan Student', 'Casey Student'], 'Later Period', '2030/2031')
+    const page = await mountTeacher([summary()], true, 'en',
+      Promise.resolve(summaryPage([summary()], 0, 2, 21)))
+    api.list.mockResolvedValue(summaryPage([second], 1, 2, 21))
+    await button(page, 'Next page').trigger('click')
+    await flushPromises()
+    expect(api.list).toHaveBeenLastCalledWith('', true, 1, 20)
+    expect(page.findAll('.proposal-result')).toHaveLength(1)
+    expect(page.get('.proposal-result').text()).toContain('Later Page Project')
+
+    api.get.mockResolvedValue({
+      ...record('SUBMITTED'),
+      projectId: otherProjectId,
+      reviewHistory: {
+        content: [{ id: 'review-id', teacherId: 'teacher-id', decision: 'REQUEST_REVISION', feedback: 'Clarify the comparison.' }],
+        page: 0, size: 20, totalElements: 1, totalPages: 1,
+      },
     })
-    const page = mount(FormalApplicationPage)
-    await load(page, 'SUBMITTED')
-    api.get.mockResolvedValueOnce(record('APPROVED'))
+    await page.get('.proposal-result').trigger('click')
+    await flushPromises()
+    expect(api.get).toHaveBeenCalledExactlyOnceWith(otherProjectId)
+    expect(api.roster).not.toHaveBeenCalled()
+    expect(page.text()).toContain('Later Page Project')
+    expect(page.text()).toContain('Jordan Student, Casey Student')
+    expect(page.text()).toContain('Later Period')
+    expect(page.text()).toContain('2030/2031')
+    expect(page.text()).toContain('Clarify the comparison.')
+    expect(page.text()).not.toContain(projectId)
+    expect(page.text()).not.toContain(otherProjectId)
+    expect(page.text()).not.toContain(applicationId)
+    expect(document.activeElement).toBe(page.get('section.panel.stack h2').element)
+
+    await button(page, 'Return to proposals').trigger('click')
+    await nextTick()
+    expect(document.activeElement).toBe(page.get('.proposal-result').element)
+
+    await page.get('.proposal-result').trigger('click')
+    await flushPromises()
+    api.list.mockResolvedValue(summaryPage([]))
+    await page.get('#formal-proposal-search').setValue('proposal no longer on this page')
+    await page.get('form.toolbar').trigger('submit')
+    await flushPromises()
+    await button(page, 'Return to proposals').trigger('click')
+    await nextTick()
+    expect(document.activeElement).toBe(page.get('h2.section-title').element)
+    page.unmount()
+  })
+
+  it('shows loading and empty list states, and a failed list has a working retry', async () => {
+    const pending = deferred<components['schemas']['PageResponseFormalApplicationSummaryResponse']>()
+    const loadingPage = await mountTeacher([], false, 'en', pending.promise)
+    expect(loadingPage.get('[role="status"]').text()).toContain('Loading Formal proposals')
+    pending.resolve(summaryPage([]))
+    await flushPromises()
+    expect(loadingPage.text()).toContain('No Formal proposals match this search.')
+    loadingPage.unmount()
+
+    const failed = Promise.reject(new Error('request unavailable'))
+    const retryPage = await mountTeacher([], false, 'en', failed)
+    expect(retryPage.get('[role="alert"]').text()).toContain('Formal proposals could not be loaded.')
+    api.list.mockResolvedValue(summaryPage([summary()]))
+    await button(retryPage, 'Retry loading proposals').trigger('click')
+    await flushPromises()
+    expect(retryPage.find('[role="alert"]').exists()).toBe(false)
+    expect(retryPage.find('.proposal-result').exists()).toBe(true)
+    retryPage.unmount()
+  })
+
+  it('ignores a stale list response when a newer teacher search finishes first', async () => {
+    const page = await mountTeacher([summary()])
+    const stale = deferred<components['schemas']['PageResponseFormalApplicationSummaryResponse']>()
+    api.list.mockReturnValueOnce(stale.promise)
+      .mockResolvedValueOnce(summaryPage([summary('new-id', otherProjectId, 'Newest Search Result')]))
+    await page.get('#formal-proposal-search').setValue('older search')
+    await page.get('form.toolbar').trigger('submit')
+    await page.get('#formal-proposal-search').setValue('newer search')
+    await page.get('form.toolbar').trigger('submit')
+    await flushPromises()
+    expect(page.text()).toContain('Newest Search Result')
+    stale.resolve(summaryPage([summary('stale-id', otherProjectId, 'Stale Search Result')]))
+    await flushPromises()
+    expect(page.text()).toContain('Newest Search Result')
+    expect(page.text()).not.toContain('Stale Search Result')
+    page.unmount()
+  })
+
+  it('keeps selection and filter context during a pending detail request and ignores its stale response', async () => {
+    const first = summary()
+    const second = summary('second-formal-id', otherProjectId, 'Second Project')
+    const page = await mountTeacher([first, second])
+    const stale = deferred<FormalApplication>()
+    const current = deferred<FormalApplication>()
+    api.get.mockReturnValueOnce(stale.promise).mockReturnValueOnce(current.promise)
+
+    await page.findAll('.proposal-result')[0].trigger('click')
+    expect(page.get('[role="status"]').text()).toContain('Loading the selected Formal proposal')
+    expect(page.find('#formal-proposal-search').exists()).toBe(true)
+    expect(page.get('#formal-supervised-only').element).toHaveProperty('checked', true)
+    expect(page.findAll('.proposal-result').every((row) => row.attributes('disabled') !== undefined)).toBe(true)
+
+    await button(page, 'Cancel loading this proposal').trigger('click')
+    await flushPromises()
+    await page.findAll('.proposal-result')[1].trigger('click')
+    stale.resolve(record('APPROVED'))
+    await flushPromises()
+    expect(page.get('[role="status"]').text()).toContain('Loading the selected Formal proposal')
+    expect(page.text()).not.toContain(input.topic)
+    current.resolve({ ...record('SUBMITTED'), projectId: otherProjectId })
+    await flushPromises()
+    expect(page.text()).toContain('Second Project')
+    expect(page.get('section.panel.stack h2').text()).toBe(input.topic)
+    page.unmount()
+  })
+
+  it('retries a failed teacher detail request without losing list selection context', async () => {
+    const page = await mountTeacher([summary()])
+    api.get.mockRejectedValueOnce(new Error('temporary error'))
+    await page.get('.proposal-result').trigger('click')
+    await flushPromises()
+    expect(page.get('[role="alert"]').text()).toContain('The existing Formal proposal could not be loaded.')
+    expect(page.find('#formal-proposal-search').exists()).toBe(true)
+    api.get.mockResolvedValueOnce(record('SUBMITTED'))
+    await button(page, 'Retry loading this proposal').trigger('click')
+    await flushPromises()
+    expect(api.get).toHaveBeenCalledTimes(2)
+    expect(page.text()).toContain('River Lab Project')
+    expect(page.find('[role="alert"]').exists()).toBe(false)
+    page.unmount()
+  })
+
+  it('refreshes the selected status after review without losing search, filter, page, or review-cancel semantics', async () => {
+    const item = summary(applicationId, otherProjectId, 'Later Page Project')
+    const page = await mountTeacher([summary()], true, 'en',
+      Promise.resolve(summaryPage([summary()], 0, 2, 21)))
+    api.list.mockResolvedValue(summaryPage([summary()], 0, 2, 21))
+    await page.get('#formal-proposal-search').setValue('  project topic  ')
+    await page.get('form.toolbar').trigger('submit')
+    await flushPromises()
+    await page.get('#formal-supervised-only').setValue(false)
+    await flushPromises()
+    api.list.mockResolvedValue(summaryPage([item], 1, 2, 21))
+    await button(page, 'Next page').trigger('click')
+    await flushPromises()
+
+    api.get.mockResolvedValue({ ...record('SUBMITTED'), projectId: otherProjectId })
+    await page.get('.proposal-result').trigger('click')
+    await flushPromises()
+    const initialListCalls = api.list.mock.calls.length
     api.review.mockResolvedValue({ id: applicationId })
+    api.get.mockResolvedValue({ ...record('APPROVED'), projectId: otherProjectId })
+    api.list.mockResolvedValue(summaryPage([
+      summary(applicationId, otherProjectId, 'Later Page Project', 'APPROVED'),
+    ], 1, 2, 21))
+    vi.spyOn(window, 'confirm').mockReturnValue(false)
+    await page.get('#formal-decision').setValue('APPROVE')
+    await page.get('#formal-feedback').setValue('Review confirmation cancelled.')
+    await page.get('form.panel.stack').trigger('submit')
+    await flushPromises()
+    expect(api.review).not.toHaveBeenCalled()
+    expect(api.list).toHaveBeenCalledTimes(initialListCalls)
+    expect(page.get('.proposal-result').text()).toContain('Submitted')
+
+    vi.mocked(window.confirm).mockReturnValue(true)
+    await page.get('form.panel.stack').trigger('submit')
+    await flushPromises()
+    expect(api.review).toHaveBeenCalledExactlyOnceWith(applicationId, {
+      decision: 'APPROVE', feedback: 'Review confirmation cancelled.',
+    })
+    expect(api.get).toHaveBeenCalledTimes(2)
+    expect(api.list).toHaveBeenLastCalledWith('project topic', false, 1, 20)
+    expect(page.get('#formal-proposal-search').element).toHaveProperty('value', 'project topic')
+    expect(page.get('#formal-supervised-only').element).toHaveProperty('checked', false)
+    expect(page.get('.proposal-result').text()).toContain('Approved')
+    page.unmount()
+  })
+
+  it('retains teacher review decisions and feedback submission', async () => {
+    const page = await mountTeacher()
+    api.get.mockResolvedValue(record('SUBMITTED'))
+    await page.find('.proposal-result').trigger('click')
+    await flushPromises()
+    api.review.mockResolvedValue({ id: applicationId })
+    api.get.mockResolvedValue(record('APPROVED'))
+    api.list.mockResolvedValue(summaryPage([summary(applicationId, projectId, 'River Lab Project', 'APPROVED')]))
     vi.spyOn(window, 'confirm').mockReturnValue(true)
     await page.get('#formal-decision').setValue('APPROVE')
     await page.get('#formal-feedback').setValue('Approved for project work.')
@@ -842,6 +1122,7 @@ describe('Formal proposal presentation and unchanged lifecycle', () => {
     })
     expect(api.create).not.toHaveBeenCalled()
     expect(page.get('section.panel .status-badge').text()).toBe('Approved')
+    expect(api.list).toHaveBeenLastCalledWith('', true, 0, 20)
     page.unmount()
   })
 
