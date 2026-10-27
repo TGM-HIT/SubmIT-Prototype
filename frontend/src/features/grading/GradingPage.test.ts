@@ -969,6 +969,33 @@ describe("grading project selection", () => {
     page.unmount()
   })
 
+  it("disables student clear/change until pending record reads finish, then clears and restores focus", async () => {
+    api.role = "STUDENT"
+    const pending = deferred<ReturnType<typeof pageResult>>()
+    api.grades.mockReturnValueOnce(pending.promise)
+    const page = mount(GradingPage, { attachTo: document.body })
+    await selectStudentProject(page)
+    const clear = page.findAll("button").find((button) => button.text() === "Clear or change project")!
+    expect(page.text()).toContain("Loading grading record")
+    expect(clear.attributes("disabled")).toBeDefined()
+    await clear.trigger("click")
+    expect(page.text()).toContain("River Lab")
+    expect(page.find("#grading-student-project").exists()).toBe(false)
+    expect(page.findAll('[role="tab"]')).toHaveLength(0)
+    pending.resolve(pageResult())
+    await flushPromises()
+    expect(clear.attributes("disabled")).toBeUndefined()
+    expect(page.text()).not.toContain("Loading grading record")
+    await clear.trigger("click")
+    await flushPromises()
+    expect(document.activeElement).toBe(page.get("#grading-student-project").element)
+    expect(page.findAll('[role="tab"]')).toHaveLength(0)
+    for (const write of [api.recordGrade, api.recordGroupGrade, api.recordMetric, api.setFinalGrade]) {
+      expect(write).not.toHaveBeenCalled()
+    }
+    page.unmount()
+  })
+
   it("ignores an in-flight project response after GradingPage unmounts", async () => {
     api.role = "TEACHER"
     api.formalList.mockResolvedValue(teacherPage([
@@ -1080,6 +1107,143 @@ describe("grading project selection", () => {
     expect((page.get("#metric-note").element as HTMLInputElement).value).toBe("correctable draft")
     expect(api.metrics).toHaveBeenLastCalledWith("project-2")
     page.unmount()
+  })
+
+  it.each(["individual", "group", "project-final", "student-final"] as const)(
+    "refreshes only the current selection after a %s write and retains failed input and browsing state",
+    async (kind) => {
+      api.role = "TEACHER"
+      api.activeRubric.mockResolvedValue({
+        id: "rubric-current", name: "Current rubric",
+        finalGradeScale: { min: 1, max: 5, step: 1 },
+        categories: [{ id: "science", name: "Science", criteria: [
+          { id: "analysis", name: "Analysis", subject: "STUDENT", scale: { min: 1, max: 5, step: 1 } },
+          { id: "team", name: "Team", subject: "GROUP", scale: { min: 1, max: 5, step: 1 } },
+        ] }],
+      })
+      const rows = Array.from({ length: 21 }, (_, index) =>
+        teacherSummary(`proposal-${index + 1}`, `project-${index + 1}`, `Lab ${index + 1}`, ["A"], "Period", "2026/2027"))
+      api.formalList.mockImplementation(async (q: string, supervisedOnly: boolean, index: number, size: number) => {
+        const filtered = rows.filter((row) => (!q || row.projectTitle.toLowerCase().includes(q.toLowerCase()))
+          && (!supervisedOnly || row.projectId === "project-1"))
+        return { content: filtered.slice(index * size, (index + 1) * size), page: index, size,
+          totalElements: filtered.length, totalPages: Math.ceil(filtered.length / size) }
+      })
+      const page = mount(GradingPage)
+      await flushPromises()
+      await loadTeacherProject(page, "Lab 1")
+      await page.findAll("button").find((button) => button.text() === "Return to project list")!.trigger("click")
+      await flushPromises()
+      await page.get("#grading-project-search").setValue("Lab")
+      await page.get("form.toolbar").trigger("submit")
+      await flushPromises()
+      await page.get("#grading-supervised-only").setValue(false)
+      await flushPromises()
+      await page.findAll("button").find((button) => button.text() === "Next page")!.trigger("click")
+      await flushPromises()
+      await loadTeacherProject(page, "Lab 21")
+      const readMocks = [api.grades, api.groupGrades, api.metrics, api.finalGrade]
+      readMocks.forEach((read) => read.mockClear())
+      const isAssessment = kind === "individual" || kind === "group"
+      if (!isAssessment) {
+        await page.findAll('[role="tab"]').find((tab) => tab.text() === "Final grades")!.trigger("click")
+      }
+      const form = isAssessment
+        ? page.findAll("form.panel")[kind === "individual" ? 0 : 1]
+        : page.findAll("form.panel").find((form) => form.find(kind === "project-final" ? "#rationale" : "#student-rationale").exists())!
+      const draftSelector = isAssessment ? "textarea[id$='-evidence']" : kind === "project-final" ? "#rationale" : "#student-rationale"
+      if (isAssessment) {
+        if (kind === "individual") await form.get("#student-id").setValue("student-target")
+        await form.get("select[id$='-criterion']").setValue(kind === "individual" ? "analysis" : "team")
+        await form.get("select[id$='-grade']").setValue("4")
+        await form.get("input[type='date']").setValue("2026-10-10")
+      } else {
+        if (kind === "student-final") await form.get("#final-student-id").setValue("student-target")
+        await form.get(kind === "project-final" ? "#final-grade" : "#student-final-grade").setValue("4")
+      }
+      await form.get(draftSelector).setValue("Correctable evidence")
+      const write = kind === "individual" ? api.recordGrade : kind === "group" ? api.recordGroupGrade : api.setFinalGrade
+      write.mockRejectedValueOnce(new ApiError("write rejected", 400))
+      await form.trigger("submit")
+      await flushPromises()
+      expect(page.text()).toContain("write rejected")
+      expect((form.get(draftSelector).element as HTMLTextAreaElement).value).toBe("Correctable evidence")
+      expect(page.get("h3[tabindex='-1']").text()).toContain("Lab 21")
+      readMocks.forEach((read) => expect(read).not.toHaveBeenCalled())
+
+      api.grades.mockResolvedValue(pageResult([{ id: "fresh-individual", criterionId: "fresh-analysis", grade: 5 }]))
+      api.groupGrades.mockResolvedValue(pageResult([{ id: "fresh-group", criterionId: "fresh-team", grade: 5 }]))
+      api.finalGrade.mockResolvedValue({ current: { id: "fresh-final", grade: 5, rationale: "Fresh persisted decision" }, history: [] })
+      await form.trigger("submit")
+      await flushPromises()
+      const payload = kind === "individual"
+        ? { studentId: "student-target", criterionId: "analysis", grade: 4, evidence: "Correctable evidence" }
+        : kind === "group" ? { criterionId: "team", grade: 4, evidence: "Correctable evidence" }
+          : kind === "project-final" ? { project: { grade: 4, rationale: "Correctable evidence" } }
+            : { students: [{ studentId: "student-target", grade: 4, rationale: "Correctable evidence" }] }
+      expect(write).toHaveBeenLastCalledWith("project-21", expect.objectContaining(payload))
+      for (const read of readMocks) {
+        expect(read).toHaveBeenCalledTimes(1)
+        expect(read).toHaveBeenCalledWith("project-21")
+      }
+      expect(api.finalStudentGrade).not.toHaveBeenCalled()
+      expect(page.get("h3[tabindex='-1']").text()).toContain("Lab 21")
+      await page.findAll('[role="tab"]').find((tab) =>
+        tab.text() === (kind === "individual" ? "Individual assessments" : kind === "group" ? "Group assessments" : "Final grades"))!.trigger("click")
+      expect(page.text()).toContain(kind === "individual" ? "fresh-analysis" : kind === "group" ? "fresh-team" : "Fresh persisted decision")
+      await page.findAll("button").find((button) => button.text() === "Return to project list")!.trigger("click")
+      await flushPromises()
+      expect((page.get("#grading-project-search").element as HTMLInputElement).value).toBe("Lab")
+      expect((page.get("#grading-supervised-only").element as HTMLInputElement).checked).toBe(false)
+      expect(api.formalList).toHaveBeenLastCalledWith("Lab", false, 1, 20)
+      expect(page.findAll("button.proposal-result").map((button) => button.text())).toHaveLength(1)
+      expect(page.find("button.proposal-result").text()).toContain("Lab 21")
+      readMocks.forEach((read) => read.mockClear())
+      api.grades.mockResolvedValue(pageResult([{ id: "reselected", criterionId: "reselected-analysis", grade: 3 }]))
+      await loadTeacherProject(page, "Lab 21")
+      await page.findAll('[role="tab"]').find((tab) => tab.text() === "Individual assessments")!.trigger("click")
+      expect(page.text()).toContain("reselected-analysis")
+      expect(page.text()).not.toContain("fresh-analysis")
+      for (const read of readMocks) {
+        expect(read).toHaveBeenCalledTimes(1)
+        expect(read).toHaveBeenCalledWith("project-21")
+      }
+      page.unmount()
+    },
+  )
+
+  it.each([
+    ["en", "Project", "Choose a project…", "Clear or change project", "Loading grading record…", "No projects are available for this selection.", "Unable to load projects. Please retry."],
+    ["de", "Projekt", "Projekt auswählen …", "Projekt löschen oder wechseln", "Bewertungsdatensatz wird geladen …", "Für diese Auswahl sind keine Projekte verfügbar.", "Projekte konnten nicht geladen werden. Bitte erneut versuchen."],
+  ] as const)("localizes student selection, clear and list/record feedback in %s", async (language, label, prompt, clearLabel, loading, empty, error) => {
+    api.role = "STUDENT"
+    setLanguage(language)
+    const pending = deferred<ReturnType<typeof pageResult>>()
+    api.grades.mockReturnValueOnce(pending.promise)
+    const page = mount(GradingPage)
+    await flushPromises()
+    expect(page.get('label[for="grading-student-project"]').text()).toBe(label)
+    expect(page.get("#grading-student-project option").text()).toContain(prompt)
+    await selectStudentProject(page)
+    expect(page.findAll("button").some((button) => button.text() === clearLabel)).toBe(true)
+    expect(page.get('[role="status"]').text()).toContain(loading)
+    pending.resolve(pageResult())
+    await flushPromises()
+    await page.findAll("button").find((button) => button.text() === clearLabel)!.trigger("click")
+    await flushPromises()
+    expect(page.get('label[for="grading-student-project"]').text()).toBe(label)
+    page.unmount()
+    api.eligibleProjects.mockResolvedValueOnce(eligiblePage([]))
+    const emptyPage = mount(GradingPage)
+    await flushPromises()
+    expect(emptyPage.get('[role="status"]').text()).toContain(empty)
+    emptyPage.unmount()
+    api.eligibleProjects.mockRejectedValueOnce(new Error("offline"))
+    const failedPage = mount(GradingPage)
+    await flushPromises()
+    expect(failedPage.get('[role="alert"]').text()).toContain(error)
+    expect(failedPage.get('[role="alert"] button').text()).toBe(String(i18n.global.t("grading.retryProjects")))
+    failedPage.unmount()
   })
 
   it.each([

@@ -218,7 +218,11 @@ export class Lifecycle {
   async selectStudentGradingProject(title, periodLabel = this.text.period) {
     const text = JSON.stringify(title)
     const period = JSON.stringify(periodLabel)
-    await this.wait(`!!document.querySelector('#grading-student-project')`, 'student grading project selector')
+    await this.wait(`(() => {
+      const select = document.querySelector('#grading-student-project');
+      return !!select && !select.disabled && [...select.options]
+        .filter(option => option.textContent.includes(${text}) && option.textContent.includes(${period}) && option.value).length === 1;
+    })()`, `enabled student grading selector with exactly one option for ${title} in ${periodLabel}`)
     const value = await this.evaluate(`(() => {
       const options = [...document.querySelector('#grading-student-project').options]
         .filter(option => option.textContent.includes(${text}) && option.textContent.includes(${period}) && option.value);
@@ -232,7 +236,11 @@ export class Lifecycle {
   async selectStudentFormalProject(title, periodLabel = this.text.period) {
     const text = JSON.stringify(title)
     const period = JSON.stringify(periodLabel)
-    await this.wait(`!!document.querySelector('#eligible-project')`, 'student Formal proposal selector')
+    await this.wait(`(() => {
+      const select = document.querySelector('#eligible-project');
+      return !!select && !select.disabled && [...select.options]
+        .filter(option => option.textContent.includes(${text}) && option.textContent.includes(${period}) && option.value).length === 1;
+    })()`, `enabled student Formal proposal selector with exactly one option for ${title} in ${periodLabel}`)
     const value = await this.evaluate(`(() => {
       const options = [...document.querySelector('#eligible-project').options]
         .filter(option => option.textContent.includes(${text}) && option.textContent.includes(${period}) && option.value);

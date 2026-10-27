@@ -103,7 +103,7 @@
         <div class="page-heading">
           <h3 ref="selectedProjectHeading" tabindex="-1" class="form-section-title">{{ selectedContext }}</h3>
           <button v-if="isTeacher" class="button button-secondary" type="button" :disabled="task.loading.value" @click="returnToTeacherList">{{ $t('grading.returnToList') }}</button>
-          <button v-else-if="isStudent" class="button button-secondary" type="button" :disabled="task.loading.value" @click="clearSelection">{{ $t('grading.changeProject') }}</button>
+          <button v-else-if="isStudent" class="button button-secondary" type="button" :disabled="projectLoading || task.loading.value" @click="clearSelection">{{ $t('grading.changeProject') }}</button>
         </div>
         <p v-if="projectLoading" class="notice" role="status">{{ $t('grading.loadingRecord') }}</p>
         <div v-if="projectError" class="error-box stack" role="alert">

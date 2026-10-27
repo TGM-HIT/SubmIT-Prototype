@@ -12,6 +12,7 @@ import { collectBrowserErrors } from '../preview.mjs'
 import { assertMatchingRubricIds, assertTestingAccountRole, Lifecycle } from './scenario.mjs'
 import { assertPublicBoundary } from './privacy.mjs'
 import { createServer } from 'node:http'
+import { runInNewContext } from 'node:vm'
 
 // Encoded test pixels are test data only. Guide screenshots are exclusively Chrome Page.captureScreenshot.
 function chunk(kind, data) {
@@ -69,6 +70,48 @@ function dependencies(root, additional = {}) {
     },
     ...additional,
   }
+}
+
+for (const [method, selector] of [
+  ['selectStudentGradingProject', '#grading-student-project'],
+  ['selectStudentFormalProject', '#eligible-project'],
+]) {
+  test(`T8 ${method} waits for exact async option readiness and enabled list`, async () => {
+    const lifecycle = new Lifecycle({ locale: { example: { period: 'Final period' } }, report: {}, options: {} })
+    const select = { disabled: true, options: [] }
+    const document = { querySelector: (actual) => {
+      assert.equal(actual, selector)
+      return select
+    } }
+    const evaluate = (expression) => runInNewContext(expression, { document })
+    const option = (title, period, value = 'period|project') => ({ textContent: `${title} — ${period}`, value })
+    let ready = false
+    lifecycle.wait = async (expression) => {
+      // The DOM select exists from mount, before its asynchronous list is ready.
+      assert.equal(evaluate(expression), false)
+      select.disabled = false
+      assert.equal(evaluate(expression), false)
+      select.options = [option('Expected title', 'Wrong period'), option('Other title', 'Final period')]
+      assert.equal(evaluate(expression), false)
+      select.options.push(option('Expected title', 'Final period'))
+      select.disabled = true
+      assert.equal(evaluate(expression), false)
+      select.disabled = false
+      assert.equal(evaluate(expression), true)
+      select.options.push(option('Expected title', 'Final period', 'duplicate'))
+      assert.equal(evaluate(expression), false)
+      select.options.pop()
+      ready = true
+    }
+    lifecycle.evaluate = async (expression) => {
+      assert.ok(ready, 'Must not read the selected option before readiness')
+      return evaluate(expression)
+    }
+    const fills = []
+    lifecycle.fill = async (...args) => fills.push(args)
+    await lifecycle[method]('Expected title')
+    assert.deepEqual(fills, [[selector, 'period|project']])
+  })
 }
 
 test('D1 German guides cover all lifecycle checkpoints and navigable chapters', async (t) => {
