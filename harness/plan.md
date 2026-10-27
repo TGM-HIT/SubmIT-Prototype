@@ -52,6 +52,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Bug-30](tickets/done/Bug-30.md) | done | Show meaningful audit events with timestamps, resources, and actors |
 | [Bug-31](tickets/done/Bug-31.md) | done | Show group members by name in student Formal proposals |
 | [Bug-32](tickets/done/Bug-32.md) | done | Diagnose root-only blank page and restore reliable login landing |
+| [Bug-33](tickets/Bug-33.md) | to-do | Load supervisor-free finalized groups in student Formal proposals |
 
 ### Development
 
