@@ -35,12 +35,14 @@ class TestingAccountsInactiveProfileTest {
     @Test
     void doesNotSeedWorkflowAccountsAndRetainsBootstrapAdminBehaviorWhenTestingProfileIsInactive() {
         assertFalse(applicationContext.containsBean("seedTestingAccounts"));
+        assertFalse(applicationContext.containsBean("testingDraftRubricSeeder"));
         assertFalse(applicationContext.containsBean("seedTestingFormalApplicationFixture"));
         assertFalse(applicationContext.containsBean("testingIdeasFixtureSeeder"));
         assertFalse(applicationContext.containsBean("testingAllocationPreviewSeeder"));
         assertTrue(records.findByType("testing_multi_group_allocation_preview",
                 org.springframework.data.domain.PageRequest.of(0, 20)).isEmpty());
         assertTrue(records.findByType("idea", org.springframework.data.domain.PageRequest.of(0, 20)).isEmpty());
+        assertTrue(records.findByType("grading_rubric", org.springframework.data.domain.PageRequest.of(0, 20)).isEmpty());
         assertTrue(records.findByType("application_period", org.springframework.data.domain.PageRequest.of(0, 20)).isEmpty());
         assertTrue(records.findByType("student_application", org.springframework.data.domain.PageRequest.of(0, 20)).isEmpty());
         assertTrue(records.findByType("allocation_run", org.springframework.data.domain.PageRequest.of(0, 20)).isEmpty());

@@ -1,0 +1,181 @@
+{
+  "version": "dev55-draft-testing-v1",
+  "name": "Entwurf Rubrikenbewertung — Testing snapshot (nicht schulisch freigegeben)",
+  "effectiveFrom": "2020-01-01",
+  "assessmentScale": { "min": 1, "max": 5, "step": 1 },
+  "finalGradeScale": { "min": 1, "max": 5, "step": 1 },
+  "categories": [
+    {
+      "id": "a1",
+      "name": "A Technische Realisierung — A1 Konzeption und Architektur",
+      "description": "Quellzuordnung: A Technische Realisierung / A1. Evidenz / Anmerkungen ist der Dokument-Spaltenkontext; Nachweise sind nicht verpflichtend. Entwurfsalternativen, keine zusätzlichen Kriterien: „Strukturiert die Software sinnvoll in Komponenten, Module bzw. Schichten und definiert deren Schnittstellen.“; „Wählt geeignete Aufnahme-, Licht-, Ton- und Postproduktionstechnik.“; „Programmiersprachen, Frameworks, Bibliotheken, Datenmodelle“; „technische Formate, Codecs, Auflösung, Framerate“; „Architektur- und Technologieentscheidungen, Produktion, Postproduktion, Distribution, Datenschutz, Sicherheit, ...“.",
+      "criteria": [
+        { "id": "a1-01", "name": "Leitet aus Problemstellung ein schlüssiges technisches, gestalterisch-technisches oder kreatives Konzept sowie nachvollziehbare funktionale und nichtfunktionale Anforderungen ab.", "subject": "BOTH" },
+        { "id": "a1-02", "name": "Strukturiert das Gesamtsystem bzw. Produkt in sinnvolle Komponenten und definiert deren Zusammenspiel (z.B. Softwarearchitektur, Workflow).", "subject": "BOTH" },
+        { "id": "a1-03", "name": "Wählt geeignete Technologien, Werkzeuge, Verfahren und Materialien aus.", "subject": "BOTH" },
+        { "id": "a1-04", "name": "Begründet wesentliche Konzept- und Technologieentscheidungen fachlich nachvollziehbar", "subject": "BOTH", "description": "Nummerierter Entwurfsdescriptor; angehängte Formulierungsalternativen siehe Abschnittskontext." },
+        { "id": "a1-05", "name": "Berücksichtigt relevante technische, sicherheitstechnische, organisatorische, rechtliche und ethische Rahmenbedingungen, Schnittstellen und Abhängigkeiten.", "subject": "BOTH" },
+        { "id": "a1-total", "name": "Gesamtkalkül", "subject": "BOTH", "description": "Manuelle Gesamtbeurteilung dieses Abschnitts. Separat zu erfassen; keine abgeleitete oder berechnete Zusammenfassung." }
+      ]
+    },
+    {
+      "id": "a2",
+      "name": "A Technische Realisierung — A2 Qualität der Realisierung",
+      "description": "Quellzuordnung: A Technische Realisierung / A2. Evidenz / Anmerkungen ist der Dokument-Spaltenkontext; Nachweise sind nicht verpflichtend. Entwurfsalternativen, keine zusätzlichen Kriterien: „Verwendet sinnvolle Modularisierung, Abstraktion, Datenstrukturen und Schnittstellen / erreicht eine dem Projekt angemessene Bild- und Ton-Qualität).“; „Behandelt Fehler, Sonderfälle und Eingaben angemessen und setzt Frameworks, Bibliotheken und APIs sachgerecht ein / setzt Schnitt, Montage und gegebenenfalls Effekte technisch sauber und inhaltlich zielgerichtet ein.“; „Berücksichtigt, soweit relevant, Sicherheit, Performance, Barrierefreiheit und Ressourcenverbrauch / Führt Farbkorrektur, Audiobearbeitung und weitere Postproduktionsschritte fachgerecht durch.“",
+      "criteria": [
+        { "id": "a2-01", "name": "Setzt das entwickelte Konzept fachlich, technisch und gestalterisch korrekt um.", "subject": "BOTH" },
+        { "id": "a2-02", "name": "Verwendet Technologien, Werkzeuge, Geräte und Verfahren fachgerecht", "subject": "BOTH", "description": "(Schreibt verständlichen, konsistent strukturierten und wartbaren Code / Bedient Kamera-, Licht-, Ton- und sonstiges Produktionsequipment fachgerecht und sicher)." },
+        { "id": "a2-03", "name": "Erreicht eine dem Projektumfang und Ausbildungsniveau entsprechende technische Qualität", "subject": "BOTH", "description": "Nummerierter Entwurfsdescriptor; angehängte Formulierungsalternativen siehe Abschnittskontext." },
+        { "id": "a2-04", "name": "Löst auftretende technische Probleme systematisch und möglichst eigenständig.", "subject": "BOTH" },
+        { "id": "a2-05", "name": "Realisiert ein robustes, technisch einwandfreies und für den vorgesehenen Einsatzzweck geeignetes Endprodukt.", "subject": "BOTH" },
+        { "id": "a2-total", "name": "Gesamtkalkül", "subject": "BOTH", "description": "Manuelle Gesamtbeurteilung dieses Abschnitts. Separat zu erfassen; keine abgeleitete oder berechnete Zusammenfassung." }
+      ]
+    },
+    {
+      "id": "a3",
+      "name": "A Technische Realisierung — A3 technischer Arbeitsprozess, Produktionsworkflow und Dokumentation",
+      "description": "Quellzuordnung: A Technische Realisierung / A3. Evidenz / Anmerkungen ist der Dokument-Spaltenkontext; Nachweise sind nicht verpflichtend. Entwurfsalternativen, keine zusätzlichen Kriterien: „Verwendet ein Versionskontrollsystem fachgerecht.“; „Organisiert Rohmaterial, Audio, Grafiken, Projektdateien und sonstige Assets in einer nachvollziehbaren Struktur und verwendet eindeutige und konsistente Datei- und Versionsbezeichnungen.“; „Verwaltet Konfigurationen, Zugangsdaten und sensible Informationen sachgerecht.“; „Dokumentiert verwendetes Equipment, wesentliche Einstellungen, Formate und technische Workflows.“; „Erstellt nachvollziehbare, sinnvoll abgegrenzte Commits und organisiert Branches bzw. Entwicklungsstände zweckmäßig.“; „Verwaltet unterschiedliche Bearbeitungs- und Freigabestände nachvollziehbar.“; „Setzt geeignete Backup- und Sicherungsstrategien ein.“; „Dokumentiert Schnittstellen und technisch relevante Komponenten in angemessenem Umfang.“; „Archiviert bzw. übergibt Projektdateien und Endprodukte so, dass eine spätere Weiterbearbeitung möglich ist.“",
+      "criteria": [
+        { "id": "a3-01", "name": "Organisiert Dateien, Daten, Assets und Arbeitsstände strukturiert und nachvollziehbar.", "subject": "BOTH" },
+        { "id": "a3-02", "name": "Dokumentiert Ablauf, Konfiguration und wesentliche technische Entscheidungen.", "subject": "BOTH" },
+        { "id": "a3-03", "name": "Dokumentiert die notwendigen Schritte zur Inbetriebnahme, Weiterbearbeitung bzw. Reproduktion (Installation, Konfiguration, Abhängigkeiten).", "subject": "BOTH" },
+        { "id": "a3-04", "name": "Verwendet geeignete Verfahren zur Versionisierung, Sicherung und Archivierung.", "subject": "BOTH" },
+        { "id": "a3-05", "name": "Erstellt eine technische Dokumentation, die eine Weiterführung durch fachkundige Dritte ermöglicht.", "subject": "BOTH" },
+        { "id": "a3-total", "name": "Gesamtkalkül", "subject": "BOTH", "description": "Manuelle Gesamtbeurteilung dieses Abschnitts. Separat zu erfassen; keine abgeleitete oder berechnete Zusammenfassung." }
+      ]
+    },
+    {
+      "id": "a4",
+      "name": "A Technische Realisierung — A4 Verifikation, Testen und Qualitätssicherung",
+      "description": "Quellzuordnung: A Technische Realisierung / A4. Evidenz / Anmerkungen ist der Dokument-Spaltenkontext; Nachweise sind nicht verpflichtend. Entwurfsalternativen, keine zusätzlichen Kriterien: „Entwickelt eine für das Projekt angemessene Teststrategie.“; „Erstellt nachvollziehbare Tests für wesentliche Funktionen und Fehlerfälle und automatisiert Tests dort, wo dies technisch und wirtschaftlich sinnvoll ist.“; „Kontrolliert Bild- und Tonmaterial während Produktion und Postproduktion systematisch.“; „Setzt gegebenenfalls Unit-, Integrations-, System- bzw. Akzeptanztests angemessen ein.“; „Kontrolliert Export bzw. Master auf Bild, Ton, Synchronität und Medienintegrität.“; „Dokumentiert wesentliche Qualitätskontrollen und gegebenenfalls bekannte Einschränkungen.“; „Stellt sicher, dass das abgegebene System reproduzierbar erstellt, installiert und ausgeführt werden kann.“; „Überprüft das Endprodukt auf den vorgesehenen Wiedergabe- bzw. Distributionssystemen.“",
+      "criteria": [
+        { "id": "a4-01", "name": "Definiert überprüfbare Anforderungen bzw. Qualitätskriterien.", "subject": "BOTH" },
+        { "id": "a4-02", "name": "Überprüft die Realisierung systematisch anhand dieser Kriterien.", "subject": "BOTH" },
+        { "id": "a4-03", "name": "Setzt geeignete Test- bzw. Prüfverfahren ein.", "subject": "BOTH" },
+        { "id": "a4-04", "name": "Erkennt und dokumentiert Fehler und Qualitätsmängel und behebt diese systematisch.", "subject": "BOTH" },
+        { "id": "a4-05", "name": "Überprüft das Endprodukt unter realistischen Einsatzbedingungen.", "subject": "BOTH" },
+        { "id": "a4-total", "name": "Gesamtkalkül", "subject": "BOTH", "description": "Manuelle Gesamtbeurteilung dieses Abschnitts. Separat zu erfassen; keine abgeleitete oder berechnete Zusammenfassung." }
+      ]
+    },
+    {
+      "id": "b",
+      "name": "B Projektmanagement",
+      "description": "Quellzuordnung: B Projektmanagement. Evidenz / Anmerkungen ist der Dokument-Spaltenkontext; Nachweise sind nicht verpflichtend. Unnummerierte Draft-Alternativen (nicht als zusätzliche Kriterien übernommen): „Bringt sich konstruktiv in die Themenfindung / Formulierung der Problemstellung ein (aus Selbstkompetenz -gehört hier noch eingebaut)“; „Dokumentiert den Prozess und hält sich an Vereinbarungen und Termine (aus Selbstkompetenz – aber eh schon abgedeckt?).“ Editoriale offene Hinweise: die erste Zuordnung war noch einzubauen; die zweite wurde als möglicherweise bereits abgedeckt hinterfragt. Späterer redaktioneller Kontext zum Prozess- und Terminthema steht bei der Selbstkompetenz-Tabelle.",
+      "criteria": [
+        { "id": "b-01", "name": "Plant das Projekt nachvollziehbar, definiert Arbeitspakete, Meilensteine, Verantwortlichkeiten, Abhängigkeiten und verbindliche Termine.", "subject": "BOTH" },
+        { "id": "b-02", "name": "Überwacht den Projektfortschritt laufend, erkennt Abweichungen und Risiken und reagiert mit geeigneten Maßnahmen.", "subject": "BOTH" },
+        { "id": "b-03", "name": "Hält vereinbarte Termine und Verantwortlichkeiten ein bzw. kommuniziert notwendige Änderungen frühzeitig und nachvollziehbar.", "subject": "BOTH" },
+        { "id": "b-04", "name": "Kommuniziert zielorientiert mit Projektbeteiligten, erkennt Konflikte und trägt konstruktiv zu deren Lösung bei.", "subject": "BOTH" },
+        { "id": "b-05", "name": "Organisiert projektrelevante Dokumente, Dateien, Protokolle, Entscheidungen und Arbeitsstände strukturiert und nachvollziehbar.", "subject": "BOTH" },
+        { "id": "b-total", "name": "Gesamtkalkül", "subject": "BOTH", "description": "Manuelle Gesamtbeurteilung dieses Abschnitts. Separat zu erfassen; keine abgeleitete oder berechnete Zusammenfassung." }
+      ]
+    },
+    {
+      "id": "c1",
+      "name": "C schriftliche Arbeit und fachliche Dokumentation — C1 Inhaltliche und fachliche Auseinandersetzung",
+      "description": "Quellzuordnung: C schriftliche Arbeit und fachliche Dokumentation / C1. Evidenz / Anmerkungen ist der Dokument-Spaltenkontext; Nachweise sind nicht verpflichtend. Unnummerierte Draft-Alternativen (nicht als zusätzliche Kriterien übernommen): „Gliedert die Arbeit sachlogisch und nachvollziehbar.“; „Bindet relevante Argumente in die Auseinandersetzung mit der Problemstellung ein und bearbeitet die Problemstellung.“; „Begründet die Ergebnisse seiner/ihrer Arbeit.“",
+      "criteria": [
+        { "id": "c1-01", "name": "Strukturiert die schriftliche Arbeit logisch, nachvollziehbar und der Problemstellung entsprechend.", "subject": "BOTH" },
+        { "id": "c1-02", "name": "Setzt sich fachlich fundiert mit der Problemstellung auseinander und verwendet relevante Argumente, Quellen und Grundlagen.", "subject": "BOTH" },
+        { "id": "c1-03", "name": "Beschreibt und begründet wesentliche Entscheidungen und Ergebnisse der Arbeit.", "subject": "BOTH" },
+        { "id": "c1-04", "name": "Reflektiert Ergebnisse, Grenzen und gegebenenfalls alternative Lösungswege.", "subject": "BOTH" },
+        { "id": "c1-total", "name": "Gesamtkalkül", "subject": "BOTH", "description": "Manuelle Gesamtbeurteilung dieses Abschnitts. Separat zu erfassen; keine abgeleitete oder berechnete Zusammenfassung." }
+      ]
+    },
+    {
+      "id": "c2",
+      "name": "C schriftliche Arbeit und fachliche Dokumentation — C2 wissenschaftliches und formales Arbeiten",
+      "description": "Quellzuordnung: C schriftliche Arbeit und fachliche Dokumentation / C2. Evidenz / Anmerkungen ist der Dokument-Spaltenkontext; Nachweise sind nicht verpflichtend. Unnummerierte Draft-Alternativen (nicht als zusätzliche Kriterien übernommen): „Wählt Quellen und Datenmaterial entsprechend ihrer fachlichen Relevanz für das Thema aus.“; „Zitiert und bibliographiert einheitlich und korrekt, auch unter Berücksichtigung KI-generierter Texte.“; „Erfüllt die Anforderungen hinsichtlich formaler Vollständigkeit.“",
+      "criteria": [
+        { "id": "c2-01", "name": "Wählt Quellen und Datenmaterial nach fachlicher Relevanz und Qualität aus.", "subject": "BOTH" },
+        { "id": "c2-02", "name": "Zitiert und bibliographiert einheitlich und korrekt und kennzeichnet übernommene bzw. KI-generierte Inhalte entsprechend der geltenden Vorgaben.", "subject": "BOTH" },
+        { "id": "c2-03", "name": "Erfüllt die vereinbarten Anforderungen hinsichtlich formaler Vollständigkeit.", "subject": "BOTH" },
+        { "id": "c2-04", "name": "Trennt nachvollziehbar eigene Leistungen von übernommenen Inhalten und Hilfsmitteln.", "subject": "BOTH" },
+        { "id": "c2-total", "name": "Gesamtkalkül", "subject": "BOTH", "description": "Manuelle Gesamtbeurteilung dieses Abschnitts. Separat zu erfassen; keine abgeleitete oder berechnete Zusammenfassung." }
+      ]
+    },
+    {
+      "id": "c3",
+      "name": "C schriftliche Arbeit und fachliche Dokumentation — C3 Sprache und Darstellung",
+      "description": "Quellzuordnung: C schriftliche Arbeit und fachliche Dokumentation / C3. Evidenz / Anmerkungen ist der Dokument-Spaltenkontext; Nachweise sind nicht verpflichtend. Unnummerierte Draft-Alternativen (nicht als zusätzliche Kriterien übernommen): „Beherrscht die Grundprinzipien von Orthografie, Satzzeichensetzung und Grammatik.“; „Verwendet Ausdruck und Wortwahl entsprechend dem Bildungsniveau einer Abschlussklasse.“",
+      "criteria": [
+        { "id": "c3-01", "name": "Verwendet Orthografie, Grammatik und Zeichensetzung korrekt bzw. ist in der Lage technische Hilfsmittel zur Fehlerkorrektur einzusetzen.", "subject": "BOTH" },
+        { "id": "c3-02", "name": "Verwendet eine dem Bildungsniveau und Fachgebiet entsprechende Ausdrucksweise und Wortwahl.", "subject": "BOTH" },
+        { "id": "c3-03", "name": "Setzt Fachbegriffe korrekt und konsistent ein.", "subject": "BOTH" },
+        { "id": "c3-04", "name": "Stellt komplexe Sachverhalte verständlich und präzise dar.", "subject": "BOTH" },
+        { "id": "c3-total", "name": "Gesamtkalkül", "subject": "BOTH", "description": "Manuelle Gesamtbeurteilung dieses Abschnitts. Separat zu erfassen; keine abgeleitete oder berechnete Zusammenfassung." }
+      ]
+    },
+    {
+      "id": "d1",
+      "name": "D Präsentation, Diskussion und Verteidigung — D1 Präsentation",
+      "description": "Quellzuordnung: D Präsentation, Diskussion und Verteidigung / D1. Evidenz / Anmerkungen ist der Dokument-Spaltenkontext; Nachweise sind nicht verpflichtend. Unnummerierte Draft-Alternativen (nicht als zusätzliche Kriterien übernommen): „Gliedert die Präsentation klar erkennbar, stringent und zielgerichtet.“; „Stellt die Kernaussagen sachkompetent und folgerichtig dar.“; „Fasst die Schlussfolgerungen in einem Fazit zusammen.“; „Wählt geeignetes Präsentationsmaterial und passende Medien.“; „Geht kompetent mit den eingesetzten Medien und/oder Präsentationsmethoden um.“; „Verwendet die Standardsprache korrekt unter Anwendung des Fachvokabulars, spricht frei und setzt rhetorische Tools zur Verdeutlichung ein.“",
+      "criteria": [
+        { "id": "d1-01", "name": "Gliedert die Präsentation klar erkennbar, stringent und zielgerichtet.", "subject": "BOTH" },
+        { "id": "d1-02", "name": "Stellt Problemstellung, Vorgehen, wesentliche Entscheidungen und Ergebnisse fachlich korrekt und verständlich dar.", "subject": "BOTH" },
+        { "id": "d1-03", "name": "Setzt Präsentationsmaterialen und Medien zweckmäßig und professionell ein.", "subject": "BOTH" },
+        { "id": "d1-04", "name": "Verwendet Fachsprache korrekt, spricht weitgehend frei und vermittelt die Inhalte adressatengerecht.", "subject": "BOTH" },
+        { "id": "d1-05", "name": "Hält den vorgegebenen zeitlichen Rahmen ein.", "subject": "BOTH" },
+        { "id": "d1-total", "name": "Gesamtkalkül", "subject": "BOTH", "description": "Manuelle Gesamtbeurteilung dieses Abschnitts. Separat zu erfassen; keine abgeleitete oder berechnete Zusammenfassung." }
+      ]
+    },
+    {
+      "id": "d2",
+      "name": "D Präsentation, Diskussion und Verteidigung — D2 Diskussion und Verteidigung",
+      "description": "Quellzuordnung: D Präsentation, Diskussion und Verteidigung / D2. Evidenz / Anmerkungen ist der Dokument-Spaltenkontext; Nachweise sind nicht verpflichtend. Unnummerierte Draft-Alternativen (nicht als zusätzliche Kriterien übernommen): „Antwortet fundiert auf Fragen zum methodischen Vorgehen und zum Arbeitsprozess der eigenen Diplomarbeit bzw. zur Teamarbeit.“; „Beantwortet Fragen zum Inhalt der Arbeit korrekt und eigenständig.“; „Argumentiert inhaltliche Positionen und den Berufsfeldbezug schlüssig und sachlogisch.“",
+      "criteria": [
+        { "id": "d2-01", "name": "Beantwortet Fragen zum methodischen und technischen Vorgehen fundiert und eigenständig.", "subject": "BOTH" },
+        { "id": "d2-02", "name": "Beantwortet fachliche Fragen zu Inhalten und Ergebnissen der Arbeit korrekt.", "subject": "BOTH" },
+        { "id": "d2-03", "name": "Begründet wesentliche technische, gestalterische und organisatorische Entscheidungen nachvollziehbar.", "subject": "BOTH" },
+        { "id": "d2-04", "name": "Setzt sich kritisch mit Alternativen, Grenzen und Schwächen der eigenen Lösung auseinander.", "subject": "BOTH" },
+        { "id": "d2-05", "name": "Grenzt den eigenen Beitrag klar von Leistungen anderer Teammitglieder bzw. verwendeten externen Hilfsmitteln ab.", "subject": "BOTH" },
+        { "id": "d2-total", "name": "Gesamtkalkül", "subject": "BOTH", "description": "Manuelle Gesamtbeurteilung dieses Abschnitts. Separat zu erfassen; keine abgeleitete oder berechnete Zusammenfassung." }
+      ]
+    },
+    {
+      "id": "selbstkompetenz",
+      "name": "Selbstkompetenz (Entwurf; in der Vorlage noch nicht abgedeckt)",
+      "description": "Quellzuordnung: zusätzliche Selbstkompetenz-Tabelle. Die Vorlage bezeichnet die Tabelle als derzeit nicht abgedeckt; Inhalte bleiben ausdrücklich Draft. Evidenz / Anmerkungen ist Spaltenkontext, nicht verpflichtend. Editorialer Kontext außerhalb der Tabelle: „Extrem gut wäre noch:“; der Prozess-/Vereinbarungs-/Terminaspekt wurde als essenziell zur Verantwortlichkeit bei ausbleibender Kommunikation zwischen Kandidat/innen und Betreuenden markiert. Offene redaktionelle Zuordnung, keine beschlossene Regel.",
+      "criteria": [
+        { "id": "self-01", "name": "Bringt sich konstruktiv in die Themenfindung / Formulierung der Problemstellung ein.", "subject": "STUDENT", "description": "Unnummerierter Descriptor aus einer zusätzlichen Tabelle, ausdrücklich Draft und nicht als freigegebene Bewertungsregel verstanden." },
+        { "id": "self-02", "name": "Gestaltet die einzelnen Prozessschritte eigenständig.", "subject": "STUDENT", "description": "Unnummerierter Descriptor aus einer zusätzlichen Tabelle, ausdrücklich Draft und nicht als freigegebene Bewertungsregel verstanden." },
+        { "id": "self-03", "name": "Dokumentiert den Prozess und hält sich an Vereinbarungen und Termine.", "subject": "STUDENT", "description": "Unnummerierter Descriptor aus einer zusätzlichen Tabelle, ausdrücklich Draft und nicht als freigegebene Bewertungsregel verstanden; der Dokumentrand enthält zusätzliche redaktionelle Betonung." },
+        { "id": "self-total", "name": "Gesamtkalkül", "subject": "STUDENT", "description": "Manuelle Gesamtbeurteilung dieses Abschnitts. Separat zu erfassen; keine abgeleitete oder berechnete Zusammenfassung." }
+      ]
+    },
+    {
+      "id": "berufsfeldkompetenz",
+      "name": "Berufsfeldkompetenz (Entwurf; in der Vorlage noch nicht abgedeckt)",
+      "description": "Quellzuordnung: zusätzliche Berufsfeldkompetenz-Tabelle. Die Vorlage bezeichnet die Tabelle als derzeit nicht abgedeckt; Inhalte bleiben ausdrücklich Draft. Evidenz / Anmerkungen ist Spaltenkontext, nicht verpflichtend.",
+      "criteria": [
+        { "id": "beruf-01", "name": "Nimmt einen eindeutigen Berufsfeldbezug in der Bearbeitung der Problemstellung auf.", "subject": "BOTH", "description": "Unnummerierter Descriptor aus einer zusätzlichen Tabelle, ausdrücklich Draft und nicht als freigegebene Bewertungsregel verstanden." },
+        { "id": "beruf-02", "name": "Wählt im Bezug zum Thema eine passende Methode bzw. passende Methoden zur Bearbeitung der Problemstellung.", "subject": "BOTH", "description": "Unnummerierter Descriptor aus einer zusätzlichen Tabelle, ausdrücklich Draft und nicht als freigegebene Bewertungsregel verstanden." },
+        { "id": "beruf-03", "name": "Setzt die gewählte Methode ergebnisorientiert ein.", "subject": "BOTH", "description": "Unnummerierter Descriptor aus einer zusätzlichen Tabelle, ausdrücklich Draft und nicht als freigegebene Bewertungsregel verstanden." },
+        { "id": "beruf-total", "name": "Gesamtkalkül", "subject": "BOTH", "description": "Manuelle Gesamtbeurteilung dieses Abschnitts. Separat zu erfassen; keine abgeleitete oder berechnete Zusammenfassung." }
+      ]
+    },
+    {
+      "id": "teamkompetenz",
+      "name": "Teamkompetenz (Entwurf; in der Vorlage noch nicht abgedeckt)",
+      "description": "Quellzuordnung: zusätzliche Teamkompetenz-Tabelle. Die Vorlage bezeichnet die Tabelle als derzeit nicht abgedeckt; Inhalte bleiben ausdrücklich Draft. Evidenz / Anmerkungen ist Spaltenkontext, nicht verpflichtend.",
+      "criteria": [
+        { "id": "team-01", "name": "Kommuniziert zielorientiert mit den Teammitgliedern bzw. im gegebenen Fall mit Kooperationspartner/inne/n.", "subject": "GROUP", "description": "Unnummerierter Descriptor aus einer zusätzlichen Tabelle, ausdrücklich Draft und nicht als freigegebene Bewertungsregel verstanden." },
+        { "id": "team-02", "name": "Bringt ihren/seinen schriftlichen Arbeitsteil (z.B. Einleitung, Abstract, Resümee) selbstverantwortlich in das Team ein.", "subject": "GROUP", "description": "Unnummerierter Descriptor aus einer zusätzlichen Tabelle, ausdrücklich Draft und nicht als freigegebene Bewertungsregel verstanden." },
+        { "id": "team-03", "name": "Hält sich an die im Team vereinbarten Regeln hinsichtlich Zeitmanagement, Verlässlichkeit und der übertragenen Aufgaben.", "subject": "GROUP", "description": "Unnummerierter Descriptor aus einer zusätzlichen Tabelle, ausdrücklich Draft und nicht als freigegebene Bewertungsregel verstanden." },
+        { "id": "team-total", "name": "Gesamtkalkül", "subject": "GROUP", "description": "Manuelle Gesamtbeurteilung dieses Abschnitts. Separat zu erfassen; keine abgeleitete oder berechnete Zusammenfassung." }
+      ]
+    }
+  ],
+  "metricDefinitions": [
+    {
+      "id": "testing-supplemental-observation",
+      "name": "Supplemental synthetic testing metric",
+      "version": 1,
+      "description": "Synthetic testing-only metric to exercise the existing metric API; it is not defined by the source draft and is not a rubric criterion.",
+      "unit": "test units",
+      "min": 0,
+      "max": 100
+    }
+  ],
+  "aggregationRules": []
+}
