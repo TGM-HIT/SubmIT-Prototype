@@ -111,7 +111,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-52](tickets/done/Dev-52.md) | done | Anchor line-numbered ticket sources to a Git revision |
 | [Dev-53](tickets/done/Dev-53.md) | done | Test period response fields and label boundaries |
 | [Dev-54](tickets/done/Dev-54.md) | done | Consolidate duplicate review request schemas |
-| [Dev-55](tickets/Dev-55.md) | to-do | Seed a synthetic grading rubric for testing |
+| [Dev-55](tickets/done/Dev-55.md) | done | Seed the draft grading rubric for testing |
 | [Dev-56](tickets/Dev-56.md) | to-do | Correct the backend Java namespace |
 | [Dev-57](tickets/Dev-57.md) | to-do | Run PostgreSQL and pgAdmin in Docker Compose |
 | [Dev-58](tickets/done/Dev-58.md) | done | Automate frontend browser keyboard navigation tests |

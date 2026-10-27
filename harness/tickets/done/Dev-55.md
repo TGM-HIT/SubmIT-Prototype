@@ -6,7 +6,7 @@ Starting the application with `make run-testing` should provide an effective gra
 
 ## Source
 
-Owner confirmation: provide the rubric through `make run-testing`. Owner refinement on 2026-10-27: "Use the `docs/Entwurf Rubrikenbewertung.docx` as rubric." This replaces the earlier synthetic criterion-content requirement, not the testing-profile boundary or prohibition on invented final-grade calculations. Source: [draft rubric](../../docs/Entwurf%20Rubrikenbewertung.docx), together with the versioned-data requirements in [shared specification](../../docs/SPEC.md) and [backend specification](../../backend/SPEC.md).
+Owner confirmation: provide the rubric through `make run-testing`. Owner refinement on 2026-10-27: "Use the `docs/Entwurf Rubrikenbewertung.docx` as rubric." This replaces the earlier synthetic criterion-content requirement, not the testing-profile boundary or prohibition on invented final-grade calculations. Source: [draft rubric](../../../docs/Entwurf%20Rubrikenbewertung.docx), together with the versioned-data requirements in [shared specification](../../../docs/SPEC.md) and [backend specification](../../../backend/SPEC.md).
 
 ## Scope and contract
 
