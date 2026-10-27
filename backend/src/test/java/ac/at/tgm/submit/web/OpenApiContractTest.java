@@ -94,12 +94,18 @@ class OpenApiContractTest {
         JsonNode document = apiDocument();
         JsonNode operation = document.path("paths").path("/api/formal-applications").path("get");
         assertTrue(operation.isObject());
-        assertTrue(operation.path("security").isArray());
-        assertTrue(operation.path("security").get(0).path("bearerAuth").isArray());
-        assertTrue(operation.path("responses").has("401"));
-        assertTrue(operation.path("responses").has("403"));
+        JsonNode security = operation.path("security");
+        assertTrue(security.isArray());
+        assertEquals(1, security.size(), "Authentication must not be optional in an alternate security entry.");
+        assertEquals(Set.of("bearerAuth"), fieldNames(security.get(0)));
+        assertTrue(security.get(0).path("bearerAuth").isArray());
+        assertEquals(0, security.get(0).path("bearerAuth").size(),
+                "The operation must use bearer authentication without scopes or alternatives.");
+        JsonNode responses = operation.path("responses");
+        assertEquals(Set.of("200", "401", "403"), fieldNames(responses),
+                "Documented statuses match success, missing/invalid authentication, and non-teacher authorization.");
         assertEquals("#/components/schemas/PageResponseFormalApplicationSummaryResponse",
-                operation.path("responses").path("200").path("content").path("*/*")
+                responses.path("200").path("content").path("*/*")
                         .path("schema").path("$ref").asText());
 
         JsonNode parameters = operation.path("parameters");
@@ -109,23 +115,30 @@ class OpenApiContractTest {
         assertEquals("query", query.path("in").asText());
         assertFalse(query.path("required").asBoolean());
         assertEquals("string", query.path("schema").path("type").asText());
-        assertTrue(query.path("description").asText().contains("trimmed"));
-        assertTrue(query.path("description").asText().contains("period label"));
+        assertEquals("Optional case-insensitive substring in project title, member display name, period label, "
+                + "or school year; surrounding whitespace is trimmed and blank is ignored.",
+                query.path("description").asText());
         JsonNode supervised = parameter(parameters, "supervisedOnly");
         assertFalse(supervised.path("required").asBoolean());
         assertEquals("boolean", supervised.path("schema").path("type").asText());
         assertEquals("true", supervised.path("schema").path("default").asText());
-        assertTrue(supervised.path("description").asText().contains("confirmed supervisor assignment"));
+        assertEquals("Limit results to projects with a current confirmed supervisor assignment to the caller. "
+                + "Defaults to true.", supervised.path("description").asText());
         JsonNode page = parameter(parameters, "page");
         assertFalse(page.path("required").asBoolean());
         assertEquals("integer", page.path("schema").path("type").asText());
+        assertEquals("int32", page.path("schema").path("format").asText());
         assertEquals("0", page.path("schema").path("default").asText());
+        assertEquals("Zero-based page index; defaults to 0.", page.path("description").asText());
         JsonNode size = parameter(parameters, "size");
         assertFalse(size.path("required").asBoolean());
         assertEquals("integer", size.path("schema").path("type").asText());
+        assertEquals("int32", size.path("schema").path("format").asText());
         assertEquals("20", size.path("schema").path("default").asText());
         assertEquals(1, size.path("schema").path("minimum").asInt());
         assertEquals(100, size.path("schema").path("maximum").asInt());
+        assertEquals("Page size; defaults to 20 and is normalized to the inclusive range 1–100.",
+                size.path("description").asText());
 
         JsonNode schemas = document.path("components").path("schemas");
         JsonNode pageSchema = schemas.path("PageResponseFormalApplicationSummaryResponse");

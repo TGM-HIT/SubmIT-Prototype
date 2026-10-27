@@ -126,8 +126,14 @@ class FormalApplicationListApiTest {
         SeededProposal target = proposals.get(0);
         assertSearchFinds(target, "  pUbLiC aPi sEaRcH nEbUlA  ");
         assertSearchFinds(target, "  Liam Foster  ");
+        assertSearchFinds(target, "  " + users.findByUsername("student05").orElseThrow().getDisplayName() + "  ");
         assertSearchFinds(target, " UNIQUE LABEL QUASAR ");
         assertSearchFinds(target, " 2038/2039 ");
+
+        SeededProposal otherTeacherProposal = proposals.get(1);
+        JsonNode unfilteredOtherTeacherSearch = response(queryRequest(teacherToken, false, 0, 20,
+                " other teacher project ").andExpect(status().isOk()).andReturn());
+        assertEquals(List.of(otherTeacherProposal.applicationId().toString()), idsAsList(unfilteredOtherTeacherSearch));
 
         JsonNode blank = response(queryRequest(teacherToken, true, 0, 100, "   ")
                 .andExpect(status().isOk()).andReturn());
@@ -208,7 +214,7 @@ class FormalApplicationListApiTest {
         assertEquals(5, requiredInt(first, "size"));
         assertEquals(21, requiredInt(first, "totalElements"));
         assertEquals(5, requiredInt(first, "totalPages"));
-        assertEquals(ids(first), ids(second));
+        assertEquals(idsAsList(first), idsAsList(second));
 
         for (JsonNode summary : required(defaultPage, "content")) {
             assertEquals(SUMMARY_FIELDS, fieldNames(summary));
