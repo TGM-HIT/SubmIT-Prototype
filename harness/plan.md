@@ -152,7 +152,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Feature-23](tickets/done/Feature-23.md) | done | Select eligible students for application periods |
 | [Feature-24](tickets/done/Feature-24.md) | done | Decide whether administrators may record grades, metrics, and final grades |
 | [Feature-25](tickets/done/Feature-25.md) | done | Allow teacher and administrator roles on one account |
-| [Feature-26](tickets/Feature-26.md) | to-do | Browse teacher Formal proposals by project and period |
+| [Feature-26](tickets/done/Feature-26.md) | done | Browse teacher Formal proposals by project and period |
 
 ### Optimizations
 
