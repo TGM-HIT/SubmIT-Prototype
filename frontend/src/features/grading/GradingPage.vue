@@ -27,12 +27,92 @@
     </div>
     <div class="panel stack">
       <h2 class="section-title">{{ $t('grading.projectHistory') }}</h2>
-      <div class="toolbar">
-        <div class="field"><label class="label" for="project-id">{{ $t('grading.projectId') }}</label><input id="project-id" v-model.trim="projectId" class="input" /></div>
-        <button class="button button-secondary" type="button" :disabled="!projectId || task.loading.value" @click="loadProject">{{ $t('grading.loadProject') }}</button>
+      <div v-if="isTeacher && !projectId" class="stack">
+        <h3 ref="teacherListHeading" tabindex="-1" class="form-section-title">{{ $t('grading.projectList') }}</h3>
+        <form class="toolbar" @submit.prevent="searchTeacherProjects">
+          <div class="field"><label class="label" for="grading-project-search">{{ $t('grading.searchProjects') }}</label><input id="grading-project-search" v-model="teacherSearchDraft" class="input" type="search" :disabled="teacherProjectsLoading || projectLoading || task.loading.value" /></div>
+          <button class="button button-secondary" :disabled="teacherProjectsLoading || projectLoading || task.loading.value">{{ $t('grading.search') }}</button>
+        </form>
+        <label class="field checkbox-field" for="grading-supervised-only">
+          <input id="grading-supervised-only" v-model="supervisedOnly" type="checkbox"
+            :disabled="teacherProjectsLoading || projectLoading || task.loading.value" @change="changeSupervisedFilter" />
+          <span>{{ $t('grading.supervisedOnly') }}</span>
+        </label>
+        <p v-if="teacherProjectsLoading" class="notice" role="status">{{ $t('grading.loadingProjects') }}</p>
+        <div v-if="teacherProjectsError" class="error-box" role="alert">
+          <p>{{ teacherProjectsError }}</p>
+          <button class="button button-secondary" type="button" :disabled="projectLoading || task.loading.value" @click="loadTeacherProjects">{{ $t('grading.retryProjects') }}</button>
+        </div>
+        <p v-if="!teacherProjectsLoading && !teacherProjectsError && !teacherProjects.length" class="notice" role="status">{{ $t('grading.noProjects') }}</p>
+        <div v-if="teacherProjects.length" class="stack" role="list" :aria-label="$t('grading.projectResults')">
+          <article v-for="project in teacherProjects" :key="project.formalApplicationId" class="data-row" role="listitem">
+            <button class="proposal-result" type="button"
+              :data-formal-application-id="project.formalApplicationId"
+              :ref="(element) => setTeacherResultButton(project.formalApplicationId, element)"
+              :aria-pressed="project.projectId === projectId"
+              :disabled="teacherProjectsLoading || projectLoading || task.loading.value"
+              @click="selectTeacherProject(project)">
+              <span class="proposal-result-title">{{ project.projectTitle }}</span>
+              <span>{{ project.studentNames.join(', ') }}</span>
+              <span>{{ teacherResultLabel(project) }}</span>
+              <span class="status-badge">{{ proposalStatus(project.status) }}</span>
+            </button>
+          </article>
+        </div>
+        <div class="toolbar" :aria-label="$t('grading.pagination')">
+          <button class="button button-secondary" type="button"
+            :disabled="teacherProjectsLoading || projectLoading || task.loading.value || teacherPage === 0" @click="changeTeacherPage(-1)">
+            {{ $t('grading.previousPage') }}
+          </button>
+          <span role="status">{{ $t('grading.pageSummary', {
+            current: teacherPage + 1,
+            total: Math.max(teacherTotalPages, 1),
+            count: teacherTotalElements,
+          }) }}</span>
+          <button class="button button-secondary" type="button"
+            :disabled="teacherProjectsLoading || projectLoading || task.loading.value || teacherPage + 1 >= teacherTotalPages"
+            @click="changeTeacherPage(1)">
+            {{ $t('grading.nextPage') }}
+          </button>
+        </div>
+      </div>
+      <div v-else-if="isStudent && !projectId" class="stack">
+        <div class="field">
+          <label class="label" for="grading-student-project">{{ $t('grading.chooseProject') }}</label>
+          <select id="grading-student-project" ref="studentProjectSelect" :value="projectId" class="select"
+            :disabled="studentProjectsLoading || !!studentProjectsError || projectLoading || task.loading.value"
+            @change="selectStudentProject">
+            <option value="">{{ $t('grading.chooseProjectPrompt') }}</option>
+            <option v-for="project in studentProjects" :key="`${project.periodId}-${project.projectId}`" :value="studentProjectOptionValue(project)">
+              {{ studentProjectLabel(project) }}
+            </option>
+          </select>
+        </div>
+        <p v-if="studentProjectsLoading" class="notice" role="status">{{ $t('grading.loadingProjects') }}</p>
+        <div v-if="studentProjectsError" class="error-box" role="alert">
+          <p>{{ studentProjectsError }}</p>
+          <button class="button button-secondary" type="button" :disabled="projectLoading || task.loading.value" @click="loadStudentProjects">{{ $t('grading.retryProjects') }}</button>
+        </div>
+        <p v-else-if="!studentProjectsLoading && !studentProjects.length" class="notice" role="status">{{ $t('grading.noProjects') }}</p>
+      </div>
+      <form v-else-if="!isTeacher && !isStudent" class="toolbar" @submit.prevent="loadProject">
+        <div class="field"><label class="label" for="project-id">{{ $t('grading.projectId') }}</label><input id="project-id" v-model.trim="projectId" class="input" :disabled="projectLoading || task.loading.value" /></div>
+        <button class="button button-secondary" type="submit" :disabled="!projectId || projectLoading || task.loading.value">{{ $t('grading.loadProject') }}</button>
+      </form>
+      <div v-if="projectId" class="stack">
+        <div class="page-heading">
+          <h3 ref="selectedProjectHeading" tabindex="-1" class="form-section-title">{{ selectedContext }}</h3>
+          <button v-if="isTeacher" class="button button-secondary" type="button" :disabled="task.loading.value" @click="returnToTeacherList">{{ $t('grading.returnToList') }}</button>
+          <button v-else-if="isStudent" class="button button-secondary" type="button" :disabled="task.loading.value" @click="clearSelection">{{ $t('grading.changeProject') }}</button>
+        </div>
+        <p v-if="projectLoading" class="notice" role="status">{{ $t('grading.loadingRecord') }}</p>
+        <div v-if="projectError" class="error-box stack" role="alert">
+          <p>{{ projectError }}</p>
+          <button class="button button-secondary button-small" type="button" :disabled="projectLoading || task.loading.value" @click="loadProject">{{ $t('grading.retry') }}</button>
+        </div>
       </div>
       <p class="notice">{{ $t('grading.privacyHelp') }}</p>
-      <div v-if="projectId && auth.user?.roles.includes('TEACHER')" class="grid grid-2">
+      <div v-if="projectLoaded && isTeacher" class="grid grid-2">
         <form class="panel" @submit.prevent="recordGrade(false)">
           <h3 class="form-section-title">{{ $t('grading.individualAssessment') }}</h3>
           <div class="field"><label class="label" for="student-id">{{ $t('grading.groupMemberId') }}</label><input id="student-id" v-model.trim="gradeForm.studentId" class="input" required /></div>
@@ -47,12 +127,12 @@
           <button class="button stack" :disabled="task.loading.value || !selectedGroupCriterion">{{ $t('grading.recordGroupAssessment') }}</button>
         </form>
       </div>
-      <form v-if="projectId && auth.user?.roles.includes('TEACHER')" class="panel stack" @submit.prevent="recordMetric">
+      <form v-if="projectLoaded && isTeacher" class="panel stack" @submit.prevent="recordMetric">
         <h3 class="form-section-title">{{ $t('grading.metricHeading') }}</h3>
         <div class="grid grid-2"><div class="field"><label class="label" for="metric-id">{{ $t('grading.metricDefinition') }}</label><select id="metric-id" v-model="metricForm.metricId" class="select" required><option value="">{{ $t('grading.selectMetric') }}</option><option v-for="metric in metricsDefinitions" :key="String(metric.id)" :value="metric.id">{{ metric.name }} · {{ metric.unit || $t('grading.unitUnspecified') }}</option></select></div><div class="field"><label class="label" for="metric-value">{{ $t('grading.observedValue') }}</label><input id="metric-value" v-model.number="metricForm.value" class="input" type="number" step="any" required /></div></div>
         <div class="field"><label class="label" for="metric-note">{{ $t('grading.contextNote') }}</label><input id="metric-note" v-model="metricForm.note" class="input" maxlength="2000" /></div>
         <div class="field"><label class="label" for="metric-transition">{{ $t('grading.transitionReason') }}</label><textarea id="metric-transition" v-model="metricForm.transitionReason" class="textarea" maxlength="2000" /></div>
-        <button class="button">{{ $t('grading.recordObservation') }}</button>
+        <button class="button" :disabled="task.loading.value || projectLoading">{{ $t('grading.recordObservation') }}</button>
       </form>
       <div v-if="projectLoaded" class="tab-list" role="tablist" :aria-label="$t('grading.tablist')">
         <button v-for="tab in tabs" :key="tab.id" class="tab-button" role="tab" :aria-selected="activeTab === tab.id" @click="activeTab = tab.id">{{ tab.label }}</button>
@@ -69,27 +149,27 @@
         <article v-for="metric in metricEntries.content" :key="String(metric.id)" class="data-row"><div class="row-main"><h3>{{ metric.metricId }} · {{ displayNumber(metric.value) }} <span class="status-badge">v{{ metric.metricVersion }}</span></h3><p>{{ $t('grading.measured') }} {{ date(metric.measuredAt) }} · {{ $t('grading.rubric') }} {{ metric.rubricVersion }}</p><p>{{ metric.note }}</p></div></article>
         <p v-if="!metricEntries.content.length" class="empty">{{ $t('grading.noMetrics') }}</p>
       </div>
-      <div v-if="(projectLoaded && activeTab === 'final') || (projectId && auth.user?.roles.includes('TEACHER'))" class="stack">
-        <form v-if="auth.user?.roles.includes('TEACHER')" class="panel" @submit.prevent="saveFinalGrade">
+      <div v-if="projectLoaded && activeTab === 'final'" class="stack">
+        <form v-if="isTeacher" class="panel" @submit.prevent="saveFinalGrade">
           <h3 class="form-section-title">{{ $t('grading.recordProjectFinal') }}</h3>
           <div class="grid grid-2"><div class="field"><label class="label" for="rule">{{ $t('grading.projectRule') }}</label><select id="rule" v-model="finalForm.ruleId" class="select"><option value="">{{ $t('grading.manualDecision') }}</option><option v-for="rule in projectRules" :key="String(rule.id)" :value="rule.id">{{ rule.id }} · v{{ rule.version }}</option></select></div><div class="field"><label class="label" for="final-grade">{{ $t('grading.individualGrade') }} {{ finalForm.ruleId ? $t('grading.optionalConfirmation') : '' }}</label><input id="final-grade" v-model.number="finalForm.grade" class="input" type="number" :min="number(scaleField(activeRubric?.finalGradeScale, 'min'))" :max="number(scaleField(activeRubric?.finalGradeScale, 'max'))" :step="number(scaleField(activeRubric?.finalGradeScale, 'step'), 1)" :required="!finalForm.ruleId" /></div></div>
           <div class="field"><label class="label" for="rationale">{{ $t('grading.teacherRationale') }} {{ finalForm.ruleId ? $t('grading.optional') : $t('grading.requiredNoRule') }}</label><textarea id="rationale" v-model="finalForm.rationale" class="textarea" maxlength="4000" :required="!finalForm.ruleId" /></div>
           <div class="field"><label class="label" for="final-transition">{{ $t('grading.transitionReason') }}</label><textarea id="final-transition" v-model="finalForm.transitionReason" class="textarea" maxlength="2000" /></div>
           <div class="notice">{{ $t('grading.projectGradeHelp') }}</div>
-          <button class="button">{{ $t('grading.saveProjectGrade') }}</button>
+          <button class="button" :disabled="task.loading.value || projectLoading">{{ $t('grading.saveProjectGrade') }}</button>
         </form>
-        <form v-if="auth.user?.roles.includes('TEACHER')" class="panel stack" @submit.prevent="saveStudentFinalGrade">
+        <form v-if="isTeacher" class="panel stack" @submit.prevent="saveStudentFinalGrade">
           <h3 class="form-section-title">{{ $t('grading.recordStudentFinal') }}</h3>
           <div class="field"><label class="label" for="final-student-id">{{ $t('grading.allocatedStudentId') }}</label><input id="final-student-id" v-model.trim="studentFinalForm.studentId" class="input" required /></div>
           <div class="grid grid-2"><div class="field"><label class="label" for="student-rule">{{ $t('grading.studentRule') }}</label><select id="student-rule" v-model="studentFinalForm.ruleId" class="select"><option value="">{{ $t('grading.manualDecision') }}</option><option v-for="rule in studentRules" :key="String(rule.id)" :value="rule.id">{{ rule.id }} · v{{ rule.version }}</option></select></div><div class="field"><label class="label" for="student-final-grade">{{ $t('grading.individualGrade') }}</label><input id="student-final-grade" v-model.number="studentFinalForm.grade" class="input" type="number" :min="number(scaleField(activeRubric?.finalGradeScale, 'min'))" :max="number(scaleField(activeRubric?.finalGradeScale, 'max'))" :step="number(scaleField(activeRubric?.finalGradeScale, 'step'), 1)" :required="!studentFinalForm.ruleId" /></div></div>
           <div class="field"><label class="label" for="student-rationale">{{ $t('grading.rationale') }} {{ studentFinalForm.ruleId ? $t('grading.optional') : $t('grading.requiredNoRule') }}</label><textarea id="student-rationale" v-model="studentFinalForm.rationale" class="textarea" maxlength="4000" :required="!studentFinalForm.ruleId" /></div>
           <div class="field"><label class="label" for="student-transition">{{ $t('grading.transitionReason') }}</label><textarea id="student-transition" v-model="studentFinalForm.transitionReason" class="textarea" maxlength="2000" /></div>
-          <button class="button">{{ $t('grading.saveStudentGrade') }}</button>
+          <button class="button" :disabled="task.loading.value || projectLoading">{{ $t('grading.saveStudentGrade') }}</button>
         </form>
         <pre v-if="finalGrade" class="json-view">{{ localizedFinalGrade() }}</pre>
         <p v-else-if="projectLoaded" class="empty">{{ $t('grading.noFinalGrade') }}</p>
       </div>
-      <div v-if="task.error.value" class="error-box stack" role="alert">{{ task.error.value }} <button class="button button-secondary button-small" @click="loadProject">{{ $t('grading.retry') }}</button></div>
+      <div v-if="task.error.value" class="error-box stack" role="alert">{{ task.error.value }}</div>
       <p v-if="task.success.value" class="success-note" role="status">{{ task.success.value }}</p>
     </div>
     <section v-if="rubrics.content.length" class="panel stack">
@@ -100,10 +180,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import type { components } from '../../api/schema'
 import type { Page } from '../../api/client'
-import { gradingApi } from '../../api/services'
+import { formalApi, gradingApi } from '../../api/services'
 import { ApiError } from '../../api/client'
 import { useAuthStore } from '../../stores/auth'
 import { useTask } from '../../composables/useTask'
@@ -123,7 +203,11 @@ type StudentGradeRequest = components['schemas']['StudentGradeRequest']
 type GroupGradeRequest = components['schemas']['GroupGradeRequest']
 type MetricRequest = components['schemas']['MetricRequest']
 type FinalGradesRequest = components['schemas']['FinalGradesRequest']
+type TeacherProject = components['schemas']['FormalApplicationSummaryResponse']
+type StudentProject = components['schemas']['EligibleFormalProjectResponse']
 const auth = useAuthStore()
+const isTeacher = computed(() => auth.user?.roles.includes('TEACHER') ?? false)
+const isStudent = computed(() => auth.user?.roles.includes('STUDENT') ?? false)
 const knownStatuses = ['ACTIVE', 'SUPERSEDED', 'PUBLISHED'] as const
 function statusLabel(value: unknown): string {
   if (typeof value === 'string' && (knownStatuses as readonly string[]).includes(value)) {
@@ -131,11 +215,36 @@ function statusLabel(value: unknown): string {
   }
   return typeof value === 'string' ? value : String(i18n.global.t('grading.published'))
 }
+function studentProjectOptionValue(project: StudentProject): string {
+  return `${project.periodId}|${project.projectId}`
+}
 const task = useTask()
 const activeRubric = ref<Rubric | null>(null)
 const rubrics = ref<Page<components['schemas']['RubricSummary']>>({ content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 })
 const projectId = ref('')
+const selectedContext = ref('')
 const projectLoaded = ref(false)
+const projectLoading = ref(false)
+const projectError = ref('')
+const teacherProjects = ref<TeacherProject[]>([])
+const teacherProjectsLoading = ref(false)
+const teacherProjectsError = ref('')
+const teacherQuery = ref('')
+const teacherSearchDraft = ref('')
+const supervisedOnly = ref(true)
+const teacherPage = ref(0)
+const teacherTotalPages = ref(0)
+const teacherTotalElements = ref(0)
+const studentProjects = ref<StudentProject[]>([])
+const studentProjectsLoading = ref(false)
+const studentProjectsError = ref('')
+const teacherListHeading = ref<HTMLElement | null>(null)
+const selectedProjectHeading = ref<HTMLElement | null>(null)
+const studentProjectSelect = ref<HTMLSelectElement | null>(null)
+const teacherResultButtons = new Map<string, HTMLButtonElement>()
+let teacherListVersion = 0
+let studentListVersion = 0
+let projectLoadVersion = 0
 const activeTab = ref('individual')
 const tabs = computed(() => [
   { id: 'individual', label: i18n.global.t('grading.tabs.individual') },
@@ -192,6 +301,45 @@ function date(value: unknown): string {
   const parsed = new Date(value)
   return Number.isNaN(parsed.valueOf()) ? value : formatTimestamp(parsed)
 }
+function proposalStatus(value: string): string {
+  const key = `formal.states.${value.toLowerCase()}`
+  return i18n.global.te(key) ? String(i18n.global.t(key)) : value
+}
+function studentProjectLabel(project: StudentProject): string {
+  const period = project.periodLabel === project.schoolYear
+    ? project.periodLabel
+    : `${project.periodLabel} · ${project.schoolYear}`
+  return `${project.projectTitle} — ${period}`
+}
+function teacherResultLabel(project: TeacherProject): string {
+  const period = project.periodLabel === project.schoolYear
+    ? project.periodLabel
+    : `${project.periodLabel} · ${project.schoolYear}`
+  return `${project.projectTitle} — ${period}`
+}
+function clearProjectData(preserveSuccess = false): void {
+  projectLoaded.value = false
+  gradeEntries.value = emptyPage()
+  groupEntries.value = emptyPage()
+  metricEntries.value = emptyPage()
+  finalGrade.value = null
+  projectError.value = ''
+  if (!preserveSuccess) task.success.value = ''
+  resetProjectDrafts()
+}
+function resetProjectDrafts(): void {
+  Object.assign(gradeForm, {
+    studentId: '', criterionId: '', grade: '',
+    assessedOn: new Date().toISOString().slice(0, 10), evidence: '', comments: '', transitionReason: '',
+  })
+  Object.assign(groupForm, {
+    criterionId: '', grade: '', assessedOn: new Date().toISOString().slice(0, 10),
+    evidence: '', comments: '', transitionReason: '',
+  })
+  Object.assign(metricForm, { metricId: '', value: 0, note: '', transitionReason: '' })
+  Object.assign(finalForm, { ruleId: '', grade: 0, rationale: '', transitionReason: '' })
+  Object.assign(studentFinalForm, { studentId: '', ruleId: '', grade: 0, rationale: '', transitionReason: '' })
+}
 async function loadRubric(): Promise<void> {
   await task.run(async () => {
     const [current, listPage] = await Promise.all([gradingApi.activeRubric(), gradingApi.rubrics()])
@@ -200,34 +348,159 @@ async function loadRubric(): Promise<void> {
   })
 }
 async function loadProject(): Promise<void> {
-  if (!projectId.value) return
-  const result = await task.run(async () => {
+  const selectedProjectId = projectId.value
+  if (!selectedProjectId || projectLoading.value || task.loading.value) return
+  const version = ++projectLoadVersion
+  clearProjectData(true)
+  projectLoading.value = true
+  try {
     const [individual, group, metrics, final] = await Promise.all([
-      gradingApi.grades(projectId.value),
-      gradingApi.groupGrades(projectId.value),
-      gradingApi.metrics(projectId.value),
-      (auth.user?.roles.includes('STUDENT') && auth.user.id
-        ? gradingApi.finalStudentGrade(projectId.value, auth.user.id)
-        : gradingApi.finalGrade(projectId.value)).catch((error: unknown) => {
+      gradingApi.grades(selectedProjectId),
+      gradingApi.groupGrades(selectedProjectId),
+      gradingApi.metrics(selectedProjectId),
+      (isStudent.value && auth.user?.id
+        ? gradingApi.finalStudentGrade(selectedProjectId, auth.user.id)
+        : gradingApi.finalGrade(selectedProjectId)).catch((error: unknown) => {
         if (error instanceof ApiError && error.status === 404) return null
         throw error
       }),
     ])
-    return { individual, group, metrics, final }
-  })
-  if (result) {
-    gradeEntries.value = result.individual
-    groupEntries.value = result.group
-    metricEntries.value = result.metrics
-    finalGrade.value = result.final
+    if (version !== projectLoadVersion || selectedProjectId !== projectId.value) return
+    if (!selectedContext.value) selectedContext.value = String(i18n.global.t('grading.authorizedProject'))
+    gradeEntries.value = individual
+    groupEntries.value = group
+    metricEntries.value = metrics
+    finalGrade.value = final
     projectLoaded.value = true
-  } else {
-    projectLoaded.value = false
+    await nextTick()
+    selectedProjectHeading.value?.focus()
+  } catch {
+    if (version === projectLoadVersion && selectedProjectId === projectId.value) {
+      projectError.value = String(i18n.global.t('grading.projectLoadFailed'))
+    }
+  } finally {
+    if (version === projectLoadVersion) projectLoading.value = false
   }
+}
+function selectProject(id: string, context: string): void {
+  if (projectLoading.value || task.loading.value) return
+  ++projectLoadVersion
+  projectId.value = id
+  selectedContext.value = context
+  clearProjectData()
+  if (id) void loadProject()
+}
+function setTeacherResultButton(id: string, element: unknown): void {
+  if (element instanceof HTMLButtonElement) teacherResultButtons.set(id, element)
+  else teacherResultButtons.delete(id)
+}
+async function loadTeacherProjects(): Promise<void> {
+  const version = ++teacherListVersion
+  teacherProjectsLoading.value = true
+  teacherProjectsError.value = ''
+  try {
+    const result = await formalApi.list(teacherQuery.value, supervisedOnly.value, teacherPage.value, 20)
+    if (version !== teacherListVersion) return
+    teacherProjects.value = result.content
+    teacherTotalPages.value = result.totalPages
+    teacherTotalElements.value = result.totalElements
+  } catch {
+    if (version === teacherListVersion) {
+      teacherProjects.value = []
+      teacherProjectsError.value = String(i18n.global.t('grading.projectListFailed'))
+    }
+  } finally {
+    if (version === teacherListVersion) teacherProjectsLoading.value = false
+  }
+}
+function searchTeacherProjects(): void {
+  teacherSearchDraft.value = teacherSearchDraft.value.trim()
+  teacherQuery.value = teacherSearchDraft.value
+  teacherPage.value = 0
+  void loadTeacherProjects()
+}
+function changeSupervisedFilter(): void {
+  teacherPage.value = 0
+  void loadTeacherProjects()
+}
+function changeTeacherPage(offset: number): void {
+  const next = teacherPage.value + offset
+  if (next < 0 || next >= teacherTotalPages.value || teacherProjectsLoading.value) return
+  teacherPage.value = next
+  void loadTeacherProjects()
+}
+function selectTeacherProject(project: TeacherProject): void {
+  selectProject(project.projectId, teacherResultLabel(project))
+}
+async function returnToTeacherList(): Promise<void> {
+  const selectedProjectId = projectId.value
+  ++projectLoadVersion
+  projectLoading.value = false
+  projectId.value = ''
+  selectedContext.value = ''
+  clearProjectData()
+  await nextTick()
+  await loadTeacherProjects()
+  await nextTick()
+  const selected = teacherProjects.value.find((project) => project.projectId === selectedProjectId)
+  const resultButton = selected
+    ? teacherResultButtons.get(selected.formalApplicationId)
+      ?? Array.from(document.querySelectorAll<HTMLButtonElement>('.proposal-result'))
+        .find((button) => button.dataset.formalApplicationId === selected.formalApplicationId)
+    : undefined
+  if (resultButton?.isConnected && !resultButton.disabled) resultButton.focus()
+  else teacherListHeading.value?.focus()
+}
+async function loadStudentProjects(): Promise<void> {
+  const version = ++studentListVersion
+  studentProjectsLoading.value = true
+  studentProjectsError.value = ''
+  studentProjects.value = []
+  try {
+    const results: StudentProject[] = []
+    let page = 0
+    let totalPages = 1
+    while (page < totalPages) {
+      const response = await formalApi.eligibleProjects(page, 100)
+      if (version !== studentListVersion) return
+      results.push(...response.content)
+      totalPages = page === 0 ? Math.max(response.totalPages, 1) : totalPages
+      page += 1
+    }
+    if (version === studentListVersion) studentProjects.value = results
+  } catch (error) {
+    if (version === studentListVersion) {
+      studentProjects.value = []
+      studentProjectsError.value = error instanceof ApiError
+        ? `${String(i18n.global.t('grading.projectListFailed'))} ${error.message}`
+        : String(i18n.global.t('grading.projectListFailed'))
+    }
+  } finally {
+    if (version === studentListVersion) studentProjectsLoading.value = false
+  }
+}
+function selectStudentProject(event: Event): void {
+  const value = (event.target as HTMLSelectElement).value
+  const project = studentProjects.value.find((item) => studentProjectOptionValue(item) === value)
+  if (!project) {
+    clearSelection()
+    return
+  }
+  selectProject(project.projectId, studentProjectLabel(project))
+}
+async function clearSelection(): Promise<void> {
+  if (projectLoading.value || task.loading.value) return
+  ++projectLoadVersion
+  projectLoading.value = false
+  projectId.value = ''
+  selectedContext.value = ''
+  clearProjectData()
+  await nextTick()
+  if (isStudent.value) studentProjectSelect.value?.focus()
 }
 async function recordGrade(group: boolean): Promise<void> {
   const selected = group ? selectedGroupCriterion.value : selectedCriterion.value
-  if (!selected || !projectId.value || !activeRubric.value?.id) return
+  if (!projectLoaded.value || !selected || !projectId.value || !activeRubric.value?.id) return
   const rubricId = activeRubric.value.id
   const transitionReason = group ? groupForm.transitionReason : gradeForm.transitionReason
   const common = {
@@ -250,7 +523,7 @@ async function recordGrade(group: boolean): Promise<void> {
   if (result) await loadProject()
 }
 async function recordMetric(): Promise<void> {
-  if (!projectId.value || !activeRubric.value?.id) return
+  if (!projectLoaded.value || !projectId.value || !activeRubric.value?.id) return
   const body: MetricRequest = {
     rubricId: activeRubric.value.id,
     ...(metricForm.transitionReason ? { versionTransition: { reason: metricForm.transitionReason } } : {}),
@@ -263,7 +536,7 @@ async function recordMetric(): Promise<void> {
   if (result) await loadProject()
 }
 async function saveFinalGrade(): Promise<void> {
-  if (!projectId.value || !activeRubric.value?.id) return
+  if (!projectLoaded.value || !projectId.value || !activeRubric.value?.id) return
   const project = finalForm.ruleId
     ? { ruleId: finalForm.ruleId, ...(finalForm.grade ? { grade: finalForm.grade } : {}) }
     : { grade: finalForm.grade, rationale: finalForm.rationale }
@@ -277,7 +550,7 @@ async function saveFinalGrade(): Promise<void> {
   if (result) await loadProject()
 }
 async function saveStudentFinalGrade(): Promise<void> {
-  if (!projectId.value || !activeRubric.value?.id) return
+  if (!projectLoaded.value || !projectId.value || !activeRubric.value?.id) return
   const decision = studentFinalForm.ruleId
     ? { ruleId: studentFinalForm.ruleId, ...(studentFinalForm.grade ? { grade: studentFinalForm.grade } : {}) }
     : { grade: studentFinalForm.grade, rationale: studentFinalForm.rationale }
@@ -308,5 +581,14 @@ async function publishRubric(): Promise<void> {
   const result = await task.run(() => gradingApi.publishRubric(payload), String(i18n.global.t('grading.rubricPublished')))
   if (result) await loadRubric()
 }
-onMounted(() => void loadRubric())
+onMounted(() => {
+  void loadRubric()
+  if (isTeacher.value) void loadTeacherProjects()
+  else if (isStudent.value) void loadStudentProjects()
+})
+onBeforeUnmount(() => {
+  ++teacherListVersion
+  ++studentListVersion
+  ++projectLoadVersion
+})
 </script>

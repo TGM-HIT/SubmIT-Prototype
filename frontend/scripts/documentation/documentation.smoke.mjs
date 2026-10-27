@@ -9,7 +9,7 @@ import { execFileSync } from 'node:child_process'
 import { generate, repo } from './run.mjs'
 import { loadLocale, renderGuides, validateGuides, validateLocale, validatePng, checkpoints, roles } from './guides.mjs'
 import { collectBrowserErrors } from '../preview.mjs'
-import { assertMatchingRubricIds, Lifecycle } from './scenario.mjs'
+import { assertMatchingRubricIds, assertTestingAccountRole, Lifecycle } from './scenario.mjs'
 import { assertPublicBoundary } from './privacy.mjs'
 import { createServer } from 'node:http'
 
@@ -134,7 +134,7 @@ test('D2 temporary second-language configuration reuses the shared registration 
       this.fill = async (selector, value) => {
         if (selector === '#display-name') this.registrationDisplayNames.push(value)
       }
-      this.button = async () => {}
+      this.click = async () => {}
       this.wait = async () => {}
       await this.story({ registrationOnly: true })
       this.report.registrationDisplayNames = this.registrationDisplayNames
@@ -171,6 +171,49 @@ test('D2 invalid/missing/incomplete locale and missing password/browser fail bef
   assert.equal(starts, 0)
   assert.deepEqual(await readFile(path.join(root, 'docs/user-guide/de/schueler.md')), previous)
   await assert.rejects(access(path.join(root, 'docs/user-guide/fr')))
+})
+
+test('T8 grading walkthrough selects teacher summaries and student eligible choices without an ID input', async () => {
+  const lifecycle = new Lifecycle({
+    locale: { example: {} }, password: 'unit-test-only-secret', backendUrl: 'http://localhost:8080',
+    frontendUrl: 'http://localhost:5173', output: '/ignored', work: '/ignored', report: {}, options: {},
+  })
+  const actions = []
+  lifecycle.wait = async () => {}
+  lifecycle.evaluate = async (expression) => expression.includes('#grading-student-project')
+    && expression.includes('options') ? 'period-uuid|project-uuid' : undefined
+  lifecycle.step = async (...step) => actions.push(step)
+  await lifecycle.selectTeacherGradingProject('Synthetic project')
+  await lifecycle.selectStudentGradingProject('Synthetic project')
+  assert.deepEqual(actions, [
+    ['click', 'button[data-doc-grading-result]'],
+    ['fill', '#grading-student-project', 'period-uuid|project-uuid'],
+  ])
+  const scenario = await readFile(new URL('./scenario.mjs', import.meta.url), 'utf8')
+  assert.equal((scenario.match(/this\.click\('form\.auth-card button\[type="submit"\]'\)/g) ?? []).length, 2)
+  assert.ok(scenario.includes("'finalized period displayed'"))
+  assert.ok(scenario.includes('selectStudentFormalProject(this.text.title)'))
+  assert.ok(scenario.includes('selectTeacherFormalProposal(this.text.title)'))
+  assert.ok(scenario.includes('`#member-topic-${index}`'))
+  const gradingStart = scenario.indexOf("this.stage = 'project-work-and-assessment'")
+  const archiveStart = scenario.indexOf('  async archive()', gradingStart)
+  assert.ok(gradingStart >= 0 && archiveStart > gradingStart)
+  const gradingScenario = scenario.slice(gradingStart, archiveStart)
+  assert.ok(gradingScenario.includes('selectTeacherGradingProject(this.text.title)'))
+  assert.ok(gradingScenario.includes('selectStudentGradingProject(this.text.title)'))
+  assert.ok(gradingScenario.includes("selectOption('#grade-criterion', 'individual')"))
+  assert.ok(gradingScenario.includes("mutateUI('Record assessment'"))
+  assert.ok(scenario.includes("document.querySelectorAll('.group-member-list li').length === ${this.members.length}"))
+  assert.ok(!gradingScenario.includes("this.fill('#project-id'"))
+  assert.ok(!gradingScenario.includes("'Load authorized project record'"))
+})
+
+test('documentation testing-account role checks match the authenticated roles array', () => {
+  assert.doesNotThrow(() => assertTestingAccountRole({ user: { roles: ['STUDENT'] } }, 'student01'))
+  assert.doesNotThrow(() => assertTestingAccountRole({ user: { roles: ['TEACHER'] } }, 'teacher01'))
+  assert.doesNotThrow(() => assertTestingAccountRole({ user: { roles: ['ADMIN'] } }, 'admin01'))
+  assert.throws(() => assertTestingAccountRole({ user: { role: 'STUDENT' } }, 'student01'),
+    /user\.roles/)
 })
 
 test('D6 strict collector catches unexpected HTTP failures and console exceptions', () => {

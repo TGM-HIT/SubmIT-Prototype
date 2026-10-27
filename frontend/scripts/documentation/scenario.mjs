@@ -23,6 +23,12 @@ export function assertMatchingRubricIds(createdRubric, initialRubric) {
   assert.equal(initialRubric.id, createdRubric.id, 'Fresh persisted active rubric must match the created doc-v1 identity')
 }
 
+export function assertTestingAccountRole(session, actor) {
+  const expectedRole = actor.startsWith('student') ? 'STUDENT' : actor.startsWith('teacher') ? 'TEACHER' : 'ADMIN'
+  assert.ok(Array.isArray(session.user.roles) && session.user.roles.includes(expectedRole),
+    `${actor} login response must include ${expectedRole} in user.roles`)
+}
+
 // This is shared across documentation languages. Text and example files come from the locale.
 // Supporting records use only existing, authorized HTTP operations in this command-owned testing JVM.
 export class Lifecycle {
@@ -62,7 +68,7 @@ export class Lifecycle {
     for (const actor of ['student01', 'student02', 'student03', 'teacher01', 'teacher02', 'admin01']) {
       const session = await this.api(null, '/api/auth/login', 'POST', { username: actor, password: this.password })
       assert.ok(session.token && session.user.id)
-      assert.equal(session.user.role, actor.startsWith('student') ? 'STUDENT' : actor.startsWith('teacher') ? 'TEACHER' : 'ADMIN')
+      assertTestingAccountRole(session, actor)
       this.sessions[actor] = session
     }
     // Minimal fixtures are selected for this process only; baseline counts and ordinary fixtures are untouched.
@@ -174,9 +180,82 @@ export class Lifecycle {
     await this.step('fill', selector, String(value))
   }
 
+  async selectOption(selector, value) {
+    await this.wait(`!!document.querySelector(${JSON.stringify(selector)})`, selector)
+    const option = await this.evaluate(`(() => {
+      const select = document.querySelector(${JSON.stringify(selector)});
+      const index = [...select.options].findIndex(option => option.value === ${JSON.stringify(String(value))});
+      return index < 0 ? null : { index, label: select.options[index].textContent.trim() };
+    })()`)
+    if (!option || !Number.isInteger(option.index)) {
+      throw new Error(`No select option ${value} exists for ${selector}.`)
+    }
+    this.report.steps.push({ stage: this.stage, actor: this.actor, route: this.route, action: 'select-index',
+      selector, index: option.index, label: option.label })
+    await applyPageSteps(this.client, [{ action: 'select-index', selector, index: option.index }], { log: () => {} })
+  }
+
   async click(selector) {
     await this.wait(`!!document.querySelector(${JSON.stringify(selector)}) && !document.querySelector(${JSON.stringify(selector)}).disabled`, selector)
     await this.step('click', selector)
+  }
+
+  async selectTeacherGradingProject(title, periodLabel = this.text.period) {
+    const text = JSON.stringify(title)
+    const period = JSON.stringify(periodLabel)
+    await this.wait(`Array.from(document.querySelectorAll('button.proposal-result')).filter(button => button.textContent.includes(${text}) && button.textContent.includes(${period}) && !button.disabled).length === 1`,
+      `teacher grading result for ${title} in ${periodLabel}`)
+    await this.evaluate(`(() => {
+      const matches = [...document.querySelectorAll('button.proposal-result')]
+        .filter(button => button.textContent.includes(${text}) && button.textContent.includes(${period}) && !button.disabled);
+      if (matches.length !== 1) throw new Error('Expected exactly one teacher grading result for ${text}.');
+      matches[0].setAttribute('data-doc-grading-result', '');
+    })()`)
+    await this.click('button[data-doc-grading-result]')
+    await this.evaluate(`document.querySelectorAll('[data-doc-grading-result]').forEach(button => button.removeAttribute('data-doc-grading-result'))`)
+  }
+
+  async selectStudentGradingProject(title, periodLabel = this.text.period) {
+    const text = JSON.stringify(title)
+    const period = JSON.stringify(periodLabel)
+    await this.wait(`!!document.querySelector('#grading-student-project')`, 'student grading project selector')
+    const value = await this.evaluate(`(() => {
+      const options = [...document.querySelector('#grading-student-project').options]
+        .filter(option => option.textContent.includes(${text}) && option.textContent.includes(${period}) && option.value);
+      if (options.length !== 1) throw new Error('Expected exactly one eligible grading option for ${text}.');
+      return options[0].value;
+    })()`)
+    if (typeof value !== 'string' || !value) throw new Error(`No eligible grading project option matches ${title}.`)
+    await this.fill('#grading-student-project', value)
+  }
+
+  async selectStudentFormalProject(title, periodLabel = this.text.period) {
+    const text = JSON.stringify(title)
+    const period = JSON.stringify(periodLabel)
+    await this.wait(`!!document.querySelector('#eligible-project')`, 'student Formal proposal selector')
+    const value = await this.evaluate(`(() => {
+      const options = [...document.querySelector('#eligible-project').options]
+        .filter(option => option.textContent.includes(${text}) && option.textContent.includes(${period}) && option.value);
+      if (options.length !== 1) throw new Error('Expected exactly one eligible Formal proposal option for ${text}.');
+      return options[0].value;
+    })()`)
+    if (typeof value !== 'string' || !value) throw new Error(`No eligible Formal proposal project option matches ${title}.`)
+    await this.fill('#eligible-project', value)
+  }
+
+  async selectTeacherFormalProposal(title, periodLabel = this.text.period) {
+    const text = JSON.stringify(title)
+    const period = JSON.stringify(periodLabel)
+    await this.wait(`Array.from(document.querySelectorAll('button.proposal-result')).filter(button => button.textContent.includes(${text}) && button.textContent.includes(${period}) && !button.disabled).length === 1`,
+      `teacher Formal proposal result for ${title} in ${periodLabel}`)
+    await this.evaluate(`(() => {
+      const matches = [...document.querySelectorAll('button.proposal-result')]
+        .filter(button => button.textContent.includes(${text}) && button.textContent.includes(${period}) && !button.disabled);
+      if (matches.length !== 1) throw new Error('Expected exactly one teacher Formal proposal result for ${text}.');
+      matches[0].setAttribute('data-doc-formal-result', '');
+    })()`)
+    await this.click('button[data-doc-formal-result]')
+    await this.evaluate(`document.querySelectorAll('[data-doc-formal-result]').forEach(button => button.removeAttribute('data-doc-formal-result'))`)
   }
 
   async button(text, scope = 'document') {
@@ -185,15 +264,17 @@ export class Lifecycle {
     await this.wait(`!![...(${scope}?.querySelectorAll('button') ?? [])].find(b => b.textContent.trim() === ${JSON.stringify(text)} && !b.disabled)`, text)
     await this.evaluate(`(() => {
       document.querySelectorAll('[data-doc-action]').forEach(b => b.removeAttribute('data-doc-action'));
-      [...${scope}.querySelectorAll('button')].find(b => b.textContent.trim() === ${JSON.stringify(text)} && !b.disabled).setAttribute('data-doc-action', '');
+      const button = [...${scope}.querySelectorAll('button')].find(b => b.textContent.trim() === ${JSON.stringify(text)} && !b.disabled);
+      if (!button) throw new Error('No enabled button matches ${text}.');
+      button.setAttribute('data-doc-action', '');
     })()`)
     this.report.steps.push({ stage: this.stage, actor: this.actor, route: this.route, action: 'control-label', label: text, scope })
     await this.click(selector)
   }
 
-  async mutateUI(label, route, method = 'POST') {
+  async mutateUI(label, route, method = 'POST', scope = 'document') {
     const previous = new Set(this.errors.requests.keys())
-    await this.button(label)
+    await this.button(label, scope)
     const end = Date.now() + 15_000
     while (Date.now() < end) {
       this.checkErrors()
@@ -226,7 +307,7 @@ export class Lifecycle {
     await this.go('/login')
     await this.fill('#username', actor)
     await this.fill('#password', this.password)
-    await this.button('Sign in')
+    await this.click('form.auth-card button[type="submit"]')
     await this.wait(`location.pathname === '/' && !!localStorage.getItem('project-ideas-token')`, 'authenticated workspace')
     const user = await this.evaluate(`JSON.parse(localStorage.getItem('project-ideas-user'))`)
     assert.equal(user.id, this.sessions[actor].user.id)
@@ -318,7 +399,7 @@ export class Lifecycle {
     await this.fill('#username', 'doc-student')
     await this.fill('#display-name', this.text.registrationDisplayName)
     await this.fill('#password', this.password)
-    await this.button('Create account')
+    await this.click('form.auth-card button[type="submit"]')
     await this.wait(`location.pathname === '/'`, 'new student workspace')
   }
 
@@ -505,25 +586,27 @@ export class Lifecycle {
     this.members = memberIds
     for (const actor of ['student01', 'student02', 'student03']) assert.ok(memberIds.includes(this.sessions[actor].user.id))
     await this.button('Finalize result')
-    await this.wait(`document.querySelector('#period-select option:checked')?.textContent.includes('FINALIZED')`, 'allocation finalized')
+    await this.wait(`document.querySelector('#period-select')?.value === ${JSON.stringify(this.period)} && !document.querySelector('[data-doc-action]')`,
+      'finalized period displayed')
     await this.as('student01', '/applications')
-    await this.shot('group', `document.body.textContent.includes('Final assignment') && document.querySelectorAll('.group-member-list li').length === 3`, '.student-period-result')
+    await this.shot('group', `document.body.textContent.includes('Final assignment') && document.querySelectorAll('.group-member-list li').length === ${this.members.length}`, '.student-period-result')
   }
 
   async formalAndGrading() {
     this.stage = 'formal-application'
     await this.as('student01', '/formal-application')
-    await this.fill('#project-id', this.primary)
+    await this.selectStudentFormalProject(this.text.title)
     await this.button('Start a formal proposal')
     await this.fill('#topic', this.text.formalTopic)
     await this.fill('#situation', this.text.situation)
     await this.fill('#objective', this.text.objective)
     for (let index = 0; index < this.members.length; index++) {
-      if (index) await this.button('＋ Add allocated group member')
-      for (const [field, value] of [
-        ['id', this.members[index]], ['topic', this.text.memberTopics[index]],
-        ['concern', this.text.concern], ['result', this.text.result],
-      ]) await this.fill(`#member-${field}-${index}`, value)
+      if (index) await this.click(`#member-tab-${index}`)
+      const individualTopic = this.text.memberTopics[index]
+        ?? `${this.text.memberTopics[index % this.text.memberTopics.length]} ${index + 1}`
+      await this.fill(`#member-topic-${index}`, individualTopic)
+      await this.fill(`#member-concern-${index}`, this.text.concern)
+      await this.fill(`#member-result-${index}`, this.text.result)
     }
     await this.fill('#milestone-0', this.text.milestone)
     await this.fill('#milestone-date-0', new Date(Date.now() + 86400_000).toISOString().slice(0, 10))
@@ -531,13 +614,12 @@ export class Lifecycle {
     await this.wait(`!!document.querySelector('.success-note')`, 'formal draft saved')
     await this.button('Edit formal proposal')
     await this.button('Submit for teacher review')
-    await this.wait(`!document.querySelector('#topic')`, 'formal submitted')
+    await this.wait(`!document.querySelector('#topic') && document.body.textContent.toLowerCase().includes('submitted')`, 'formal submitted')
     const formal = await this.api('student01', `/api/projects/${this.primary}/formal-applications`)
     assert.equal(formal.status, 'SUBMITTED')
-    await this.shot('formal', `document.body.textContent.includes('SUBMITTED')`, 'section.panel.stack')
+    await this.shot('formal', `document.body.textContent.toLowerCase().includes('submitted')`, 'section.panel.stack')
     await this.as('teacher01', '/formal-application')
-    await this.fill('#project-id', this.primary)
-    await this.button('Load formal proposal')
+    await this.selectTeacherFormalProposal(this.text.title)
     await this.fill('#formal-decision', 'APPROVE')
     await this.fill('#formal-feedback', this.text.formalFeedback)
     await this.button('Record teacher decision')
@@ -564,18 +646,38 @@ export class Lifecycle {
     this.report.prepared.push({ kind: 'initial-final-grade', projectId: this.primary,
       reason: 'Avoid missing final-grade GET on first grading page load; confirmed with rationale through UI below' })
     await this.as('teacher01', '/grading')
-    await this.fill('#project-id', this.primary)
-    await this.button('Load authorized project record')
+    await this.selectTeacherGradingProject(this.text.title)
     await this.wait(`!!document.querySelector('[role=tablist][aria-label="Project grading record"]')`, 'project grading record')
     await this.fill('#student-id', this.sessions.student01.user.id)
-    await this.fill('#grade-criterion', 'individual')
-    await this.fill('#grade-grade', '2')
+    await this.wait(`!!document.querySelector('#grade-criterion option[value="individual"]')`, 'active rubric individual criterion')
+    await this.selectOption('#grade-criterion', 'individual')
+    await this.wait(`document.querySelector('#grade-criterion')?.value === 'individual'`,
+      'individual grading criterion selected')
+    await this.wait(`!!document.querySelector('#grade-grade option[value="2"]')`, 'individual grade value')
+    await this.selectOption('#grade-grade', '2')
+    await this.wait(`document.querySelector('#grade-grade')?.value === '2'`, 'individual grade value selected')
     await this.fill('#grade-evidence', this.text.evidence)
-    await this.mutateUI('Record assessment', `/api/projects/${this.primary}/student-grades`)
+    this.report.gradingFormState = await this.evaluate(`(() => {
+      const form = [...document.querySelectorAll('form.panel')]
+        .find(candidate => candidate.querySelector('h3')?.textContent.trim() === 'Record individual assessment');
+      return {
+        criterion: form?.querySelector('#grade-criterion')?.value,
+        selectedCriterionNotice: form?.querySelector('.notice')?.textContent.trim() ?? null,
+        grade: form?.querySelector('#grade-grade')?.value,
+        submitDisabled: form?.querySelector('button')?.disabled,
+        submitText: form?.querySelector('button')?.textContent.trim(),
+      };
+    })()`)
+    const individualForm = `([...document.querySelectorAll('form.panel')].find(candidate => candidate.querySelector('h3')?.textContent.trim() === 'Record individual assessment'))`
+    await this.mutateUI('Record assessment', `/api/projects/${this.primary}/student-grades`, 'POST', individualForm)
     await this.wait(`document.querySelector('.data-list')?.textContent.includes(${JSON.stringify(this.text.evidence)}) || [...document.querySelectorAll('article.data-row')].some(r=>r.textContent.includes(${JSON.stringify(this.text.evidence)}))`, 'individual assessment persisted')
     await this.fill('#student-id', this.sessions.student02.user.id)
+    await this.wait(`!!document.querySelector('#grade-criterion option[value="individual"]')`, 'active rubric individual criterion')
+    await this.selectOption('#grade-criterion', 'individual')
+    await this.wait(`!!document.querySelector('#grade-grade option[value="2"]')`, 'individual grade value')
+    await this.selectOption('#grade-grade', '2')
     await this.fill('#grade-evidence', 'DOC_OTHER_GRADE_SENTINEL')
-    await this.mutateUI('Record assessment', `/api/projects/${this.primary}/student-grades`)
+    await this.mutateUI('Record assessment', `/api/projects/${this.primary}/student-grades`, 'POST', individualForm)
     // GradeFields currently uses the same default IDs for both forms; scope each selector to the real form.
     await this.evaluate(`(() => {
       const form = [...document.querySelectorAll('form')].find(f => f.querySelector('h3')?.textContent === 'Record group assessment');
@@ -583,11 +685,13 @@ export class Lifecycle {
       form.setAttribute('data-doc-group', '');
     })()`)
     const groupSelector = `form[data-doc-group]`
-    await this.fill(`${groupSelector} #grade-criterion`, 'team')
-    await this.fill(`${groupSelector} #grade-grade`, '2')
+    await this.wait(`!!document.querySelector('${groupSelector} #grade-criterion option[value="team"]')`, 'active rubric group criterion')
+    await this.selectOption(`${groupSelector} #grade-criterion`, 'team')
+    await this.wait(`!!document.querySelector('${groupSelector} #grade-grade option[value="2"]')`, 'group grade value')
+    await this.selectOption(`${groupSelector} #grade-grade`, '2')
     await this.fill(`${groupSelector} #grade-evidence`, this.text.evidence)
     await this.mutateUI('Record group assessment', `/api/projects/${this.primary}/group-grades`)
-    await this.fill('#metric-id', 'experiments')
+    await this.selectOption('#metric-id', 'experiments')
     await this.fill('#metric-value', '3')
     await this.fill('#metric-note', this.text.metricNote)
     await this.mutateUI('Record observation', `/api/projects/${this.primary}/metrics`)
@@ -629,8 +733,7 @@ export class Lifecycle {
     assert.ok(Array.isArray(final.history) && final.history.length >= 2, 'Prepared grade must remain in persisted history')
     await this.shot('final-grade', `document.body.textContent.includes(${JSON.stringify(this.text.rationale)})`, 'pre.json-view')
     await this.as('student01', '/grading')
-    await this.fill('#project-id', this.primary)
-    await this.button('Load authorized project record')
+    await this.selectStudentGradingProject(this.text.title)
     await this.wait(`!!document.querySelector('[role=tablist][aria-label="Project grading record"]')`, 'own grading record')
     const own = await this.api('student01', `/api/projects/${this.primary}/student-grades`)
     assert.ok(own.content.length)
