@@ -51,7 +51,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Bug-29](tickets/done/Bug-29.md) | done | Declare always-returned audit and group-member response fields |
 | [Bug-30](tickets/done/Bug-30.md) | done | Show meaningful audit events with timestamps, resources, and actors |
 | [Bug-31](tickets/done/Bug-31.md) | done | Show group members by name in student Formal proposals |
-| [Bug-32](tickets/Bug-32.md) | to-do | Diagnose root-only blank page and restore reliable login landing |
+| [Bug-32](tickets/Bug-32.md) | awaiting-human | Diagnose root-only blank page and restore reliable login landing |
 
 ### Development
 
