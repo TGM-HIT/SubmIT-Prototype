@@ -107,6 +107,16 @@ class OpenApiContractTest {
         assertEquals("#/components/schemas/PageResponseFormalApplicationSummaryResponse",
                 responses.path("200").path("content").path("*/*")
                         .path("schema").path("$ref").asText());
+        String unauthorizedDescription = responses.path("401").path("description").asText()
+                .toLowerCase(Locale.ROOT);
+        assertTrue(unauthorizedDescription.contains("missing") && unauthorizedDescription.contains("invalid")
+                        && unauthorizedDescription.contains("authentication"),
+                "401 documents missing or invalid authentication, not role authorization.");
+        String forbiddenDescription = responses.path("403").path("description").asText()
+                .toLowerCase(Locale.ROOT);
+        assertTrue(forbiddenDescription.contains("caller") && forbiddenDescription.contains("lacks")
+                        && forbiddenDescription.contains("teacher") && forbiddenDescription.contains("role"),
+                "403 documents an authenticated caller lacking the TEACHER role.");
 
         JsonNode parameters = operation.path("parameters");
         assertTrue(parameters.isArray());

@@ -224,11 +224,14 @@ class FormalApplicationListApiTest {
             }
             assertTrue(required(summary, "formalApplicationId").isTextual());
             assertTrue(required(summary, "projectId").isTextual());
+            requiredText(summary, "projectTitle");
             assertTrue(required(summary, "studentNames").isArray());
             for (JsonNode name : required(summary, "studentNames")) {
                 assertTrue(name.isTextual());
                 assertFalse(name.asText().matches("[0-9a-fA-F-]{36}"));
             }
+            requiredText(summary, "periodLabel");
+            requiredText(summary, "schoolYear");
             assertTrue(Set.of("DRAFT", "NEEDS_REVISION", "SUBMITTED", "APPROVED", "DECLINED")
                     .contains(requiredText(summary, "status")));
             assertFalse(summary.has("studentIds"));
