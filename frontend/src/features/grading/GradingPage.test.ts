@@ -804,6 +804,52 @@ describe("grading project selection", () => {
     page.unmount()
   })
 
+  it("keeps a no-proposal student project with no grades selectable and shows all empty states", async () => {
+    api.role = "STUDENT"
+    const project = {
+      projectId: "project-without-grades",
+      projectTitle: "Unassessed Project",
+      periodId: "period-without-grades",
+      periodLabel: "Independent period",
+      schoolYear: "2027/2028",
+      formalProposalId: null,
+      formalProposalStatus: null,
+    }
+    api.eligibleProjects.mockResolvedValue(eligiblePage([project]))
+    api.grades.mockResolvedValue(pageResult())
+    api.groupGrades.mockResolvedValue(pageResult())
+    api.metrics.mockResolvedValue(pageResult())
+    api.finalStudentGrade.mockRejectedValue(new ApiError("no student final grade", 404))
+
+    const page = mount(GradingPage)
+    await flushPromises()
+    const option = page.get("#grading-student-project").findAll("option")
+      .find((item) => item.attributes("value")?.endsWith(`|${project.projectId}`))
+    expect(option).toBeDefined()
+    expect(option!.text()).toContain("Unassessed Project")
+    expect(option!.text()).toContain("Independent period")
+    expect(option!.text()).not.toContain("proposal")
+
+    await selectStudentProject(page, project.projectId)
+    expect(api.grades).toHaveBeenCalledWith(project.projectId)
+    expect(api.groupGrades).toHaveBeenCalledWith(project.projectId)
+    expect(api.metrics).toHaveBeenCalledWith(project.projectId)
+    expect(api.finalStudentGrade).toHaveBeenCalledWith(project.projectId, "student-1")
+    expect(page.text()).toContain("Unassessed Project")
+    expect(page.find('[role="alert"]').exists()).toBe(false)
+    expect(page.text()).not.toContain("Unable to load this grading record")
+    expect(page.text()).toContain("No individual grade entries are available")
+
+    await page.findAll('[role="tab"]').find((tab) => tab.text() === "Group assessments")!.trigger("click")
+    expect(page.text()).toContain("No group assessments are available")
+    await page.findAll('[role="tab"]').find((tab) => tab.text() === "Metric observations")!.trigger("click")
+    expect(page.text()).toContain("No metric observations are available")
+    await page.findAll('[role="tab"]').find((tab) => tab.text() === "Final grades")!.trigger("click")
+    expect(page.text()).toContain("No final grade is recorded")
+    expect(page.text()).not.toContain("student-final")
+    page.unmount()
+  })
+
   it("shows failed teacher and student list loads distinctly from empty lists and allows retry", async () => {
     api.role = "TEACHER"
     api.formalList.mockRejectedValueOnce(new ApiError("list unavailable", 503))
@@ -1232,7 +1278,39 @@ describe("grading project selection", () => {
     await page.findAll("button").find((button) => button.text() === clearLabel)!.trigger("click")
     await flushPromises()
     expect(page.get('label[for="grading-student-project"]').text()).toBe(label)
+
+    const partialHistory = "partial-history-must-stay-hidden"
+    api.grades.mockResolvedValue(pageResult([{
+      id: "partial-grade",
+      criterionId: partialHistory,
+      grade: 5,
+      status: "ACTIVE",
+      rubricVersion: "v1",
+    }]))
+    api.groupGrades.mockRejectedValueOnce(new ApiError("group history unavailable", 503))
+    await selectStudentProject(page)
+    expect(page.get("h3[tabindex='-1']").text()).toContain("River Lab")
+    const projectError = language === "en"
+      ? "Unable to load this grading record. Your selection is retained; retry."
+      : "Bewertungsdatensatz konnte nicht geladen werden. Auswahl bleibt erhalten; erneut versuchen."
+    const retryLabel = language === "en" ? "Retry" : "Erneut versuchen"
+    expect(page.get('[role="alert"]').text()).toContain(projectError)
+    expect(page.get('[role="alert"] button').text()).toBe(retryLabel)
+    expect(page.findAll('[role="tab"]')).toHaveLength(0)
+    expect(page.text()).not.toContain(partialHistory)
+    expect(page.text()).not.toContain("No individual grade entries are available")
+    expect(page.text()).not.toContain("No final grade is recorded")
+
+    const groupReadsBeforeRetry = api.groupGrades.mock.calls.length
+    await page.get('[role="alert"] button').trigger("click")
+    await flushPromises()
+    expect(api.groupGrades).toHaveBeenCalledTimes(groupReadsBeforeRetry + 1)
+    expect(api.groupGrades).toHaveBeenLastCalledWith("project-1")
+    expect(page.find('[role="alert"]').exists()).toBe(false)
+    expect(page.findAll('[role="tab"]')).toHaveLength(4)
+    expect(page.text()).toContain(partialHistory)
     page.unmount()
+
     api.eligibleProjects.mockResolvedValueOnce(eligiblePage([]))
     const emptyPage = mount(GradingPage)
     await flushPromises()
