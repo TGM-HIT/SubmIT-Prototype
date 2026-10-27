@@ -234,9 +234,13 @@ export function parseArgs(args) {
             value: argument.slice(0, separator),
             selector: argument.slice(separator + 1),
           })
-        } else if (['click', 'wait', 'read', 'focus', 'scroll', 'screenshot', 'key', 'select-index'].includes(action) && argument) {
+        } else if (['click', 'wait', 'read', 'focus', 'scroll', 'screenshot', 'key', 'select-index',
+          'navigate', 'assert-url'].includes(action) && argument) {
           if (action === 'screenshot' && path.basename(argument) !== argument) {
             throw new Error('--step screenshot must use a filename, not a path.')
+          }
+          if (action === 'navigate' && !argument.startsWith('/')) {
+            throw new Error('--step navigate must use a same-origin absolute path beginning with /.')
           }
           if (action === 'key' && !SUPPORTED_BROWSER_KEYS.includes(argument)) {
             throw new Error(`--step key must be one of ${SUPPORTED_BROWSER_KEYS.join('|')}.`)
@@ -255,11 +259,11 @@ export function parseArgs(args) {
           } else {
             options.steps.push({ action, value: argument })
           }
-        } else if (['accept-confirms', 'reject-confirms', 'offline', 'online', 'measure-overflow',
+        } else if (['reload', 'accept-confirms', 'reject-confirms', 'offline', 'online', 'measure-overflow',
           'assert-dialog-contained', 'assert-dialog-closed'].includes(action) && !argument) {
           options.steps.push({ action })
         } else {
-          throw new Error('--step must be fill:SELECTOR=VALUE, select-index:SELECTOR=INDEX, click-record-action:TITLE_OR_ID|SELECTOR, read-record:TITLE_OR_ID, click:SELECTOR, wait:SELECTOR, read:SELECTOR, focus:SELECTOR, scroll:SELECTOR, screenshot:FILE, key:SUPPORTED_KEY, assert-dialog-contained, assert-dialog-closed, accept-confirms, reject-confirms, offline, online, or measure-overflow.')
+          throw new Error('--step must be fill:SELECTOR=VALUE, select-index:SELECTOR=INDEX, click-record-action:TITLE_OR_ID|SELECTOR, read-record:TITLE_OR_ID, click:SELECTOR, wait:SELECTOR, read:SELECTOR, focus:SELECTOR, scroll:SELECTOR, navigate:/SAME_ORIGIN_PATH, assert-url:PATH_AND_QUERY, reload, screenshot:FILE, key:SUPPORTED_KEY, assert-dialog-contained, assert-dialog-closed, accept-confirms, reject-confirms, offline, online, or measure-overflow.')
         }
       } else {
         options[name] = value
@@ -934,6 +938,7 @@ export async function evaluatePage(client, expression, description) {
 export async function applyPageInteractions(client, options, {
   nativeInput = sendMacNativeSelectKeys,
   log = console.log,
+  signal,
 } = {}) {
   for (const { selector, value } of options.fill ?? []) {
     const expression = `(selector, value) => {
@@ -1076,7 +1081,7 @@ export async function applyPageInteractions(client, options, {
     if (selected !== value) throw new Error(`Keyboard selection in ${selector} produced ${JSON.stringify(selected)}, expected ${JSON.stringify(value)}.`)
     log(`Selected ${JSON.stringify(value)} in ${selector} with ${useNativeMacKeys ? 'the macOS native popup keyboard' : 'the keyboard'}.`)
   }
-  await applyPageSteps(client, options.steps ?? [], { outputDir: options.outputDir, log })
+  await applyPageSteps(client, options.steps ?? [], { outputDir: options.outputDir, log, signal })
 }
 
 export async function openNativeSelect(client, selector) {
@@ -1115,9 +1120,31 @@ export const RECORD_LOCATOR_EXPRESSION = `(key, selector, click, timeoutMs = 100
         check();
       })`
 
-export async function applyPageSteps(client, steps, { outputDir, log = console.log } = {}) {
+export async function applyPageSteps(client, steps, { outputDir, log = console.log, signal } = {}) {
   for (const step of steps) {
-    if (step.action === 'fill') {
+    if (step.action === 'navigate') {
+      const currentUrl = await evaluatePage(client, 'location.href', 'read current page URL')
+      const current = new URL(currentUrl)
+      const destination = new URL(step.value, current)
+      if (destination.origin !== current.origin) {
+        throw new Error(`Preview navigation must remain on the current origin; received ${destination.origin}.`)
+      }
+      await navigate(client, destination.href, signal)
+      log(`Navigated to ${destination.pathname}${destination.search}${destination.hash}.`)
+    } else if (step.action === 'reload') {
+      await reloadPage(client, signal)
+      log('Reloaded the current page.')
+    } else if (step.action === 'assert-url') {
+      const current = await evaluatePage(
+        client,
+        'location.pathname + location.search + location.hash',
+        'read current page path, query, and hash',
+      )
+      if (current !== step.value) {
+        throw new Error(`URL assertion failed: expected ${JSON.stringify(step.value)}, observed ${JSON.stringify(current)}.`)
+      }
+      log(`Current URL matches ${step.value}.`)
+    } else if (step.action === 'fill') {
       const expression = `(selector, value) => {
         const element = document.querySelector(selector);
         if (!element) throw new Error('No element matches ' + selector);
@@ -1338,6 +1365,36 @@ export async function navigate(client, url, signal) {
   }
 }
 
+export async function reloadPage(client, signal) {
+  if (signal?.aborted) throw new Error('Preview interrupted.')
+  let loadHandler
+  let abortHandler
+  const loaded = new Promise((resolve) => {
+    loadHandler = client.onEvent(({ method }) => {
+      if (method === 'Page.loadEventFired') {
+        loadHandler()
+        resolve()
+      }
+    })
+  })
+  let timer
+  try {
+    await client.send('Page.reload', { ignoreCache: false })
+    await Promise.race([
+      loaded,
+      new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('Timed out reloading the current page.')), 30_000) }),
+      ...(signal ? [new Promise((_, reject) => {
+        abortHandler = () => reject(new Error('Preview interrupted during reload.'))
+        signal.addEventListener('abort', abortHandler, { once: true })
+      })] : []),
+    ])
+  } finally {
+    clearTimeout(timer)
+    loadHandler?.()
+    if (abortHandler) signal.removeEventListener('abort', abortHandler)
+  }
+}
+
 async function login(client, username, password) {
   const expression = `async () => {
     const response = await fetch('/api/auth/login', {
@@ -1419,7 +1476,7 @@ export async function launchBrowser(options, url, {
       await navigate(client, url, signal)
     }
 
-    await applyPageInteractions(client, options)
+    await applyPageInteractions(client, options, { signal })
     await new Promise((resolve) => setTimeout(resolve, 250))
     const evaluation = await client.send('Runtime.evaluate', {
       expression: '({ title: document.title, url: location.href, language: navigator.language })',
@@ -1525,7 +1582,9 @@ backend/DEV-GUIDELINES.md and pass --username student01 (or another documented a
 Use --fill, --click, --wait-for, and --expand-select to perform reusable preview interactions after authentication,
 or repeat --step ACTION:VALUE to sequence conditional flows. Steps support fill:SELECTOR=VALUE, click:SELECTOR,
 click-row-action:USERNAME|SELECTOR,
-wait:SELECTOR, read:SELECTOR, focus:SELECTOR, scroll:SELECTOR, key:Tab|Shift+Tab|Escape|Enter|Space|ArrowLeft|ArrowRight|ArrowUp|ArrowDown|Home|End,
+wait:SELECTOR, read:SELECTOR, focus:SELECTOR, scroll:SELECTOR,
+navigate:/SAME_ORIGIN_PATH, assert-url:PATH_AND_QUERY, reload,
+key:Tab|Shift+Tab|Escape|Enter|Space|ArrowLeft|ArrowRight|ArrowUp|ArrowDown|Home|End,
 select-index:SELECTOR=INDEX, screenshot:FILE, assert-dialog-contained, assert-dialog-closed,
 accept-confirms, reject-confirms, offline, or online. Generic key steps dispatch real browser keyboard events
 without assuming a dialog; use the explicit dialog assertions only in dialog scenarios.

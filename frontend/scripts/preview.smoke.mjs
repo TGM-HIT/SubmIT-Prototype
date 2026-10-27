@@ -77,6 +77,54 @@ test('measure-overflow reports viewport widths and fails on horizontal document 
   )
 })
 
+test('preview steps navigate and reload in the same origin and assert the resulting route', async () => {
+  let currentUrl = 'http://localhost:5173/login'
+  const calls = []
+  const listeners = new Set()
+  const client = {
+    async send(method, params) {
+      calls.push([method, params])
+      if (method === 'Runtime.evaluate') {
+        const value = params.expression === 'location.href'
+          ? currentUrl
+          : (() => {
+              const { pathname, search, hash } = new URL(currentUrl)
+              return `${pathname}${search}${hash}`
+            })()
+        return { result: { value } }
+      }
+      if (method === 'Page.navigate') currentUrl = params.url
+      if (method === 'Page.navigate' || method === 'Page.reload') {
+        for (const listener of listeners) listener({ method: 'Page.loadEventFired' })
+      }
+      return {}
+    },
+    onEvent(listener) {
+      listeners.add(listener)
+      return () => listeners.delete(listener)
+    },
+  }
+  const logs = []
+  await applyPageSteps(client, [
+    { action: 'navigate', value: '/settings?from=root-check#account' },
+    { action: 'assert-url', value: '/settings?from=root-check#account' },
+    { action: 'reload' },
+    { action: 'assert-url', value: '/settings?from=root-check#account' },
+  ], { log: (message) => logs.push(message) })
+
+  assert.deepEqual(calls.filter(([method]) => method === 'Page.navigate'), [
+    ['Page.navigate', { url: 'http://localhost:5173/settings?from=root-check#account' }],
+  ])
+  assert.deepEqual(calls.filter(([method]) => method === 'Page.reload'), [
+    ['Page.reload', { ignoreCache: false }],
+  ])
+  assert.match(logs.join(' '), /URL matches \/settings\?from=root-check#account/)
+  await assert.rejects(
+    applyPageSteps(client, [{ action: 'navigate', value: 'https://example.test/' }]),
+    /must remain on the current origin/,
+  )
+})
+
 test('G8 parses scoped attribute selectors without consuming assignment characters in CSS or input values', () => {
   const selector = '[data-period-label="Apply together walkthrough"] [id^="lookup-"]'
   const parsed = parseArgs(['--step', `fill:${selector}=Noah=a`, '--fill', `${selector}=Noah=b`,
@@ -104,6 +152,17 @@ test('parses preview options and rejects incomplete or invalid invocations', () 
   assert.throws(() => parseArgs(['--locale', 'not_a_locale']), /valid BCP 47/)
   assert.equal(parseArgs(['--viewport', 'mobile', '--output-dir', '/tmp/previews']).viewport, 'mobile')
   assert.equal(parseArgs(['--no-start', '--url', 'http://localhost:5173']).start, false)
+  assert.deepEqual(parseArgs([
+    '--step', 'navigate:/settings?from=root-check#account',
+    '--step', 'assert-url:/settings?from=root-check#account',
+    '--step', 'reload',
+  ]).steps, [
+    { action: 'navigate', value: '/settings?from=root-check#account' },
+    { action: 'assert-url', value: '/settings?from=root-check#account' },
+    { action: 'reload' },
+  ])
+  assert.throws(() => parseArgs(['--step', 'navigate:https://example.test/']), /same-origin absolute path/)
+  assert.throws(() => parseArgs(['--step', 'reload:unexpected']), /--step must be/)
   assert.deepEqual(parseArgs(['--step', 'focus:#trigger', '--step', 'scroll:#result', '--step', 'read:body']).steps, [
     { action: 'focus', value: '#trigger' },
     { action: 'scroll', value: '#result' },
