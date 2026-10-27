@@ -121,7 +121,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | Ticket | Status | Specification |
 | --- | --- | --- |
 | [Agent-01](tickets/done/Agent-01.md) | done | Add a dedicated Agent ticket category |
-| [Agent-02](tickets/Agent-02.md) | to-do | Remove named ticket references from agent contracts |
+| [Agent-02](tickets/done/Agent-02.md) | done | Remove named ticket references from agent contracts |
 
 ### Features
 
