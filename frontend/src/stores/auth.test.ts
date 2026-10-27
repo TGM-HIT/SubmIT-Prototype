@@ -87,4 +87,68 @@ describe('registration authentication', () => {
     expect(i18n.global.locale.value).toBe(expectedBrowserLanguage)
     expect(document.documentElement.lang).toBe(expectedBrowserLanguage)
   })
+
+  it.each([
+    ['missing', {}],
+    ['null', { roles: null }],
+    ['string', { roles: 'STUDENT' }],
+    ['non-string member', { roles: [null] }],
+  ])('rejects %s roles from login without reporting success or persisting a session', async (_label, user) => {
+    api.request.mockResolvedValueOnce({ token: 'test-token', user })
+    const auth = useAuthStore()
+
+    await expect(auth.login({ username: 'student', password: 'password' }))
+      .rejects.toThrow('Invalid authentication user: roles must be an array of strings.')
+
+    expect(auth.isAuthenticated).toBe(false)
+    expect(auth.user).toBeNull()
+    expect(auth.token).toBeNull()
+    expect(localStorage.getItem('project-ideas-user')).toBeNull()
+    expect(localStorage.getItem('project-ideas-token')).toBeNull()
+  })
+
+  it('rejects an invalid account update before replacing the current user, language or stored session', async () => {
+    const user = {
+      id: 'student-id', username: 'student', displayName: 'Student', roles: ['STUDENT'], language: 'de',
+    }
+    api.request.mockResolvedValueOnce({ token: 'test-token', user })
+    const auth = useAuthStore()
+    await auth.login({ username: 'student', password: 'password' })
+    const invalidUpdate = JSON.parse(JSON.stringify({ ...user, roles: undefined, language: 'en' }))
+
+    expect(() => auth.updateUser(invalidUpdate))
+      .toThrow('Invalid authentication user: roles must be an array of strings.')
+    expect(auth.user).toEqual(user)
+    expect(auth.isAuthenticated).toBe(true)
+    expect(i18n.global.locale.value).toBe('de')
+    expect(JSON.parse(localStorage.getItem('project-ideas-user')!)).toEqual(user)
+    expect(localStorage.getItem('project-ideas-token')).toBe('test-token')
+  })
+
+  it('preserves the existing authenticated treatment of an empty role collection', async () => {
+    const user = {
+      id: 'student-id', username: 'student', displayName: 'Student', roles: [], language: 'en',
+    }
+    api.request.mockResolvedValueOnce({ token: 'test-token', user })
+    const auth = useAuthStore()
+    await auth.login({ username: 'student', password: 'password' })
+    expect(auth.isAuthenticated).toBe(true)
+    expect(auth.user).toEqual(user)
+  })
+
+  it('reports unreadable stored user data without exposing or erasing its contents', () => {
+    const report = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+    localStorage.setItem('project-ideas-user', 'invalid-json')
+    localStorage.setItem('project-ideas-token', 'test-token')
+    try {
+      const auth = useAuthStore()
+      expect(auth.user).toBeNull()
+      expect(auth.isAuthenticated).toBe(false)
+      expect(report).toHaveBeenCalledExactlyOnceWith('Unable to restore authentication user: invalid stored user data.')
+      expect(localStorage.getItem('project-ideas-user')).toBe('invalid-json')
+      expect(localStorage.getItem('project-ideas-token')).toBe('test-token')
+    } finally {
+      report.mockRestore()
+    }
+  })
 })

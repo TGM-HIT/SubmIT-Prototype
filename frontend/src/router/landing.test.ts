@@ -106,6 +106,34 @@ describe('root authentication landing', () => {
     expect(fetchMock.mock.calls.some(([input]) => String(input).includes('/api/school-years'))).toBe(false)
   })
 
+  it('recovers a truthy token/user with undefined roles to usable root-origin login', async () => {
+    // Persisting this shape is a reproduction path, not a diagnosis of the owner's profile.
+    const invalidUser = { ...session('STUDENT').user, roles: undefined }
+    const savedUser = JSON.stringify(invalidUser)
+    localStorage.setItem('project-ideas-token', 'persisted-test-token')
+    localStorage.setItem('project-ideas-user', savedUser)
+    const report = vi.spyOn(console, 'error').mockImplementation(() => undefined)
+
+    try {
+      const wrapper = await mountApp('/')
+
+      expect(router.currentRoute.value.name).toBe('login')
+      expect(router.currentRoute.value.query.redirect).toBe('/')
+      assertUsableLogin(wrapper)
+      expect(fetchMock).not.toHaveBeenCalled()
+      expect(report).toHaveBeenCalledWith('Unable to restore authentication user: invalid stored user data.')
+      // Reading an invalid record must not erase the preserved diagnostic state.
+      expect(localStorage.getItem('project-ideas-user')).toBe(savedUser)
+      expect(localStorage.getItem('project-ideas-token')).toBe('persisted-test-token')
+
+      await submitLogin(wrapper)
+      expect(router.currentRoute.value.fullPath).toBe('/')
+      expect(wrapper.findComponent(DashboardPage).exists()).toBe(true)
+    } finally {
+      report.mockRestore()
+    }
+  })
+
   it('renders login after client navigation to root and after a reload-equivalent fresh mount', async () => {
     const wrapper = await mountApp('/login')
     await router.push('/')
@@ -206,6 +234,24 @@ describe('root authentication landing', () => {
     expect((wrapper.get('#password').element as HTMLInputElement).value).toBe('wrong-password')
     expect(wrapper.findAll('#settings-account-name')).toHaveLength(0)
     expect(wrapper.findComponent(DashboardPage).exists()).toBe(false)
+  })
+
+  it('shows the existing error instead of navigating after a login response with missing roles', async () => {
+    const wrapper = await mountApp('/')
+    fetchMock.mockResolvedValueOnce(jsonResponse({
+      ...session('STUDENT'),
+      user: { ...session('STUDENT').user, roles: undefined },
+    }))
+
+    await submitLogin(wrapper)
+
+    expect(router.currentRoute.value.fullPath).toBe('/login?redirect=/')
+    assertUsableLogin(wrapper)
+    expect(wrapper.get('[role="alert"]').text()).toBe(String(i18n.global.t('errors.unexpected')))
+    expect((wrapper.get('#username').element as HTMLInputElement).value).toBe('student01')
+    expect((wrapper.get('#password').element as HTMLInputElement).value).toBe('testing-password')
+    expect(localStorage.getItem('project-ideas-user')).toBeNull()
+    expect(localStorage.getItem('project-ideas-token')).toBeNull()
   })
 
   it('keeps login and registration public and the public archive route guard-exempt', async () => {
