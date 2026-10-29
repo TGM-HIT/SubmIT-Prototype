@@ -16,7 +16,7 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.Order;
 
 @Configuration
-@Profile("testing")
+@Profile("testing & !testing-tgm")
 public class TestingFormalApplicationFixtureConfiguration {
     public static final UUID PROJECT_ID = UUID.fromString("03a00000-0000-4000-8000-000000000001");
     private static final List<String> STUDENT_USERNAMES = List.of("student01", "student02", "student03");

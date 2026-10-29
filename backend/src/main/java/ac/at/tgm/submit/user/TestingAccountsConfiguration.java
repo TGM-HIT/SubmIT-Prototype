@@ -8,6 +8,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.Order;
+import org.springframework.core.env.Environment;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
 @Configuration
@@ -52,23 +53,47 @@ public class TestingAccountsConfiguration {
     @Bean
     @Order(1)
     ApplicationRunner seedTestingAccounts(UserAccountRepository users, StudentClassRepository classes,
-            PasswordEncoder encoder) {
+            PasswordEncoder encoder, Environment environment) {
         return args -> {
-            StudentClassEntity firstClass = testingClass(classes, "Testing Class");
-            StudentClassEntity secondClass = testingClass(classes, "Testing Class 2");
-            ACCOUNTS.stream().filter(account -> users.findByUsername(account.username()).isEmpty())
-                    .map(account -> new UserAccount(UUID.randomUUID(), account.username(), account.displayName(),
-                            encoder.encode(DEFAULT_PASSWORD), account.role()))
-                    .forEach(users::save);
-            for (int index = 0; index < ACCOUNTS.size(); index++) {
-                SeedAccount account = ACCOUNTS.get(index);
-                if (account.role() == Role.STUDENT) {
-                    UserAccount student = users.findByUsername(account.username()).orElseThrow();
-                    student.setStudentClass(index % 2 == 0 ? firstClass : secondClass);
-                    users.save(student);
-                }
+            boolean tgmProfile = environment.acceptsProfiles(org.springframework.core.env.Profiles.of("testing-tgm"));
+            if (tgmProfile) {
+                seedTgmStaff(users, encoder);
+            } else {
+                seedOrdinaryTestingFixtures(users, classes, encoder);
             }
         };
+    }
+
+    private void seedTgmStaff(UserAccountRepository users, PasswordEncoder encoder) {
+        List<SeedAccount> staff = ACCOUNTS.stream().filter(account -> account.role() != Role.STUDENT).toList();
+        seedAccounts(users, encoder, staff);
+    }
+
+    private void seedOrdinaryTestingFixtures(UserAccountRepository users, StudentClassRepository classes,
+            PasswordEncoder encoder) {
+        StudentClassEntity firstClass = testingClass(classes, "Testing Class");
+        StudentClassEntity secondClass = testingClass(classes, "Testing Class 2");
+        seedAccounts(users, encoder, ACCOUNTS);
+        seedStudents(users, firstClass, secondClass);
+    }
+
+    private void seedAccounts(UserAccountRepository users, PasswordEncoder encoder, List<SeedAccount> accounts) {
+        accounts.stream().filter(account -> users.findByUsername(account.username()).isEmpty())
+                .map(account -> new UserAccount(UUID.randomUUID(), account.username(), account.displayName(),
+                        encoder.encode(DEFAULT_PASSWORD), account.role()))
+                .forEach(users::save);
+    }
+
+    private void seedStudents(UserAccountRepository users, StudentClassEntity firstClass,
+            StudentClassEntity secondClass) {
+        for (int index = 0; index < ACCOUNTS.size(); index++) {
+            SeedAccount account = ACCOUNTS.get(index);
+            if (account.role() == Role.STUDENT) {
+                UserAccount student = users.findByUsername(account.username()).orElseThrow();
+                student.setStudentClass(index % 2 == 0 ? firstClass : secondClass);
+                users.save(student);
+            }
+        }
     }
 
     private StudentClassEntity testingClass(StudentClassRepository classes, String name) {

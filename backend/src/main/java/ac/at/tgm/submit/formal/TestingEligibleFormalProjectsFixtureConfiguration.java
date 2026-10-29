@@ -19,7 +19,7 @@ import org.springframework.core.annotation.Order;
 
 /** Isolated opt-in finalized Formal proposal choices for local UI verification. */
 @Configuration
-@Profile("testing")
+@Profile("testing & !testing-tgm")
 @ConditionalOnProperty(name = "dadb.testing.eligible-formal-project-preview", havingValue = "true")
 public class TestingEligibleFormalProjectsFixtureConfiguration {
     public static final UUID EXISTING_PROJECT_ID = UUID.fromString("22a00000-0000-4000-8000-000000000001");

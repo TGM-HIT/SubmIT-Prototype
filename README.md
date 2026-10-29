@@ -27,6 +27,12 @@ Run `./scripts/check-docker-build-contexts.sh` from the repository root to verif
 
 If pulling base images fails with `error getting credentials ... docker-credential-desktop: executable file not found in $PATH`, that is a local Docker setup problem (the `credsStore` helper in your Docker config is not on `PATH`), not a project problem. Put the Docker Desktop `bin` directory on `PATH` or fix `credsStore` in your own Docker config; the project does not modify it.
 
+### Dedicated TGM testing profile
+
+For a disposable local workbook-based preference walkthrough, run `make run-testing-tgm` from the repository root. The command starts the shared testing backend/frontend stack with both the `testing` and `testing-tgm` Spring profiles, forces the existing minimal-fixture state, and disables optional allocation/group/formal-preview fixtures. It ignores bootstrap-administrator settings from `.env` for this target.
+
+The backend reads `docs/Projekte_2026_27.xlsx` locally at startup. Keep that owner-provided workbook untracked and unchanged. This mode retains the five standard synthetic teacher accounts, two standard synthetic administrator accounts and draft rubric, while replacing ordinary synthetic student and student-owned idea/project fixtures with workbook-derived accounts, accepted projects, one open application period, and valid solo/shared applications. Direct application of the dedicated profile requires the `testing` support profile as well. Ordinary `make run-testing`, `make run-testing-minimal`, and non-testing startup behavior are unchanged. See [`backend/DEV-GUIDELINES.md`](backend/DEV-GUIDELINES.md) for isolation, import and privacy details.
+
 ## Startup wiring check
 
 Run `make startup-config-check` from the repository root to verify that the sample administrator and UI-port variables, Compose wiring, existing backend bindings, and both-values bootstrap guard agree. This configuration-only check uses Python's standard library and also runs automatically as part of `make check`.

@@ -53,7 +53,7 @@ import org.springframework.core.annotation.Order;
 
 /** Reproducible, opt-in grading selector records for the local testing preview only. */
 @Configuration
-@Profile("testing")
+@Profile("testing & !testing-tgm")
 @ConditionalOnProperty(name = TestingGradingSelectionPreviewConfiguration.PROPERTY, havingValue = "true")
 public class TestingGradingSelectionPreviewConfiguration {
     public static final String PROPERTY = "DADB_TESTING_GRADING_SELECTION_PREVIEW";

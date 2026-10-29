@@ -15,7 +15,7 @@ FRONTEND_DEV := cd $(FRONTEND) && (npm ci || npm install) && npm run dev
 
 .PHONY: help env install format-markdown build build-backend build-frontend test test-backend test-frontend \
         startup-config-check \
-        check run run-testing run-testing-minimal testing-stack run-backend run-backend-testing \
+        check run run-testing run-testing-minimal run-testing-tgm testing-stack run-backend run-backend-testing \
         run-frontend openapi clean doc
 
 help: ## Show this help
@@ -65,12 +65,20 @@ run: env ## Start backend and frontend dev server (Ctrl+C stops both)
 
 run-testing: TESTING_FIXTURE_ENV=env -u DADB_TESTING_MINIMAL_FIXTURES
 run-testing-minimal: TESTING_FIXTURE_ENV=env DADB_TESTING_MINIMAL_FIXTURES=true
+run-testing-tgm: TESTING_FIXTURE_ENV=env DADB_TESTING_MINIMAL_FIXTURES=true DADB_TESTING_ALLOCATION_PIN_PREVIEW=false DADB_TESTING_APPLYING_GROUP_PREVIEW=false DADB_TESTING_ELIGIBLE_FORMAL_PROJECTS_PREVIEW=false DADB_TESTING_FORMAL_PROPOSAL_SEARCH_PREVIEW=false DADB_TESTING_GRADING_SELECTION_PREVIEW=false DADB_BOOTSTRAPADMIN_USERNAME= DADB_BOOTSTRAPADMIN_PASSWORD= dadb.testing.applying-group-preview=false dadb.testing.eligible-formal-project-preview=false dadb.testing.formal-proposal-search-preview=false dadb.testing.grading-selection-preview=false
+run-testing: TESTING_PROFILE=testing
+run-testing-minimal: TESTING_PROFILE=testing
+run-testing-tgm: TESTING_PROFILE=testing,testing-tgm
 run-testing: testing-stack ## Start backend with full testing fixtures and frontend dev server
 run-testing-minimal: testing-stack ## Start testing backend with minimal fixtures and frontend dev server
+run-testing-tgm: testing-stack ## Start the isolated TGM workbook testing profile and frontend dev server
+
+TESTING_PROFILE ?= testing
+TESTING_FIXTURE_ENV ?= env -u DADB_TESTING_MINIMAL_FIXTURES
 
 testing-stack: env
 	@trap 'kill 0' INT TERM EXIT; \
-	(cd $(BACKEND) && $(TESTING_FIXTURE_ENV) ./gradlew bootRun --args='--spring.profiles.active=testing') & \
+	(cd $(BACKEND) && $(TESTING_FIXTURE_ENV) ./gradlew bootRun --args='--spring.profiles.active=$(TESTING_PROFILE)') & \
 	($(FRONTEND_DEV)) & \
 	wait
 

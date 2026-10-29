@@ -22,7 +22,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 @Component
-@Profile("testing")
+@Profile("testing & !testing-tgm")
 @Order(3)
 public class TestingIdeasFixtureSeeder implements ApplicationRunner {
     private static final String FIXTURE_TYPE = "testing_idea_fixture";

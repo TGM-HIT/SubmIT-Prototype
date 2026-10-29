@@ -19,7 +19,7 @@ import org.springframework.security.core.context.SecurityContextHolder;
 
 /** Explicit, disposable preview prerequisites; ordinary fixture counts are unchanged. */
 @Configuration
-@Profile("testing")
+@Profile("testing & !testing-tgm")
 @ConditionalOnProperty(name = "dadb.testing.applying-group-preview", havingValue = "true")
 public class TestingApplyingGroupPreviewConfiguration {
     private static final long MAIN_DEADLINE_SECONDS = 420;

@@ -18,7 +18,7 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.core.annotation.Order;
 
 @Configuration
-@Profile("testing")
+@Profile("testing & !testing-tgm")
 @ConditionalOnProperty(name = "DADB_TESTING_FORMAL_PROPOSAL_SEARCH_PREVIEW", havingValue = "true")
 public class TestingFormalProposalSearchPreviewConfiguration {
     public static final String PROPERTY = "DADB_TESTING_FORMAL_PROPOSAL_SEARCH_PREVIEW";
