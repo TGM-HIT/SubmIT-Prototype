@@ -20,6 +20,8 @@ import ac.at.tgm.submit.data.RecordStore;
 import ac.at.tgm.submit.data.StoredRecord;
 import ac.at.tgm.submit.security.Role;
 import java.nio.file.Path;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -67,7 +69,9 @@ class TestingTgmImportFlowTest {
     void importsAccountsCataloguePeriodAndReciprocalGroupsThroughExistingLifecycle() throws Exception {
         byte[] source = TgmWorkbookReaderTest.importScenarioWorkbook();
         TestingTgmWorkbookImporter importer = importer();
+        Instant importStartedAt = Instant.now();
         importer.importSource(INVENTED_PATH, source);
+        Instant importFinishedAt = Instant.now();
 
         assertEquals(9, users.findAll().stream()
                 .filter(user -> user.getStudentClass() != null
@@ -121,6 +125,21 @@ class TestingTgmImportFlowTest {
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
         assertEquals(1, periodPage.path("totalElements").asInt());
         assertEquals(period.getId().toString(), periodPage.path("content").get(0).path("id").asText());
+        JsonNode publicPeriod = periodPage.path("content").get(0);
+        assertTrue(publicPeriod.has("opensAt") && publicPeriod.path("opensAt").isTextual());
+        assertTrue(publicPeriod.has("closesAt") && publicPeriod.path("closesAt").isTextual());
+        Instant opensAt = Instant.parse(publicPeriod.path("opensAt").textValue());
+        Instant closesAt = Instant.parse(publicPeriod.path("closesAt").textValue());
+        assertTrue(!opensAt.isBefore(importStartedAt.minusSeconds(60)),
+                "period opening predates the import-start bracket");
+        assertTrue(!opensAt.isAfter(importFinishedAt.minusSeconds(60)),
+                "period opening exceeds the import-finish bracket");
+        assertTrue(!closesAt.isBefore(importStartedAt.plusSeconds(7 * 24 * 60 * 60)),
+                "period closing predates the import-start bracket");
+        assertTrue(!closesAt.isAfter(importFinishedAt.plusSeconds(7 * 24 * 60 * 60)),
+                "period closing exceeds the import-finish bracket");
+        assertEquals(604_860, Duration.between(opensAt, closesAt).getSeconds());
+        assertEquals(0, Duration.between(opensAt, closesAt).toNanosPart());
         JsonNode groupPage = json(mockMvc.perform(get("/api/application-periods/{id}/applying-groups",
                         period.getId()).header("Authorization", "Bearer " + teacherToken)
                         .param("page", "0").param("size", "100"))
@@ -129,8 +148,16 @@ class TestingTgmImportFlowTest {
         Set<Integer> memberCounts = new java.util.HashSet<>();
         for (JsonNode group : groupPage.path("content")) {
             assertEquals("SUBMITTED", group.path("status").asText());
-            memberCounts.add(group.path("members").size());
-            assertTrue(group.path("members").findValues("approved").stream().allMatch(JsonNode::asBoolean));
+            JsonNode members = group.path("members");
+            assertTrue(members.isArray());
+            assertTrue(Set.of(2, 5).contains(members.size()), "unexpected submitted group size");
+            memberCounts.add(members.size());
+            for (JsonNode member : members) {
+                assertTrue(member.isObject());
+                assertTrue(member.has("approved"));
+                assertTrue(member.path("approved").isBoolean());
+                assertTrue(member.path("approved").booleanValue());
+            }
             assertEquals(List.of("Invented Cedar", "Invented Birch", "Invented Maple"),
                     group.path("preferences").findValuesAsText("projectTitle"));
         }

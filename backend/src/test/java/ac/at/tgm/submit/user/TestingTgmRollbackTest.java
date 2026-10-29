@@ -13,13 +13,13 @@ import static org.mockito.Mockito.when;
 
 import ac.at.tgm.submit.data.RecordStore;
 import ac.at.tgm.submit.data.StoredRecord;
+import ac.at.tgm.submit.security.Role;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Map;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
 import java.util.logging.Handler;
@@ -56,11 +56,11 @@ class TestingTgmRollbackTest {
     @Test
     void failureAfterGroupHistoryWritesRollsBackAllImportTypesAndClearsAuthentication() {
         Map<UUID, RecordSnapshot> beforeRecords = recordSnapshots();
-        Set<UUID> beforeUsers = users.findAll().stream().map(UserAccount::getId).collect(Collectors.toSet());
+        Map<UUID, UserSnapshot> beforeUsers = userSnapshots();
         Map<String, UUID> beforeClasses = classes.findAll().stream()
                 .collect(Collectors.toMap(StudentClassEntity::getName, StudentClassEntity::getId));
         assertTrue(beforeRecords.values().stream().anyMatch(record -> record.type().equals("grading_rubric")));
-        assertTrue(beforeUsers.stream().map(users::findById).allMatch(java.util.Optional::isPresent));
+        assertTrue(beforeUsers.keySet().stream().map(users::findById).allMatch(java.util.Optional::isPresent));
 
         doAnswer(invocation -> {
             invocation.callRealMethod();
@@ -108,7 +108,7 @@ class TestingTgmRollbackTest {
         assertNull(SecurityContextHolder.getContext().getAuthentication());
 
         assertEquals(beforeRecords, recordSnapshots());
-        assertEquals(beforeUsers, users.findAll().stream().map(UserAccount::getId).collect(Collectors.toSet()));
+        assertEquals(beforeUsers, userSnapshots());
         assertEquals(beforeClasses, classes.findAll().stream()
                 .collect(Collectors.toMap(StudentClassEntity::getName, StudentClassEntity::getId)));
         assertTrue(users.findByUsername("FixtureÄSolo").isEmpty());
@@ -120,6 +120,18 @@ class TestingTgmRollbackTest {
         return store.repository().findAll().stream().collect(Collectors.toMap(StoredRecord::getId, record ->
                 new RecordSnapshot(record.getType(), record.getOwnerId(), record.getParentId(), record.getStatus(),
                         record.getReferenceType(), record.getPayload(), record.getCreatedAt())));
+    }
+
+    private Map<UUID, UserSnapshot> userSnapshots() {
+        return new TransactionTemplate(transactions).execute(status -> users.findAll().stream()
+                .collect(Collectors.toMap(UserAccount::getId, user -> new UserSnapshot(user.getUsername(),
+                        user.getDisplayName(), user.getPasswordHash(), user.getRoles(), user.getLanguage(),
+                        user.getStudentClass() == null ? null : user.getStudentClass().getId(),
+                        user.getElectiveSubjects().stream().map(ElectiveSubjectEntity::getId).sorted().toList()))));
+    }
+
+    private record UserSnapshot(String username, String displayName, String passwordHash, List<Role> roles,
+            AccountLanguage language, UUID classId, List<UUID> electiveIds) {
     }
 
     private record RecordSnapshot(String type, String ownerId, String parentId, String status, String referenceType,
