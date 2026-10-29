@@ -1630,6 +1630,8 @@ describe('IdeasPage collaboration access changes', () => {
       { name: 'notes.txt', size: 10, text: async () => 'ignored' },
       { name: 'empty.md', size: 0, text: async () => '' },
       { name: 'broken.md', size: 20, text: async () => '## Unknown\ninvalid' },
+      { name: 'over-limit.md', size: 1100, text: async () => '## Description\nReplacement\n'
+        + `## Intended outcome\nReplacement\n## Initial scope points\n- ${'x'.repeat(1001)}` },
     ]) {
       Object.defineProperty(input, 'files', { configurable: true, value: [file] })
       await page.get('#idea-markdown-file').trigger('change')
@@ -1665,6 +1667,8 @@ describe('IdeasPage collaboration access changes', () => {
   it('uploads an idea PDF with unchanged manual metadata', async () => {
     const createPdf = { ...idea('IDEA_DRAFT'), id: 'idea-pdf-created', pdfPresent: true }
     api.createPdf.mockResolvedValue(createPdf)
+    api.list.mockResolvedValueOnce(pageIdeas()).mockResolvedValue({ ...pageIdeas(), content: [createPdf] })
+    api.get.mockResolvedValue(createPdf)
     const page = mountPage()
     await flushPromises()
     await page.get('#new-idea-button').trigger('click')
@@ -1693,6 +1697,10 @@ describe('IdeasPage collaboration access changes', () => {
       file,
     )
 
+    expect(page.text()).toContain(createPdf.title)
+    await page.get('#details-button-idea-pdf-created').trigger('click')
+    await flushPromises()
+    expect(page.get('[role="dialog"]').text()).toContain('Preview submitted PDF')
     page.unmount()
   })
 
@@ -1767,6 +1775,7 @@ describe('IdeasPage collaboration access changes', () => {
     expect(api.saveSpecificationPdf).not.toHaveBeenCalled()
     Object.defineProperty(retryInput, 'files', { configurable: true, value: [pdf] })
     await page.get('#specification-file').trigger('change')
+    api.get.mockResolvedValue({ ...approved, specification: { pdfPresent: true } })
     await page.get('[role="dialog"] form').trigger('submit')
     await flushPromises()
 
@@ -1774,6 +1783,144 @@ describe('IdeasPage collaboration access changes', () => {
     expect(api.specification).not.toHaveBeenCalled()
     expect(approved.title).toBe('Unchanged idea title')
     expect(approved.schoolYear).toBe('2026/2027')
+    await page.get('#details-button-idea-IDEA_APPROVED_FOR_SPECIFICATION').trigger('click')
+    await flushPromises()
+    expect(page.get('[role="dialog"]').text()).toContain('Preview submitted PDF')
     page.unmount()
+  })
+
+  it('imports specification Markdown transactionally and preserves a populated draft on failure', async () => {
+    const approved = idea('IDEA_APPROVED_FOR_SPECIFICATION')
+    api.list.mockResolvedValue({ ...pageIdeas(), content: [approved] })
+    api.get.mockResolvedValue(approved)
+    const page = mountPage()
+    await flushPromises()
+    await page.get('#details-button-idea-IDEA_APPROVED_FOR_SPECIFICATION').trigger('click')
+    await flushPromises()
+    await page.get('#develop-specification').trigger('click')
+    await page.findAll('input[type="radio"]')[1].setValue()
+    const input = page.get('#spec-markdown-file').element as HTMLInputElement
+    const markdown = '## Objectives:\n- Imported goal\n## Intended users\n- Imported users\n'
+      + '## Requirements\n- Imported requirement\n## Deliverables\n- Imported result\n'
+      + '## Proposed scope\nImported scope\n## Dependencies or resources\n- Imported resource'
+    const select = async (text: string) => {
+      Object.defineProperty(input, 'files', {
+        configurable: true, value: [{ name: 'spec.md', size: text.length, text: async () => text }],
+      })
+      await page.get('#spec-markdown-file').trigger('change')
+      await flushPromises()
+    }
+    await select(markdown)
+    const values = () => page.findAll('[role="dialog"] textarea')
+      .map(field => (field.element as HTMLTextAreaElement).value)
+    const expected = ['Imported goal', 'Imported users', 'Imported requirement', 'Imported result',
+      'Imported scope', 'Imported resource']
+    expect(values()).toEqual(expected)
+    expect(api.specification).not.toHaveBeenCalled()
+    for (const invalid of ['## Unknown\ninvalid', markdown.replace('Imported resource', 'x'.repeat(1001))]) {
+      await select(invalid)
+      expect(values()).toEqual(expected)
+      expect(page.get('[role="alert"]').text()).toContain('Markdown')
+      expect(api.specification).not.toHaveBeenCalled()
+    }
+    await page.get('[role="dialog"] form').trigger('submit')
+    await flushPromises()
+    expect(api.specification).toHaveBeenCalledWith(approved.id, {
+      objectives: ['Imported goal'], intendedUsers: ['Imported users'],
+      requirements: ['Imported requirement'], deliverables: ['Imported result'],
+      scope: 'Imported scope', dependencies: ['Imported resource'],
+    })
+    page.unmount()
+  })
+
+  it.each(['resolve', 'reject'] as const)('safely closes and reopens while a PDF request will %s', async (outcome) => {
+    const createObjectURL = vi.fn(() => 'blob:current')
+    const revokeObjectURL = vi.fn()
+    vi.stubGlobal('URL', { createObjectURL, revokeObjectURL })
+    const pdfIdea = { ...idea('IDEA_SUBMITTED'), pdfPresent: true }
+    api.list.mockResolvedValue({ ...pageIdeas(), content: [pdfIdea] })
+    api.get.mockResolvedValue(pdfIdea)
+    let resolve!: (blob: Blob) => void
+    let reject!: (error: Error) => void
+    api.pdf.mockReturnValueOnce(new Promise<Blob>((yes, no) => { resolve = yes; reject = no }))
+      .mockResolvedValueOnce(new Blob(['current']))
+    const page = mountPage()
+    await flushPromises()
+    await page.get('#details-button-idea-IDEA_SUBMITTED').trigger('click')
+    await flushPromises()
+    const trigger = page.findAll('[role="dialog"] button').find(button => button.text() === 'Preview submitted PDF')!
+    await trigger.trigger('click')
+    await flushPromises()
+    const preview = () => page.findAll('[role="dialog"]').at(-1)!
+    expect(preview().text()).toContain('Loading')
+    expect(preview().find('iframe').exists()).toBe(false)
+    await preview().findAll('button').find(button => button.text() === 'Close')!.trigger('click')
+    await flushPromises()
+    expect(document.activeElement).toBe(trigger.element)
+    await trigger.trigger('click')
+    await flushPromises()
+    expect(preview().get('iframe').attributes('src')).toBe('blob:current')
+    if (outcome === 'resolve') resolve(new Blob(['stale']))
+    else reject(new Error('stale failure'))
+    await flushPromises()
+    expect(preview().get('iframe').attributes('src')).toBe('blob:current')
+    expect(preview().text()).not.toContain('Unable to load')
+    expect(createObjectURL).toHaveBeenCalledTimes(1)
+    await preview().findAll('button').find(button => button.text() === 'Close')!.trigger('click')
+    await flushPromises()
+    expect(revokeObjectURL).toHaveBeenCalledExactlyOnceWith('blob:current')
+    expect(document.activeElement).toBe(trigger.element)
+    page.unmount()
+  })
+
+  it.each(['resolve', 'reject'] as const)('ignores a pending PDF that will %s after close or unmount', async (outcome) => {
+    const createObjectURL = vi.fn(() => 'blob:closed')
+    const revokeObjectURL = vi.fn()
+    vi.stubGlobal('URL', { createObjectURL, revokeObjectURL })
+    const pdfIdea = { ...idea('IDEA_SUBMITTED'), pdfPresent: true }
+    api.list.mockResolvedValue({ ...pageIdeas(), content: [pdfIdea] })
+    api.get.mockResolvedValue(pdfIdea)
+    const page = mountPage()
+    await flushPromises()
+    await page.get('#details-button-idea-IDEA_SUBMITTED').trigger('click')
+    await flushPromises()
+    const trigger = page.findAll('[role="dialog"] button').find(button => button.text() === 'Preview submitted PDF')!
+    for (const unmount of [false, true]) {
+      let resolve!: (blob: Blob) => void
+      let reject!: (error: Error) => void
+      api.pdf.mockReturnValueOnce(new Promise<Blob>((yes, no) => { resolve = yes; reject = no }))
+      await trigger.trigger('click')
+      await flushPromises()
+      if (unmount) page.unmount()
+      else {
+        await page.findAll('[role="dialog"]').at(-1)!.findAll('button')
+          .find(button => button.text() === 'Close')!.trigger('click')
+        await flushPromises()
+        expect(document.activeElement).toBe(trigger.element)
+      }
+      if (outcome === 'resolve') resolve(new Blob(['closed']))
+      else reject(new Error('closed failure'))
+      await flushPromises()
+      expect(createObjectURL).not.toHaveBeenCalled()
+    }
+    expect(revokeObjectURL).not.toHaveBeenCalled()
+  })
+
+  it('revokes a loaded PDF URL on unmount', async () => {
+    const revokeObjectURL = vi.fn()
+    vi.stubGlobal('URL', { createObjectURL: vi.fn(() => 'blob:unmounted'), revokeObjectURL })
+    const pdfIdea = { ...idea('IDEA_SUBMITTED'), pdfPresent: true }
+    api.list.mockResolvedValue({ ...pageIdeas(), content: [pdfIdea] })
+    api.get.mockResolvedValue(pdfIdea)
+    api.pdf.mockResolvedValue(new Blob(['loaded']))
+    const page = mountPage()
+    await flushPromises()
+    await page.get('#details-button-idea-IDEA_SUBMITTED').trigger('click')
+    await flushPromises()
+    await page.findAll('[role="dialog"] button')
+      .find(button => button.text() === 'Preview submitted PDF')!.trigger('click')
+    await flushPromises()
+    page.unmount()
+    expect(revokeObjectURL).toHaveBeenCalledExactlyOnceWith('blob:unmounted')
   })
 })

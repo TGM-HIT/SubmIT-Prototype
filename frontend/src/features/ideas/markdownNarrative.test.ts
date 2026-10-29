@@ -59,6 +59,33 @@ describe('Markdown narrative parser', () => {
   })
 
   it.each([
+    ['scopePoints', 1000],
+    ['learningTopics', 200],
+  ] as const)('checks the final idea list %s at and beyond its boundary', (field, limit) => {
+    const heading = field === 'scopePoints' ? 'Initial scope points' : 'Learning topics'
+    const prefix = '## Description\nText\n## Intended outcome\nOutcome\n'
+      + (field === 'learningTopics' ? '## Initial scope points\n- Scope\n' : '')
+    expect(parseMarkdownNarrative(`${prefix}## ${heading}\n- ${'x'.repeat(limit)}`, 'idea')[field])
+      .toEqual(['x'.repeat(limit)])
+    expect(() => parseMarkdownNarrative(`${prefix}## ${heading}\n- ${'x'.repeat(limit + 1)}`, 'idea'))
+      .toThrow('fieldLimit')
+  })
+
+  it('checks the final dependency and scalar sections and the 50-topic cap', () => {
+    const prefix = '## Objectives:\n- Goal\n## Intended users\n- Users\n## Requirements\n- Need\n'
+      + '## Deliverables\n- Result\n'
+    expect(parseMarkdownNarrative(`${prefix}## Proposed scope\nScope\n## Dependencies or resources\n- ${'x'.repeat(1000)}`,
+      'specification').dependencies).toEqual(['x'.repeat(1000)])
+    expect(() => parseMarkdownNarrative(`${prefix}## Proposed scope\nScope\n## Dependencies or resources\n- ${'x'.repeat(1001)}`,
+      'specification')).toThrow('fieldLimit')
+    expect(() => parseMarkdownNarrative(`${prefix}## Dependencies or resources\n- Tool\n## Proposed scope\n${'x'.repeat(5001)}`,
+      'specification')).toThrow('fieldLimit')
+    const idea = '## Description\nText\n## Intended outcome\nOutcome\n## Initial scope points\n- Scope\n## Learning topics\n'
+    expect(parseMarkdownNarrative(idea + '- Topic\n'.repeat(50), 'idea').learningTopics).toHaveLength(50)
+    expect(() => parseMarkdownNarrative(idea + '- Topic\n'.repeat(51), 'idea')).toThrow('fieldLimit')
+  })
+
+  it.each([
     ['## Unknown\nx', 'unknownHeading'],
     ['## Description\nx\n## Description\ny', 'duplicateHeading'],
     ['## Description\nx', 'missingHeading'],

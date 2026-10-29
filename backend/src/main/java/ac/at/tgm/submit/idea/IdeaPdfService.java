@@ -69,6 +69,10 @@ public class IdeaPdfService {
         ObjectNode payload = store.parse(idea);
         payload.put("title", metadata.title().trim());
         payload.put("schoolYear", metadata.schoolYear().trim());
+        payload.put("description", "");
+        payload.put("intendedOutcome", "");
+        payload.set("scopePoints", store.value(List.of()));
+        payload.set("learningTopics", store.value(List.of()));
         payload.put(PDF_CONTENT, Base64.getEncoder().encodeToString(bytes));
         store.update(idea, WITHDRAWN.equals(idea.getStatus()) ? IDEA_DRAFT : idea.getStatus(), payload);
         ideaService.recordPdfIdeaUpdated(caller, id);

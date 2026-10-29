@@ -45,6 +45,7 @@ class IdeaPdfApiTest {
     @Autowired private MockMvc mockMvc;
     @Autowired private ObjectMapper objectMapper;
     @Autowired private RecordStore store;
+    @Autowired private ac.at.tgm.submit.user.UserAccountRepository users;
     private String student;
     private String unrelatedStudent;
     private String teacher;
@@ -56,6 +57,60 @@ class IdeaPdfApiTest {
         unrelatedStudent = login("student02");
         teacher = login("teacher01");
         admin = login("admin01");
+    }
+
+    @Test
+    void replacingFormIdeaWithPdfClearsNarrativeAndPreservesManualMetadataAndOwners() throws Exception {
+        Map<String, Object> input = Map.of("title", "Updated title", "description", "Old description",
+                "intendedOutcome", "Old outcome", "scopePoints", List.of("Old scope"),
+                "learningTopics", List.of("Old topic"), "schoolYear", "2026/2027");
+        MvcResult created = mockMvc.perform(post("/api/ideas").header(HttpHeaders.AUTHORIZATION, bearer(student))
+                        .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsBytes(input)))
+                .andExpect(status().isCreated()).andReturn();
+        JsonNode before = objectMapper.readTree(created.getResponse().getContentAsByteArray());
+        String id = before.path("id").asText();
+        String collaboratorId = users.findByUsername("student02").orElseThrow().getId().toString();
+        mockMvc.perform(post("/api/ideas/{id}/owners", id).header(HttpHeaders.AUTHORIZATION, bearer(student))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsBytes(Map.of("studentId", collaboratorId))))
+                .andExpect(status().isOk());
+        JsonNode owned = objectMapper.readTree(mockMvc.perform(get("/api/ideas/{id}", id)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(student)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray());
+        assertEquals(2, owned.path("owners").size());
+        mockMvc.perform(pdfUpdateRequest(id, student)).andExpect(status().isOk());
+        JsonNode detail = objectMapper.readTree(mockMvc.perform(get("/api/ideas/{id}", id)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(student)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray());
+        assertTrue(detail.path("pdfPresent").isBoolean());
+        assertTrue(detail.path("pdfPresent").booleanValue());
+        assertEquals(owned.path("owners"), detail.path("owners"));
+        assertEquals(owned.path("title"), detail.path("title"));
+        assertEquals(owned.path("schoolYear"), detail.path("schoolYear"));
+        assertEquals(owned.path("creatorId"), detail.path("creatorId"));
+        assertEmptyIdeaNarrative(detail);
+        JsonNode persisted = store.parse(store.get("idea", java.util.UUID.fromString(id)));
+        assertEmptyIdeaNarrative(persisted);
+        assertTrue(persisted.path("privatePdfBase64").isTextual());
+        JsonNode rows = objectMapper.readTree(mockMvc.perform(get("/api/ideas?size=100")
+                        .header(HttpHeaders.AUTHORIZATION, bearer(student)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray()).path("content");
+        JsonNode listed = java.util.stream.StreamSupport.stream(rows.spliterator(), false)
+                .filter(row -> id.equals(row.path("id").asText())).findFirst().orElseThrow();
+        assertEmptyIdeaNarrative(listed);
+        mockMvc.perform(get("/api/ideas/{id}/pdf", id).header(HttpHeaders.AUTHORIZATION, bearer(unrelatedStudent)))
+                .andExpect(status().isOk()).andExpect(content().bytes(PDF));
+    }
+
+    private void assertEmptyIdeaNarrative(JsonNode node) {
+        for (String field : List.of("description", "intendedOutcome")) {
+            assertTrue(node.path(field).isTextual(), field);
+            assertEquals("", node.path(field).textValue());
+        }
+        for (String field : List.of("scopePoints", "learningTopics")) {
+            assertTrue(node.path(field).isArray(), field);
+            assertTrue(node.path(field).isEmpty(), field);
+        }
     }
 
     @Test

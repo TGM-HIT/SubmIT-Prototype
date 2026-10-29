@@ -726,18 +726,21 @@ async function saveSpecification(): Promise<void> {
   }
   async function loadPdfPreview(): Promise<void> {
     if (!pdfPreview.value || !selectedIdea.value?.id) return
-    if (pdfPreview.value.url) URL.revokeObjectURL(pdfPreview.value.url)
-    pdfPreview.value.loading = true
-    pdfPreview.value.error = false
+    const preview = pdfPreview.value
+    if (preview.url) URL.revokeObjectURL(preview.url)
+    preview.url = undefined
+    preview.loading = true
+    preview.error = false
     try {
-      const blob = pdfPreview.value.specification
+      const blob = preview.specification
         ? await ideasApi.specificationPdf(selectedIdea.value.id)
         : await ideasApi.pdf(selectedIdea.value.id)
-      pdfPreview.value.url = URL.createObjectURL(blob)
+      if (pdfPreview.value !== preview) return
+      preview.url = URL.createObjectURL(blob)
     } catch {
-      pdfPreview.value.error = true
+      if (pdfPreview.value === preview) preview.error = true
     } finally {
-      pdfPreview.value.loading = false
+      if (pdfPreview.value === preview) preview.loading = false
     }
   }
   function closePdfPreview(): void {
@@ -887,6 +890,7 @@ watch(() => Boolean(detailsOpen.value && isStudent.value && selectedIdea.value?.
   }, 2000)
 })
 onUnmounted(stopOwnerAccessPoll)
+onUnmounted(closePdfPreview)
 
 onMounted(async () => {
   const [years] = await Promise.all([

@@ -86,18 +86,6 @@ export function parseMarkdownNarrative(
         if (!bullet) throw new Error('malformedList')
         values.push(bullet[1].trim())
       }
-      const maximumLength: Partial<Record<Field, number>> = {
-        description: 5000, intendedOutcome: 2000, scopePoints: 1000, learningTopics: 200,
-        objectives: 2000, intendedUsers: 1000, requirements: 2000, deliverables: 1000,
-        scope: 5000, dependencies: 1000,
-      }
-      for (const [field, value] of Object.entries(result) as [Field, string | string[]][]) {
-        const values = Array.isArray(value) ? value : [value]
-        if (values.some((entry) => entry.length > (maximumLength[field] ?? Number.MAX_SAFE_INTEGER))
-            || (field === 'learningTopics' && values.length > 50)) {
-          throw new Error('fieldLimit')
-        }
-      }
       if (!values.length && !(workflow === 'idea' && field === 'learningTopics')) {
         throw new Error('emptySection')
       }
@@ -106,6 +94,18 @@ export function parseMarkdownNarrative(
       const text = lines.join('\n').trim()
       if (!text) throw new Error('emptySection')
       result[field] = text
+    }
+  }
+  const maximumLength: Record<Field, number> = {
+    description: 5000, intendedOutcome: 2000, scopePoints: 1000, learningTopics: 200,
+    objectives: 2000, intendedUsers: 1000, requirements: 2000, deliverables: 1000,
+    scope: 5000, dependencies: 1000,
+  }
+  for (const [field, value] of Object.entries(result) as [Field, string | string[]][]) {
+    const values = Array.isArray(value) ? value : [value]
+    if (values.some((entry) => entry.length > maximumLength[field])
+        || (field === 'learningTopics' && values.length > 50)) {
+      throw new Error('fieldLimit')
     }
   }
   if (workflow === 'idea') {
