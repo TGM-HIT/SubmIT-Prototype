@@ -27,6 +27,7 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.core.io.ClassPathResource;
 
 @SpringBootTest(properties = "spring.datasource.url=jdbc:h2:mem:testingdraftrubric;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE")
 @ActiveProfiles("testing")
@@ -297,6 +298,74 @@ class TestingDraftRubricApiTest {
     }
 
     @Test
+    void selfContainedFixturePublishesAsAReusableDefinitionOnlyAfterChoosingANewVersion() throws Exception {
+        JsonNode definition;
+        try (var input = new ClassPathResource("testing/grading-rubric-draft.json").getInputStream()) {
+            definition = objectMapper.readTree(input);
+        }
+        assertFalse(definition.has("assessmentScale"));
+        int criteria = 0;
+        for (JsonNode category : definition.path("categories")) {
+            for (JsonNode criterion : category.path("criteria")) {
+                assertTrue(criterion.has("evidenceRequired"));
+                assertTrue(criterion.path("evidenceRequired").isBoolean());
+                assertEquals(false, criterion.path("evidenceRequired").asBoolean());
+                JsonNode scale = criterion.path("scale");
+                assertTrue(scale.isObject());
+                assertTrue(scale.path("min").isNumber());
+                assertTrue(scale.path("max").isNumber());
+                assertTrue(scale.path("step").isNumber());
+                assertEquals(1, scale.path("min").asInt());
+                assertEquals(5, scale.path("max").asInt());
+                assertEquals(1, scale.path("step").asInt());
+                criteria++;
+            }
+        }
+        assertEquals(69, criteria);
+
+        mockMvc.perform(bearer(post("/api/grading-rubrics")
+                        .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsBytes(definition)),
+                        loginAdmin()))
+                .andExpect(status().isConflict());
+
+        var newVersion = ((com.fasterxml.jackson.databind.node.ObjectNode) definition.deepCopy())
+                .put("version", "dev61-reusable-definition-test")
+                .put("effectiveFrom", "2099-01-01");
+        JsonNode published = response(mockMvc.perform(bearer(post("/api/grading-rubrics")
+                        .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsBytes(newVersion)),
+                        loginAdmin()))
+                .andExpect(status().isCreated()).andReturn());
+        assertEquals("dev61-reusable-definition-test", published.path("version").asText());
+        var publishedDefinition = (com.fasterxml.jackson.databind.node.ObjectNode) published.deepCopy();
+        for (String metadata : List.of("id", "status", "createdAt", "publishedAt", "publishedBy")) {
+            publishedDefinition.remove(metadata);
+        }
+        assertRequestFieldsPreserved(newVersion, publishedDefinition, "rubric");
+        assertEquals(newVersion.path("categories").size(), published.path("categories").size());
+        for (int categoryIndex = 0; categoryIndex < newVersion.path("categories").size(); categoryIndex++) {
+            JsonNode expectedCategory = newVersion.path("categories").get(categoryIndex);
+            JsonNode actualCategory = published.path("categories").get(categoryIndex);
+            assertEquals(expectedCategory.path("id"), actualCategory.path("id"));
+            assertEquals(expectedCategory.path("name"), actualCategory.path("name"));
+            assertEquals(expectedCategory.path("criteria").size(), actualCategory.path("criteria").size());
+            for (int criterionIndex = 0; criterionIndex < expectedCategory.path("criteria").size(); criterionIndex++) {
+                JsonNode expectedCriterion = expectedCategory.path("criteria").get(criterionIndex);
+                JsonNode actualCriterion = actualCategory.path("criteria").get(criterionIndex);
+                assertEquals(expectedCriterion.path("id"), actualCriterion.path("id"));
+                assertEquals(expectedCriterion.path("subject"), actualCriterion.path("subject"));
+                assertEquals(expectedCriterion.path("evidenceRequired"), actualCriterion.path("evidenceRequired"));
+                assertEquals(expectedCriterion.path("scale").path("min"), actualCriterion.path("scale").path("min"));
+                assertEquals(expectedCriterion.path("scale").path("max"), actualCriterion.path("scale").path("max"));
+                assertEquals(expectedCriterion.path("scale").path("step"), actualCriterion.path("scale").path("step"));
+            }
+        }
+        assertEquals(newVersion.path("metricDefinitions").get(0).path("id"),
+                published.path("metricDefinitions").get(0).path("id"));
+        assertEquals(newVersion.path("aggregationRules"), published.path("aggregationRules"));
+        assertFalse(published.has("assessmentScale"));
+    }
+
+    @Test
     @Transactional
     void repeatedSeederRunReusesPersistedImmutableVersionAndAudit() throws Exception {
         StoredRecord initial = rubricRecord();
@@ -350,6 +419,14 @@ class TestingDraftRubricApiTest {
         return response(result).path("token").asText();
     }
 
+    private String loginAdmin() throws Exception {
+        MvcResult result = mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"username\":\"admin01\",\"password\":\"testing-password\"}"))
+                .andExpect(status().isOk()).andReturn();
+        return response(result).path("token").asText();
+    }
+
     private StoredRecord rubricRecord() {
         return store.page("grading_rubric", null, null, Pageable.unpaged()).getContent().stream()
                 .filter(record -> VERSION.equals(store.parse(record).path("version").asText()))
@@ -378,6 +455,25 @@ class TestingDraftRubricApiTest {
         assertTrue(found, "Missing source section " + categoryId);
         for (String fragment : fragments) {
             assertTrue(description.contains(fragment), categoryId + " is missing draft context: " + fragment);
+        }
+    }
+
+    private void assertRequestFieldsPreserved(JsonNode expected, JsonNode actual, String path) {
+        assertEquals(expected.getNodeType(), actual.getNodeType(), path + " JSON type");
+        if (expected.isObject()) {
+            for (var entry : expected.properties()) {
+                assertTrue(actual.has(entry.getKey()), path + "." + entry.getKey() + " must be present");
+                assertRequestFieldsPreserved(entry.getValue(), actual.get(entry.getKey()), path + "." + entry.getKey());
+            }
+        } else if (expected.isArray()) {
+            assertEquals(expected.size(), actual.size(), path + " array length/order");
+            for (int index = 0; index < expected.size(); index++) {
+                assertRequestFieldsPreserved(expected.get(index), actual.get(index), path + "[" + index + "]");
+            }
+        } else if (expected.isNumber() && actual.isNumber()) {
+            assertEquals(0, expected.decimalValue().compareTo(actual.decimalValue()), path + " numeric value");
+        } else {
+            assertEquals(expected, actual, path + " value");
         }
     }
 

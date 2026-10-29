@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process'
-import { access, mkdir, mkdtemp, open, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, open, readFile, realpath, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { constants } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -128,6 +128,8 @@ export function parseArgs(args) {
     seedIdeaOwner: undefined,
     seedIdeaHistory: undefined,
     seedAllocationPinPreview: false,
+    seedRubricPaginationPreview: false,
+    evidenceReport: undefined,
     fill: [],
     click: [],
     waitFor: [],
@@ -153,6 +155,7 @@ export function parseArgs(args) {
     ['--seed-idea-owner', 'seedIdeaOwner'],
     ['--seed-idea-history', 'seedIdeaHistory'],
     ['--seed-idea-title', 'seedIdeaTitle'],
+    ['--evidence-report', 'evidenceReport'],
     ['--password-env', 'passwordEnv'],
     ['--chrome', 'chrome'],
     ['--startup-timeout', 'startupTimeout'],
@@ -183,6 +186,8 @@ export function parseArgs(args) {
       options.auth = true
     } else if (flag === '--seed-allocation-pin-preview') {
       options.seedAllocationPinPreview = true
+    } else if (flag === '--seed-rubric-pagination-preview') {
+      options.seedRubricPaginationPreview = true
     } else if (flag === '--session') {
       options.session = true
     } else if (['--session-start', '--session-url', '--session-stop'].includes(flag)) {
@@ -244,7 +249,7 @@ export function parseArgs(args) {
             value: argument.slice(0, separator),
             selector: argument.slice(separator + 1),
           })
-        } else if (['click', 'wait', 'read', 'focus', 'scroll', 'screenshot', 'key', 'select-index',
+        } else if (['click', 'download', 'wait', 'read', 'focus', 'scroll', 'screenshot', 'key', 'tab-to', 'select-index',
           'navigate', 'assert-url'].includes(action) && argument) {
           if (action === 'screenshot' && path.basename(argument) !== argument) {
             throw new Error('--step screenshot must use a filename, not a path.')
@@ -273,7 +278,7 @@ export function parseArgs(args) {
           'assert-dialog-contained', 'assert-dialog-closed'].includes(action) && !argument) {
           options.steps.push({ action })
         } else {
-          throw new Error('--step must be fill:SELECTOR=VALUE, set-file:SELECTOR=REPOSITORY_RELATIVE_PATH, select-index:SELECTOR=INDEX, click-record-action:TITLE_OR_ID|SELECTOR, read-record:TITLE_OR_ID, click:SELECTOR, wait:SELECTOR, read:SELECTOR, focus:SELECTOR, scroll:SELECTOR, navigate:/SAME_ORIGIN_PATH, assert-url:PATH_AND_QUERY, reload, screenshot:FILE, key:SUPPORTED_KEY, assert-dialog-contained, assert-dialog-closed, accept-confirms, reject-confirms, offline, online, or measure-overflow.')
+          throw new Error('--step must be fill:SELECTOR=VALUE, set-file:SELECTOR=REPOSITORY_RELATIVE_PATH, select-index:SELECTOR=INDEX, click-record-action:TITLE_OR_ID|SELECTOR, read-record:TITLE_OR_ID, click:SELECTOR, download:SELECTOR, tab-to:SELECTOR, wait:SELECTOR, read:SELECTOR, focus:SELECTOR, scroll:SELECTOR, navigate:/SAME_ORIGIN_PATH, assert-url:PATH_AND_QUERY, reload, screenshot:FILE, key:SUPPORTED_KEY, assert-dialog-contained, assert-dialog-closed, accept-confirms, reject-confirms, offline, online, or measure-overflow.')
         }
       } else {
         options[name] = value
@@ -318,6 +323,13 @@ export function parseArgs(args) {
   if (options.seedAllocationPinPreview
       && (!options.start || options.session || !options.auth || options.username !== "admin01")) {
     throw new Error('--seed-allocation-pin-preview requires a started preview authenticated as admin01.')
+  }
+  if (options.seedRubricPaginationPreview
+      && (!options.start || options.session || !options.auth || options.username !== 'admin01' || options.pagePath !== '/grading')) {
+    throw new Error('--seed-rubric-pagination-preview requires a started admin01 preview at /grading.')
+  }
+  if (options.evidenceReport && path.basename(options.evidenceReport) !== options.evidenceReport) {
+    throw new Error('--evidence-report must be a filename, not a path.')
   }
   const seedable = options.start || options.session
   if (options.seedIdeaOwner && (!options.auth || !options.username || !seedable)) {
@@ -462,6 +474,56 @@ export async function seedTestingIdeaHistory({ baseUrl, ownerUsername, password,
   return idea
 }
 
+export async function seedTestingRubricHistory({ baseUrl, password, count = 21, fetchImpl = fetch }) {
+  const login = await fetchImpl(`${baseUrl}/api/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: 'admin01', password }),
+  })
+  if (!login.ok) throw new Error(`Could not authenticate admin01 for local rubric pagination setup (HTTP ${login.status}).`)
+  const session = await login.json()
+  if (!session.token) throw new Error('The local admin01 account did not receive a token for rubric pagination setup.')
+
+  const created = []
+  for (let index = 1; index <= count; index += 1) {
+    const version = `dev61-preview-${String(index).padStart(2, '0')}`
+    const definition = {
+      version,
+      name: `Dev-61 pagination preview ${String(index).padStart(2, '0')}`,
+      schoolYear: 'Dev-61 local preview',
+      effectiveFrom: `2090-${String(Math.floor((index - 1) / 12) + 1).padStart(2, '0')}-${String(((index - 1) % 12) + 1).padStart(2, '0')}`,
+      finalGradeScale: { min: 1, max: 5, step: 1 },
+      categories: [{
+        id: 'preview-category',
+        name: 'Synthetic preview category',
+        criteria: [{
+          id: 'preview-criterion',
+          name: 'Synthetic preview criterion',
+          subject: 'STUDENT',
+          evidenceRequired: false,
+          scale: { min: 1, max: 5, step: 1 },
+        }],
+      }],
+      metricDefinitions: [],
+      aggregationRules: [],
+    }
+    const response = await fetchImpl(`${baseUrl}/api/grading-rubrics`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.token}`,
+      },
+      body: JSON.stringify(definition),
+    })
+    if (!response.ok) {
+      throw new Error(`Could not create synthetic local rubric ${version} (HTTP ${response.status}).`)
+    }
+    const result = await response.json()
+    created.push({ version, recordId: result.id, status: response.status })
+  }
+  return created
+}
+
 export async function saveScreenshot(client, outputDir, filename) {
   await mkdir(outputDir, { recursive: true })
   const { data } = await client.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: false })
@@ -469,6 +531,77 @@ export async function saveScreenshot(client, outputDir, filename) {
   const outputPath = path.resolve(outputDir, filename)
   await writeFile(outputPath, Buffer.from(data, 'base64'))
   return outputPath
+}
+
+export async function captureBrowserDownload(client, outputDir, trigger, { timeoutMs = 15_000 } = {}) {
+  if (!outputDir) throw new Error('A browser download capture requires an output directory.')
+  await mkdir(outputDir, { recursive: true })
+  await client.send('Browser.setDownloadBehavior', {
+    behavior: 'allowAndName',
+    downloadPath: outputDir,
+    eventsEnabled: true,
+  })
+  return new Promise((resolve, reject) => {
+    let download
+    let settled = false
+    const timer = setTimeout(() => finish(new Error('Timed out waiting for the browser download to complete.')), timeoutMs)
+    const removeListener = client.onEvent(({ method, params }) => {
+      if (method === 'Browser.downloadWillBegin' && !download) {
+        download = {
+          guid: params.guid,
+          filename: path.basename(params.suggestedFilename ?? ''),
+          url: params.url,
+        }
+      } else if (method === 'Browser.downloadProgress' && download?.guid === params.guid) {
+        if (params.state === 'canceled') {
+          finish(new Error(`Browser download was canceled: filename=${download.filename || 'unavailable'}; `
+            + `URL=${download.url || 'unavailable'}; progress=${JSON.stringify(params)}.`))
+        } else if (params.state === 'completed') {
+          void saveCompletedDownload()
+        }
+      }
+    })
+
+    function finish(error, result) {
+      if (settled) return
+      settled = true
+      clearTimeout(timer)
+      removeListener()
+      if (error) reject(error)
+      else resolve(result)
+    }
+
+    async function saveCompletedDownload() {
+      if (settled) return
+      if (!download?.guid || !download.filename || download.filename === '.' || download.filename === '..') {
+        finish(new Error('Chrome completed a download without a safe suggested filename.'))
+        return
+      }
+      try {
+        const extension = path.extname(download.filename)
+        const stem = download.filename.slice(0, download.filename.length - extension.length)
+        let filename = download.filename
+        let suffix = 2
+        while (true) {
+          try {
+            await access(path.join(outputDir, filename), constants.F_OK)
+            filename = `${stem}-${suffix}${extension}`
+            suffix += 1
+          } catch (error) {
+            if (error?.code !== 'ENOENT') throw error
+            break
+          }
+        }
+        const outputPath = path.join(outputDir, filename)
+        await rename(path.join(outputDir, download.guid), outputPath)
+        finish(null, { filename, suggestedFilename: download.filename, url: download.url, outputPath })
+      } catch (error) {
+        finish(new Error(`Could not retain the completed browser download: ${error.message}`))
+      }
+    }
+
+    Promise.resolve().then(trigger).catch((error) => finish(error))
+  })
 }
 
 function waitForExit(child, timeoutMs) {
@@ -1202,6 +1335,26 @@ export async function applyPageSteps(client, steps, { outputDir, log = console.l
         `(${expression})(${JSON.stringify(step.selector)}, ${step.index})`,
         `select option ${step.index} in ${step.selector}`)
       log(`Selected option ${step.index} (${text}) in ${step.selector}.`)
+    } else if (step.action === 'download') {
+      const result = await captureBrowserDownload(client.browserDownloadClient ?? client, outputDir, async () => {
+        await evaluatePage(client, `(() => {
+          const element = document.querySelector(${JSON.stringify(step.value)});
+          if (!(element instanceof HTMLAnchorElement) || !element.hasAttribute('download')) {
+            throw new Error('No prepared download link matches ' + ${JSON.stringify(step.value)});
+          }
+          if (document.activeElement !== element) {
+            throw new Error('Prepared download link is not focused; use tab-to or wait for the UI focus restoration first.');
+          }
+          return { tag: element.tagName, id: element.id, label: element.getAttribute('aria-label') || element.textContent?.trim() || '' };
+        })()`, `verify focused download link ${step.value}`)
+        await dispatchBrowserKey(client, 'Enter')
+        const focus = await evaluatePage(client, `(() => {
+          const element = document.activeElement;
+          return element ? { tag: element.tagName, id: element.id, label: element.getAttribute('aria-label') || element.textContent?.trim() || '' } : null;
+        })()`, 'inspect focus after keyboard download activation')
+        log(`Keyboard activation sequence: Enter; focused download control remains ${JSON.stringify(focus)}`)
+      })
+      log(`Browser download completed by keyboard activation: ${result.filename}; suggested=${result.suggestedFilename}; URL=${result.url}; saved=${result.outputPath}`)
     } else if (step.action === 'click') {
       const expression = `(selector) => {
         const element = document.querySelector(selector);
@@ -1267,6 +1420,28 @@ export async function applyPageSteps(client, steps, { outputDir, log = console.l
       })))`, `verify focus on ${step.value}`)
       if (!result.matches) throw new Error(`Expected focus to return to ${step.value}; active element is ${JSON.stringify(result.activeElement)}.`)
       log(`Focus returned to ${step.value}.`)
+    } else if (step.action === 'tab-to') {
+      const exists = await evaluatePage(client, `document.querySelector(${JSON.stringify(step.value)}) !== null`,
+        `locate ${step.value}`)
+      if (!exists) throw new Error(`No focusable element matches ${step.value}.`)
+      let focus
+      for (let index = 0; index < 80; index += 1) {
+        focus = await evaluatePage(client, `(() => {
+          const element = document.activeElement;
+          return {
+            matches: element?.matches(${JSON.stringify(step.value)}) === true,
+            activeElement: element ? {
+              tagName: element.tagName,
+              id: element.id,
+              label: element.getAttribute('aria-label') || element.textContent?.trim() || '',
+            } : null,
+          };
+        })()`, `check browser Tab focus on ${step.value}`)
+        if (focus.matches) break
+        await dispatchBrowserKey(client, 'Tab')
+        if (index === 79) throw new Error(`Could not reach ${step.value} by pressing Tab.`)
+      }
+      log(`Tabbed to ${step.value}; focus=${JSON.stringify(focus.activeElement)}`)
     } else if (step.action === 'scroll') {
       await evaluatePage(client, `(() => {
         const element = document.querySelector(${JSON.stringify(step.value)});
@@ -1305,7 +1480,16 @@ export async function applyPageSteps(client, steps, { outputDir, log = console.l
       }
     } else if (step.action === 'key') {
       await dispatchBrowserKey(client, step.value)
-      log(`Pressed ${step.value}.`)
+      const focus = await evaluatePage(client, `(() => {
+        const element = document.activeElement;
+        return element ? {
+          tag: element.tagName,
+          id: element.id,
+          role: element.getAttribute('role'),
+          label: element.getAttribute('aria-label') || element.textContent?.trim() || '',
+        } : null;
+      })()`, `inspect focus after ${step.value}`)
+      log(`Pressed ${step.value}; focus=${JSON.stringify(focus)}`)
     } else if (step.action === 'screenshot') {
       if (!outputDir) throw new Error('A screenshot step requires an output directory.')
       const outputPath = await saveScreenshot(client, outputDir, step.value)
@@ -1453,6 +1637,7 @@ export async function launchBrowser(options, url, {
   onBrowser,
   onClient,
   env,
+  fixtureSetup = {},
   startBrowser = startChild,
   waitForDevtoolsReady = waitForDevtools,
 } = {}) {
@@ -1461,6 +1646,7 @@ export async function launchBrowser(options, url, {
   console.log(`Browser profile: ${path.basename(profile)}`)
   const port = await unusedPort()
   let browserErrors = []
+  let browserClient
   const browser = startBrowser(executable, [
     ...(options.headed ? [] : ['--headless=new']),
     ...(options.locale ? [`--lang=${options.locale}`] : []),
@@ -1476,10 +1662,12 @@ export async function launchBrowser(options, url, {
   try {
     const response = await waitForDevtoolsReady(port, browser, signal)
     const version = await response.json()
+    if (version.webSocketDebuggerUrl) browserClient = await connectCdp(version.webSocketDebuggerUrl)
     const targetResponse = await fetch(`http://127.0.0.1:${port}/json/new?about:blank`, { method: 'PUT' })
     if (!targetResponse.ok) throw new Error(`Chrome could not open a page (HTTP ${targetResponse.status}).`)
     const target = await targetResponse.json()
     const client = await connectCdp(target.webSocketDebuggerUrl)
+    if (browserClient) client.browserDownloadClient = browserClient
     onClient(client)
     browserErrors = collectBrowserErrors(client)
     await Promise.all([
@@ -1503,7 +1691,14 @@ export async function launchBrowser(options, url, {
       await navigate(client, url, signal)
     }
 
-    await applyPageInteractions(client, options, { signal })
+    const interactions = []
+    await applyPageInteractions(client, options, {
+      signal,
+      log: (message) => {
+        interactions.push(message)
+        console.log(message)
+      },
+    })
     await new Promise((resolve) => setTimeout(resolve, 250))
     const evaluation = await client.send('Runtime.evaluate', {
       expression: '({ title: document.title, url: location.href, language: navigator.language })',
@@ -1515,6 +1710,20 @@ export async function launchBrowser(options, url, {
     }
     if (options.locale) console.log(`Chromium navigator.language: ${evaluation.result.value.language}.`)
     if (options.networkReport) for (const line of networkReport(browserErrors)) console.log(`Browser request: ${line}`)
+    if (options.evidenceReport) {
+      await mkdir(options.outputDir, { recursive: true })
+      const requestEvidence = networkReport(browserErrors).map((line) => JSON.parse(line))
+      const report = {
+        page: evaluation.result?.value,
+        viewport: { width: viewport.width, height: viewport.height, mobile: viewport.mobile },
+        fixtureSetup,
+        requests: requestEvidence,
+        interactions,
+        consoleErrors: browserErrors.filter((line) => /console (?:exception|error)|browser log:/i.test(line)),
+      }
+      await writeFile(path.join(options.outputDir, options.evidenceReport), `${JSON.stringify(report, null, 2)}\n`)
+      console.log(`Browser evidence report saved: ${path.join(options.outputDir, options.evidenceReport)}`)
+    }
     return { browser, profile, client, errors: browserErrors, page: evaluation.result?.value }
   } catch (error) {
     if (options.networkReport) for (const line of networkReport(browserErrors)) console.error(`Browser request: ${line}`)
@@ -1524,6 +1733,7 @@ export async function launchBrowser(options, url, {
         console.error(`Browser request incomplete: ${request.method} ${request.url}; status=${request.responseStatus ?? "none"}; responseUrl=${request.responseUrl ?? "none"}`)
       }
     }
+    browserClient?.close()
     await stopChild(browser).catch(() => undefined)
     await rm(profile, { recursive: true, force: true })
     throw error
@@ -1578,10 +1788,12 @@ Options:
   --width N --height N            Optional custom viewport, supplied together
   --output-dir DIR                Screenshot directory (default frontend/.preview)
   --screenshot FILE               Screenshot filename (default preview.png)
+  --evidence-report FILE          Retain sanitized request, fixture and interaction evidence in the output directory
   --path PATH                     Page path to inspect, e.g. /login or /ideas
   --auth --username USER          Authenticate using the local testing account
   --seed-idea-owner USER           Create and submit a synthetic idea using a student testing account before opening the page
   --seed-idea-history USER         Create a synthetic idea with review and preference history for display verification
+  --seed-rubric-pagination-preview Seed 21 synthetic future-effective versions for an admin01 /grading walkthrough
   --seed-allocation-pin-preview    Opt in to a testing-profile period with 21 pins and 22 applications
   --seed-idea-title TITLE          Distinctive title for the seeded idea so a later invocation can find it
   --fill SELECTOR=VALUE           Fill an input, textarea, or select; may be repeated
@@ -1610,14 +1822,16 @@ backend/DEV-GUIDELINES.md and pass --username student01 (or another documented a
 Use --fill, --click, --wait-for, and --expand-select to perform reusable preview interactions after authentication,
 or repeat --step ACTION:VALUE to sequence conditional flows. Steps support fill:SELECTOR=VALUE, click:SELECTOR,
 click-row-action:USERNAME|SELECTOR,
-wait:SELECTOR, read:SELECTOR, focus:SELECTOR, scroll:SELECTOR,
+wait:SELECTOR, read:SELECTOR, focus:SELECTOR, scroll:SELECTOR, download:SELECTOR,
 navigate:/SAME_ORIGIN_PATH, assert-url:PATH_AND_QUERY, reload,
 key:Tab|Shift+Tab|Escape|Enter|Space|ArrowLeft|ArrowRight|ArrowUp|ArrowDown|Home|End,
+tab-to:SELECTOR uses actual Tab key input to reach and report focus on a selector within 80 presses,
 select-index:SELECTOR=INDEX, screenshot:FILE, assert-dialog-contained, assert-dialog-closed,
 accept-confirms, reject-confirms, offline, or online. Generic key steps dispatch real browser keyboard events
 without assuming a dialog; use the explicit dialog assertions only in dialog scenarios.
 offline/online change the browser's network state only after the page is loaded, for reusable local failure/offline scenarios; intentional API disconnect errors remain in the network report but do not fail the preview. measure-overflow reports document/body/viewport widths and fails on horizontal document overflow.
 --network-report prints local API method/URL/initiator/status/completion evidence, excluding authentication requests, headers and payloads.
+download requires the prepared, focused <a download> link; it activates it with a real browser Enter key, captures the Chrome download in --output-dir under the browser-suggested filename and reports its saved path and focus.
 for example to load a form that requires a project ID before its details are shown. Use --tab-to and
 --select-by-key for browser keyboard navigation. On macOS, use --headed and --native-select-by-key for GUI
 keyboard input to a collapsed popup (Terminal may require Accessibility permission).
@@ -1653,9 +1867,15 @@ export async function waitForTestingAccount(baseUrl, username, password, timeout
 }
 
 async function seedRequested(options, baseUrl) {
-  if (!options.seedIdeaOwner && !options.seedIdeaHistory) return
+  const evidence = {}
+  if (!options.seedIdeaOwner && !options.seedIdeaHistory && !options.seedRubricPaginationPreview) return evidence
   const password = process.env[options.passwordEnv ?? 'PREVIEW_PASSWORD']
   if (!password) throw new Error(`Set ${options.passwordEnv ?? 'PREVIEW_PASSWORD'} to seed local preview data.`)
+  if (options.seedRubricPaginationPreview) {
+    const created = await seedTestingRubricHistory({ baseUrl, password })
+    evidence.rubricPagination = { effectiveFrom: '2090-01-01 through 2091-09-01', records: created }
+    console.log(`Created ${created.length} synthetic future-effective rubric versions for the local Dev-61 pagination walkthrough.`)
+  }
   if (options.seedIdeaOwner) {
     const created = await seedTestingIdea({ baseUrl, ownerUsername: options.seedIdeaOwner, password, title: options.seedIdeaTitle })
     console.log(`Created submitted idea ${created.id} (title: ${JSON.stringify(created.title ?? options.seedIdeaTitle ?? 'generated')}) for ${options.seedIdeaOwner} in the testing profile at ${baseUrl}.`)
@@ -1664,6 +1884,7 @@ async function seedRequested(options, baseUrl) {
     const created = await seedTestingIdeaHistory({ baseUrl, ownerUsername: options.seedIdeaHistory, password, title: options.seedIdeaTitle })
     console.log(`Created idea ${created.id} (title: ${JSON.stringify(created.title ?? options.seedIdeaTitle ?? 'generated')}) with review and preference history for ${options.seedIdeaHistory} in the testing profile at ${baseUrl}.`)
   }
+  return evidence
 }
 
 function assertSpawnedAlive(child, label, port) {
@@ -1682,7 +1903,7 @@ export async function run(options, {
     const session = await requireSession({ sessionFile: options.sessionFile })
     options = { ...options, url: session.frontendUrl, start: false }
     console.log(`Using shared preview session ${session.frontendUrl} (backend ${session.backendUrl}).`)
-    await seedRequested(options, session.backendUrl)
+    options.fixtureSetup = await seedRequested(options, session.backendUrl)
   } else if (options.start) {
     const existing = await readSession(options.sessionFile)
     if (existing) {
@@ -1731,7 +1952,7 @@ export async function run(options, {
       console.log(`Backend ready: http://127.0.0.1:${backendPort}`)
       await new Promise((resolve) => setTimeout(resolve, 500))
       assertSpawnedAlive(backend, 'backend', backendPort)
-      await seedRequested(options, `http://127.0.0.1:${backendPort}`)
+      options.fixtureSetup = await seedRequested(options, `http://127.0.0.1:${backendPort}`)
       const frontendPort = options.frontendPort
       const frontendCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm'
       const frontend = startChild(frontendCommand, [
@@ -1755,6 +1976,7 @@ export async function run(options, {
     const launched = await browserLauncher(options, url, {
       signal: controller.signal,
       env: childEnv,
+      fixtureSetup: options.fixtureSetup,
       onBrowser: (child, directory) => {
         browser = child
         profile = directory
@@ -1779,6 +2001,7 @@ export async function run(options, {
       throw new Error(`${unexpectedErrors.length} browser console or request error(s) detected; see details above.`)
     }
   } finally {
+    client?.browserDownloadClient?.close()
     client?.close()
     if (browser) await stopChild(browser)
     if (profile) await rm(profile, { recursive: true, force: true })

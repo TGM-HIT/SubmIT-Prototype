@@ -11,9 +11,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import ac.at.tgm.submit.data.RecordStore;
+import ac.at.tgm.submit.data.StoredRecord;
 import ac.at.tgm.submit.data.StoredRecordRepository;
 import ac.at.tgm.submit.user.UserAccountRepository;
 import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -21,6 +24,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.DefaultApplicationArguments;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
 import org.springframework.test.context.ActiveProfiles;
@@ -39,6 +43,7 @@ class TestingGradingSelectionPreviewFixtureTest {
     @Autowired private StoredRecordRepository records;
     @Autowired private RecordStore store;
     @Autowired private UserAccountRepository users;
+    @Autowired private TestingDraftRubricSeeder draftRubricSeeder;
 
     private String adminToken;
     private String teacherOneToken;
@@ -141,6 +146,42 @@ class TestingGradingSelectionPreviewFixtureTest {
             assertTrue(studentFinal.path("current").has("grade"));
         }
         assertRepeatInitializationDoesNotDuplicateRecords();
+    }
+
+    @Test
+    void draftSeederReusePreservesExistingAssessmentRubricBindingsAndPayloads() {
+        List<String> types = List.of(
+                GradingKeys.STUDENT_GRADE, GradingKeys.GROUP_GRADE, GradingKeys.METRIC, GradingKeys.FINAL_GRADE);
+        Map<String, String> before = gradingPayloadSnapshot(types);
+        assertFalse(before.isEmpty());
+
+        String rubricId = store.page(GradingKeys.RUBRIC, null, null, Pageable.unpaged()).getContent().stream()
+                .filter(record -> "dev55-draft-testing-v1".equals(store.parse(record).path(GradingKeys.VERSION).asText()))
+                .map(StoredRecord::getId)
+                .map(UUID::toString)
+                .findFirst()
+                .orElseThrow();
+        for (String type : types) {
+            for (StoredRecord record : store.page(type, null, null, Pageable.unpaged()).getContent()) {
+                JsonNode payload = store.parse(record);
+                assertEquals(rubricId, payload.path(GradingKeys.RUBRIC_ID).asText());
+                assertEquals("dev55-draft-testing-v1", payload.path(GradingKeys.RUBRIC_VERSION).asText());
+            }
+        }
+
+        draftRubricSeeder.run(new DefaultApplicationArguments(new String[0]));
+
+        assertEquals(before, gradingPayloadSnapshot(types));
+    }
+
+    private Map<String, String> gradingPayloadSnapshot(List<String> types) {
+        Map<String, String> snapshot = new TreeMap<>();
+        for (String type : types) {
+            for (StoredRecord record : store.page(type, null, null, Pageable.unpaged()).getContent()) {
+                snapshot.put(type + ":" + record.getId(), record.getPayload());
+            }
+        }
+        return snapshot;
     }
 
     private void assertRepeatInitializationDoesNotDuplicateRecords() {

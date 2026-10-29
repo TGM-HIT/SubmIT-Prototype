@@ -1,6 +1,40 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { configureApi } from './client'
-import { adminApi, formalApi, ideasApi, userApi } from './services'
+import { adminApi, formalApi, gradingApi, ideasApi, userApi } from './services'
+
+describe('grading rubric API service', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    configureApi({ getToken: () => null, onUnauthorized: () => undefined })
+  })
+
+  it('fetches a typed full definition for the exact requested rubric record', async () => {
+    const response = {
+      id: 'rubric-record-id',
+      status: 'PUBLISHED',
+      createdAt: '2026-10-10T00:00:00Z',
+      publishedAt: '2026-10-10T00:00:00Z',
+      publishedBy: 'admin',
+      version: 'v3',
+      name: 'Historic rubric',
+      effectiveFrom: '2025-09-01',
+      finalGradeScale: { min: 1, max: 5, step: 1 },
+      categories: [],
+      metricDefinitions: [],
+      aggregationRules: [],
+    }
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(response), {
+      status: 200, headers: { 'Content-Type': 'application/json' },
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(gradingApi.rubric('rubric/record-id')).resolves.toMatchObject(response)
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
+      '/api/grading-rubrics/rubric%2Frecord-id',
+      expect.anything(),
+    )
+  })
+})
 
 describe('ideas API service', () => {
   afterEach(() => {

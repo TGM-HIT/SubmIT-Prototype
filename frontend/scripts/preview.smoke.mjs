@@ -21,6 +21,7 @@ import {
   saveScreenshot,
   seedTestingIdea,
   seedTestingIdeaHistory,
+  seedTestingRubricHistory,
   stopChild,
   isPortFree,
   launchBrowser,
@@ -34,6 +35,7 @@ import {
   assertBrowserState,
   assertDialogContainsFocus,
   assertDialogClosed,
+  captureBrowserDownload,
 } from './preview.mjs'
 
 test('G8 optional network evidence includes completion and initiator without authentication or payload data', () => {
@@ -203,6 +205,19 @@ test('parses preview options and rejects incomplete or invalid invocations', () 
   assert.deepEqual(parseArgs(['--step', 'select-index:#teacher-id=2']).steps, [
     { action: 'select-index', selector: '#teacher-id', index: 2 },
   ])
+  assert.deepEqual(parseArgs(['--step', 'download:a[download]']).steps, [
+    { action: 'download', value: 'a[download]' },
+  ])
+  assert.deepEqual(parseArgs(['--step', 'tab-to:#rubric-next-page']).steps, [
+    { action: 'tab-to', value: '#rubric-next-page' },
+  ])
+  assert.equal(parseArgs([
+    '--seed-rubric-pagination-preview', '--auth', '--username', 'admin01', '--path', '/grading',
+  ]).seedRubricPaginationPreview, true)
+  assert.equal(parseArgs(['--evidence-report', 'rubric-evidence.json']).evidenceReport, 'rubric-evidence.json')
+  assert.throws(() => parseArgs(['--evidence-report', '../private.json']), /filename, not a path/)
+  assert.throws(() => parseArgs(['--seed-rubric-pagination-preview', '--auth', '--username', 'admin01']),
+    /requires a started admin01 preview at \/grading/)
   assert.deepEqual(parseArgs(['--step', 'reject-confirms']).steps, [
     { action: 'reject-confirms' },
   ])
@@ -548,15 +563,155 @@ test('generic CDP keyboard dispatch has no implicit dialog assumptions on ordina
   await applyPageSteps({
     async send(method, params) {
       pageCalls.push({ method, params })
-      return {}
+      return method === 'Runtime.evaluate' ? { result: { value: null } } : {}
     },
   }, [
     { action: 'key', value: 'Tab' },
     { action: 'key', value: 'Shift+Tab' },
     { action: 'key', value: 'Escape' },
   ], { log: () => undefined })
-  assert.equal(pageCalls.every(({ method }) => method === 'Input.dispatchKeyEvent'), true,
+  assert.equal(pageCalls.filter(({ method }) => method === 'Input.dispatchKeyEvent').length, 6)
+  assert.equal(pageCalls.filter(({ method }) => method === 'Runtime.evaluate').length, 3,
     'ordinary page key dispatch performs no dialog lookup/assertion')
+})
+
+test('captures and retains a completed real-browser download under its suggested filename', async () => {
+  const outputDir = await mkdtemp(path.join(tmpdir(), 'submit-browser-download-'))
+  let eventListener
+  const client = {
+    async send(method, params) {
+      assert.equal(method, 'Browser.setDownloadBehavior')
+      assert.equal(params.behavior, 'allowAndName')
+      assert.equal(params.eventsEnabled, true)
+      return {}
+    },
+    onEvent(listener) {
+      eventListener = listener
+      return () => { eventListener = undefined }
+    },
+  }
+  try {
+    const result = await captureBrowserDownload(client, outputDir, async () => {
+      eventListener({ method: 'Browser.downloadWillBegin', params: {
+        guid: 'download-guid', suggestedFilename: 'rubric-v1.json', url: 'http://localhost/api/grading-rubrics/id',
+      } })
+      await writeFile(path.join(outputDir, 'download-guid'), '{"version":"v1"}', 'utf8')
+      eventListener({ method: 'Browser.downloadProgress', params: { guid: 'download-guid', state: 'completed' } })
+    })
+
+    test('pagination preview fixture creates 21 distinct, valid future definitions through the existing API', async () => {
+      const requests = []
+      const fetchImpl = async (url, options) => {
+        if (url.endsWith('/api/auth/login')) {
+          return new Response(JSON.stringify({ token: 'private-test-token' }), { status: 200 })
+        }
+        const body = JSON.parse(options.body)
+        requests.push({ url, method: options.method, authorization: options.headers.Authorization, body })
+        return new Response(JSON.stringify({ id: `record-${requests.length}` }), { status: 201 })
+      }
+      const records = await seedTestingRubricHistory({
+        baseUrl: 'http://localhost:8080',
+        password: 'testing-password',
+        fetchImpl,
+      })
+      assert.equal(records.length, 21)
+      assert.equal(requests.length, 21)
+      assert.equal(new Set(records.map(({ version }) => version)).size, 21)
+      assert.equal(new Set(requests.map(({ body }) => body.effectiveFrom)).size, 21)
+      assert.equal(requests.every(({ method, url, authorization }) =>
+        method === 'POST' && url.endsWith('/api/grading-rubrics') && authorization === 'Bearer private-test-token'), true)
+      assert.equal(requests.every(({ body }) => body.effectiveFrom.startsWith('2090-') || body.effectiveFrom.startsWith('2091-')), true)
+      assert.equal(requests.every(({ body }) => body.aggregationRules.length === 0
+        && body.categories[0].criteria[0].evidenceRequired === false
+        && body.categories[0].criteria[0].scale.max === 5), true)
+      assert.deepEqual(records[0], { version: 'dev61-preview-01', recordId: 'record-1', status: 201 })
+    })
+    assert.equal(result.filename, 'rubric-v1.json')
+    assert.equal(result.suggestedFilename, 'rubric-v1.json')
+    assert.equal(await readFile(result.outputPath, 'utf8'), '{"version":"v1"}')
+  } finally {
+    await rm(outputDir, { recursive: true, force: true })
+  }
+})
+
+test('download page step activates its focused button with browser Enter and captures the payload', async () => {
+  const outputDir = await mkdtemp(path.join(tmpdir(), 'submit-keyboard-download-'))
+  const calls = []
+  let eventListener
+  const client = {
+    async send(method, params) {
+      calls.push({ method, params })
+      if (method === 'Browser.setDownloadBehavior') return {}
+      if (method === 'Runtime.evaluate') {
+        return { result: { value: { tag: 'A', id: 'rubric-json', label: 'Download JSON: Dev-55' } } }
+      }
+      if (method === 'Input.dispatchKeyEvent' && params.type === 'keyDown') {
+        eventListener({ method: 'Browser.downloadWillBegin', params: {
+          guid: 'keyboard-download-guid',
+          suggestedFilename: 'rubric-dev55-draft-testing-v1.json',
+          url: 'http://localhost/api/grading-rubrics/definition-id',
+        } })
+        await writeFile(path.join(outputDir, 'keyboard-download-guid'), '{"version":"dev55-draft-testing-v1"}', 'utf8')
+        eventListener({ method: 'Browser.downloadProgress', params: {
+          guid: 'keyboard-download-guid',
+          state: 'completed',
+        } })
+      }
+      return {}
+    },
+    onEvent(listener) {
+      eventListener = listener
+      return () => { eventListener = undefined }
+    },
+  }
+  const logs = []
+  try {
+    await applyPageSteps(client, [{ action: 'download', value: '#rubric-json' }], {
+      outputDir,
+      log: (message) => logs.push(message),
+    })
+    const keyboard = calls.filter(({ method }) => method === 'Input.dispatchKeyEvent')
+    assert.deepEqual(keyboard.map(({ params }) => [params.key, params.type]), [
+      ['Enter', 'keyDown'],
+      ['Enter', 'keyUp'],
+    ])
+    assert.match(logs.join(' '), /Keyboard activation sequence: Enter/)
+    assert.match(logs.join(' '), /Browser download completed by keyboard activation/)
+    assert.deepEqual(await readdir(outputDir), ['rubric-dev55-draft-testing-v1.json'])
+    assert.equal(await readFile(path.join(outputDir, 'rubric-dev55-draft-testing-v1.json'), 'utf8'),
+      '{"version":"dev55-draft-testing-v1"}')
+  } finally {
+    await rm(outputDir, { recursive: true, force: true })
+  }
+})
+
+test('tab-to page step uses browser Tab input and verifies the resulting focus', async () => {
+  const calls = []
+  let focused = false
+  const client = {
+    async send(method, params) {
+      calls.push({ method, params })
+      if (method === 'Runtime.evaluate') {
+        const value = params.expression.includes('document.activeElement')
+          ? { matches: focused, activeElement: focused ? { tagName: 'BUTTON', id: 'rubric-next-page', label: 'Next page' } : null }
+          : true
+        return { result: { value } }
+      }
+      if (method === 'Input.dispatchKeyEvent' && params.key === 'Tab' && params.type === 'keyDown') focused = true
+      return {}
+    },
+  }
+  const logs = []
+  await applyPageSteps(client, [{ action: 'tab-to', value: '#rubric-next-page' }], {
+    log: (message) => logs.push(message),
+  })
+  assert.deepEqual(calls.filter(({ method }) => method === 'Input.dispatchKeyEvent')
+    .map(({ params }) => [params.key, params.type]), [
+    ['Tab', 'keyDown'],
+    ['Tab', 'keyUp'],
+  ])
+  assert.match(logs.join(' '), /Tabbed to #rubric-next-page/)
+  assert.match(logs.join(' '), /"id":"rubric-next-page"/)
 })
 
 test('dispatches every supported browser key with CDP down/up metadata and Shift modifier', async () => {

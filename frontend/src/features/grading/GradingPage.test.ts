@@ -9,6 +9,7 @@ const api = vi.hoisted(() => ({
   extraRoles: [] as string[],
   activeRubric: vi.fn(),
   rubrics: vi.fn(),
+  rubric: vi.fn(),
   grades: vi.fn(),
   groupGrades: vi.fn(),
   metrics: vi.fn(),
@@ -22,6 +23,7 @@ const api = vi.hoisted(() => ({
   recordGroupGrade: vi.fn(),
   recordMetric: vi.fn(),
   setFinalGrade: vi.fn(),
+  publishRubric: vi.fn(),
 }))
 
 vi.mock("../../api/services", () => ({
@@ -34,6 +36,7 @@ vi.mock("../../api/services", () => ({
   gradingApi: {
     activeRubric: api.activeRubric,
     rubrics: api.rubrics,
+    rubric: api.rubric,
     grades: api.grades,
     groupGrades: api.groupGrades,
     metrics: api.metrics,
@@ -43,6 +46,7 @@ vi.mock("../../api/services", () => ({
     recordGroupGrade: api.recordGroupGrade,
     recordMetric: api.recordMetric,
     setFinalGrade: api.setFinalGrade,
+    publishRubric: api.publishRubric,
   },
 }))
 
@@ -76,6 +80,17 @@ function eligiblePage(content = [{
   return { content, page: 0, size: 100, totalElements: content.length, totalPages: content.length ? 1 : 0 }
 }
 
+function rubricSummary(id: string, version: string, name = `Rubric ${version}`) {
+  return {
+    id,
+    version,
+    name,
+    schoolYear: null,
+    effectiveFrom: "2026-09-01",
+    effectiveTo: null,
+  }
+}
+
 async function loadTeacherProject(page: ReturnType<typeof mount>, title = "River Lab") {
   await flushPromises()
   await page.findAll("button.proposal-result").find((button) => button.text().includes(title))!.trigger("click")
@@ -98,6 +113,22 @@ describe("grading student identities", () => {
     setLanguage("en")
     api.activeRubric.mockResolvedValue({ name: "Current rubric", categories: [] })
     api.rubrics.mockResolvedValue(pageResult())
+    api.rubric.mockResolvedValue({
+      id: "rubric-record-id",
+      status: "PUBLISHED",
+      createdAt: "2026-10-10T00:00:00Z",
+      publishedAt: "2026-10-10T00:00:00Z",
+      publishedBy: "ADMIN",
+      version: "v1",
+      name: "Current rubric",
+      schoolYear: null,
+      effectiveFrom: "2026-09-01",
+      effectiveTo: null,
+      finalGradeScale: { min: 1, max: 5, step: 1 },
+      categories: [],
+      metricDefinitions: [],
+      aggregationRules: [],
+    })
     api.grades.mockResolvedValue(pageResult([{
       id: "grade-1",
       studentId: "11111111-1111-4111-8111-111111111111",
@@ -197,7 +228,7 @@ describe("grading student identities", () => {
 
   it.each(["TEACHER", "STUDENT"])("%s role controls grading form visibility", async (role) => {
     api.role = role
-    const page = mount(GradingPage)
+    const page = mount(GradingPage, { attachTo: document.body })
     await flushPromises()
 
     if (role === "TEACHER") {
@@ -578,6 +609,379 @@ describe("grading student identities", () => {
     expect(finalGrade.createdAt).toBe("2026-10-12T09:00:00Z")
     expect(finalGrade.inputs.studentGrades[0].assessedOn).toBe(assessedOn)
     page.unmount()
+  })
+
+  it.each([
+    ["ADMIN", []],
+    ["TEACHER", []],
+    ["STUDENT", []],
+    ["ADMIN", ["TEACHER"]],
+  ] as const)("lists rubric downloads for %s %s", async (role, extraRoles) => {
+    api.role = role
+    api.extraRoles = [...extraRoles]
+    api.rubrics.mockResolvedValue({
+      content: [rubricSummary("rubric-id", "v2", "Historic rubric")],
+      page: 0,
+      size: 20,
+      totalElements: 1,
+      totalPages: 1,
+    })
+    const page = mount(GradingPage)
+    await flushPromises()
+
+    expect(page.text()).toContain("Historic rubric · v2")
+    expect(page.findAll("button").some((button) => button.text() === "Download JSON")).toBe(true)
+    expect(page.findAll("button").some((button) => button.text() === "Download Markdown")).toBe(true)
+    const hasTeacherRole = role === "TEACHER" || (extraRoles as readonly string[]).includes("TEACHER")
+    expect(page.find("#rubric-json").exists()).toBe(role === "ADMIN")
+    expect(page.find("#grading-project-search").exists()).toBe(hasTeacherRole)
+    page.unmount()
+  })
+
+  it.each([
+    ["ADMIN", []],
+    ["TEACHER", []],
+    ["STUDENT", []],
+    ["ADMIN", ["TEACHER"]],
+  ] as const)("downloads the selected definition without mutations for %s %s", async (role, extraRoles) => {
+    api.role = role
+    api.extraRoles = [...extraRoles]
+    api.rubrics.mockResolvedValue({
+      content: [rubricSummary("reader-rubric-id", "reader-v1", "Reader rubric")],
+      page: 0,
+      size: 20,
+      totalElements: 1,
+      totalPages: 1,
+    })
+    const createUrl = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:reader-role")
+    const page = mount(GradingPage, { attachTo: document.body })
+    await flushPromises()
+    await page.findAll("button").find((button) => button.text() === "Download JSON")!.trigger("click")
+    await flushPromises()
+
+    expect(api.rubric).toHaveBeenCalledExactlyOnceWith("reader-rubric-id")
+    expect(createUrl).toHaveBeenCalledOnce()
+    expect((createUrl.mock.calls[0][0] as Blob).type).toBe("application/json;charset=utf-8")
+    const downloadLink = page.get('a[download="rubric-v1.json"]')
+    expect(document.activeElement).toBe(downloadLink.element)
+    downloadLink.element.addEventListener("click", (event) => event.preventDefault(), { once: true })
+    await downloadLink.trigger("click")
+    await flushPromises()
+    expect(page.text()).toContain("JSON download started.")
+    expect(api.publishRubric).not.toHaveBeenCalled()
+    expect(api.recordGrade).not.toHaveBeenCalled()
+    expect(api.recordGroupGrade).not.toHaveBeenCalled()
+    expect(api.recordMetric).not.toHaveBeenCalled()
+    expect(api.setFinalGrade).not.toHaveBeenCalled()
+    page.unmount()
+    createUrl.mockRestore()
+  })
+
+  it("distinguishes version-list loading from an explicitly empty successful response", async () => {
+    const pending = deferred<ReturnType<typeof pageResult>>()
+    api.rubrics.mockReturnValue(pending.promise)
+    const page = mount(GradingPage)
+    await flushPromises()
+    expect(page.text()).toContain("Loading rubric versions…")
+    expect(page.text()).not.toContain("No rubric versions are available.")
+
+    pending.resolve(pageResult([]))
+    await flushPromises()
+    expect(page.text()).not.toContain("Loading rubric versions…")
+    expect(page.text()).toContain("No rubric versions are available.")
+    page.unmount()
+  })
+
+  it("paginates to an inactive version and exports exactly that full detail with payload, MIME, filename and focus", async () => {
+    api.role = "ADMIN"
+    api.extraRoles = ["TEACHER"]
+    const later = rubricSummary("inactive-rubric-id", "past-2025", "Inactive version")
+    api.rubrics.mockImplementation(async (pageIndex = 0) => ({
+      content: pageIndex === 0 ? [rubricSummary("active-rubric-id", "active", "Active")] : [later],
+      page: pageIndex,
+      size: 20,
+      totalElements: 21,
+      totalPages: 2,
+    }))
+    api.rubric.mockResolvedValue({
+      id: "inactive-rubric-id",
+      status: "PUBLISHED",
+      createdAt: "2025-01-01T00:00:00Z",
+      publishedAt: "2025-01-01T00:00:00Z",
+      publishedBy: "private account",
+      version: "past-2025",
+      name: "Inactive version",
+      schoolYear: "2025/2026",
+      effectiveFrom: "2025-09-01",
+      effectiveTo: "2026-08-31",
+      finalGradeScale: { min: 1, max: 5, step: 1, labels: { "1": "Unzureichend" } },
+      categories: [{
+        id: "category-id",
+        name: "Category",
+        description: null,
+        criteria: [{
+          id: "criterion-id",
+          name: "Criterion",
+          description: null,
+          subject: "GROUP",
+          stage: null,
+          evidenceRequired: false,
+          scale: { min: 1, max: 5, step: 1, labels: null },
+        }],
+      }],
+      metricDefinitions: [],
+      aggregationRules: [],
+    })
+    const createUrl = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:rubric-evidence")
+    const revokeUrl = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined)
+    const page = mount(GradingPage, { attachTo: document.body })
+    await flushPromises()
+    await loadTeacherProject(page)
+    await page.get("#grade-evidence").setValue("Unsaved assessment evidence")
+    await page.get("#rubric-json").setValue('{"version":"unsaved-publish-draft"}')
+    await page.get('[aria-label="Rubric version pages"] button:last-of-type').trigger("click")
+    await flushPromises()
+
+    expect(page.text()).toContain("Inactive version · past-2025")
+    expect(page.get("#grade-evidence").element).toHaveProperty("value", "Unsaved assessment evidence")
+    expect(page.get("#rubric-json").element).toHaveProperty("value", '{"version":"unsaved-publish-draft"}')
+    expect(page.get("h3[tabindex='-1']").text()).toContain("River Lab")
+    const jsonButton = page.findAll("button").find((button) => button.text() === "Download JSON")!
+    await jsonButton.trigger("click")
+    await flushPromises()
+    expect(api.rubric).toHaveBeenCalledExactlyOnceWith("inactive-rubric-id")
+    expect(createUrl).toHaveBeenCalledOnce()
+    const jsonBlob = createUrl.mock.calls[0][0] as Blob
+    expect(jsonBlob.type).toBe("application/json;charset=utf-8")
+    const json = JSON.parse(await jsonBlob.text())
+    expect(json).toMatchObject({
+      version: "past-2025",
+      name: "Inactive version",
+      categories: [{ id: "category-id", criteria: [{ id: "criterion-id", subject: "GROUP", evidenceRequired: false }] }],
+    })
+    expect(json).not.toHaveProperty("id")
+    expect(json).not.toHaveProperty("publishedBy")
+    const jsonLink = page.get('a[download="rubric-past-2025.json"]')
+    expect(document.activeElement).toBe(jsonLink.element)
+    jsonLink.element.addEventListener("click", (event) => event.preventDefault(), { once: true })
+    await jsonLink.trigger("click")
+    await flushPromises()
+    expect(page.text()).toContain("JSON download started.")
+
+    const markdownButton = page.findAll("button").find((button) => button.text() === "Download Markdown")!
+    await markdownButton.trigger("click")
+    await flushPromises()
+    expect(api.rubric).toHaveBeenCalledTimes(2)
+    const markdownBlob = createUrl.mock.calls[1][0] as Blob
+    expect(markdownBlob.type).toBe("text/markdown;charset=utf-8")
+    expect(await markdownBlob.text()).toContain("## Category")
+    expect(await markdownBlob.text()).toContain("Criterion ID")
+    expect(await markdownBlob.text()).toContain("No aggregation rules are configured")
+    const markdownLink = page.get('a[download="rubric-past-2025.md"]')
+    expect(document.activeElement).toBe(markdownLink.element)
+    markdownLink.element.addEventListener("click", (event) => event.preventDefault(), { once: true })
+    await markdownLink.trigger("click")
+    await flushPromises()
+    expect(page.text()).toContain("Markdown download started.")
+    expect(page.text()).toContain("Inactive version · past-2025")
+    expect(api.publishRubric).not.toHaveBeenCalled()
+    expect(api.recordGrade).not.toHaveBeenCalled()
+    page.unmount()
+    expect(revokeUrl).toHaveBeenCalledWith("blob:rubric-evidence")
+    createUrl.mockRestore()
+    revokeUrl.mockRestore()
+  })
+
+  it("keeps list failures explicit and retries without showing an empty-state success", async () => {
+    api.rubrics.mockRejectedValueOnce(new ApiError("offline", 503))
+      .mockResolvedValueOnce({ ...pageResult([rubricSummary("recovered-id", "v2")]), totalPages: 1 })
+    const page = mount(GradingPage)
+    await flushPromises()
+    expect(page.text()).toContain("Unable to load rubric versions. Please retry.")
+    expect(page.text()).not.toContain("No rubric versions are available.")
+    await page.findAll("button").find((button) => button.text() === "Retry loading rubric versions")!.trigger("click")
+    await flushPromises()
+    expect(api.rubrics).toHaveBeenCalledTimes(2)
+    expect(page.text()).toContain("Rubric v2 · v2")
+    expect(page.text()).not.toContain("Unable to load rubric versions")
+    page.unmount()
+  })
+
+  it.each([
+    ["ADMIN", []],
+    ["TEACHER", []],
+    ["STUDENT", []],
+    ["ADMIN", ["TEACHER"]],
+  ] as const)("announces and retries a detail failure without mutations for %s %s", async (role, extraRoles) => {
+    api.role = role
+    api.extraRoles = [...extraRoles]
+    api.rubrics.mockResolvedValue({ ...pageResult([rubricSummary("retry-detail-id", "retry")]), totalPages: 1 })
+    api.rubric.mockRejectedValueOnce(new ApiError("detail unavailable", 503))
+      .mockResolvedValueOnce({
+        id: "retry-detail-id",
+        version: "retry",
+        name: "Retry detail",
+        effectiveFrom: "2026-09-01",
+        finalGradeScale: { min: 1, max: 5, step: 1 },
+        categories: [],
+        metricDefinitions: [],
+        aggregationRules: [],
+      })
+    const createUrl = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:retry")
+    const page = mount(GradingPage)
+    await flushPromises()
+    const button = page.findAll("button").find((item) => item.text() === "Download JSON")!
+    await button.trigger("click")
+    await flushPromises()
+    expect(page.text()).toContain("Unable to download this rubric version. Please retry.")
+    expect(button.text()).toBe("Retry JSON download")
+    expect(createUrl).not.toHaveBeenCalled()
+    await button.trigger("click")
+    await flushPromises()
+    expect(api.rubric).toHaveBeenNthCalledWith(1, "retry-detail-id")
+    expect(api.rubric).toHaveBeenNthCalledWith(2, "retry-detail-id")
+    expect(page.text()).toContain("The JSON definition is ready.")
+    const retryLink = page.get('a[download="rubric-retry.json"]')
+    retryLink.element.addEventListener("click", (event) => event.preventDefault(), { once: true })
+    await retryLink.trigger("click")
+    await flushPromises()
+    expect(page.text()).toContain("JSON download started.")
+    expect(page.text()).toContain("Rubric retry · retry")
+    expect(api.publishRubric).not.toHaveBeenCalled()
+    expect(api.recordGrade).not.toHaveBeenCalled()
+    page.unmount()
+    createUrl.mockRestore()
+  })
+
+  it("ignores an obsolete detail response after pagination and blocks repeated pending actions", async () => {
+    let resolveDetail!: (value: Record<string, unknown>) => void
+    api.rubrics.mockImplementation(async (pageIndex = 0) => ({
+      content: [rubricSummary(pageIndex === 0 ? "old-id" : "new-id", pageIndex === 0 ? "old" : "new")],
+      page: pageIndex,
+      size: 20,
+      totalElements: 21,
+      totalPages: 2,
+    }))
+    api.rubric.mockImplementation(() => new Promise((resolve) => { resolveDetail = resolve }))
+    const createUrl = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:obsolete")
+    const page = mount(GradingPage)
+    await flushPromises()
+    const oldButton = page.findAll("button").find((button) => button.text() === "Download JSON")!
+    await oldButton.trigger("click")
+    await oldButton.trigger("click")
+    expect(oldButton.attributes("disabled")).toBeDefined()
+    expect(api.rubric).toHaveBeenCalledExactlyOnceWith("old-id")
+    await page.get('[aria-label="Rubric version pages"] button:last-of-type').trigger("click")
+    await flushPromises()
+    resolveDetail({
+      id: "old-id",
+      version: "old",
+      name: "Old detail",
+      effectiveFrom: "2025-01-01",
+      finalGradeScale: { min: 1, max: 5, step: 1 },
+      categories: [],
+      metricDefinitions: [],
+      aggregationRules: [],
+    })
+    await flushPromises()
+    expect(createUrl).not.toHaveBeenCalled()
+    expect(page.text()).toContain("Rubric new · new")
+    expect(page.text()).not.toContain("JSON download started.")
+    page.unmount()
+    createUrl.mockRestore()
+  })
+
+  it("does not render a late list response or start a download after unmount", async () => {
+    const listPending = deferred<ReturnType<typeof pageResult>>()
+    api.rubrics.mockReturnValue(listPending.promise)
+    const listPage = mount(GradingPage)
+    await flushPromises()
+    listPage.unmount()
+    listPending.resolve(pageResult([rubricSummary("late-list-id", "late")]))
+    await flushPromises()
+    expect(listPage.text()).not.toContain("late-list-id")
+    expect(listPage.text()).not.toContain("Rubric late · late")
+
+    api.rubrics.mockResolvedValue({
+      content: [rubricSummary("late-detail-id", "late-detail")],
+      page: 0,
+      size: 20,
+      totalElements: 1,
+      totalPages: 1,
+    })
+    const detailPending = deferred<Record<string, unknown>>()
+    api.rubric.mockReturnValue(detailPending.promise)
+    const createUrl = vi.spyOn(URL, "createObjectURL")
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined)
+    const detailPage = mount(GradingPage)
+    await flushPromises()
+    await detailPage.findAll("button").find((button) => button.text() === "Download JSON")!.trigger("click")
+    detailPage.unmount()
+    detailPending.resolve({
+      id: "late-detail-id",
+      version: "late-detail",
+      name: "Late detail",
+      effectiveFrom: "2025-01-01",
+      finalGradeScale: { min: 1, max: 5, step: 1 },
+      categories: [],
+      metricDefinitions: [],
+      aggregationRules: [],
+    })
+    await flushPromises()
+    expect(createUrl).not.toHaveBeenCalled()
+    expect(click).not.toHaveBeenCalled()
+    click.mockRestore()
+    createUrl.mockRestore()
+  })
+
+  it.each([
+    ["en", "Download rubric definitions", "Download JSON"],
+    ["de", "Bewertungsraster-Definitionen herunterladen", "JSON herunterladen"],
+  ] as const)("localizes version downloads in %s", async (language, heading, button) => {
+    setLanguage(language)
+    api.rubrics.mockResolvedValue({ ...pageResult([rubricSummary("localized-id", "locale")]), totalPages: 1 })
+    api.rubric.mockResolvedValue({
+      id: "localized-id",
+      version: "locale",
+      name: "Authored rubric",
+      schoolYear: null,
+      effectiveFrom: "2026-09-01",
+      finalGradeScale: { min: 1, max: 5, step: 1 },
+      categories: [{
+        id: "category-id",
+        name: "Authored category",
+        criteria: [{
+          id: "authored-criterion-id",
+          name: "Authored criterion",
+          subject: "BOTH",
+          evidenceRequired: false,
+          scale: { min: 1, max: 5, step: 1 },
+        }],
+      }],
+      metricDefinitions: [],
+      aggregationRules: [],
+    })
+    const createUrl = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:localized-markdown")
+    const page = mount(GradingPage, { attachTo: document.body })
+    await flushPromises()
+    expect(page.text()).toContain(heading)
+    expect(page.text()).toContain(button)
+    expect(page.findAll(".toolbar").some((toolbar) => toolbar.attributes("aria-label") === String(i18n.global.t("grading.versionPages")))).toBe(true)
+    await page.findAll("button").find((item) => item.text() === String(i18n.global.t("grading.downloadMarkdown")))!.trigger("click")
+    await flushPromises()
+    const markdown = await (createUrl.mock.calls[0][0] as Blob).text()
+    expect((createUrl.mock.calls[0][0] as Blob).type).toBe("text/markdown;charset=utf-8")
+    expect(markdown).toContain("Authored category")
+    expect(markdown).toContain("Authored criterion")
+    expect(markdown).toContain(language === "de" ? "**Gültigkeit:** Alle Schuljahre" : "**Applicability:** All school years")
+    expect(markdown).toContain(language === "de" ? "**Kriterien-ID:** authored\\-criterion\\-id" : "**Criterion ID:** authored\\-criterion\\-id")
+    expect(markdown).toContain(language === "de" ? "**Nachweis erforderlich:** Nein" : "**Evidence required:** No")
+    expect(markdown).toContain(language === "de" ? "## Metrikdefinitionen" : "## Metric definitions")
+    expect(markdown).toContain(language === "de" ? "## Aggregationsregeln" : "## Aggregation rules")
+    const downloadLink = page.get('a[download="rubric-locale.md"]')
+    expect(document.activeElement).toBe(downloadLink.element)
+    page.unmount()
+    createUrl.mockRestore()
   })
 })
 

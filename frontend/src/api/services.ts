@@ -274,6 +274,9 @@ export const gradingApi = {
   rubrics(page = 0): Promise<Page<components['schemas']['PageResponseRubricSummary']>> {
     return json(`/api/grading-rubrics?${pageQuery(page)}`)
   },
+  rubric(id: string): Promise<RubricResponse> {
+    return json<RubricResponse>(`/api/grading-rubrics/${encodeURIComponent(id)}`)
+  },
   activeRubric(): Promise<RubricResponse> {
     return json<RubricResponse>('/api/grading-rubrics/active')
   },
