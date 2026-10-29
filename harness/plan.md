@@ -116,7 +116,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-56](tickets/Dev-56.md) | to-do | Correct the backend Java namespace |
 | [Dev-57](tickets/Dev-57.md) | to-do | Run PostgreSQL and pgAdmin in Docker Compose |
 | [Dev-58](tickets/done/Dev-58.md) | done | Automate frontend browser keyboard navigation tests |
-| [Dev-59](tickets/Dev-59.md) | awaiting-human | Load TGM workbook preferences in a dedicated testing profile |
+| [Dev-59](tickets/Dev-59.md) | in-progress | Load TGM workbook preferences in a dedicated testing profile |
 | [Dev-60](tickets/done/Dev-60.md) | done | Allow Markdown and PDF idea and specification submissions |
 | [Dev-61](tickets/Dev-61.md) | to-do | Make rubric definitions self-contained JSON and downloadable |
 
