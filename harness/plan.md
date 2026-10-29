@@ -53,7 +53,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Bug-31](tickets/done/Bug-31.md) | done | Show group members by name in student Formal proposals |
 | [Bug-32](tickets/done/Bug-32.md) | done | Diagnose root-only blank page and restore reliable login landing |
 | [Bug-33](tickets/done/Bug-33.md) | done | Load supervisor-free finalized groups in student Formal proposals |
-| [Bug-34](tickets/Bug-34.md) | to-do | Remove fixed allocation size ceilings without weakening optimization |
+| [Bug-34](tickets/done/Bug-34.md) | done | Remove fixed allocation size ceilings without weakening optimization |
 
 ### Development
 

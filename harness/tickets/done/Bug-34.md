@@ -8,7 +8,7 @@ Starting an allocation after `make run-testing-tgm` fails with `Run error: at mo
 
 Owner report, 2026-10-29: "Run error: at most 60 students are supported, got 113"; request: "Please make the allocation run unbounded (why is it limited?)".
 
-Current-state references: `backend/src/main/java/ac/at/tgm/submit/allocation/AllocationLimits.java`, `AllocationOptimizer.java`, `AllocationService.java`, and `AllocationEngine.java` in the same package; completed [Dev-59](done/Dev-59.md).
+Current-state references: `backend/src/main/java/ac/at/tgm/submit/allocation/AllocationLimits.java`, `AllocationOptimizer.java`, `AllocationService.java`, and `AllocationEngine.java` in the same package; completed [Dev-59](Dev-59.md).
 
 The current exact optimizer opens subsets of viable projects, solves residual solo min-cost flow, and branches over indivisible shared units. Its documented exponential search is guarded by 60-student and 12-project constants. Project subset iteration also uses a fixed-width `long` bitmask. The service separately reads at most 61 application records and rejects a larger total before filtering submitted applications. These are implementation guards, not school policy or group-size rules.
 
