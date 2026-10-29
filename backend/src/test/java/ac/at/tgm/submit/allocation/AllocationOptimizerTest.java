@@ -185,20 +185,53 @@ class AllocationOptimizerTest {
     }
 
     @Test
-    void preservesSupportedAssignmentOrderingAndUnassignmentReasons() {
-        List<Application> applications = concat(students("a", 3, "A"), students("b", 3, "B"));
-        Request request = new Request(projects("B", "A"), applications);
+    void seededSixtyStudentTwelveProjectWorkloadRetainsItsOriginalTimeout() {
+        Request request = randomRequest(new Random(1), 60, 12);
+        Result result = assertTimeoutPreemptively(Duration.ofSeconds(60), () -> optimizer.optimize(request));
+        assertValid(request, result);
+    }
+
+    @Test
+    void preservesCompleteLegacyResultForTiedPinnedAndIndivisibleRequest() {
+        List<Application> applications = List.of(
+                student("a0", "A"),
+                student("a1", "A"),
+                student("a2", "A"),
+                student("overflow-0", "A"),
+                student("overflow-1", "A"),
+                student("overflow-2", "A"),
+                new Application("unit-0", List.of("A", "B"), "shared"),
+                new Application("unit-1", List.of("A", "B"), "shared"),
+                student("b0", "B"),
+                student("b1", "B"),
+                student("b2", "B"),
+                new Application("no-preference", List.of(), null, false));
+        Request request = new Request(projects("B", "A", "C"), applications, Set.of("a0"));
 
         Result result = optimizer.optimize(request);
 
-        assertEquals(new Result(List.of(
+        Result expected = new Result(List.of(
+                new Assignment("unit-0", "B", 2, false),
+                new Assignment("unit-1", "B", 2, false),
                 new Assignment("b0", "B", 1, false),
                 new Assignment("b1", "B", 1, false),
                 new Assignment("b2", "B", 1, false),
                 new Assignment("a0", "A", 1, false),
-                new Assignment("a1", "A", 1, false),
-                new Assignment("a2", "A", 1, false)),
-                List.of(), List.of(), 6, 12), result);
+                new Assignment("a2", "A", 1, false),
+                new Assignment("overflow-0", "A", 1, false),
+                new Assignment("overflow-1", "A", 1, false),
+                new Assignment("overflow-2", "A", 1, false)),
+                List.of(
+                        new UnassignedStudent("a1", StudentUnassignedReason.RANKED_GROUPS_FULL, List.of("A")),
+                        new UnassignedStudent("no-preference",
+                                StudentUnassignedReason.RANKED_PROJECTS_NOT_FORMED, List.of())),
+                List.of(
+                        new AllocationOptimizer.UnassignedProject("C",
+                                ProjectUnassignedReason.INSUFFICIENT_INTEREST, 0)),
+                10, 28);
+        assertEquals(expected, result,
+                "Complete ordered result is retained from the pre-change subset traversal for this tied request.");
+        assertEquals(expected, optimizer.optimize(request));
     }
 
     @Test
@@ -226,11 +259,14 @@ class AllocationOptimizerTest {
         Request request = new Request(projects, applications, pinned);
 
         Result result = assertTimeoutPreemptively(Duration.ofSeconds(30), () -> optimizer.optimize(request));
+        Result repeated = assertTimeoutPreemptively(Duration.ofSeconds(30), () -> optimizer.optimize(request));
 
+        assertEquals(result, repeated);
         assertEquals(113, result.assignedStudents());
-        assertEquals(113, result.assignments().size());
-        assertEquals(33L, groupCount(result));
-        assertEquals(112L * 33, result.preferenceScore());
+        assertExactAccountingAndObjective(request, result);
+        assertEquals(Set.copyOf(projectIds), result.assignments().stream()
+                .map(Assignment::projectId).collect(java.util.stream.Collectors.toSet()));
+        assertEquals(3696, result.preferenceScore());
         assertTrue(result.unassignedStudents().isEmpty());
         assertEquals(1, result.assignments().stream().filter(assignment -> assignment.preferenceRank() == 0).count());
         assertTrue(pinned.stream().allMatch(id -> result.assignments().stream()
@@ -242,7 +278,6 @@ class AllocationOptimizerTest {
             assertEquals(2, unitAssignments.size());
             assertEquals(1, unitAssignments.stream().map(Assignment::projectId).distinct().count());
         }
-        assertValid(request, result);
     }
 
     @Test
@@ -257,20 +292,24 @@ class AllocationOptimizerTest {
         Result result = optimizer.optimize(request);
 
         assertEquals(198, result.assignedStudents());
-        assertEquals(66L, groupCount(result));
+        assertExactAccountingAndObjective(request, result);
+        assertEquals(Set.copyOf(projectIds), result.assignments().stream()
+                .map(Assignment::projectId).collect(java.util.stream.Collectors.toSet()));
         assertEquals(66L * 3 * 66, result.preferenceScore());
-        assertValid(request, result);
     }
 
     @Test
-    void branchSearchKeepsSharedUnitsWholeAndDeterministicAcrossThirteenProjects() {
-        List<String> projectIds = IntStream.range(0, 13).mapToObj(index -> "P" + index).toList();
+    void splitUnitBranchingBeyondTwelveProjectsMatchesKnownObjective() {
+        List<String> projectIds = new ArrayList<>(List.of("A", "B"));
         List<Application> applications = new ArrayList<>();
-        for (String project : projectIds) {
-            applications.addAll(students(project + "-ranked-", 3, project));
-        }
-        for (int member = 0; member < 2; member++) {
-            applications.add(new Application("unit-" + member, List.of("P0", "P1"), "shared-unit"));
+        applications.addAll(students("a-", 4, "A"));
+        applications.addAll(students("b-", 3, "B"));
+        applications.add(new Application("unit-0", List.of("A", "B"), "shared"));
+        applications.add(new Application("unit-1", List.of("A", "B"), "shared"));
+        for (int index = 2; index < 13; index++) {
+            String project = "P" + index;
+            projectIds.add(project);
+            applications.addAll(students(project + "-", 3, project));
         }
         Request request = new Request(projectIds.stream().map(Project::new).toList(), applications);
 
@@ -278,15 +317,46 @@ class AllocationOptimizerTest {
         Result repeated = optimizer.optimize(request);
 
         assertEquals(first, repeated);
-        assertEquals(41, first.assignedStudents());
-        assertEquals(533, first.preferenceScore());
-        assertEquals(13L, groupCount(first));
-        String unitProject = first.assignments().stream().filter(a -> a.studentId().startsWith("unit-"))
-                .map(Assignment::projectId).distinct().reduce((left, right) -> {
-                    throw new AssertionError("Shared unit was split across projects");
-                }).orElseThrow();
-        assertTrue(Set.of("P0", "P1").contains(unitProject));
-        assertValid(request, first);
+        assertExactAccountingAndObjective(request, first);
+        assertEquals(42, first.assignedStudents());
+        assertEquals(544, first.preferenceScore());
+        List<Assignment> unitAssignments = first.assignments().stream()
+                .filter(row -> row.studentId().startsWith("unit-")).toList();
+        assertEquals(2, unitAssignments.size());
+        assertEquals(1, unitAssignments.stream().map(Assignment::projectId).distinct().count());
+        assertEquals("B", unitAssignments.getFirst().projectId());
+        assertEquals(Set.copyOf(projectIds), first.assignments().stream()
+                .map(Assignment::projectId).collect(java.util.stream.Collectors.toSet()));
+    }
+
+    @Test
+    void undersizedProjectBranchingBeyondTwelveProjectsPreservesPinsAndNoPreferenceAccounting() {
+        List<String> projectIds = new ArrayList<>(List.of("A", "D"));
+        List<Application> applications = new ArrayList<>();
+        applications.addAll(students("a-", 3, "A"));
+        applications.addAll(students("flex-", 3, "A", "D"));
+        applications.add(new Application("unranked", List.of(), null, false));
+        Set<String> pinned = Set.of("a-0");
+        for (int index = 2; index < 13; index++) {
+            String project = "P" + index;
+            projectIds.add(project);
+            applications.addAll(students(project + "-", 3, project));
+        }
+        Request request = new Request(projectIds.stream().map(Project::new).toList(), applications, pinned);
+
+        Result result = optimizer.optimize(request);
+
+        assertExactAccountingAndObjective(request, result);
+        assertEquals(40, result.assignedStudents());
+        assertEquals(505, result.preferenceScore());
+        assertTrue(result.assignments().stream().anyMatch(row -> row.studentId().equals("a-0")
+                && row.projectId().equals("A")), "The pinned candidate must remain assigned to A.");
+        assertTrue(result.assignments().stream().anyMatch(row -> row.studentId().equals("unranked")
+                && row.preferenceRank() == 0));
+        assertEquals(3, result.assignments().stream().filter(row -> row.projectId().equals("D")).count());
+        assertTrue(result.unassignedProjects().stream().noneMatch(row -> row.projectId().equals("D")));
+        assertEquals(Set.copyOf(projectIds), result.assignments().stream()
+                .map(Assignment::projectId).collect(java.util.stream.Collectors.toSet()));
     }
 
     @Test
@@ -335,6 +405,58 @@ class AllocationOptimizerTest {
         }
         assertEquals(request.applications().size(), seen.size());
         assertEquals(request.projects().size(), groupCount(result) + result.unassignedProjects().size());
+    }
+
+    private static void assertExactAccountingAndObjective(Request request, Result result) {
+        assertValid(request, result);
+        Set<String> expectedStudents = request.applications().stream().map(Application::studentId)
+                .collect(java.util.stream.Collectors.toSet());
+        Set<String> expectedProjects = request.projects().stream().map(Project::projectId)
+                .collect(java.util.stream.Collectors.toSet());
+        Set<String> seenStudents = new HashSet<>();
+        Map<String, Integer> sizes = new HashMap<>();
+        long score = 0;
+        for (Assignment assignment : result.assignments()) {
+            assertTrue(expectedProjects.contains(assignment.projectId()));
+            Application application = request.applications().stream()
+                    .filter(row -> row.studentId().equals(assignment.studentId())).findFirst().orElseThrow();
+            int expectedRank = application.rankedProjectIds().indexOf(assignment.projectId()) + 1;
+            if (application.hasPreferences()) {
+                assertTrue(expectedRank > 0, "Ranked candidates must be assigned only to ranked projects.");
+                assertEquals(expectedRank, assignment.preferenceRank());
+                score += request.projects().size() - expectedRank + 1L;
+            } else {
+                assertEquals(0, assignment.preferenceRank());
+            }
+            assertTrue(seenStudents.add(assignment.studentId()), "Each candidate is accounted for once.");
+            sizes.merge(assignment.projectId(), 1, Integer::sum);
+        }
+        for (UnassignedStudent unassigned : result.unassignedStudents()) {
+            assertTrue(expectedStudents.contains(unassigned.studentId()));
+            assertTrue(seenStudents.add(unassigned.studentId()), "Unassigned candidates are unique.");
+            assertTrue(unassigned.reason() != null);
+        }
+        assertEquals(expectedStudents, seenStudents);
+        Set<String> accountedProjects = java.util.stream.Stream.concat(
+                sizes.keySet().stream(), result.unassignedProjects().stream()
+                        .map(AllocationOptimizer.UnassignedProject::projectId))
+                .collect(java.util.stream.Collectors.toSet());
+        assertEquals(expectedProjects, accountedProjects);
+        assertEquals(result.assignments().size(), result.assignedStudents());
+        assertEquals(score, result.preferenceScore());
+        sizes.values().forEach(size -> assertTrue(size >= 3 && size <= 5));
+        for (String unitId : request.applications().stream().map(Application::applyingUnitId)
+                .filter(java.util.Objects::nonNull).distinct().toList()) {
+            List<String> unitMembers = request.applications().stream()
+                    .filter(application -> unitId.equals(application.applyingUnitId()))
+                    .map(Application::studentId).toList();
+            List<Assignment> assignedMembers = result.assignments().stream()
+                    .filter(assignment -> unitMembers.contains(assignment.studentId())).toList();
+            assertTrue(assignedMembers.isEmpty() || assignedMembers.size() == unitMembers.size());
+            if (!assignedMembers.isEmpty()) {
+                assertEquals(1, assignedMembers.stream().map(Assignment::projectId).distinct().count());
+            }
+        }
     }
 
     /** Returns {assigned, score} of the best allocation by exhaustive search. */

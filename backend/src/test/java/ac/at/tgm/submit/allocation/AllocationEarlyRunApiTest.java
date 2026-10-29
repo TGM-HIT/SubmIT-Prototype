@@ -352,7 +352,7 @@ class AllocationEarlyRunApiTest {
         assertBooleanProperty(failedRun, "initial", false);
         assertEquals("FAILED", failedRun.path("status").asText());
         assertTrue(failedRun.path("error").asText().contains("duplicate student id"));
-        assertFalse(failedRun.path("inputSnapshotComplete").asBoolean());
+        assertBooleanProperty(failedRun, "inputSnapshotComplete", false);
         assertEquals("OPEN", getPeriod(adminToken).path("status").asText());
     }
 
@@ -363,6 +363,7 @@ class AllocationEarlyRunApiTest {
         List<UUID> fixtureProjectIds = new ArrayList<>(projects);
         List<UUID> fixtureApplicationIds = new ArrayList<>();
         List<UUID> extraProjectIds = new ArrayList<>();
+        Map<String, List<String>> expectedRankings = new java.util.LinkedHashMap<>();
         UUID fixturePeriodId = null;
         try {
             for (int index = 0; index < 104; index++) {
@@ -393,6 +394,8 @@ class AllocationEarlyRunApiTest {
                 List<UUID> ranking = index == 100
                         ? List.of(fixtureProjectIds.get(12), fixtureProjectIds.get(0), fixtureProjectIds.get(1))
                         : rankedProjects;
+                expectedRankings.put(fixtureUserIds.get(index).toString(),
+                        ranking.stream().map(UUID::toString).toList());
                 fixtureApplicationIds.add(saveFixtureApplication(fixturePeriodId,
                         new UUID(0, 0x200000000L + index), fixtureUserIds.get(index), "SUBMITTED", ranking));
             }
@@ -406,6 +409,11 @@ class AllocationEarlyRunApiTest {
             groupMembers.add(fixtureUserIds.get(101).toString()).add(fixtureUserIds.get(102).toString());
             groupData.set("projectIds", store.value(List.of(fixtureProjectIds.get(12).toString(),
                     fixtureProjectIds.get(0).toString(), fixtureProjectIds.get(1).toString())));
+            expectedRankings.put(fixtureUserIds.get(101).toString(), List.of(fixtureProjectIds.get(12).toString(),
+                    fixtureProjectIds.get(0).toString(), fixtureProjectIds.get(1).toString()));
+            expectedRankings.put(fixtureUserIds.get(102).toString(), List.of(fixtureProjectIds.get(12).toString(),
+                    fixtureProjectIds.get(0).toString(), fixtureProjectIds.get(1).toString()));
+            expectedRankings.put(fixtureUserIds.get(103).toString(), List.of());
             ObjectNode approvals = groupData.putObject("approvals");
             approvals.put(fixtureUserIds.get(101).toString(), 1);
             approvals.put(fixtureUserIds.get(102).toString(), 1);
@@ -450,9 +458,10 @@ class AllocationEarlyRunApiTest {
             assertEquals(fixtureApplicationIds.subList(0, 101).stream().map(UUID::toString).toList(),
                     actualApplicationIds);
             assertEquals(fixtureUserIds.subList(0, 101).stream().map(UUID::toString).toList(), actualApplicantIds);
-            assertEquals(List.of(fixtureProjectIds.get(12).toString(), fixtureProjectIds.get(0).toString(),
-                    fixtureProjectIds.get(1).toString()),
-                    savedApplications.get(100).path("preferences").findValuesAsText("projectId"));
+            for (int index = 0; index < savedApplications.size(); index++) {
+                assertPreferenceArray(savedApplications.get(index).path("preferences"),
+                        expectedRankings.get(fixtureUserIds.get(index).toString()));
+            }
             assertFalse(actualApplicantIds.contains(fixtureUserIds.get(101).toString()));
 
             JsonNode savedUnits = detail.path("applyingUnits");
@@ -465,7 +474,7 @@ class AllocationEarlyRunApiTest {
                     fixtureProjectIds.get(1).toString()), textualMembers(savedUnits.get(0).path("projectIds")));
 
             JsonNode result = detail.path("result");
-            assertTrue(result.isObject());
+            assertValidApiResult(result, fixtureUserIds, fixtureProjectIds, expectedRankings);
             List<String> resultStudents = new ArrayList<>();
             for (String field : List.of("assignments", "unassignedStudents")) {
                 JsonNode rows = result.path(field);
@@ -504,11 +513,14 @@ class AllocationEarlyRunApiTest {
             List<StoredRecord> runs = store.repository().findByTypeAndParentId(
                     "allocation_run", fixturePeriodId.toString());
             List<StoredRecord> initialRuns = runs.stream()
-                    .filter(run -> store.parse(run).path("initial").asBoolean()).toList();
+                    .filter(run -> booleanProperty(store.parse(run), "initial")).toList();
             assertEquals(1, initialRuns.size());
             StoredRecord initialRun = initialRuns.getFirst();
             assertEquals("COMPLETED", initialRun.getStatus());
-            assertFalse(store.parse(initialRun).path("early").asBoolean());
+            ObjectNode initialSnapshot = store.parse(initialRun);
+            assertBooleanProperty(initialSnapshot, "early", false);
+            assertBooleanProperty(initialSnapshot, "initial", true);
+            assertValidApiResult(initialSnapshot.path("result"), fixtureUserIds, fixtureProjectIds, expectedRankings);
             assertEquals("ALLOCATED", store.get("application_period", fixturePeriodId).getStatus());
 
             JsonNode replacement = mapper.readTree(mockMvc.perform(
@@ -522,6 +534,7 @@ class AllocationEarlyRunApiTest {
             assertEquals(detail.path("projectIds"), replacement.path("projectIds"));
             assertEquals(detail.path("applications"), replacement.path("applications"));
             assertEquals(detail.path("applyingUnits"), replacement.path("applyingUnits"));
+            assertValidApiResult(replacement.path("result"), fixtureUserIds, fixtureProjectIds, expectedRankings);
 
             mockMvc.perform(post("/api/allocation-runs/{id}/finalize", replacement.path("id").asText())
                             .header("Authorization", bearer(adminToken)))
@@ -552,8 +565,10 @@ class AllocationEarlyRunApiTest {
                 ObjectNode finalGroupData = store.parse(group);
                 if (fixturePeriodId.toString().equals(finalGroupData.path("periodId").asText())) {
                     assertEquals(replacement.path("id").asText(), finalGroupData.path("allocationRunId").asText());
-                    actualFinalGroups.put(finalGroupData.path("projectId").asText(),
-                            textualMembers(finalGroupData.path("studentIds")));
+                    String projectId = finalGroupData.path("projectId").asText();
+                    assertFalse(actualFinalGroups.containsKey(projectId),
+                            "Finalization must not persist duplicate groups for a project.");
+                    actualFinalGroups.put(projectId, textualMembers(finalGroupData.path("studentIds")));
                 }
             }
             assertEquals(expectedFinalGroups, actualFinalGroups);
@@ -588,6 +603,97 @@ class AllocationEarlyRunApiTest {
         store.repository().save(new StoredRecord(recordId, new StoredRecord.Details("student_application",
                 studentId.toString(), periodId.toString(), status, null, store.encode(payload), Instant.now())));
         return recordId;
+    }
+
+    private void assertPreferenceArray(JsonNode preferences, List<String> expectedProjectIds) {
+        assertTrue(preferences.isArray());
+        assertEquals(expectedProjectIds.size(), preferences.size());
+        for (int rank = 0; rank < expectedProjectIds.size(); rank++) {
+            JsonNode preference = preferences.get(rank);
+            assertTrue(preference.isObject());
+            assertTrue(preference.path("projectId").isTextual());
+            assertEquals(expectedProjectIds.get(rank), preference.path("projectId").textValue());
+            assertTrue(preference.path("rank").isIntegralNumber());
+            assertEquals(rank + 1, preference.path("rank").intValue());
+        }
+    }
+
+    private void assertValidApiResult(JsonNode result, List<UUID> candidateIds, List<UUID> projectIds,
+            Map<String, List<String>> expectedRankings) {
+        assertTrue(result.isObject());
+        JsonNode assignments = result.path("assignments");
+        JsonNode unassigned = result.path("unassignedStudents");
+        JsonNode unassignedProjects = result.path("unassignedProjects");
+        assertTrue(assignments.isArray());
+        assertTrue(unassigned.isArray());
+        assertTrue(unassignedProjects.isArray());
+        assertTrue(assignments.size() > 0, "A completed large-input result must contain formed groups.");
+        assertTrue(result.path("assignedStudents").isIntegralNumber());
+        assertTrue(result.path("preferenceScore").isIntegralNumber());
+        Set<String> expectedCandidates = candidateIds.stream().map(UUID::toString)
+                .collect(java.util.stream.Collectors.toSet());
+        Set<String> expectedProjects = projectIds.stream().map(UUID::toString)
+                .collect(java.util.stream.Collectors.toSet());
+        Set<String> accountedCandidates = new HashSet<>();
+        Set<String> formedProjects = new HashSet<>();
+        Map<String, Integer> groupSizes = new java.util.LinkedHashMap<>();
+        long score = 0;
+        for (JsonNode assignment : assignments) {
+            assertTrue(assignment.isObject());
+            assertTrue(assignment.path("studentId").isTextual());
+            assertTrue(assignment.path("projectId").isTextual());
+            assertTrue(assignment.path("preferenceRank").isIntegralNumber());
+            String studentId = assignment.path("studentId").textValue();
+            String projectId = assignment.path("projectId").textValue();
+            assertTrue(expectedCandidates.contains(studentId));
+            assertTrue(expectedProjects.contains(projectId));
+            assertTrue(accountedCandidates.add(studentId), "Candidate must not be assigned more than once.");
+            formedProjects.add(projectId);
+            groupSizes.merge(projectId, 1, Integer::sum);
+            List<String> ranking = expectedRankings.get(studentId);
+            assertTrue(ranking != null, "Every eligible candidate has an independent fixture ranking.");
+            int rank = assignment.path("preferenceRank").intValue();
+            if (ranking.isEmpty()) {
+                assertEquals(0, rank);
+            } else {
+                int expectedRank = ranking.indexOf(projectId) + 1;
+                assertTrue(expectedRank > 0, "Ranked candidates must be assigned only to ranked projects.");
+                assertEquals(expectedRank, rank);
+                score += projectIds.size() - expectedRank + 1L;
+            }
+        }
+        for (JsonNode row : unassigned) {
+            assertTrue(row.isObject());
+            assertTrue(row.path("studentId").isTextual());
+            assertTrue(row.path("reason").isTextual());
+            String studentId = row.path("studentId").textValue();
+            assertTrue(expectedCandidates.contains(studentId));
+            assertTrue(accountedCandidates.add(studentId), "Each unassigned candidate is accounted for once.");
+            assertPreferenceIdArray(row.path("rankedProjectIds"), expectedRankings.get(studentId));
+        }
+        assertEquals(expectedCandidates, accountedCandidates);
+        assertEquals(assignments.size(), result.path("assignedStudents").intValue());
+        assertEquals(score, result.path("preferenceScore").longValue());
+        groupSizes.values().forEach(size -> assertTrue(size >= 3 && size <= 5));
+        Set<String> allProjects = new HashSet<>(formedProjects);
+        for (JsonNode row : unassignedProjects) {
+            assertTrue(row.isObject());
+            assertTrue(row.path("projectId").isTextual());
+            assertTrue(row.path("reason").isTextual());
+            assertTrue(allProjects.add(row.path("projectId").textValue()),
+                    "A project cannot be both formed and unassigned or duplicated.");
+        }
+        assertEquals(expectedProjects, allProjects);
+    }
+
+    private void assertPreferenceIdArray(JsonNode preferences, List<String> expectedProjectIds) {
+        assertTrue(preferences.isArray());
+        List<String> actual = new ArrayList<>();
+        for (JsonNode preference : preferences) {
+            assertTrue(preference.isTextual());
+            actual.add(preference.textValue());
+        }
+        assertEquals(expectedProjectIds, actual);
     }
 
     private List<String> textualMembers(JsonNode values) {
