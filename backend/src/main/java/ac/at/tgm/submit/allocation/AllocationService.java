@@ -41,7 +41,7 @@ public class AllocationService {
     private static final String STUDENT_ID_FIELD = "studentId";
     private static final String UNASSIGNED_STUDENTS_FIELD = "unassignedStudents";
     private static final String UNASSIGNED_PROJECTS_FIELD = "unassignedProjects";
-    private static final int MAX_APPLICATIONS = AllocationLimits.MAX_STUDENTS;
+    private static final int APPLICATION_PAGE_SIZE = 100;
 
     private final RecordStore store;
     private final AuditService audit;
@@ -194,7 +194,7 @@ public class AllocationService {
             if (!early) {
                 store.update(period, "ALLOCATED", periodData);
             }
-        } catch (AllocationLimitExceededException | IllegalArgumentException exception) {
+        } catch (IllegalArgumentException exception) {
             snapshot.put("error", exception.getMessage());
             snapshot.put("inputSnapshotComplete", false);
             store.update(run, "FAILED", snapshot);
@@ -270,13 +270,22 @@ public class AllocationService {
     }
 
     private List<StoredRecord> readApplications(UUID periodId) {
-        Page<StoredRecord> page = store.page(APPLICATION, null, periodId.toString(),
-                PageRequest.of(0, MAX_APPLICATIONS + 1));
-        if (page.getTotalElements() > MAX_APPLICATIONS) {
-            throw new AllocationLimitExceededException("The exact allocation supports at most "
-                    + MAX_APPLICATIONS + " student applications.");
-        }
-        return page.getContent().stream().filter(application -> "SUBMITTED".equals(application.getStatus())).toList();
+        List<StoredRecord> applications = new ArrayList<>();
+        StoredRecord cursor = null;
+        Page<StoredRecord> page;
+        do {
+            var ordering = PageRequest.of(0, APPLICATION_PAGE_SIZE,
+                    Sort.by(Sort.Direction.ASC, "createdAt").and(Sort.by(Sort.Direction.ASC, "id")));
+            page = cursor == null
+                    ? store.page(APPLICATION, null, periodId.toString(), ordering)
+                    : store.repository().findByTypeAndParentIdAfterCreationCursor(APPLICATION, periodId.toString(),
+                            cursor.getCreatedAt(), cursor.getId(), ordering);
+            applications.addAll(page.getContent());
+            if (!page.getContent().isEmpty()) {
+                cursor = page.getContent().getLast();
+            }
+        } while (page.getContent().size() == APPLICATION_PAGE_SIZE);
+        return applications.stream().filter(application -> "SUBMITTED".equals(application.getStatus())).toList();
     }
 
     private ObjectNode snapshot(List<String> projects, List<StoredRecord> applications, List<StoredRecord> pins) {
@@ -293,7 +302,8 @@ public class AllocationService {
 
     private List<StoredRecord> readPins(UUID periodId) {
         return store.repository().findByTypeAndParentId("allocation_pin", periodId.toString()).stream()
-                .filter(this::pinTargetIsStudent).toList();
+                .filter(this::pinTargetIsStudent)
+                .sorted(java.util.Comparator.comparing(StoredRecord::getId)).toList();
     }
 
     private boolean pinTargetIsStudent(StoredRecord pin) {

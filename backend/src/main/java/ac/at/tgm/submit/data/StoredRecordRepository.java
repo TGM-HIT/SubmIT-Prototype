@@ -1,5 +1,6 @@
 package ac.at.tgm.submit.data;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -19,6 +20,12 @@ public interface StoredRecordRepository extends JpaRepository<StoredRecord, UUID
     Page<StoredRecord> findByTypeAndParentId(String type, String parentId, Pageable pageable);
 
     List<StoredRecord> findByTypeAndParentId(String type, String parentId);
+
+    @Query("select record from StoredRecord record where record.type = :type and record.parentId = :parentId "
+            + "and (record.createdAt > :createdAt or (record.createdAt = :createdAt and record.id > :id))")
+    Page<StoredRecord> findByTypeAndParentIdAfterCreationCursor(@Param("type") String type,
+            @Param("parentId") String parentId, @Param("createdAt") Instant createdAt, @Param("id") UUID id,
+            Pageable pageable);
 
     List<StoredRecord> findByTypeAndParentIdOrderByCreatedAtDesc(String type, String parentId);
 

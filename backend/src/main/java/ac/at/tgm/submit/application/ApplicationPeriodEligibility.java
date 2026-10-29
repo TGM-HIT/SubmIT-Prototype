@@ -16,6 +16,7 @@ import java.util.Set;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
@@ -151,7 +152,8 @@ public class ApplicationPeriodEligibility {
         int page = 0;
         Page<UserAccount> current;
         do {
-            current = users.findByFilters(Role.STUDENT, null, PageRequest.of(page++, 100));
+            current = users.findByFilters(Role.STUDENT, null,
+                    PageRequest.of(page++, 100, Sort.by(Sort.Direction.ASC, "id")));
             students.addAll(current.getContent());
         } while (current.hasNext());
         return List.copyOf(students);

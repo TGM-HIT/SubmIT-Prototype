@@ -3,11 +3,11 @@ package ac.at.tgm.submit.allocation;
 import java.util.Arrays;
 
 /**
- * Max-profit assignment for a fixed set of open projects using successive shortest paths (SPFA).
+ * Max-profit assignment relaxation for the selected project set using successive shortest paths (SPFA).
  *
- * <p>Each project sink edge is split into {@code MIN_GROUP_SIZE} units carrying a large bonus and the remaining units with
- * no bonus, so a feasible allocation always fills the mandatory units first. Infeasibility is detected by the caller by
- * checking the minimum group size.
+ * <p>Mandatory projects' first remaining seats carry a dominating bonus; optional projects have no minimum in the
+ * relaxation. The exact optimizer branches on optional projects receiving one or two seats, then enforces the group-size
+ * rule. Infeasible mandatory lower bounds are detected by the caller.
  */
 final class AllocationFlow {
 
@@ -15,26 +15,24 @@ final class AllocationFlow {
 
     private final int[] to;
     private final int[] capacity;
-    private final int[] cost;
+    private final long[] cost;
     private final int[] next;
     private final int[] head;
     private final int[] studentEdgeProject;
     private int edgeCount;
 
     private final int students;
-    private final int[][] profit;
+    private final long[][] profit;
     private final int[] open;
 
     /**
      * @param profit profit[student][project], or 0 if the student did not rank the project
-     * @param open global indexes of the open projects
-     * @param mandatoryBonus profit bonus of each of the first three seats of a project
+     * @param open global indexes of the projects still eligible for assignment
+     * @param mandatoryBonus profit bonus for each remaining seat needed to satisfy an open project's minimum size
+     * @param reserved students already fixed to each project
+     * @param mandatory projects whose minimum group size is enforced in this solve
      */
-    AllocationFlow(int[][] profit, int[] open, int mandatoryBonus) {
-        this(profit, open, mandatoryBonus, new int[profit.length == 0 ? 0 : profit[0].length]);
-    }
-
-    AllocationFlow(int[][] profit, int[] open, int mandatoryBonus, int[] reserved) {
+    AllocationFlow(long[][] profit, int[] open, long mandatoryBonus, int[] reserved, boolean[] mandatory) {
         this.students = profit.length;
         this.profit = profit;
         this.open = open;
@@ -42,13 +40,13 @@ final class AllocationFlow {
         int maxEdges = 2 * (students + students * open.length + 2 * open.length);
         this.to = new int[maxEdges];
         this.capacity = new int[maxEdges];
-        this.cost = new int[maxEdges];
+        this.cost = new long[maxEdges];
         this.next = new int[maxEdges];
         this.head = new int[nodes];
         this.studentEdgeProject = new int[maxEdges];
         Arrays.fill(head, NONE);
         Arrays.fill(studentEdgeProject, NONE);
-        build(mandatoryBonus, reserved);
+        build(mandatoryBonus, reserved, mandatory);
     }
 
     /** Returns the assigned global project index per student, or -1 if unassigned. */
@@ -66,7 +64,7 @@ final class AllocationFlow {
         return assignment;
     }
 
-    private void build(int mandatoryBonus, int[] reserved) {
+    private void build(long mandatoryBonus, int[] reserved, boolean[] mandatory) {
         int sink = students + open.length + 1;
         for (int s = 0; s < students; s++) {
             addEdge(0, 1 + s, 1, 0, NONE);
@@ -78,13 +76,14 @@ final class AllocationFlow {
         }
         for (int k = 0; k < open.length; k++) {
             int occupied = reserved.length == 0 ? 0 : reserved[open[k]];
-            int mandatory = Math.max(0, AllocationLimits.MIN_GROUP_SIZE - occupied);
-            addEdge(1 + students + k, sink, mandatory, -mandatoryBonus, NONE);
-            addEdge(1 + students + k, sink, AllocationLimits.MAX_GROUP_SIZE - occupied - mandatory, 0, NONE);
+            int mandatorySeats = mandatory[open[k]]
+                    ? Math.max(0, AllocationLimits.MIN_GROUP_SIZE - occupied) : 0;
+            addEdge(1 + students + k, sink, mandatorySeats, -mandatoryBonus, NONE);
+            addEdge(1 + students + k, sink, AllocationLimits.MAX_GROUP_SIZE - occupied - mandatorySeats, 0, NONE);
         }
     }
 
-    private void addEdge(int from, int target, int cap, int edgeCost, int project) {
+    private void addEdge(int from, int target, int cap, long edgeCost, int project) {
         to[edgeCount] = target;
         capacity[edgeCount] = cap;
         cost[edgeCount] = edgeCost;

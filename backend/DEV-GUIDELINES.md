@@ -41,6 +41,12 @@ Use unit, slice, integration, and limited end-to-end tests at the appropriate bo
 - Public archive access without authentication for approved completed-project artefacts, denial for unapproved/incomplete projects, and exclusion of private student/grading data.
 - Pagination, consistent API errors, transactions, and audit history for significant state changes.
 
+### Allocation input size and exact search
+
+The former 60-student/12-project optimizer guards protected an exhaustive project-subset traversal; the service also read only 61 application rows before rejecting larger periods. These were implementation constraints, not school policy. Allocation now has no application-imposed student, application, or project count ceiling: it reads application records in stable UUID keyset order, sorts eligible students and applying units deterministically, and keeps submitted filtering separate from total-record traversal.
+
+The optimizer retains the established subset traversal for small viable-project sets and uses exact branch-and-bound for larger ones. Min-cost flow provides an objective upper bound; branches resolve undersized projects and indivisible applying units. This avoids unconditional enumeration of every project subset but does not change the worst-case combinatorial nature of allocation. Input matrices and flow graphs also consume memory proportional to the student/project relationship surface. Runtime and resource use therefore depend on actual preference overlap and shared-unit structure; do not promise constant or unlimited performance, add heuristic/partial-result fallbacks, or infer general scalability from trivial fixtures.
+
 From `backend/`, run `./gradlew compileJava compileTestJava --rerun-tasks`, `./gradlew test`, and `./gradlew checkstyleMain` after backend code changes. Both Java source sets compile with detailed deprecation and removal diagnostics, and deprecated API use fails compilation. `./gradlew test` also compiles isolated deprecated/removal probes against the same compiler options for both source sets. Do not suppress or filter these diagnostics; replace owned usage with a supported API. Run `./gradlew generateOpenApi` whenever endpoint annotations, models, or validation rules change, and review `contracts/openapi.yaml`.
 
 ### Local workflow accounts

@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Component;
 
@@ -40,7 +41,8 @@ public class ApplyingGroupRecords {
         int page = 0;
         org.springframework.data.domain.Page<StoredRecord> records;
         do {
-            records = store.page(TYPE, null, periodId.toString(), PageRequest.of(page++, 100));
+            records = store.page(TYPE, null, periodId.toString(),
+                    PageRequest.of(page++, 100, Sort.by(Sort.Direction.ASC, "createdAt", "id")));
             result.addAll(records.getContent());
         } while (records.hasNext());
         return result;

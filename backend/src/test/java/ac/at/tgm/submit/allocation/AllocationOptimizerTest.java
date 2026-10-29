@@ -185,20 +185,108 @@ class AllocationOptimizerTest {
     }
 
     @Test
-    void largestSupportedRequestFinishesInReasonableTime() {
-        Request request = randomRequest(new Random(1), AllocationLimits.MAX_STUDENTS, AllocationLimits.MAX_PROJECTS);
-        Result result = assertTimeoutPreemptively(Duration.ofSeconds(60), () -> optimizer.optimize(request));
+    void preservesSupportedAssignmentOrderingAndUnassignmentReasons() {
+        List<Application> applications = concat(students("a", 3, "A"), students("b", 3, "B"));
+        Request request = new Request(projects("B", "A"), applications);
+
+        Result result = optimizer.optimize(request);
+
+        assertEquals(new Result(List.of(
+                new Assignment("b0", "B", 1, false),
+                new Assignment("b1", "B", 1, false),
+                new Assignment("b2", "B", 1, false),
+                new Assignment("a0", "A", 1, false),
+                new Assignment("a1", "A", 1, false),
+                new Assignment("a2", "A", 1, false)),
+                List.of(), List.of(), 6, 12), result);
+    }
+
+    @Test
+    void exactSearchAccountsFor113StudentsAnd33Projects() {
+        List<String> projectIds = IntStream.range(0, 33).mapToObj(index -> "P" + index).toList();
+        List<Project> projects = projectIds.stream().map(Project::new).toList();
+        List<Application> applications = new ArrayList<>();
+        Set<String> pinned = new HashSet<>();
+        for (int projectIndex = 0; projectIndex < projectIds.size(); projectIndex++) {
+            String project = projectIds.get(projectIndex);
+            if (projectIndex < 7) {
+                applications.add(new Application(project + "-unit-a", List.of(project), project + "-unit"));
+                applications.add(new Application(project + "-unit-b", List.of(project), project + "-unit"));
+                String pinnedSolo = project + "-solo-base";
+                applications.add(student(pinnedSolo, project));
+                pinned.add(pinnedSolo);
+            } else {
+                applications.addAll(students(project + "-ranked-", 3, project));
+            }
+            if (projectIndex >= 7 && projectIndex < 20) {
+                applications.add(student(project + "-ranked-extra", project));
+            }
+        }
+        applications.add(new Application("eligible-without-preferences", List.of(), null, false));
+        Request request = new Request(projects, applications, pinned);
+
+        Result result = assertTimeoutPreemptively(Duration.ofSeconds(30), () -> optimizer.optimize(request));
+
+        assertEquals(113, result.assignedStudents());
+        assertEquals(113, result.assignments().size());
+        assertEquals(33L, groupCount(result));
+        assertEquals(112L * 33, result.preferenceScore());
+        assertTrue(result.unassignedStudents().isEmpty());
+        assertEquals(1, result.assignments().stream().filter(assignment -> assignment.preferenceRank() == 0).count());
+        assertTrue(pinned.stream().allMatch(id -> result.assignments().stream()
+                .anyMatch(assignment -> assignment.studentId().equals(id))));
+        for (int projectIndex = 0; projectIndex < 7; projectIndex++) {
+            String unitPrefix = "P" + projectIndex + "-unit-";
+            List<Assignment> unitAssignments = result.assignments().stream()
+                    .filter(assignment -> assignment.studentId().startsWith(unitPrefix)).toList();
+            assertEquals(2, unitAssignments.size());
+            assertEquals(1, unitAssignments.stream().map(Assignment::projectId).distinct().count());
+        }
         assertValid(request, result);
     }
 
     @Test
-    void rejectsExcessiveInputExplicitly() {
-        List<Application> tooMany = students("s", AllocationLimits.MAX_STUDENTS + 1, "A");
-        assertThrows(AllocationLimitExceededException.class,
-                () -> optimizer.optimize(new Request(projects("A"), tooMany)));
-        List<String> manyProjects = IntStream.range(0, AllocationLimits.MAX_PROJECTS + 1).mapToObj(i -> "P" + i).toList();
-        assertThrows(AllocationLimitExceededException.class,
-                () -> optimizer.optimize(new Request(projects(manyProjects.toArray(String[]::new)), List.of())));
+    void projectsBeyondLongMaskBoundaryParticipateInExactOptimization() {
+        List<String> projectIds = IntStream.range(0, 66).mapToObj(index -> "P" + index).toList();
+        List<Application> applications = new ArrayList<>();
+        for (String project : projectIds) {
+            applications.addAll(students(project + "-ranked-", 3, project));
+        }
+        Request request = new Request(projectIds.stream().map(Project::new).toList(), applications);
+
+        Result result = optimizer.optimize(request);
+
+        assertEquals(198, result.assignedStudents());
+        assertEquals(66L, groupCount(result));
+        assertEquals(66L * 3 * 66, result.preferenceScore());
+        assertValid(request, result);
+    }
+
+    @Test
+    void branchSearchKeepsSharedUnitsWholeAndDeterministicAcrossThirteenProjects() {
+        List<String> projectIds = IntStream.range(0, 13).mapToObj(index -> "P" + index).toList();
+        List<Application> applications = new ArrayList<>();
+        for (String project : projectIds) {
+            applications.addAll(students(project + "-ranked-", 3, project));
+        }
+        for (int member = 0; member < 2; member++) {
+            applications.add(new Application("unit-" + member, List.of("P0", "P1"), "shared-unit"));
+        }
+        Request request = new Request(projectIds.stream().map(Project::new).toList(), applications);
+
+        Result first = optimizer.optimize(request);
+        Result repeated = optimizer.optimize(request);
+
+        assertEquals(first, repeated);
+        assertEquals(41, first.assignedStudents());
+        assertEquals(533, first.preferenceScore());
+        assertEquals(13L, groupCount(first));
+        String unitProject = first.assignments().stream().filter(a -> a.studentId().startsWith("unit-"))
+                .map(Assignment::projectId).distinct().reduce((left, right) -> {
+                    throw new AssertionError("Shared unit was split across projects");
+                }).orElseThrow();
+        assertTrue(Set.of("P0", "P1").contains(unitProject));
+        assertValid(request, first);
     }
 
     @Test

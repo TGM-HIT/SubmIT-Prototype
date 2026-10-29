@@ -15,10 +15,14 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import ac.at.tgm.submit.data.RecordStore;
 import ac.at.tgm.submit.data.StoredRecord;
+import ac.at.tgm.submit.application.ApplyingGroupRecords;
+import ac.at.tgm.submit.security.Role;
 import ac.at.tgm.submit.user.StudentClassRepository;
+import ac.at.tgm.submit.user.UserAccount;
 import ac.at.tgm.submit.user.UserAccountRepository;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -333,11 +337,13 @@ class AllocationEarlyRunApiTest {
 
     @Test
     void aFailedEarlyRunIsStoredWithoutClosingTheOpenPeriod() throws Exception {
-        for (int number = 0; number <= AllocationLimits.MAX_STUDENTS; number++) {
+        String duplicateStudentId = students.getFirst().toString();
+        includeEligible(students.getFirst());
+        for (int number = 0; number < 2; number++) {
             ObjectNode payload = store.object().put("applicationIndex", number);
             payload.putArray("preferences").addObject()
                     .put("projectId", projects.get(0).toString()).put("rank", 1);
-            store.create("student_application", UUID.randomUUID().toString(), periodId.toString(),
+            store.create("student_application", duplicateStudentId, periodId.toString(),
                     "SUBMITTED", payload);
         }
 
@@ -345,8 +351,253 @@ class AllocationEarlyRunApiTest {
         assertBooleanProperty(failedRun, "early", true);
         assertBooleanProperty(failedRun, "initial", false);
         assertEquals("FAILED", failedRun.path("status").asText());
-        assertTrue(failedRun.path("error").asText().contains("at most"));
+        assertTrue(failedRun.path("error").asText().contains("duplicate student id"));
+        assertFalse(failedRun.path("inputSnapshotComplete").asBoolean());
         assertEquals("OPEN", getPeriod(adminToken).path("status").asText());
+    }
+
+    @Test
+    void startAndDetailApisSnapshotEveryStablePageOfLargeInputs() throws Exception {
+        List<UserAccount> fixtureUsers = new ArrayList<>();
+        List<UUID> fixtureUserIds = new ArrayList<>();
+        List<UUID> fixtureProjectIds = new ArrayList<>(projects);
+        List<UUID> fixtureApplicationIds = new ArrayList<>();
+        List<UUID> extraProjectIds = new ArrayList<>();
+        UUID fixturePeriodId = null;
+        try {
+            for (int index = 0; index < 104; index++) {
+                UUID id = new UUID(0, 0x100000000L + index);
+                fixtureUserIds.add(id);
+                fixtureUsers.add(new UserAccount(id, "bug34-scale-" + index,
+                        "Synthetic allocation student " + index, "test-hash-placeholder", Role.STUDENT));
+            }
+            users.saveAll(fixtureUsers);
+            for (int index = 3; index < 13; index++) {
+                StoredRecord project = store.create("idea", null, null, "ACCEPTED_FOR_APPLICATIONS",
+                        store.object().put("title", "Synthetic scale project " + index)
+                                .put("schoolYear", "2026/2027"));
+                fixtureProjectIds.add(project.getId());
+                extraProjectIds.add(project.getId());
+            }
+            fixturePeriodId = createPeriod("OPEN", Instant.now().plusSeconds(3600));
+            StoredRecord period = store.get("application_period", fixturePeriodId);
+            ObjectNode periodData = store.parse(period);
+            periodData.set("projectIds", store.value(fixtureProjectIds));
+            periodData.set("eligibleStudentIds", store.value(fixtureUserIds));
+            periodData.putArray("eligibleClassIds");
+            store.update(period, "OPEN", periodData);
+
+            List<UUID> rankedProjects = List.of(fixtureProjectIds.get(0), fixtureProjectIds.get(1),
+                    fixtureProjectIds.get(2));
+            for (int index = 0; index <= 100; index++) {
+                List<UUID> ranking = index == 100
+                        ? List.of(fixtureProjectIds.get(12), fixtureProjectIds.get(0), fixtureProjectIds.get(1))
+                        : rankedProjects;
+                fixtureApplicationIds.add(saveFixtureApplication(fixturePeriodId,
+                        new UUID(0, 0x200000000L + index), fixtureUserIds.get(index), "SUBMITTED", ranking));
+            }
+            fixtureApplicationIds.add(saveFixtureApplication(fixturePeriodId,
+                    new UUID(0, 0x200000000L + 101), fixtureUserIds.get(101), "DRAFT", rankedProjects));
+            fixtureApplicationIds.add(saveFixtureApplication(fixturePeriodId,
+                    new UUID(0, 0x200000000L + 102), fixtureUserIds.get(101), "WITHDRAWN", rankedProjects));
+
+            ObjectNode groupData = store.object().put("revision", 1);
+            var groupMembers = groupData.putArray("members");
+            groupMembers.add(fixtureUserIds.get(101).toString()).add(fixtureUserIds.get(102).toString());
+            groupData.set("projectIds", store.value(List.of(fixtureProjectIds.get(12).toString(),
+                    fixtureProjectIds.get(0).toString(), fixtureProjectIds.get(1).toString())));
+            ObjectNode approvals = groupData.putObject("approvals");
+            approvals.put(fixtureUserIds.get(101).toString(), 1);
+            approvals.put(fixtureUserIds.get(102).toString(), 1);
+            UUID groupId = new UUID(0, 0x300000000L);
+            store.repository().save(new StoredRecord(groupId, new StoredRecord.Details(ApplyingGroupRecords.TYPE,
+                    null, fixturePeriodId.toString(), "SUBMITTED", null, store.encode(groupData), Instant.now())));
+
+            JsonNode started = mapper.readTree(mockMvc.perform(
+                            post("/api/application-periods/{id}/allocation-runs", fixturePeriodId)
+                                    .header("Authorization", bearer(adminToken)))
+                    .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString());
+            assertEquals("COMPLETED", started.path("status").asText());
+            assertBooleanProperty(started, "early", true);
+            assertEquals(103, fixtureApplicationIds.size());
+
+            JsonNode detail = mapper.readTree(mockMvc.perform(get("/api/allocation-runs/{id}", started.path("id").asText())
+                            .header("Authorization", bearer(teacherToken)))
+                    .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+            assertEquals("COMPLETED", detail.path("status").asText());
+            assertEquals("OPEN", mapper.readTree(mockMvc.perform(get("/api/application-periods/{id}", fixturePeriodId)
+                            .header("Authorization", bearer(adminToken)))
+                    .andExpect(status().isOk()).andReturn().getResponse().getContentAsString())
+                    .path("status").asText());
+
+            List<String> expectedEligibleIds = fixtureUserIds.stream().map(UUID::toString).toList();
+            assertEquals(expectedEligibleIds, textualMembers(detail.path("eligibleStudentIds")));
+            assertEquals(fixtureProjectIds.stream().map(UUID::toString).toList(),
+                    textualMembers(detail.path("projectIds")));
+
+            JsonNode savedApplications = detail.path("applications");
+            assertTrue(savedApplications.isArray());
+            assertEquals(101, savedApplications.size());
+            List<String> actualApplicationIds = new ArrayList<>();
+            List<String> actualApplicantIds = new ArrayList<>();
+            for (JsonNode application : savedApplications) {
+                assertTrue(application.isObject());
+                assertTrue(application.path("applicationId").isTextual());
+                assertTrue(application.path("studentId").isTextual());
+                actualApplicationIds.add(application.path("applicationId").asText());
+                actualApplicantIds.add(application.path("studentId").asText());
+            }
+            assertEquals(fixtureApplicationIds.subList(0, 101).stream().map(UUID::toString).toList(),
+                    actualApplicationIds);
+            assertEquals(fixtureUserIds.subList(0, 101).stream().map(UUID::toString).toList(), actualApplicantIds);
+            assertEquals(List.of(fixtureProjectIds.get(12).toString(), fixtureProjectIds.get(0).toString(),
+                    fixtureProjectIds.get(1).toString()),
+                    savedApplications.get(100).path("preferences").findValuesAsText("projectId"));
+            assertFalse(actualApplicantIds.contains(fixtureUserIds.get(101).toString()));
+
+            JsonNode savedUnits = detail.path("applyingUnits");
+            assertTrue(savedUnits.isArray());
+            assertEquals(1, savedUnits.size());
+            assertEquals(groupId.toString(), savedUnits.get(0).path("groupId").asText());
+            assertEquals(List.of(fixtureUserIds.get(101).toString(), fixtureUserIds.get(102).toString()),
+                    textualMembers(savedUnits.get(0).path("studentIds")));
+            assertEquals(List.of(fixtureProjectIds.get(12).toString(), fixtureProjectIds.get(0).toString(),
+                    fixtureProjectIds.get(1).toString()), textualMembers(savedUnits.get(0).path("projectIds")));
+
+            JsonNode result = detail.path("result");
+            assertTrue(result.isObject());
+            List<String> resultStudents = new ArrayList<>();
+            for (String field : List.of("assignments", "unassignedStudents")) {
+                JsonNode rows = result.path(field);
+                assertTrue(rows.isArray());
+                for (JsonNode row : rows) {
+                    assertTrue(row.path("studentId").isTextual());
+                    resultStudents.add(row.path("studentId").asText());
+                }
+            }
+            assertEquals(104, resultStudents.size());
+            assertEquals(104, new HashSet<>(resultStudents).size());
+            assertEquals(new HashSet<>(expectedEligibleIds), new HashSet<>(resultStudents));
+            List<String> sharedMembers = List.of(fixtureUserIds.get(101).toString(),
+                    fixtureUserIds.get(102).toString());
+            List<JsonNode> sharedAssignments = new ArrayList<>();
+            for (JsonNode assignment : result.path("assignments")) {
+                if (sharedMembers.contains(assignment.path("studentId").asText())) {
+                    sharedAssignments.add(assignment);
+                }
+            }
+            assertTrue(sharedAssignments.isEmpty() || sharedAssignments.size() == 2);
+            if (sharedAssignments.size() == 2) {
+                assertEquals(sharedAssignments.getFirst().path("projectId").asText(),
+                        sharedAssignments.getLast().path("projectId").asText());
+            }
+            assertTrue(resultStudents.contains(fixtureUserIds.get(103).toString()),
+                    "The eligible no-application candidate must be accounted for.");
+
+            assertEarlyRunAudit(started.path("id").asText());
+            StoredRecord livePeriod = store.get("application_period", fixturePeriodId);
+            ObjectNode duePeriod = store.parse(livePeriod);
+            duePeriod.put("closesAt", Instant.now().minusSeconds(1).toString());
+            store.update(livePeriod, "OPEN", duePeriod);
+            assertEquals(1, allocationService.startDuePeriods());
+            assertEquals(0, allocationService.startDuePeriods());
+            List<StoredRecord> runs = store.repository().findByTypeAndParentId(
+                    "allocation_run", fixturePeriodId.toString());
+            List<StoredRecord> initialRuns = runs.stream()
+                    .filter(run -> store.parse(run).path("initial").asBoolean()).toList();
+            assertEquals(1, initialRuns.size());
+            StoredRecord initialRun = initialRuns.getFirst();
+            assertEquals("COMPLETED", initialRun.getStatus());
+            assertFalse(store.parse(initialRun).path("early").asBoolean());
+            assertEquals("ALLOCATED", store.get("application_period", fixturePeriodId).getStatus());
+
+            JsonNode replacement = mapper.readTree(mockMvc.perform(
+                            post("/api/application-periods/{id}/allocation-runs", fixturePeriodId)
+                                    .header("Authorization", bearer(adminToken)))
+                    .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString());
+            assertEquals("COMPLETED", replacement.path("status").asText());
+            assertBooleanProperty(replacement, "early", false);
+            assertBooleanProperty(replacement, "initial", false);
+            assertEquals(detail.path("eligibleStudentIds"), replacement.path("eligibleStudentIds"));
+            assertEquals(detail.path("projectIds"), replacement.path("projectIds"));
+            assertEquals(detail.path("applications"), replacement.path("applications"));
+            assertEquals(detail.path("applyingUnits"), replacement.path("applyingUnits"));
+
+            mockMvc.perform(post("/api/allocation-runs/{id}/finalize", replacement.path("id").asText())
+                            .header("Authorization", bearer(adminToken)))
+                    .andExpect(status().isOk());
+            StoredRecord finalizedRun = store.get("allocation_run", UUID.fromString(replacement.path("id").asText()));
+            assertEquals("FINALIZED", finalizedRun.getStatus());
+            assertEquals("FINALIZED", store.get("application_period", fixturePeriodId).getStatus());
+            List<StoredRecord> finalizationEvents = store.repository().findByTypeAndReferenceTypeAndParentId(
+                    "audit", "allocation_run", replacement.path("id").asText(),
+                    org.springframework.data.domain.PageRequest.of(0, 20)).getContent();
+            assertEquals(2, finalizationEvents.size());
+            JsonNode finalizationEvent = finalizationEvents.stream().map(store::parse)
+                    .filter(event -> "ALLOCATION_FINALIZED".equals(event.path("action").asText()))
+                    .findFirst().orElseThrow();
+            assertEquals("ALLOCATION_FINALIZED", finalizationEvent.path("action").asText());
+            assertEquals("allocation_run", finalizationEvent.path("entityType").asText());
+            assertEquals(replacement.path("id").asText(), finalizationEvent.path("entityId").asText());
+            assertEquals(users.findByUsername("admin01").orElseThrow().getId().toString(),
+                    finalizationEvent.path("actorId").asText());
+            java.util.Map<String, List<String>> expectedFinalGroups = new java.util.LinkedHashMap<>();
+            for (JsonNode assignment : replacement.path("result").path("assignments")) {
+                expectedFinalGroups.computeIfAbsent(assignment.path("projectId").asText(), ignored -> new ArrayList<>())
+                        .add(assignment.path("studentId").asText());
+            }
+            java.util.Map<String, List<String>> actualFinalGroups = new java.util.LinkedHashMap<>();
+            for (StoredRecord group : store.repository().findByType("project_group",
+                    org.springframework.data.domain.PageRequest.of(0, 1000)).getContent()) {
+                ObjectNode finalGroupData = store.parse(group);
+                if (fixturePeriodId.toString().equals(finalGroupData.path("periodId").asText())) {
+                    assertEquals(replacement.path("id").asText(), finalGroupData.path("allocationRunId").asText());
+                    actualFinalGroups.put(finalGroupData.path("projectId").asText(),
+                            textualMembers(finalGroupData.path("studentIds")));
+                }
+            }
+            assertEquals(expectedFinalGroups, actualFinalGroups);
+        } finally {
+            if (fixturePeriodId != null) {
+                UUID cleanupPeriodId = fixturePeriodId;
+                List<StoredRecord> finalizedGroups = store.repository().findByType("project_group",
+                        org.springframework.data.domain.PageRequest.of(0, 1000)).getContent().stream()
+                        .filter(group -> cleanupPeriodId.toString().equals(
+                                store.parse(group).path("periodId").asText())).toList();
+                store.repository().deleteAll(finalizedGroups);
+                store.repository().deleteAll(store.repository().findByTypeAndParentId(
+                        "student_application", cleanupPeriodId.toString()));
+                store.repository().deleteAll(store.repository().findByTypeAndParentId(
+                        ApplyingGroupRecords.TYPE, cleanupPeriodId.toString()));
+                store.repository().deleteAll(store.repository().findByTypeAndParentId(
+                        "allocation_run", cleanupPeriodId.toString()));
+                store.repository().deleteById(cleanupPeriodId);
+            }
+            store.repository().deleteAllById(extraProjectIds);
+            users.deleteAll(fixtureUsers);
+        }
+    }
+
+    private UUID saveFixtureApplication(UUID periodId, UUID recordId, UUID studentId, String status,
+            List<UUID> rankedProjects) {
+        ObjectNode payload = store.object();
+        var preferences = payload.putArray("preferences");
+        for (int rank = 0; rank < rankedProjects.size(); rank++) {
+            preferences.addObject().put("projectId", rankedProjects.get(rank).toString()).put("rank", rank + 1);
+        }
+        store.repository().save(new StoredRecord(recordId, new StoredRecord.Details("student_application",
+                studentId.toString(), periodId.toString(), status, null, store.encode(payload), Instant.now())));
+        return recordId;
+    }
+
+    private List<String> textualMembers(JsonNode values) {
+        assertTrue(values.isArray());
+        List<String> result = new ArrayList<>();
+        for (JsonNode value : values) {
+            assertTrue(value.isTextual());
+            result.add(value.asText());
+        }
+        return result;
     }
 
     @Test
