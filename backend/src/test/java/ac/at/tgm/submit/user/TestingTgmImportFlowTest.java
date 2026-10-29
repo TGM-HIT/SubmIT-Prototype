@@ -247,6 +247,24 @@ class TestingTgmImportFlowTest {
         assertPage(applications, 20, 100, 1);
         assertEquals(expectedSoloNames, applications.path("content").findValuesAsText("studentDisplayName")
                 .stream().collect(Collectors.toSet()));
+        Map<String, UUID> matrixProjectIds = store.repository().findAll().stream()
+                .filter(record -> record.getType().equals("idea"))
+                .filter(record -> workbook.projectTitles().contains(store.parse(record).path("title").asText()))
+                .collect(Collectors.toMap(record -> store.parse(record).path("title").asText(), StoredRecord::getId));
+        Map<String, TgmWorkbookReader.StudentRow> expectedSolos = workbook.students().stream()
+                .filter(row -> expectedSoloNames.contains(row.displayName()))
+                .collect(Collectors.toMap(row -> users.findByUsername(row.username()).orElseThrow()
+                        .getId().toString(), row -> row));
+        assertEquals(20, expectedSolos.size());
+        Set<String> seenSolos = new java.util.HashSet<>();
+        for (JsonNode application : applications.path("content")) {
+            assertTrue(application.path("studentId").isTextual());
+            String studentId = application.path("studentId").asText();
+            assertTrue(seenSolos.add(studentId), "duplicate fallback applicant");
+            assertTrue(expectedSolos.containsKey(studentId), "unexpected fallback applicant");
+            assertSourcePreferences(application, expectedSolos.get(studentId), matrixProjectIds);
+        }
+        assertEquals(expectedSolos.keySet(), seenSolos);
         String fallbackToken = login("MatrixDuplicateOne");
         JsonNode fallback = json(mockMvc.perform(get("/api/application-periods/{periodId}/applications/me",
                         period.getId()).header("Authorization", "Bearer " + fallbackToken))
@@ -306,6 +324,7 @@ class TestingTgmImportFlowTest {
         Map<String, String> expectedClasses = workbook.students().stream().collect(Collectors.toMap(
                 TgmWorkbookReader.StudentRow::username, TgmWorkbookReader.StudentRow::sheet));
         Set<String> publicUsernames = new java.util.HashSet<>();
+        Map<String, String> studentIdsByUsername = new LinkedHashMap<>();
         for (int page = 0; page < 2; page++) {
             JsonNode usersPage = getStudentPage(adminToken, page);
             assertPage(usersPage, 110, 100, 2);
@@ -315,7 +334,9 @@ class TestingTgmImportFlowTest {
                 assertTrue(user.path("roles").isArray());
                 assertEquals(1, user.path("roles").size());
                 assertEquals("STUDENT", user.path("roles").get(0).asText());
-                publicUsernames.add(user.path("username").asText());
+                assertTrue(user.path("id").isTextual());
+                assertTrue(publicUsernames.add(user.path("username").asText()), "duplicate paginated student");
+                studentIdsByUsername.put(user.path("username").asText(), user.path("id").asText());
                 assertEquals(expectedClasses.get(user.path("username").asText()), user.path("className").asText());
             }
         }
@@ -366,6 +387,12 @@ class TestingTgmImportFlowTest {
             }
         }
 
+        // This fixture declares exactly one reciprocal pair; all undeclared rows are valid solos.
+        // Derive expectations from source rows, never from the production planner or application responses.
+        Map<String, TgmWorkbookReader.StudentRow> expectedSoloRows = workbook.students().stream()
+                .filter(row -> row.declaredMembers().isEmpty())
+                .collect(Collectors.toMap(row -> studentIdsByUsername.get(row.username()), row -> row));
+        assertEquals(108, expectedSoloRows.size());
         Set<String> applicationStudentIds = new java.util.HashSet<>();
         for (int page = 0; page < 2; page++) {
             JsonNode applicationPage = getPage("/api/application-periods/{periodId}/applications",
@@ -374,11 +401,14 @@ class TestingTgmImportFlowTest {
             for (JsonNode application : applicationPage.path("content")) {
                 assertEquals("SUBMITTED", application.path("status").asText());
                 assertTrue(application.path("studentId").isTextual());
-                assertEquals(3, application.path("preferences").size());
-                applicationStudentIds.add(application.path("studentId").asText());
+                String studentId = application.path("studentId").asText();
+                assertTrue(applicationStudentIds.add(studentId), "duplicate paginated solo applicant");
+                assertTrue(expectedSoloRows.containsKey(studentId), "unexpected paginated solo applicant");
+                assertSourcePreferences(application, expectedSoloRows.get(studentId), projectIds);
             }
         }
         assertEquals(108, applicationStudentIds.size());
+        assertEquals(expectedSoloRows.keySet(), applicationStudentIds);
 
         JsonNode groupPage = getPage("/api/application-periods/{periodId}/applying-groups",
                 teacherToken, 0, 1, period.getId());
@@ -386,6 +416,14 @@ class TestingTgmImportFlowTest {
         JsonNode group = groupPage.path("content").get(0);
         assertEquals("SUBMITTED", group.path("status").asText());
         assertEquals(2, group.path("members").size());
+        assertTrue(group.path("members").isArray());
+        group.path("members").forEach(member -> assertTrue(member.path("studentId").isTextual()));
+        List<TgmWorkbookReader.StudentRow> expectedGroupRows = workbook.students().stream()
+                .filter(row -> !row.declaredMembers().isEmpty()).toList();
+        assertEquals(2, expectedGroupRows.size());
+        for (TgmWorkbookReader.StudentRow sourceRow : expectedGroupRows) {
+            assertSourcePreferences(group, sourceRow, projectIds);
+        }
         Set<String> groupStudentIds = group.path("members").findValuesAsText("studentId")
                 .stream().collect(Collectors.toSet());
         assertEquals(2, groupStudentIds.size());
@@ -393,9 +431,8 @@ class TestingTgmImportFlowTest {
         assertTrue(java.util.Collections.disjoint(allEffectiveIds, groupStudentIds));
         allEffectiveIds.addAll(groupStudentIds);
         assertEquals(110, allEffectiveIds.size());
-        assertEquals(Set.of(users.findByUsername("InventedStudent001").orElseThrow().getId().toString(),
-                        users.findByUsername("InventedStudent002").orElseThrow().getId().toString()),
-                groupStudentIds);
+        assertEquals(expectedGroupRows.stream().map(row -> studentIdsByUsername.get(row.username()))
+                .collect(Collectors.toSet()), groupStudentIds);
 
         mockMvc.perform(get("/api/users").param("role", "STUDENT"))
                 .andExpect(status().isUnauthorized());
@@ -404,6 +441,24 @@ class TestingTgmImportFlowTest {
         mockMvc.perform(get("/api/application-periods/{periodId}/applying-groups", period.getId()))
                 .andExpect(status().isUnauthorized());
         mockMvc.perform(get("/api/ideas")).andExpect(status().isUnauthorized());
+    }
+
+    private void assertSourcePreferences(JsonNode application, TgmWorkbookReader.StudentRow source,
+            Map<String, UUID> projectIds) {
+        JsonNode preferences = application.path("preferences");
+        assertTrue(preferences.isArray());
+        assertEquals(3, preferences.size());
+        for (int index = 0; index < 3; index++) {
+            JsonNode preference = preferences.get(index);
+            assertTrue(preference.isObject());
+            assertTrue(preference.path("projectId").isTextual());
+            assertTrue(preference.path("projectTitle").isTextual());
+            String title = source.choices().get(index).trim();
+            assertTrue(projectIds.containsKey(title));
+            assertEquals(projectIds.get(title).toString(), preference.path("projectId").asText(),
+                    source.sheet() + "!" + source.row() + " preference " + index);
+            assertEquals(title, preference.path("projectTitle").asText());
+        }
     }
 
     private TestingTgmWorkbookImporter importerFor(TgmWorkbookReader.WorkbookData workbook) {

@@ -1,6 +1,7 @@
 package ac.at.tgm.submit.user;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -16,9 +17,14 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Collectors;
+import java.util.logging.Handler;
+import java.util.logging.LogRecord;
+import java.util.logging.Logger;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -69,10 +75,35 @@ class TestingTgmRollbackTest {
                 UsernamePasswordAuthenticationToken.unauthenticated("forced-authentication", "not-a-secret"));
 
         TransactionTemplate transaction = new TransactionTemplate(transactions);
-        IllegalStateException failure = assertThrows(IllegalStateException.class, () -> transaction.execute(status -> {
-            importer.importSource(INVENTED_PATH, "forced-failure".getBytes(StandardCharsets.UTF_8));
-            return null;
-        }));
+        List<String> messages = new ArrayList<>();
+        Logger logger = Logger.getLogger(TgmWorkbookImportWriter.class.getName());
+        Handler capture = new Handler() {
+            @Override public void publish(LogRecord record) {
+                messages.add(record.getMessage());
+            }
+            @Override public void flush() {
+            }
+            @Override public void close() {
+            }
+        };
+        logger.addHandler(capture);
+        IllegalStateException failure;
+        try {
+            // Prove the actual System.Logger used by the writer reaches this capture.
+            System.getLogger(TgmWorkbookImportWriter.class.getName())
+                    .log(System.Logger.Level.INFO, "TGM failure capture active");
+            assertTrue(messages.contains("TGM failure capture active"));
+            messages.clear();
+            failure = assertThrows(IllegalStateException.class, () -> transaction.execute(status -> {
+                importer.importSource(INVENTED_PATH, "forced-failure".getBytes(StandardCharsets.UTF_8));
+                return null;
+            }));
+            assertFalse(messages.stream().anyMatch(message -> message.contains("TGM import complete")
+                    || message.contains("TGM import already completed")), "failure emitted a success summary");
+        } finally {
+            logger.removeHandler(capture);
+            capture.close();
+        }
         assertTrue(failure.getMessage().contains("forced failure after TGM application"));
         assertNull(SecurityContextHolder.getContext().getAuthentication());
 
