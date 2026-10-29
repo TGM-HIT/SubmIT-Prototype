@@ -2,6 +2,7 @@ package ac.at.tgm.submit.allocation;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
@@ -44,6 +45,101 @@ class AllocationSupervisorIndependenceTest {
     private AllocationService allocationService;
     @Autowired
     private UserAccountRepository users;
+
+    @Test
+    void finalizedSupervisorFreeAllocationIsEligibleAndLoadsItsPrivateRoster() throws Exception {
+        List<String> projectIds = new ArrayList<>();
+        for (int index = 0; index < 3; index++) {
+            projectIds.add(createAcceptedProject(index, "Finalized supervisor-free", "student01"));
+        }
+        StoredRecord period = createPeriod(projectIds);
+        List<String> studentIds = new ArrayList<>();
+        for (String username : List.of("student01", "student02", "student03")) {
+            String studentId = users.findByUsername(username).orElseThrow().getId().toString();
+            studentIds.add(studentId);
+            createApplication(period, studentId, projectIds);
+        }
+
+        String adminToken = loginAdmin();
+        JsonNode run = objectMapper.readTree(mockMvc.perform(post(
+                                "/api/application-periods/{periodId}/allocation-runs", period.getId())
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.status").value("COMPLETED"))
+                .andReturn().getResponse().getContentAsByteArray());
+        UUID runId = UUID.fromString(run.required("id").textValue());
+        mockMvc.perform(post("/api/allocation-runs/{id}/finalize", runId)
+                        .header("Authorization", "Bearer " + adminToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("FINALIZED"));
+
+        StoredRecord savedPeriod = store.repository().findById(period.getId()).orElseThrow();
+        StoredRecord savedRun = store.repository().findById(runId).orElseThrow();
+        assertEquals("FINALIZED", savedPeriod.getStatus());
+        assertEquals("FINALIZED", savedRun.getStatus());
+        assertEquals(period.getId().toString(), savedRun.getParentId());
+        JsonNode assignments = store.parse(savedRun).required("result").required("assignments");
+        assertTrue(assignments.isArray());
+        JsonNode callerAssignment = java.util.stream.StreamSupport.stream(assignments.spliterator(), false)
+                .filter(item -> studentIds.get(0).equals(item.required("studentId").textValue()))
+                .findFirst().orElseThrow();
+        String projectId = callerAssignment.required("projectId").textValue();
+        assertTrue(projectIds.contains(projectId));
+        assertTrue(store.parse(savedPeriod).required("projectIds").isArray());
+        assertEquals(store.value(projectIds), store.parse(savedPeriod).required("projectIds"));
+        StoredRecord group = store.repository().findFirstByTypeAndParentIdOrderByCreatedAtDesc(
+                "project_group", projectId).orElseThrow();
+        assertEquals("ALLOCATED", group.getStatus());
+        JsonNode groupData = store.parse(group);
+        assertEquals(projectId, groupData.required("projectId").textValue());
+        assertEquals(period.getId().toString(), groupData.required("periodId").textValue());
+        assertEquals(runId.toString(), groupData.required("allocationRunId").textValue());
+        assertTrue(groupData.required("studentIds").isArray());
+        List<String> finalizedMembers = new ArrayList<>();
+        groupData.required("studentIds").forEach(member -> {
+            assertTrue(member.isTextual());
+            finalizedMembers.add(member.textValue());
+        });
+        assertEquals(java.util.Set.copyOf(studentIds), java.util.Set.copyOf(finalizedMembers));
+        assertEquals(3, finalizedMembers.size());
+        assertEquals(0, store.repository().findByTypeAndParentId("confirmed_supervisor", projectId).size());
+
+        String studentToken = login("student01");
+        JsonNode eligibleProjects = objectMapper.readTree(mockMvc.perform(
+                                get("/api/formal-applications/eligible-projects").param("size", "100")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray())
+                .required("content");
+        assertTrue(eligibleProjects.isArray());
+        JsonNode eligible = java.util.stream.StreamSupport.stream(eligibleProjects.spliterator(), false)
+                .filter(item -> projectId.equals(item.required("projectId").textValue()))
+                .findFirst().orElseThrow();
+        assertEquals(period.getId().toString(), eligible.required("periodId").textValue());
+        assertTrue(eligible.required("formalProposalId").isNull());
+        java.util.Set<String> eligibleFields = new java.util.HashSet<>();
+        eligible.fieldNames().forEachRemaining(eligibleFields::add);
+        assertEquals(java.util.Set.of("projectId", "projectTitle", "periodId", "periodLabel", "schoolYear",
+                "formalProposalId", "formalProposalStatus"), eligibleFields);
+        JsonNode roster = objectMapper.readTree(mockMvc.perform(
+                                get("/api/projects/{projectId}/formal-application-roster", projectId)
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsByteArray())
+                .required("members");
+        assertTrue(roster.isArray());
+        List<String> rosterIds = new ArrayList<>();
+        for (JsonNode member : roster) {
+            assertTrue(member.required("studentId").isTextual());
+            assertTrue(member.required("displayName").isTextual());
+            String memberId = member.required("studentId").textValue();
+            rosterIds.add(memberId);
+            assertEquals(users.findById(UUID.fromString(memberId)).orElseThrow().getDisplayName(),
+                    member.required("displayName").textValue());
+        }
+        assertEquals(finalizedMembers, rosterIds);
+        mockMvc.perform(get("/api/projects/{projectId}/formal-application-roster", projectId)
+                        .header("Authorization", "Bearer " + login("student04")))
+                .andExpect(status().isForbidden());
+    }
 
     @Test
     void completedAllocationIncludesProjectsWithoutSupervisorsAndMatchesSupervisedResult() throws Exception {
@@ -372,10 +468,14 @@ class AllocationSupervisorIndependenceTest {
     }
 
     private String loginAdmin() throws Exception {
+        return login("admin01");
+    }
+
+    private String login(String username) throws Exception {
         MvcResult result = mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(Map.of(
-                                "username", "admin01", "password", "testing-password"))))
+                                "username", username, "password", "testing-password"))))
                 .andExpect(status().isOk())
                 .andReturn();
         return objectMapper.readTree(result.getResponse().getContentAsString()).path("token").asText();

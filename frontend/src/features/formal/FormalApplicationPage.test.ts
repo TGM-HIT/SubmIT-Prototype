@@ -299,6 +299,33 @@ describe('Formal proposal presentation and unchanged lifecycle', () => {
     setLanguage('en')
   })
 
+  it('selects a supervisor-free no-proposal project and opens the roster-backed editor with first-tab focus', async () => {
+    api.eligibleProjects.mockResolvedValue(eligiblePage([
+      eligible(null, otherProjectId, 'Supervisor-free preview project 1'),
+    ]))
+    const page = mount(FormalApplicationPage, { attachTo: document.body })
+    await flushPromises()
+    await page.get('#eligible-project').setValue(otherProjectId)
+    await flushPromises()
+    expect(api.roster).toHaveBeenCalledExactlyOnceWith(otherProjectId)
+    expect(page.text()).not.toContain('The finalized group roster could not be loaded')
+    expect(page.find('[role="alert"]').exists()).toBe(false)
+    expect(page.get('.notice').text()).toContain('No Formal proposal exists')
+    await button(page, 'Start a formal proposal').trigger('click')
+    await nextTick()
+    expect(page.findAll('[role="tab"]').map((tab) => tab.text())).toEqual(
+      rosterMembers.map((member) => member.displayName),
+    )
+    expectMemberPanelShape(page)
+    expect(document.activeElement).toBe(page.get('#member-tab-0').element)
+    expect(page.get('#member-tab-0').attributes('aria-selected')).toBe('true')
+    expect(api.get).not.toHaveBeenCalled()
+    expect(api.create).not.toHaveBeenCalled()
+    expect(api.update).not.toHaveBeenCalled()
+    expect(api.submit).not.toHaveBeenCalled()
+    page.unmount()
+  })
+
   it('starts an allocated-project draft and creates it with the existing field payload', async () => {
     const page = await mountStudent(null)
     await page.get('#eligible-project').setValue(projectId)
