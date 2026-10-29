@@ -109,6 +109,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/ideas/{id}/specification/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read a specification PDF narrative after existing idea-read authorization. */
+        get: operations["specificationPdf"];
+        /**
+         * Save a full specification using a private PDF narrative without changing idea metadata.
+         * @description Multipart alternative to PUT /api/ideas/{id}/specification JSON. The request contains only one non-empty PDF no larger than 10 MiB; form narrative fields cannot be included.
+         */
+        put: operations["savePdf"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ideas/{id}/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read an idea PDF narrative after existing idea-read authorization. */
+        get: operations["ideaPdf"];
+        /**
+         * Replace an editable idea's PDF narrative and manual metadata.
+         * @description Multipart alternative to PUT /api/ideas/{id} JSON. `metadata` supplies manual title and school year; `file` is one non-empty PDF no larger than 10 MiB. Form narrative fields cannot be included.
+         */
+        put: operations["updateWithPdf"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/formal-applications/{id}": {
         parameters: {
             query?: never;
@@ -448,6 +490,26 @@ export interface paths {
         put?: never;
         /** Add a student as a co-owner of an idea. */
         post: operations["add"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ideas/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create an idea draft using a private PDF narrative and manual idea metadata.
+         * @description Multipart alternative to POST /api/ideas JSON. `metadata` contains manually entered title, school year, and collaborator IDs; `file` is one non-empty PDF no larger than 10 MiB. JSON narrative fields cannot be included.
+         */
+        post: operations["createWithPdf"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1043,6 +1105,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/application-periods/{periodId}/projects/{projectId}/specification/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read an accepted catalogue project's private specification PDF. */
+        get: operations["specificationPdf_1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/application-periods/{periodId}/projects/{projectId}/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read an accepted catalogue project's private idea PDF. */
+        get: operations["ideaPdf_1"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/application-periods/{periodId}/catalogue/{projectId}": {
         parameters: {
             query?: never;
@@ -1495,6 +1591,7 @@ export interface components {
             /** @description Human-readable error detail. */
             message: string;
         };
+        /** @description JSON form fields for an idea narrative or values populated by the browser's Markdown parser. This JSON narrative shape is mutually exclusive with multipart PDF upload; PDF uploads use the dedicated multipart endpoints and preserve title, school year, and collaborators as manual metadata. */
         IdeaRequest: {
             /** @description Required, non-blank idea title; at most 200 characters. */
             title: string;
@@ -1560,6 +1657,8 @@ export interface components {
             learningTopics: string[];
             /** @description School year associated with the idea. */
             schoolYear: string;
+            /** @description Whether a private PDF narrative is associated with this idea; omitted from idea lists. */
+            pdfPresent?: boolean;
             confirmedSupervisorDisplayName?: string;
             /** @description Whether the current author account is a teacher; included only in staff responses. */
             teacherIdea?: boolean;
@@ -1586,6 +1685,8 @@ export interface components {
                 dependencies: string[];
                 /** @description Identifier of the source revision, or null when unavailable. */
                 revisionId: string | null;
+                /** @description Whether a private PDF narrative is associated with this specification. */
+                pdfPresent: boolean;
             } | null;
             /** @description Idea review history available to the caller. */
             reviews: components["schemas"]["ReviewResponse"][];
@@ -1671,6 +1772,8 @@ export interface components {
             dependencies: string[];
             /** @description Identifier of the source revision, or null when unavailable. */
             revisionId: string | null;
+            /** @description Whether a private PDF narrative is associated with this specification. */
+            pdfPresent: boolean;
         };
         SupervisionPreferenceResponse: {
             /**
@@ -1722,6 +1825,7 @@ export interface components {
             /** @description Optional note; at most 2,000 characters. */
             note?: string;
         };
+        /** @description JSON form fields or values populated by the browser's Markdown parser. This narrative shape is mutually exclusive with the multipart PDF alternative; idea metadata is unchanged. */
         SpecificationRequest: {
             /** @description At least one objective. */
             objectives: string[];
@@ -1735,6 +1839,15 @@ export interface components {
             scope: string;
             /** @description At least one dependency. */
             dependencies: string[];
+        };
+        /** @description Manual metadata for PDF-based idea creation or replacement. Narrative values are supplied only by the PDF and cannot be combined with the JSON narrative request. */
+        IdeaPdfMetadataRequest: {
+            /** @description Manually entered idea title; at most 200 characters. */
+            title: string;
+            /** @description Manually selected school year; at most 20 characters. */
+            schoolYear: string;
+            /** @description Optional student collaborator IDs; creator is not included; maximum four. */
+            collaboratorIds?: string[];
         };
         FormalApplicationRequest: {
             /** @description Required, non-blank project topic; at most 200 characters. */
@@ -3370,6 +3483,8 @@ export interface components {
             learningTopics: string[];
             /** @description Associated school year. */
             schoolYear: string;
+            /** @description Whether an accepted project has a PDF narrative available to catalogue viewers. */
+            pdfPresent: boolean;
             /** @description Project specification, or null if it has not been recorded. */
             specification: {
                 /** @description Project objectives. */
@@ -3384,6 +3499,8 @@ export interface components {
                 scope: string;
                 /** @description Project dependencies. */
                 dependencies: string[];
+                /** @description Whether a private specification PDF is available to this catalogue viewer. */
+                pdfPresent: boolean;
             } | null;
         };
         PageResponseGroupResponse: {
@@ -4099,6 +4216,307 @@ export interface operations {
             };
             /** @description The idea's lifecycle state or specification status does not permit this update. */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    specificationPdf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Private specification PDF; returned only after idea-read authorization. */
+            200: {
+                headers: {
+                    /** @description private, no-store, max-age=0 */
+                    "Cache-Control"?: unknown;
+                    /** @description nosniff */
+                    "X-Content-Type-Options"?: unknown;
+                    /** @description inline; filename="document.pdf" */
+                    "Content-Disposition"?: unknown;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            /** @description Idea ID is not a valid UUID. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Missing or invalid bearer authentication credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Caller is not permitted to view this idea. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Idea or associated PDF does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    savePdf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": {
+                    /**
+                     * Format: binary
+                     * @description Non-empty PDF document, maximum 10 MiB; `.pdf` filename and `%PDF-` signature required.
+                     */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Editable specification saved with a private PDF narrative. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SpecificationResponse"];
+                };
+            };
+            /** @description Empty/non-PDF/oversized file or conflicting narrative inputs. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Missing or invalid bearer authentication credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Caller is not authorized to update this specification. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Idea does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description The idea or specification lifecycle does not permit editing. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Multipart request exceeds the configured request ceiling. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ideaPdf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Private PDF narrative; returned only after idea-read authorization. */
+            200: {
+                headers: {
+                    /** @description private, no-store, max-age=0 */
+                    "Cache-Control"?: unknown;
+                    /** @description nosniff */
+                    "X-Content-Type-Options"?: unknown;
+                    /** @description inline; filename="document.pdf" */
+                    "Content-Disposition"?: unknown;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            /** @description Idea ID is not a valid UUID. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Missing or invalid bearer authentication credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Caller is not permitted to view this idea. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Idea or associated PDF does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    updateWithPdf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": {
+                    metadata: components["schemas"]["IdeaPdfMetadataRequest"];
+                    /**
+                     * Format: binary
+                     * @description Non-empty PDF document, maximum 10 MiB; `.pdf` filename and `%PDF-` signature required.
+                     */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Editable idea updated with a private PDF narrative. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdeaResponse"];
+                };
+            };
+            /** @description Invalid metadata, empty/non-PDF/oversized file, or conflicting narrative inputs. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Missing or invalid bearer authentication credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Caller is not authorized to update this idea. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Idea does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description The idea lifecycle does not permit editing. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Multipart request exceeds the configured request ceiling. */
+            413: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6009,6 +6427,73 @@ export interface operations {
             };
             /** @description The owner limit is exceeded or the requested owner is already present. */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    createWithPdf: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": {
+                    metadata: components["schemas"]["IdeaPdfMetadataRequest"];
+                    /**
+                     * Format: binary
+                     * @description Non-empty PDF document, maximum 10 MiB; `.pdf` filename and `%PDF-` signature required.
+                     */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Idea draft created with a private PDF narrative. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IdeaResponse"];
+                };
+            };
+            /** @description Invalid metadata, empty/non-PDF/oversized file, or conflicting narrative inputs. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Missing or invalid bearer authentication credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Caller is not authorized to create an idea. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Multipart request exceeds the configured request ceiling. */
+            413: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -8286,6 +8771,136 @@ export interface operations {
                 };
             };
             /** @description The artifact or its project does not exist; absent stored content returns an empty body. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    specificationPdf_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                periodId: string;
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Private PDF available under the period catalogue access rules. */
+            200: {
+                headers: {
+                    /** @description private, no-store, max-age=0 */
+                    "Cache-Control"?: unknown;
+                    /** @description nosniff */
+                    "X-Content-Type-Options"?: unknown;
+                    /** @description inline; filename="document.pdf" */
+                    "Content-Disposition"?: unknown;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            /** @description Period or project ID is not a valid UUID. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Missing or invalid bearer authentication credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Caller is not authorized to read this period catalogue. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Period, catalogue project, or PDF does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    ideaPdf_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                periodId: string;
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Private PDF available under the period catalogue access rules. */
+            200: {
+                headers: {
+                    /** @description private, no-store, max-age=0 */
+                    "Cache-Control"?: unknown;
+                    /** @description nosniff */
+                    "X-Content-Type-Options"?: unknown;
+                    /** @description inline; filename="document.pdf" */
+                    "Content-Disposition"?: unknown;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/pdf": string;
+                };
+            };
+            /** @description Period or project ID is not a valid UUID. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Missing or invalid bearer authentication credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Caller is not authorized to read this period catalogue. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Period, catalogue project, or PDF does not exist. */
             404: {
                 headers: {
                     [name: string]: unknown;

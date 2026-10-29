@@ -15,6 +15,11 @@ const api = vi.hoisted(() => ({
   review: vi.fn(),
   update: vi.fn(),
   create: vi.fn(),
+  createPdf: vi.fn(),
+  updatePdf: vi.fn(),
+  saveSpecificationPdf: vi.fn(),
+  pdf: vi.fn(),
+  specificationPdf: vi.fn(),
   lookupStudents: vi.fn(),
   addOwner: vi.fn(),
   removeOwner: vi.fn(),
@@ -35,6 +40,11 @@ vi.mock('../../api/services', () => ({
     list: api.list,
     get: api.get,
     create: api.create,
+    createPdf: api.createPdf,
+    updatePdf: api.updatePdf,
+    saveSpecificationPdf: api.saveSpecificationPdf,
+    pdf: api.pdf,
+    specificationPdf: api.specificationPdf,
     lookupStudents: api.lookupStudents,
     addOwner: api.addOwner,
     removeOwner: api.removeOwner,
@@ -115,6 +125,11 @@ beforeEach(() => {
   api.review.mockResolvedValue({ decision: 'APPROVE_FOR_SPECIFICATION' })
   api.update.mockResolvedValue({})
   api.create.mockResolvedValue({})
+  api.createPdf.mockResolvedValue({})
+  api.updatePdf.mockResolvedValue({})
+  api.saveSpecificationPdf.mockResolvedValue({})
+  api.pdf.mockResolvedValue(new Blob(['%PDF-1.4']))
+  api.specificationPdf.mockResolvedValue(new Blob(['%PDF-1.4']))
   api.lookupStudents.mockResolvedValue({ content: [{ id: 'student-2', displayName: 'Student Two' }], page: 0, size: 20, totalElements: 1, totalPages: 1 })
   api.addOwner.mockImplementation(async (id: string) => ({ ...idea('IDEA_DRAFT'), id, owners: [idea('IDEA_DRAFT').owners[0], { id: 'student-2', displayName: 'Student Two', creator: false }] }))
   api.removeOwner.mockResolvedValue(idea('IDEA_DRAFT'))
@@ -176,6 +191,8 @@ describe("student details in idea identities", () => {
       expect(page.find('#review-button-idea-IDEA_SUBMITTED').exists()).toBe(true)
       await page.get('#details-button-idea-IDEA_SUBMITTED').trigger('click')
       await flushPromises()
+      console.log('AFTER-DETAIL', page.text(), page.html().slice(-1200), api.get.mock.calls)
+      expect(api.get).toHaveBeenCalledWith('idea-IDEA_SUBMITTED')
       expect(page.find('#review-from-details').exists()).toBe(true)
       expect(page.find('#teacher-id').exists()).toBe(true)
       expect(page.find('#preference').exists()).toBe(true)
@@ -1558,6 +1575,205 @@ describe('IdeasPage collaboration access changes', () => {
     await page.get('#collaborator-lookup').setValue('Retry query')
     await flushPromises()
     expect(page.text()).toContain('Try again')
+    page.unmount()
+  })
+
+  it('imports valid Markdown transactionally and keeps idea metadata manual', async () => {
+    const page = mountPage()
+    await flushPromises()
+    await page.get('#new-idea-button').trigger('click')
+    await page.get('#idea-title').setValue('Manual idea title')
+    await page.get('#school-year').setValue('2026/2027')
+    await page.findAll('input[type="radio"]')[1].setValue()
+    const input = page.get('#idea-markdown-file').element as HTMLInputElement
+    Object.defineProperty(input, 'files', {
+      configurable: true,
+      value: [{
+        name: 'idea.md',
+        size: 100,
+        text: async () => '## Description\nImported description\n## Intended outcome\nImported outcome\n'
+          + '## Initial scope points\n- Imported scope\n## Learning topics\n- Imported topic',
+      }],
+    })
+    await page.get('#idea-markdown-file').trigger('change')
+    await flushPromises()
+
+    expect((page.get('#idea-description').element as HTMLTextAreaElement).value).toBe('Imported description')
+    expect((page.get('#idea-outcome').element as HTMLTextAreaElement).value).toBe('Imported outcome')
+    expect((page.get('#scope').element as HTMLTextAreaElement).value).toBe('Imported scope')
+    expect((page.get('#learning').element as HTMLTextAreaElement).value).toBe('Imported topic')
+    expect((page.get('#idea-title').element as HTMLInputElement).value).toBe('Manual idea title')
+    expect((page.get('#school-year').element as HTMLSelectElement).value).toBe('2026/2027')
+    expect(api.create).not.toHaveBeenCalled()
+    await page.get('form').trigger('submit')
+    await flushPromises()
+    expect(api.create).toHaveBeenCalledWith(expect.objectContaining({
+      title: 'Manual idea title',
+      schoolYear: '2026/2027',
+      description: 'Imported description',
+      intendedOutcome: 'Imported outcome',
+      scopePoints: ['Imported scope'],
+      learningTopics: ['Imported topic'],
+      collaboratorIds: [],
+    }))
+    page.unmount()
+  })
+
+  it('rejects invalid Markdown and preserves current narrative values', async () => {
+    const page = mountPage()
+    await flushPromises()
+    await page.get('#new-idea-button').trigger('click')
+    await page.get('#idea-description').setValue('Keep this description')
+    await page.findAll('input[type="radio"]')[1].setValue()
+    const input = page.get('#idea-markdown-file').element as HTMLInputElement
+    for (const file of [
+      { name: 'notes.txt', size: 10, text: async () => 'ignored' },
+      { name: 'empty.md', size: 0, text: async () => '' },
+      { name: 'broken.md', size: 20, text: async () => '## Unknown\ninvalid' },
+    ]) {
+      Object.defineProperty(input, 'files', { configurable: true, value: [file] })
+      await page.get('#idea-markdown-file').trigger('change')
+      await flushPromises()
+      expect((page.get('#idea-description').element as HTMLTextAreaElement).value).toBe('Keep this description')
+      expect(page.get('[role="alert"]').text()).not.toBe('')
+      expect(api.create).not.toHaveBeenCalled()
+    }
+    page.unmount()
+  })
+
+  it('cancels a selected PDF without saving and restores focus to the author action', async () => {
+    const page = mountPage()
+    await flushPromises()
+    const newIdea = page.get('#new-idea-button')
+    await newIdea.trigger('click')
+    await page.findAll('input[type="radio"]')[2].setValue()
+    const input = page.get('#idea-pdf-file').element as HTMLInputElement
+    Object.defineProperty(input, 'files', {
+      configurable: true,
+      value: [{ name: 'narrative.pdf', size: 32, text: async () => '%PDF-1.4' }],
+    })
+    await page.get('#idea-pdf-file').trigger('change')
+    await page.findAll('button').find(button => button.text() === 'Cancel')!.trigger('click')
+    await flushPromises()
+
+    expect(api.createPdf).not.toHaveBeenCalled()
+    expect(api.create).not.toHaveBeenCalled()
+    expect(document.activeElement).toBe(newIdea.element)
+    page.unmount()
+  })
+
+  it('uploads an idea PDF with unchanged manual metadata', async () => {
+    const createPdf = { ...idea('IDEA_DRAFT'), id: 'idea-pdf-created', pdfPresent: true }
+    api.createPdf.mockResolvedValue(createPdf)
+    const page = mountPage()
+    await flushPromises()
+    await page.get('#new-idea-button').trigger('click')
+    await page.get('#idea-title').setValue('PDF with manual title')
+    await page.get('#school-year').setValue('2026/2027')
+    await page.findAll('input[type="radio"]')[2].setValue()
+    const file = { name: 'narrative.pdf', size: 32, text: async () => '%PDF-1.4' }
+    const input = page.get('#idea-pdf-file').element as HTMLInputElement
+    for (const invalid of [
+      { name: 'notes.txt', size: 32, text: async () => 'not a pdf' },
+      { name: 'empty.pdf', size: 0, text: async () => '' },
+      { name: 'large.pdf', size: 10 * 1024 * 1024 + 1, text: async () => '%PDF-1.4' },
+    ]) {
+      Object.defineProperty(input, 'files', { configurable: true, value: [invalid] })
+      await page.get('#idea-pdf-file').trigger('change')
+      expect(page.get('[role="alert"]').text()).toContain('Choose a non-empty PDF file')
+      expect(api.createPdf).not.toHaveBeenCalled()
+    }
+    Object.defineProperty(input, 'files', { configurable: true, value: [file] })
+    await page.get('#idea-pdf-file').trigger('change')
+    expect(page.find('[role="alert"]').exists()).toBe(false)
+    await page.get('form').trigger('submit')
+    await flushPromises()
+    expect(api.createPdf).toHaveBeenCalledWith(
+      { title: 'PDF with manual title', schoolYear: '2026/2027', collaboratorIds: [] },
+      file,
+    )
+
+    page.unmount()
+  })
+
+  it('offers PDF preview with a retry and restores focus when the modal closes', async () => {
+    vi.stubGlobal('URL', {
+      createObjectURL: vi.fn(() => 'blob:preview'),
+      revokeObjectURL: vi.fn(),
+    })
+    const pdfIdea = { ...idea('IDEA_SUBMITTED'), pdfPresent: true }
+    api.list.mockResolvedValue({ ...pageIdeas(), content: [pdfIdea] })
+    api.get.mockResolvedValue(pdfIdea)
+    api.pdf.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce(new Blob(['%PDF-1.4']))
+    const page = mountPage()
+    await flushPromises()
+    await page.get('#details-button-idea-IDEA_SUBMITTED').trigger('click')
+    await flushPromises()
+    expect(api.get).toHaveBeenCalledWith('idea-IDEA_SUBMITTED')
+    const trigger = page.findAll('[role="dialog"] button').find(button => button.text() === 'Preview submitted PDF')
+    expect(trigger).toBeDefined()
+    await trigger!.trigger('click')
+    await flushPromises()
+    const previewDialog = () => page.findAll('[role="dialog"]').at(-1)!
+    expect(previewDialog().text()).toContain('Unable to load the PDF preview.')
+    await previewDialog().findAll('button').find(button => button.text() === 'Try again')!.trigger('click')
+    await flushPromises()
+    expect(api.pdf).toHaveBeenCalledWith('idea-IDEA_SUBMITTED')
+    expect(previewDialog().find('iframe').attributes('src')).toBe('blob:preview')
+    const close = previewDialog().findAll('button').find(button => button.text() === 'Close')
+    expect(close).toBeDefined()
+    await close!.trigger('click')
+    await flushPromises()
+    expect(document.activeElement).toBe(trigger!.element)
+    page.unmount()
+  })
+
+  it('selects a specification PDF without changing the existing idea metadata', async () => {
+    const approved = {
+      ...idea('IDEA_APPROVED_FOR_SPECIFICATION'),
+      title: 'Unchanged idea title',
+      schoolYear: '2026/2027',
+    }
+    api.list.mockResolvedValue({ ...pageIdeas(), content: [approved] })
+    api.get.mockResolvedValue(approved)
+    const pdf = { name: 'specification.pdf', size: 32, text: async () => '%PDF-1.4' }
+    api.saveSpecificationPdf.mockResolvedValue({ pdfPresent: true })
+    const page = mountPage()
+    await flushPromises()
+    await page.get('#details-button-idea-IDEA_APPROVED_FOR_SPECIFICATION').trigger('click')
+    await flushPromises()
+    const develop = page.get('#develop-specification')
+    await develop.trigger('click')
+    await flushPromises()
+    await page.findAll('input[type="radio"]')[2].setValue()
+    const input = page.get('#specification-file').element as HTMLInputElement
+    Object.defineProperty(input, 'files', { configurable: true, value: [pdf] })
+    await page.get('#specification-file').trigger('change')
+    await page.findAll('button').find(button => button.text() === 'Cancel')!.trigger('click')
+    await flushPromises()
+    expect(api.saveSpecificationPdf).not.toHaveBeenCalled()
+    expect(document.activeElement).toBe(develop.element)
+
+    await develop.trigger('click')
+    await flushPromises()
+    await page.findAll('input[type="radio"]')[2].setValue()
+    const retryInput = page.get('#specification-file').element as HTMLInputElement
+    Object.defineProperty(retryInput, 'files', {
+      configurable: true,
+      value: [{ name: 'invalid.txt', size: 12, text: async () => 'invalid' }],
+    })
+    await page.get('#specification-file').trigger('change')
+    expect(page.get('[role="alert"]').text()).toContain('Choose a non-empty PDF file')
+    expect(api.saveSpecificationPdf).not.toHaveBeenCalled()
+    Object.defineProperty(retryInput, 'files', { configurable: true, value: [pdf] })
+    await page.get('#specification-file').trigger('change')
+    await page.get('[role="dialog"] form').trigger('submit')
+    await flushPromises()
+
+    expect(api.saveSpecificationPdf).toHaveBeenCalledWith('idea-IDEA_APPROVED_FOR_SPECIFICATION', pdf)
+    expect(api.specification).not.toHaveBeenCalled()
+    expect(approved.title).toBe('Unchanged idea title')
+    expect(approved.schoolYear).toBe('2026/2027')
     page.unmount()
   })
 })

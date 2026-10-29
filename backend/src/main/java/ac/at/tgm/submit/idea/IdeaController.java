@@ -69,4 +69,5 @@ public class IdeaController {
     private int normalizeSize(int size) {
         return Math.min(Math.max(size, 1), MAX_PAGE_SIZE);
     }
+
 }

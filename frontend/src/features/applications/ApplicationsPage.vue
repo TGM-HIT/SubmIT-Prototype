@@ -98,16 +98,26 @@
                   </div>
                   <div class="catalogue-detail-section">
                     <h4>{{ $t('applications.idea') }}</h4>
+                    <template v-if="catalogueDetail(period.id ?? '', projectId)?.data?.pdfPresent">
+                      <p class="muted">{{ $t('ideas.ideaPdfNarrative') }}</p>
+                      <button class="button button-secondary button-small" type="button" @click="openCataloguePdf(period.id ?? '', projectId, false, $event)">{{ $t('ideas.previewPdf') }}</button>
+                    </template>
+                    <template v-else>
                     <p>{{ catalogueDetail(period.id ?? '', projectId)?.data?.description || $t('applications.noDescription') }}</p>
                     <ul v-if="(catalogueDetail(period.id ?? '', projectId)?.data?.scopePoints ?? []).length">
                       <li v-for="item in catalogueDetail(period.id ?? '', projectId)?.data?.scopePoints ?? []" :key="item">{{ item }}</li>
                     </ul>
                     <p v-if="!(catalogueDetail(period.id ?? '', projectId)?.data?.scopePoints ?? []).length" class="muted">{{ $t('applications.noScope') }}</p>
                     <p><strong>{{ $t('applications.learningTopics') }}</strong> {{ (catalogueDetail(period.id ?? '', projectId)?.data?.learningTopics ?? []).join(', ') || $t('applications.notSpecified') }}</p>
+                    </template>
                   </div>
                   <div v-if="catalogueDetail(period.id ?? '', projectId)?.data?.specification" class="catalogue-detail-section">
                     <h4>{{ $t('applications.specification') }}</h4>
-                    <dl class="catalogue-detail-list">
+                    <template v-if="catalogueDetail(period.id ?? '', projectId)?.data?.specification?.pdfPresent">
+                      <p class="muted">{{ $t('ideas.specificationPdfNarrative') }}</p>
+                      <button class="button button-secondary button-small" type="button" @click="openCataloguePdf(period.id ?? '', projectId, true, $event)">{{ $t('ideas.previewPdf') }}</button>
+                    </template>
+                    <dl v-else class="catalogue-detail-list">
                       <div><dt>{{ $t('applications.objectives') }}</dt><dd>{{ (catalogueDetail(period.id ?? '', projectId)?.data?.specification?.objectives ?? []).join('; ') || $t('applications.notSpecified') }}</dd></div>
                       <div><dt>{{ $t('applications.intendedUsers') }}</dt><dd>{{ (catalogueDetail(period.id ?? '', projectId)?.data?.specification?.intendedUsers ?? []).join('; ') || $t('applications.notSpecified') }}</dd></div>
                       <div><dt>{{ $t('applications.projectRequirements') }}</dt><dd>{{ (catalogueDetail(period.id ?? '', projectId)?.data?.specification?.requirements ?? []).join('; ') || $t('applications.notSpecified') }}</dd></div>
@@ -158,6 +168,12 @@
       </div>
       <p v-else class="empty">{{ $t('applications.noSubmissions') }}</p>
     </section>
+    <ModalDialog v-if="cataloguePdfPreview" :title="$t('ideas.pdfPreviewTitle')" :return-focus="cataloguePdfPreview.returnFocus" @close="closeCataloguePdf">
+      <p v-if="cataloguePdfPreview.loading" class="muted" role="status">{{ $t('common.loading') }}</p>
+      <div v-else-if="cataloguePdfPreview.error" class="error-box" role="alert">{{ $t('ideas.pdfPreviewError') }} <button class="button button-secondary button-small" type="button" @click="loadCataloguePdf">{{ $t('common.retry') }}</button></div>
+      <iframe v-else-if="cataloguePdfPreview.url" class="pdf-preview-frame" :src="cataloguePdfPreview.url" :title="$t('ideas.pdfPreviewTitle')" />
+      <div class="actions"><button class="button button-secondary" type="button" @click="closeCataloguePdf">{{ $t('common.close') }}</button></div>
+    </ModalDialog>
     <p v-if="task.success.value" class="success-note" role="status">{{ task.success.value }}</p>
   </section>
 </template>
@@ -173,6 +189,7 @@ import { useTask } from '../../composables/useTask'
 import AsyncPanel from '../../components/AsyncPanel.vue'
 import ApplyingGroupsWorkspace from './ApplyingGroupsWorkspace.vue'
 import { formatTimestamp, i18n } from '../../i18n'
+import ModalDialog from '../../components/ModalDialog.vue'
 
 type Period = components['schemas']['ApplicationPeriodResponse']
 type Idea = components['schemas']['IdeaResponse']
@@ -204,6 +221,10 @@ const lookupError = ref('')
 const lookupsReady = ref(false)
 const projectToAdd = ref('')
 const catalogueDetails = ref<Record<string, CatalogueProjectState>>({})
+const cataloguePdfPreview = ref<{
+  periodId: string; projectId: string; specification: boolean; returnFocus: HTMLElement | null
+  url?: string; loading: boolean; error: boolean
+} | null>(null)
 const applicationSummary = ref<Page<Application> | null>(null)
 const summaryPeriod = ref({ label: '', schoolYear: '' })
 const periodForm = reactive({
@@ -274,6 +295,33 @@ function catalogueDetailKey(periodId: string, projectId: string): string {
 }
 function catalogueDetail(periodId: string, projectId: string): CatalogueProjectState | undefined {
   return catalogueDetails.value[catalogueDetailKey(periodId, projectId)]
+}
+async function openCataloguePdf(periodId: string, projectId: string, specification: boolean, event: MouseEvent): Promise<void> {
+  cataloguePdfPreview.value = {
+    periodId, projectId, specification,
+    returnFocus: event.currentTarget instanceof HTMLElement ? event.currentTarget : null,
+    loading: true, error: false,
+  }
+  await loadCataloguePdf()
+}
+async function loadCataloguePdf(): Promise<void> {
+  if (!cataloguePdfPreview.value) return
+  const preview = cataloguePdfPreview.value
+  if (preview.url) URL.revokeObjectURL(preview.url)
+  preview.loading = true
+  preview.error = false
+  try {
+    const blob = await periodsApi.cataloguePdf(preview.periodId, preview.projectId, preview.specification)
+    if (cataloguePdfPreview.value === preview) preview.url = URL.createObjectURL(blob)
+  } catch {
+    preview.error = true
+  } finally {
+    preview.loading = false
+  }
+}
+function closeCataloguePdf(): void {
+  if (cataloguePdfPreview.value?.url) URL.revokeObjectURL(cataloguePdfPreview.value.url)
+  cataloguePdfPreview.value = null
 }
 function onProjectToggle(event: Event, periodId: string, projectId: string): void {
   const details = event.target as HTMLDetailsElement | null

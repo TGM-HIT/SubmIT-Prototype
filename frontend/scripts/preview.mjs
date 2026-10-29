@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawn } from 'node:child_process'
-import { access, mkdir, mkdtemp, open, readFile, rm, writeFile } from 'node:fs/promises'
+import { access, mkdir, mkdtemp, open, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises'
 import { constants } from 'node:fs'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
@@ -212,6 +212,16 @@ export function parseArgs(args) {
           const assignment = assignmentSeparator(argument)
           if (assignment < 1) throw new Error('--step fill must use fill:SELECTOR=VALUE.')
           options.steps.push({ action, selector: argument.slice(0, assignment), value: argument.slice(assignment + 1) })
+        } else if (action === 'set-file' && argument) {
+          const assignment = assignmentSeparator(argument)
+          if (assignment < 1) throw new Error('--step set-file must use set-file:SELECTOR=REPOSITORY_RELATIVE_PATH.')
+          const selector = argument.slice(0, assignment)
+          const relativePath = argument.slice(assignment + 1)
+          const absolutePath = path.resolve(repoDir, relativePath)
+          if (path.isAbsolute(relativePath) || absolutePath === repoDir || !absolutePath.startsWith(`${repoDir}${path.sep}`)) {
+            throw new Error('--step set-file path must be a repository-relative file path.')
+          }
+          options.steps.push({ action, selector, value: relativePath })
         } else if (action === 'click-record-action' && argument) {
           const separator = argument.lastIndexOf('|')
           if (separator < 1 || separator === argument.length - 1) {
@@ -263,7 +273,7 @@ export function parseArgs(args) {
           'assert-dialog-contained', 'assert-dialog-closed'].includes(action) && !argument) {
           options.steps.push({ action })
         } else {
-          throw new Error('--step must be fill:SELECTOR=VALUE, select-index:SELECTOR=INDEX, click-record-action:TITLE_OR_ID|SELECTOR, read-record:TITLE_OR_ID, click:SELECTOR, wait:SELECTOR, read:SELECTOR, focus:SELECTOR, scroll:SELECTOR, navigate:/SAME_ORIGIN_PATH, assert-url:PATH_AND_QUERY, reload, screenshot:FILE, key:SUPPORTED_KEY, assert-dialog-contained, assert-dialog-closed, accept-confirms, reject-confirms, offline, online, or measure-overflow.')
+          throw new Error('--step must be fill:SELECTOR=VALUE, set-file:SELECTOR=REPOSITORY_RELATIVE_PATH, select-index:SELECTOR=INDEX, click-record-action:TITLE_OR_ID|SELECTOR, read-record:TITLE_OR_ID, click:SELECTOR, wait:SELECTOR, read:SELECTOR, focus:SELECTOR, scroll:SELECTOR, navigate:/SAME_ORIGIN_PATH, assert-url:PATH_AND_QUERY, reload, screenshot:FILE, key:SUPPORTED_KEY, assert-dialog-contained, assert-dialog-closed, accept-confirms, reject-confirms, offline, online, or measure-overflow.')
         }
       } else {
         options[name] = value
@@ -1160,6 +1170,23 @@ export async function applyPageSteps(client, steps, { outputDir, log = console.l
       }`
       await evaluatePage(client, `(${expression})(${JSON.stringify(step.selector)}, ${JSON.stringify(step.value)})`, `fill ${step.selector}`)
       log(`Filled ${step.selector}.`)
+    } else if (step.action === 'set-file') {
+      const candidate = path.resolve(repoDir, step.value)
+      const resolved = await realpath(candidate)
+      if (!resolved.startsWith(`${repoDir}${path.sep}`)) {
+        throw new Error('set-file path must resolve to a file inside the repository.')
+      }
+      if (!(await stat(resolved)).isFile()) throw new Error('set-file path must identify a repository file.')
+      const document = await client.send('DOM.getDocument', { depth: 0 })
+      const match = await client.send('DOM.querySelector', { nodeId: document.root.nodeId, selector: step.selector })
+      if (!match.nodeId) throw new Error(`No file input matches ${step.selector}.`)
+      const node = await client.send('DOM.describeNode', { nodeId: match.nodeId })
+      if (node.node.nodeName !== 'INPUT' || !node.node.attributes?.some((value, index, values) =>
+        value === 'type' && values[index + 1] === 'file')) {
+        throw new Error(`Element ${step.selector} is not a file input.`)
+      }
+      await client.send('DOM.setFileInputFiles', { files: [resolved], nodeId: match.nodeId })
+      log(`Selected repository-local file for ${step.selector}.`)
     } else if (step.action === 'select-index') {
       const expression = `(selector, index) => {
         const element = document.querySelector(selector);
@@ -1568,7 +1595,8 @@ Options:
   --step ACTION:VALUE             Run ordered interactions; supports click-row-action:USERNAME|SELECTOR and, on the
                                   Ideas list, click-record-action:TITLE_OR_ID|SELECTOR (or |text:BUTTON_TEXT, e.g. text:Edit)
                                   and read-record:TITLE_OR_ID
-                                  (exact title or idea ID; fails if no or several rows match)
+                                  (exact title or idea ID; fails if no or several rows match), and
+                                  set-file:SELECTOR=REPOSITORY_RELATIVE_PATH for a repository-local fixture
   --password-env NAME             Environment variable containing its password (default PREVIEW_PASSWORD)
   --frontend-port N               Vite port (default 5173)
   --backend-port N                Backend port (default 8080)

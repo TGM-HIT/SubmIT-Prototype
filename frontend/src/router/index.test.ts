@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { router } from './index'
 import { useAuthStore } from '../stores/auth'
 
-describe('User Settings route authentication', () => {
+describe('authenticated routes', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
     useAuthStore().logout()
@@ -21,6 +21,14 @@ describe('User Settings route authentication', () => {
     await router.push('/settings')
 
     expect(router.currentRoute.value.name).toBe('settings')
+  })
+
+  it.each(['STUDENT', 'TEACHER', 'ADMIN'] as const)('opens /templates for an authenticated %s', async (role) => {
+    const auth = useAuthStore()
+    auth.token = 'test-token'
+    auth.updateUser({ id: 'user-id', username: 'account', displayName: 'Name', roles: [role], language: 'en' })
+    await router.push('/templates')
+    expect(router.currentRoute.value.name).toBe('templates')
   })
 
   it('redirects unauthenticated direct navigation to login with the requested path', async () => {

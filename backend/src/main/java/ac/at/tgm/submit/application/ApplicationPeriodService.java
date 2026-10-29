@@ -9,6 +9,7 @@ import ac.at.tgm.submit.security.AuthenticatedUser;
 import ac.at.tgm.submit.security.Role;
 import ac.at.tgm.submit.web.ApiDtos;
 import ac.at.tgm.submit.web.ApiException;
+import java.util.Base64;
 import jakarta.persistence.EntityNotFoundException;
 import java.time.Instant;
 
@@ -101,6 +102,7 @@ public class ApplicationPeriodService {
                     org.springframework.http.HttpStatus.NOT_FOUND,
                     "The project is not in this application period.");
         }
+
         var idea = store.repository().findById(projectId)
                 .filter(record -> IDEA.equals(record.getType()))
                 .orElseThrow(() -> new ApiException(
@@ -122,6 +124,27 @@ public class ApplicationPeriodService {
                 .findFirstByTypeAndParentIdOrderByCreatedAtDesc("specification", idea.getId().toString())
                 .orElse(null);
         return mapper.catalogueProject(idea, specification);
+    }
+
+    @org.springframework.transaction.annotation.Transactional(readOnly = true)
+    public byte[] cataloguePdf(AuthenticatedUser caller, java.util.UUID periodId, java.util.UUID projectId,
+            boolean specification) {
+        getCatalogueProject(caller, periodId, projectId);
+        StoredRecord document = specification
+                ? store.repository().findFirstByTypeAndParentIdOrderByCreatedAtDesc("specification", projectId.toString())
+                        .orElseThrow(() -> new ApiException(org.springframework.http.HttpStatus.NOT_FOUND,
+                                "PDF document was not found."))
+                : store.repository().findById(projectId).orElseThrow(() -> new ApiException(
+                        org.springframework.http.HttpStatus.NOT_FOUND, "PDF document was not found."));
+        String encoded = store.parse(document).path("privatePdfBase64").asText(null);
+        if (encoded == null || encoded.isBlank()) {
+            throw new ApiException(org.springframework.http.HttpStatus.NOT_FOUND, "PDF document was not found.");
+        }
+        try {
+            return Base64.getDecoder().decode(encoded);
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalStateException("Persisted PDF data is invalid.", exception);
+        }
     }
 
     @org.springframework.transaction.annotation.Transactional

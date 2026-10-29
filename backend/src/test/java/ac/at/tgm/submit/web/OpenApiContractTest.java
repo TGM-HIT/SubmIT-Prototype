@@ -443,7 +443,7 @@ class OpenApiContractTest {
             Map.entry("AllocationPinResponse", contract(
                     "studentId,studentDisplayName,projectId,projectTitle,rankedChoice,savedAt", "", "")),
             Map.entry("SpecificationResponse", contract(
-                    "id,status,objectives,intendedUsers,requirements,deliverables,scope,dependencies,revisionId",
+                    "id,status,objectives,intendedUsers,requirements,deliverables,scope,dependencies,revisionId,pdfPresent",
                     "", "revisionId")),
             Map.entry("ReviewResponse", contract(
                     "id,teacherId,teacherDisplayName,reviewType,decision,feedback,workSize,curriculumRelevance,"
@@ -460,15 +460,15 @@ class OpenApiContractTest {
             Map.entry("IdeaResponse", contract(
                     "id,ownerId,creatorId,owners,ownerDisplayName,status,title,description,intendedOutcome,scopePoints,"
                             + "learningTopics,schoolYear,specification,reviews,supervisionPreferences",
-                    "confirmedSupervisorDisplayName,teacherIdea", "ownerDisplayName,specification")),
+                    "confirmedSupervisorDisplayName,teacherIdea,pdfPresent", "ownerDisplayName,specification")),
             Map.entry("ApplicationPeriodResponse", contract(
                     "id,label,schoolYear,opensAt,closesAt,status,projectIds",
                     "projectTitles,studentApplicationStatus,studentAssignment,eligibilityMode,eligibleStudentIds,"
                             + "eligibleClassIds,eligibleToApply", "")),
             Map.entry("CatalogueProjectResponse.specification", contract(
-                    "objectives,intendedUsers,requirements,deliverables,scope,dependencies", "", "")),
+                    "objectives,intendedUsers,requirements,deliverables,scope,dependencies,pdfPresent", "", "")),
             Map.entry("CatalogueProjectResponse", contract(
-                    "id,title,description,intendedOutcome,scopePoints,learningTopics,schoolYear,specification",
+                    "id,title,description,intendedOutcome,scopePoints,learningTopics,schoolYear,specification,pdfPresent",
                     "", "specification")),
             Map.entry("ProjectTitleResponse", contract("projectId,title", "", "")),
             Map.entry("PreferenceResponse", contract("projectId,rank,projectTitle", "", "")),
@@ -777,7 +777,7 @@ class OpenApiContractTest {
 
         List<String> failures = new ArrayList<>();
         int operations = checkOperations(document.path("paths"), failures);
-        assertEquals(86, operations, "The generated API operation count should be reviewed when endpoints change.");
+        assertEquals(93, operations, "The generated API operation count should be reviewed when endpoints change.");
         JsonNode schemas = document.path("components").path("schemas");
         checkComponentSchemas(schemas, failures);
         checkResponseRequiredness(schemas, failures);
@@ -1248,6 +1248,80 @@ class OpenApiContractTest {
     }
 
     @Test
+    void pdfNarrativeAlternativesAndPrivateBinaryResponsesAreExplicit() throws Exception {
+        JsonNode document = apiDocument();
+        JsonNode paths = document.path("paths");
+        JsonNode schemas = document.path("components").path("schemas");
+        JsonNode metadata = schemas.path("IdeaPdfMetadataRequest").path("properties");
+        assertEquals(names("title,schoolYear,collaboratorIds"), propertyNames(metadata));
+        assertTrue(schemas.path("IdeaPdfMetadataRequest").path("description").asText()
+                .toLowerCase().contains("manual"));
+        assertFalse(propertyNames(schemas.path("IdeaPdfMetadataRequest").path("properties"))
+                .contains("description"));
+        assertTrue(schemas.path("IdeaRequest").path("properties").has("description"));
+        assertTrue(schemas.path("SpecificationRequest").path("properties").has("objectives"));
+
+        assertMultipartFields(paths, "post", "/api/ideas/pdf", names("metadata,file"));
+        assertMultipartFields(paths, "put", "/api/ideas/{id}/pdf", names("metadata,file"));
+        assertMultipartFields(paths, "put", "/api/ideas/{id}/specification/pdf", names("file"));
+        assertOperationMetadata(paths, "post", "/api/ideas/pdf", "createWithPdf", "Ideas and reviews");
+        assertOperationMetadata(paths, "put", "/api/ideas/{id}/pdf", "updateWithPdf", "Ideas and reviews");
+        assertOperationMetadata(paths, "get", "/api/ideas/{id}/pdf", "ideaPdf", "Ideas and reviews");
+        assertOperationMetadata(paths, "put", "/api/ideas/{id}/specification/pdf", "savePdf",
+                "specification-controller");
+        assertOperationMetadata(paths, "get", "/api/ideas/{id}/specification/pdf", "specificationPdf",
+                "specification-controller");
+        assertOperationMetadata(paths, "get", "/api/application-periods/{periodId}/projects/{projectId}/pdf",
+                "ideaPdf_1", "School years and applications");
+        assertOperationMetadata(paths, "get",
+                "/api/application-periods/{periodId}/projects/{projectId}/specification/pdf",
+                "specificationPdf_1", "School years and applications");
+        assertTrue(paths.path("/api/ideas/pdf").path("post").path("description").asText()
+                .contains("JSON narrative fields cannot be included"));
+        assertTrue(paths.path("/api/ideas/{id}/specification/pdf").path("put").path("description").asText()
+                .contains("form narrative fields cannot be included"));
+        assertTrue(schemas.path("IdeaResponse").path("properties").has("pdfPresent"));
+        assertTrue(schemas.path("SpecificationResponse").path("properties").has("pdfPresent"));
+        assertTrue(schemas.path("CatalogueProjectResponse").path("properties").has("pdfPresent"));
+
+        for (String route : List.of(
+                "/api/ideas/{id}/pdf", "/api/ideas/{id}/specification/pdf",
+                "/api/application-periods/{periodId}/projects/{projectId}/pdf",
+                "/api/application-periods/{periodId}/projects/{projectId}/specification/pdf")) {
+            JsonNode get = paths.path(route).path("get");
+            assertTrue(get.path("responses").path("200").path("content").has("application/pdf"), route);
+            JsonNode headers = get.path("responses").path("200").path("headers");
+            assertTrue(headers.has("Cache-Control"), route);
+            assertTrue(headers.has("X-Content-Type-Options"), route);
+            assertTrue(headers.has("Content-Disposition"), route);
+            assertTrue(get.path("responses").has("401"), route);
+        }
+    }
+
+    private void assertMultipartFields(JsonNode paths, String method, String path, Set<String> expected) {
+        JsonNode operation = paths.path(path).path(method);
+        JsonNode body = operation.path("requestBody").path("content").path("multipart/form-data").path("schema");
+        assertTrue(body.isObject(), method.toUpperCase() + " " + path + " must document multipart/form-data.");
+        assertEquals(expected, propertyNames(body.path("properties")), method.toUpperCase() + " " + path);
+    }
+
+    private void assertOperationMetadata(JsonNode paths, String method, String path, String operationId, String tag) {
+        JsonNode operation = paths.path(path).path(method);
+        assertEquals(operationId, operation.path("operationId").asText(), method.toUpperCase() + " " + path);
+        JsonNode tags = operation.path("tags");
+        assertTrue(tags.isArray(), method.toUpperCase() + " " + path + " tags");
+        assertEquals(1, tags.size(), method.toUpperCase() + " " + path + " tag count");
+        assertTrue(tags.path(0).isTextual(), method.toUpperCase() + " " + path + " tag type");
+        assertEquals(tag, tags.path(0).textValue(), method.toUpperCase() + " " + path + " tag");
+    }
+
+    private Set<String> propertyNames(JsonNode properties) {
+        Set<String> names = new TreeSet<>();
+        properties.fieldNames().forEachRemaining(names::add);
+        return names;
+    }
+
+    @Test
     void gradingOperationsDocumentTheirSuccessAndErrorResponseSchemas() throws Exception {
         MvcResult result = mockMvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk())
@@ -1411,8 +1485,8 @@ class OpenApiContractTest {
                 }
             }
         }
-        assertEquals(86, operationCount);
-        assertEquals(82, protectedCount);
+        assertEquals(93, operationCount);
+        assertEquals(89, protectedCount);
         assertTrue(failures.isEmpty(), () -> String.join(System.lineSeparator(), failures));
     }
 
@@ -1420,7 +1494,7 @@ class OpenApiContractTest {
     void operationsDocumentApplicableStandardErrorResponses() throws Exception {
         JsonNode paths = apiDocument().path("paths");
         List<String> failures = new ArrayList<>();
-        assertEquals(80, TICKET_ERROR_CODES.size(), "The independent ticket oracle must list all operations.");
+        assertEquals(87, TICKET_ERROR_CODES.size(), "The independent ticket oracle must list all operations.");
         Set<String> actualOperations = new java.util.TreeSet<>();
         paths.properties().forEach(path -> path.getValue().properties().forEach(method -> {
             if (HTTP_METHODS.contains(method.getKey())) {
@@ -1684,6 +1758,12 @@ class OpenApiContractTest {
                 if (expected.schema().equals("binary")) {
                     expectedContent = objectMapper.readTree(
                             "{\"application/octet-stream\":{\"schema\":{\"type\":\"string\",\"format\":\"binary\"}}}");
+                } else if (expected.schema().equals("pdf")) {
+                    expectedContent = objectMapper.readTree(
+                            "{\"application/pdf\":{\"schema\":{\"type\":\"string\",\"format\":\"binary\"}}}");
+                } else if (expected.schema().startsWith("application/json:")) {
+                    expectedContent = objectMapper.readTree("{\"application/json\":{\"schema\":{\"$ref\":\""
+                            + expected.schema().substring("application/json:".length()) + "\"}}}");
                 } else {
                     expectedContent = objectMapper.readTree("{\"*/*\":{\"schema\":{\"$ref\":\""
                             + expected.schema() + "\"}}}");
@@ -1695,7 +1775,7 @@ class OpenApiContractTest {
             }
             baselineCodes.computeIfAbsent(location, unused -> new TreeSet<>()).add(expected.status());
         }
-        assertEquals(81, BASELINE_SUCCESS_RESPONSES.size(), "The checked-in baseline must cover all operations.");
+        assertEquals(88, BASELINE_SUCCESS_RESPONSES.size(), "The checked-in baseline must cover all operations.");
 
         for (Map.Entry<String, Set<String>> route : TICKET_ERROR_CODES.entrySet()) {
             String[] parts = route.getKey().split(" ", 2);
@@ -1814,10 +1894,14 @@ class OpenApiContractTest {
                 get|/api/projects/{projectId}/artifacts|400,403,404
                 post|/api/projects/{projectId}/artifacts|400,403,404,409
                 get|/api/ideas/{id}|400,403,404
+                get|/api/ideas/{id}/pdf|400,403,404
+                get|/api/ideas/{id}/specification/pdf|400,403,404
                 put|/api/ideas/{id}|400,403,404,409
+                put|/api/ideas/{id}/pdf|400,403,404,409,413
                 put|/api/ideas/{id}/supervisor|400,403,404,409
                 put|/api/ideas/{id}/supervision-preference|400,403,404,409
                 put|/api/ideas/{id}/specification|400,403,404,409
+                put|/api/ideas/{id}/specification/pdf|400,403,404,409,413
                 put|/api/formal-applications/{id}|400,403,404,409
                 put|/api/applications/{id}|400,403,404,409
                 delete|/api/applications/{id}|400,403,404,409
@@ -1829,6 +1913,7 @@ class OpenApiContractTest {
                 post|/api/student-classes|400,403,409
                 get|/api/ideas|400
                 post|/api/ideas|400,403
+                post|/api/ideas/pdf|400,403,413
                 post|/api/ideas/{id}/withdraw|400,403,404,409
                 post|/api/ideas/{id}/submit|400,403,404,409
                 post|/api/ideas/{id}/specification/submit|400,403,404,409
@@ -1869,6 +1954,8 @@ class OpenApiContractTest {
                 delete|/api/artifacts/{artifactId}|400,403,404,409
                 get|/api/artifacts/{artifactId}/content|400,403,404
                 get|/api/application-periods/{periodId}/catalogue/{projectId}|400,403,404
+                get|/api/application-periods/{periodId}/projects/{projectId}/pdf|400,403,404
+                get|/api/application-periods/{periodId}/projects/{projectId}/specification/pdf|400,403,404
                 get|/api/application-periods/{periodId}/applications/me|400,403,404
                 get|/api/application-periods/{periodId}/allocation-pins|400,403,404
                 get|/api/allocation-runs/{id}|400,403,404
@@ -1947,10 +2034,21 @@ class OpenApiContractTest {
                 get|/api/ideas/{id}|400|idea ID;UUID
                 get|/api/ideas/{id}|403|not permitted to view this idea
                 get|/api/ideas/{id}|404|idea does not exist
+                get|/api/ideas/{id}/pdf|400|idea ID is not a valid UUID
+                get|/api/ideas/{id}/pdf|403|caller is not permitted to view this idea
+                get|/api/ideas/{id}/pdf|404|idea or associated PDF does not exist
+                get|/api/ideas/{id}/specification/pdf|400|idea ID is not a valid UUID
+                get|/api/ideas/{id}/specification/pdf|403|caller is not permitted to view this idea
+                get|/api/ideas/{id}/specification/pdf|404|idea or associated PDF does not exist
                 put|/api/ideas/{id}|400|idea ID;submitted idea fields
                 put|/api/ideas/{id}|403|role or ownership;update this idea
                 put|/api/ideas/{id}|404|idea does not exist
                 put|/api/ideas/{id}|409|current lifecycle state;does not permit this update
+                put|/api/ideas/{id}/pdf|400|invalid metadata;empty/non-PDF/oversized file;conflicting narrative inputs
+                put|/api/ideas/{id}/pdf|403|caller is not authorized to update this idea
+                put|/api/ideas/{id}/pdf|404|idea does not exist
+                put|/api/ideas/{id}/pdf|409|idea lifecycle does not permit editing
+                put|/api/ideas/{id}/pdf|413|multipart request exceeds the configured request ceiling
                 put|/api/ideas/{id}/supervisor|400|idea ID;supervisor-assignment request
                 put|/api/ideas/{id}/supervisor|403|role or authorization;assign a supervisor
                 put|/api/ideas/{id}/supervisor|404|idea does not exist
@@ -1963,6 +2061,11 @@ class OpenApiContractTest {
                 put|/api/ideas/{id}/specification|403|role or ownership;update this specification
                 put|/api/ideas/{id}/specification|404|idea does not exist
                 put|/api/ideas/{id}/specification|409|lifecycle state;specification status
+                put|/api/ideas/{id}/specification/pdf|400|empty/non-PDF/oversized file;conflicting narrative inputs
+                put|/api/ideas/{id}/specification/pdf|403|caller is not authorized to update this specification
+                put|/api/ideas/{id}/specification/pdf|404|idea does not exist
+                put|/api/ideas/{id}/specification/pdf|409|idea or specification lifecycle does not permit editing
+                put|/api/ideas/{id}/specification/pdf|413|multipart request exceeds the configured request ceiling
                 put|/api/formal-applications/{id}|400|application ID;formal-application fields
                 put|/api/formal-applications/{id}|403|authorized to update this application
                 put|/api/formal-applications/{id}|404|formal application does not exist
@@ -1997,6 +2100,9 @@ class OpenApiContractTest {
                 get|/api/ideas|400|pagination;idea-filter
                 post|/api/ideas|400|idea request;collaborator input
                 post|/api/ideas|403|role;not permitted to create an idea
+                post|/api/ideas/pdf|400|invalid metadata;empty/non-PDF/oversized file;conflicting narrative inputs
+                post|/api/ideas/pdf|403|caller is not authorized to create an idea
+                post|/api/ideas/pdf|413|multipart request exceeds the configured request ceiling
                 post|/api/ideas/{id}/withdraw|400|idea ID;UUID
                 post|/api/ideas/{id}/withdraw|403|role or ownership;withdraw the idea
                 post|/api/ideas/{id}/withdraw|404|idea does not exist
@@ -2113,6 +2219,12 @@ class OpenApiContractTest {
                 get|/api/application-periods/{periodId}/catalogue/{projectId}|400|period or project ID;UUID
                 get|/api/application-periods/{periodId}/catalogue/{projectId}|403|role required to view this catalogue entry
                 get|/api/application-periods/{periodId}/catalogue/{projectId}|404|period, project, or period catalogue entry
+                get|/api/application-periods/{periodId}/projects/{projectId}/pdf|400|period or project ID is not a valid UUID
+                get|/api/application-periods/{periodId}/projects/{projectId}/pdf|403|caller is not authorized to read this period catalogue
+                get|/api/application-periods/{periodId}/projects/{projectId}/pdf|404|period, catalogue project, or PDF does not exist
+                get|/api/application-periods/{periodId}/projects/{projectId}/specification/pdf|400|period or project ID is not a valid UUID
+                get|/api/application-periods/{periodId}/projects/{projectId}/specification/pdf|403|caller is not authorized to read this period catalogue
+                get|/api/application-periods/{periodId}/projects/{projectId}/specification/pdf|404|period, catalogue project, or PDF does not exist
                 get|/api/application-periods/{periodId}/applications/me|400|period ID;UUID
                 get|/api/application-periods/{periodId}/applications/me|403|role required to view their application
                 get|/api/application-periods/{periodId}/applications/me|404|period or caller's application
@@ -2272,10 +2384,14 @@ class OpenApiContractTest {
                 get|/api/projects/{projectId}/final-grade|200|#/components/schemas/FinalGradeHistory
                 put|/api/projects/{projectId}/final-grade|200|#/components/schemas/FinalGradesResponse
                 get|/api/ideas/{id}|200|#/components/schemas/IdeaResponse
+                get|/api/ideas/{id}/pdf|200|pdf
+                get|/api/ideas/{id}/specification/pdf|200|pdf
                 put|/api/ideas/{id}|200|#/components/schemas/IdeaResponse
+                put|/api/ideas/{id}/pdf|200|application/json:#/components/schemas/IdeaResponse
                 put|/api/ideas/{id}/supervisor|200|#/components/schemas/SupervisorResponse
                 put|/api/ideas/{id}/supervision-preference|200|#/components/schemas/SupervisionPreferenceResponse
                 put|/api/ideas/{id}/specification|200|#/components/schemas/SpecificationResponse
+                put|/api/ideas/{id}/specification/pdf|200|application/json:#/components/schemas/SpecificationResponse
                 put|/api/formal-applications/{id}|200|#/components/schemas/FormalApplicationResponse
                 put|/api/applications/{id}|200|#/components/schemas/StudentApplicationResponse
                 delete|/api/applications/{id}|204|
@@ -2302,6 +2418,7 @@ class OpenApiContractTest {
                 post|/api/projects/{projectId}/artifacts|201|#/components/schemas/ArtifactResponse
                 get|/api/ideas|200|#/components/schemas/PageResponseIdeaResponse
                 post|/api/ideas|201|#/components/schemas/IdeaResponse
+                post|/api/ideas/pdf|201|application/json:#/components/schemas/IdeaResponse
                 post|/api/ideas/{id}/withdraw|200|#/components/schemas/IdeaResponse
                 post|/api/ideas/{id}/submit|200|#/components/schemas/IdeaResponse
                 post|/api/ideas/{id}/specification/submit|200|#/components/schemas/SpecificationResponse
@@ -2343,6 +2460,8 @@ class OpenApiContractTest {
                 delete|/api/artifacts/{artifactId}|204|
                 get|/api/artifacts/{artifactId}/content|200|binary
                 get|/api/application-periods/{periodId}/catalogue/{projectId}|200|#/components/schemas/CatalogueProjectResponse
+                get|/api/application-periods/{periodId}/projects/{projectId}/pdf|200|pdf
+                get|/api/application-periods/{periodId}/projects/{projectId}/specification/pdf|200|pdf
                 get|/api/application-periods/{periodId}/applications/me|200|#/components/schemas/StudentApplicationResponse
                 get|/api/application-periods/{periodId}/allocation-pins|200|#/components/schemas/PageResponseAllocationPinResponse
                 get|/api/allocation-runs/{id}|200|#/components/schemas/AllocationRunResponse
@@ -2413,7 +2532,8 @@ class OpenApiContractTest {
         ApiDtos.SupervisionPreferenceResponse preference =
                 new ApiDtos.SupervisionPreferenceResponse(id, id, null, "WILLING_TO_SUPERVISE", null);
         ApiDtos.IdeaResponse idea = new ApiDtos.IdeaResponse(id, id, id, List.of(owner), null, "SUBMITTED",
-                "Title", "Description", "Outcome", List.of("Scope"), List.of("Topic"), "2026", null, null, null,
+                "Title", "Description", "Outcome", List.of("Scope"), List.of("Topic"), "2026", null,
+                null, null, null,
                 List.of(review), List.of(preference));
 
         JsonNode ideaJson = objectMapper.readTree(objectMapper.writeValueAsBytes(idea));

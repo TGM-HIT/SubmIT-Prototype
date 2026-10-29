@@ -134,6 +134,35 @@ test('G8 parses scoped attribute selectors without consuming assignment characte
   assert.deepEqual(parsed.selectByKey[0], { selector: '[data-kind="shared"] select', value: 'Project=c' })
 })
 
+test('set-file parses a repository-relative fixture and selects it only on a file input', async () => {
+  const parsed = parseArgs(['--step', 'set-file:#idea-markdown-file=frontend/src/features/templates/idea-template-en.md'])
+  assert.deepEqual(parsed.steps, [{
+    action: 'set-file',
+    selector: '#idea-markdown-file',
+    value: 'frontend/src/features/templates/idea-template-en.md',
+  }])
+  assert.throws(() => parseArgs(['--step', 'set-file:#file=../outside.pdf']), /repository-relative/)
+  const calls = []
+  const client = {
+    async send(method, params) {
+      calls.push([method, params])
+      if (method === 'DOM.getDocument') return { root: { nodeId: 1 } }
+      if (method === 'DOM.querySelector') return { nodeId: 2 }
+      if (method === 'DOM.describeNode') return { node: { nodeName: 'INPUT', attributes: ['type', 'file'] } }
+      return {}
+    },
+  }
+  const logs = []
+  await applyPageSteps(client, parsed.steps, { log: (message) => logs.push(message) })
+  assert.equal(calls.find(([method]) => method === 'DOM.setFileInputFiles')[1].files[0].endsWith(
+    '/frontend/src/features/templates/idea-template-en.md'), true)
+  assert.match(logs.join(' '), /Selected repository-local file/)
+  const nonFile = { send: async (method) => method === 'DOM.getDocument'
+    ? { root: { nodeId: 1 } } : method === 'DOM.querySelector' ? { nodeId: 2 }
+      : { node: { nodeName: 'TEXTAREA', attributes: [] } } }
+  await assert.rejects(applyPageSteps(nonFile, parsed.steps), /not a file input/)
+})
+
 test('browser locale override sets both navigator language and Intl locale through CDP', async () => {
   const calls = []
   const client = { send: async (...args) => { calls.push(args) } }
@@ -176,6 +205,9 @@ test('parses preview options and rejects incomplete or invalid invocations', () 
   ])
   assert.deepEqual(parseArgs(['--step', 'reject-confirms']).steps, [
     { action: 'reject-confirms' },
+  ])
+  assert.deepEqual(parseArgs(['--step', 'set-file:#pdf=frontend/src/features/ideas/__fixtures__/valid-preview.pdf']).steps, [
+    { action: 'set-file', selector: '#pdf', value: 'frontend/src/features/ideas/__fixtures__/valid-preview.pdf' },
   ])
   assert.deepEqual(parseArgs(['--step', 'offline', '--step', 'online']).steps, [
     { action: 'offline' },

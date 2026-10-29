@@ -11,6 +11,7 @@ import GradingPage from '../features/grading/GradingPage.vue'
 import ArchivePage from '../features/archive/ArchivePage.vue'
 import AdminPage from '../features/admin/AdminPage.vue'
 import SettingsPage from '../features/settings/SettingsPage.vue'
+import TemplatesPage from '../features/templates/TemplatesPage.vue'
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -24,6 +25,7 @@ export const router = createRouter({
       children: [
         { path: '', name: 'dashboard', component: DashboardPage },
         { path: 'ideas', name: 'ideas', component: IdeasPage },
+        { path: 'templates', name: 'templates', component: TemplatesPage },
         { path: 'applications', name: 'applications', component: ApplicationsPage },
         { path: 'allocation', name: 'allocation', component: AllocationPage },
         { path: 'formal-application', name: 'formal-application', component: FormalApplicationPage },

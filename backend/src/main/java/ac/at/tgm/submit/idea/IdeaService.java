@@ -17,6 +17,9 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class IdeaService {
+    static final String PDF_CONTENT = "privatePdfBase64";
+    static final String REVISION_ID = "revisionId";
+
     private static final String IDEA = "idea";
     private static final String SPECIFICATION = "specification";
     private static final String REVIEW = "review";
@@ -29,6 +32,11 @@ public class IdeaService {
     private static final String SPEC_DRAFT = "SPECIFICATION_DRAFT";
     private static final String WITHDRAWN = "WITHDRAWN";
     private static final String LEARNING_TOPICS = "learningTopics";
+
+    private record ReviewContext(AuthenticatedUser caller, UUID ideaId, StoredRecord idea,
+            boolean specificationReview, String nextStatus) {
+    }
+
     private final RecordStore store;
     private final AuditService audit;
     private final IdeaResponseMapper mapper;
@@ -111,7 +119,7 @@ public class IdeaService {
         ensureSpecificationEditable(idea, current);
         StoredRecord revision = store.create("specification_revision", caller.id().toString(), id.toString(),
                 "SAVED", payload.deepCopy());
-        payload.put("revisionId", revision.getId().toString());
+        payload.put(REVISION_ID, revision.getId().toString());
         if (current == null) {
             current = store.create(SPECIFICATION, caller.id().toString(), id.toString(),
                     "SPECIFICATION_DRAFT", payload);
@@ -158,17 +166,9 @@ public class IdeaService {
         if (!expectedStatus.equals(idea.getStatus())) {
             throw rules.conflict("The requested decision is not valid at this lifecycle stage.");
         }
-        String nextStatus = rules.nextReviewStatus(decision, specificationReview);
-        StoredRecord review = store.create(REVIEW, caller.id().toString(), id.toString(), decision, payload);
-        store.update(idea, nextStatus, store.parse(idea));
-        if (specificationReview) {
-            StoredRecord specification = store.repository()
-                    .findFirstByTypeAndParentIdOrderByCreatedAtDesc(SPECIFICATION, id.toString())
-                    .orElseThrow(() -> new ApiException(HttpStatus.CONFLICT, "A full specification is required."));
-            store.update(specification, nextStatus, store.parse(specification));
-        }
-        audit.record(caller, "IDEA_REVIEW_RECORDED", IDEA, review.getId());
-        return mapper.reviewResponse(review);
+        ReviewContext context = new ReviewContext(caller, id, idea, specificationReview,
+                rules.nextReviewStatus(decision, specificationReview));
+        return persistReview(context, decision, payload);
     }
 
     @Transactional
@@ -195,16 +195,95 @@ public class IdeaService {
         ownership.leave(caller, id);
     }
 
+    ObjectNode preparePdfIdeaCreate(ObjectNode payload, AuthenticatedUser caller) {
+        return ownership.prepareCreate(payload, caller.id(), caller.role());
+    }
+
+    void recordPdfIdeaCreated(AuthenticatedUser caller, StoredRecord record) {
+        audit.record(caller, "IDEA_CREATED", IDEA, record.getId());
+        ownership.ownerIds(record).stream().filter(ownerId -> !ownerId.equals(caller.id()))
+                .forEach(ownerId -> audit.record(caller, "IDEA_OWNER_ADDED", IDEA, record.getId()));
+    }
+
+    void validatePdfIdeaUpdate(AuthenticatedUser caller, StoredRecord idea) {
+        requireOwner(caller, idea);
+        rules.status(idea, IDEA_DRAFT, IDEA_NEEDS_REVISION, WITHDRAWN);
+        rejectGenericLifecycleForWithdrawnSpecification(idea);
+    }
+
+    void recordPdfIdeaUpdated(AuthenticatedUser caller, UUID id) {
+        audit.record(caller, "IDEA_UPDATED", IDEA, id);
+    }
+
+    void validatePdfSpecificationUpdate(AuthenticatedUser caller, StoredRecord idea,
+            StoredRecord specification) {
+        requireOwner(caller, idea);
+        rules.status(idea, IDEA_APPROVED, SPEC_NEEDS_REVISION, WITHDRAWN);
+        ensureSpecificationEditable(idea, specification);
+    }
+
+    void recordPdfSpecificationUpdated(AuthenticatedUser caller, StoredRecord specification) {
+        audit.record(caller, "SPECIFICATION_UPDATED", SPECIFICATION, specification.getId());
+    }
+
+    ApiDtos.IdeaResponse ideaResponse(StoredRecord record, Role viewerRole) {
+        return mapper.response(record, false, viewerRole);
+    }
+
+    ApiDtos.SpecificationResponse specificationResponse(StoredRecord record) {
+        return mapper.specificationResponse(record);
+    }
+
+    private ApiDtos.ReviewResponse persistReview(ReviewContext context, String decision, ObjectNode payload) {
+        AuthenticatedUser caller = context.caller();
+        UUID id = context.ideaId();
+        boolean specificationReview = context.specificationReview();
+        StoredRecord review = store.create(REVIEW, caller.id().toString(), id.toString(), decision, payload);
+        if (specificationReview) {
+            createSpecificationReviewSnapshot(caller, id, review);
+        }
+        store.update(context.idea(), context.nextStatus(), store.parse(context.idea()));
+        if (specificationReview) {
+            updateReviewedSpecification(id, context.nextStatus());
+        }
+        audit.record(caller, "IDEA_REVIEW_RECORDED", IDEA, review.getId());
+        return mapper.reviewResponse(review);
+    }
+
+    private void updateReviewedSpecification(UUID id, String nextStatus) {
+        StoredRecord specification = store.repository()
+                .findFirstByTypeAndParentIdOrderByCreatedAtDesc(SPECIFICATION, id.toString())
+                .orElseThrow(() -> new ApiException(HttpStatus.CONFLICT, "A full specification is required."));
+        store.update(specification, nextStatus, store.parse(specification));
+    }
+
+    private void createSpecificationReviewSnapshot(AuthenticatedUser caller, UUID id, StoredRecord review) {
+        StoredRecord specification = store.repository()
+                .findFirstByTypeAndParentIdOrderByCreatedAtDesc(SPECIFICATION, id.toString())
+                .orElseThrow(() -> new ApiException(HttpStatus.CONFLICT, "A full specification is required."));
+        ObjectNode reviewed = store.parse(specification);
+        ObjectNode snapshot = store.object();
+        snapshot.put(REVISION_ID, reviewed.path(REVISION_ID).asText(""));
+        if (reviewed.has(PDF_CONTENT)) {
+            snapshot.set(PDF_CONTENT, reviewed.get(PDF_CONTENT).deepCopy());
+        }
+        store.create("specification_review_snapshot", caller.id().toString(), review.getId().toString(),
+                "SUBMITTED_REVISION", snapshot);
+    }
+
     private void validateIdeaPayload(ObjectNode payload) {
         rules.text(payload, "title");
+        rules.text(payload, "schoolYear");
+        if (payload.has(PDF_CONTENT)) {
+            return;
+        }
         rules.text(payload, "description");
         rules.text(payload, "intendedOutcome");
         rules.nonEmptyArray(payload, "scopePoints");
         rules.optionalArray(payload, LEARNING_TOPICS);
-        rules.text(payload, "schoolYear");
     }
 
-    private void ensureSpecificationEditable(StoredRecord idea, StoredRecord specification) {
+    void ensureSpecificationEditable(StoredRecord idea, StoredRecord specification) {
         if (specification == null || SPEC_DRAFT.equals(specification.getStatus())
                 || SPEC_NEEDS_REVISION.equals(specification.getStatus())) {
             return;
@@ -216,7 +295,7 @@ public class IdeaService {
         throw rules.conflict("A submitted specification cannot be edited until returned for revision.");
     }
 
-    private void rejectGenericLifecycleForWithdrawnSpecification(StoredRecord idea) {
+    void rejectGenericLifecycleForWithdrawnSpecification(StoredRecord idea) {
         if (!WITHDRAWN.equals(idea.getStatus())) {
             return;
         }
@@ -230,7 +309,7 @@ public class IdeaService {
         }
     }
 
-    private StoredRecord findIdea(UUID id) {
+    StoredRecord findIdea(UUID id) {
         return store.repository().findById(id).filter(record -> IDEA.equals(record.getType()))
                 .orElseThrow(() -> new ApiException(org.springframework.http.HttpStatus.NOT_FOUND,
                         "Idea was not found."));
@@ -242,7 +321,7 @@ public class IdeaService {
         }
     }
 
-    private void requireOwner(AuthenticatedUser caller, StoredRecord record) {
+    void requireOwner(AuthenticatedUser caller, StoredRecord record) {
         if (!ownership.ownerIds(record).contains(caller.id())) {
             throw new org.springframework.security.access.AccessDeniedException("This resource belongs to another user.");
         }

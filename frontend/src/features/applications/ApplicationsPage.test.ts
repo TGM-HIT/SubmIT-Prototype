@@ -17,6 +17,7 @@ const api = vi.hoisted(() => ({
   applications: vi.fn(),
   myApplication: vi.fn(),
   projectDetails: vi.fn(),
+  cataloguePdf: vi.fn(),
   createApplication: vi.fn(),
   updateApplication: vi.fn(),
   withdrawApplication: vi.fn(),
@@ -33,6 +34,7 @@ vi.mock('../../api/services', () => ({
     applications: api.applications,
     myApplication: api.myApplication,
     projectDetails: api.projectDetails,
+    cataloguePdf: api.cataloguePdf,
     createApplication: api.createApplication,
     updateApplication: api.updateApplication,
     withdrawApplication: api.withdrawApplication,
@@ -111,6 +113,7 @@ describe('application period configuration', () => {
         dependencies: ['Power supply'],
       },
     })
+    api.cataloguePdf.mockResolvedValue(new Blob(['%PDF-1.4']))
     api.listIdeas.mockResolvedValue({
       content: projectIds.map((id, index) => ({
         id,
@@ -807,6 +810,7 @@ describe("student catalogue project titles", () => {
       }],
       page: 0, size: 20, totalElements: 1, totalPages: 1,
     })
+
     api.projectDetails.mockResolvedValue({
       id: ids[0],
       title: titles[0],
@@ -837,6 +841,53 @@ describe("student catalogue project titles", () => {
     expect(page.text()).toContain('Project summary')
     expect(page.text()).toContain('Build and test the idea.')
     expect(page.text()).toContain('Accepted project 2 · Water quality')
+  })
+
+  it('previews an accepted catalogue PDF through the period-scoped API', async () => {
+    vi.stubGlobal('URL', {
+      createObjectURL: vi.fn(() => 'blob:catalogue-preview'),
+      revokeObjectURL: vi.fn(),
+    })
+    api.role = 'STUDENT'
+    api.listIdeas.mockResolvedValue({ content: [] })
+    api.myApplication.mockRejectedValue(new ApiError('not found', 404))
+    api.listPeriods.mockResolvedValue({
+      content: [{
+        id: 'period-open', schoolYear: '2026/2027', status: 'OPEN',
+        opensAt: new Date(Date.now() - 3600000).toISOString(),
+        closesAt: new Date(Date.now() + 3600000).toISOString(),
+        projectIds: [ids[0]], projectTitles: [{ projectId: ids[0], title: titles[0] }],
+      }],
+      page: 0, size: 20, totalElements: 1, totalPages: 1,
+    })
+    api.projectDetails.mockResolvedValue({
+      id: ids[0], title: titles[0], description: '', intendedOutcome: '',
+      scopePoints: [], learningTopics: [], schoolYear: '2026/2027',
+      pdfPresent: true,
+      specification: {
+        objectives: [], intendedUsers: [], requirements: [], deliverables: [],
+        scope: '', dependencies: [], pdfPresent: true,
+      },
+    })
+    const page = mountPage(document.body)
+    await flushPromises()
+    const project = page.findAll('details')[0]
+    project.element.open = true
+    await project.trigger('toggle')
+    await flushPromises()
+    const preview = page.findAll('button').find(button => button.text() === 'Preview submitted PDF')
+    expect(preview).toBeDefined()
+    await preview!.trigger('click')
+    await flushPromises()
+
+    expect(api.cataloguePdf).toHaveBeenCalledWith('period-open', ids[0], false)
+    const dialog = page.findAll('[role="dialog"]').at(-1)!
+    expect(dialog.find('iframe').attributes('src')).toBe('blob:catalogue-preview')
+    await dialog.findAll('button').find(button => button.text() === 'Close')!.trigger('click')
+    await flushPromises()
+    expect(document.activeElement).toBe(preview!.element)
+    page.unmount()
+    vi.unstubAllGlobals()
   })
 
   it("uses open-period titles for catalogue and ranking controls while preserving ranking actions", async () => {

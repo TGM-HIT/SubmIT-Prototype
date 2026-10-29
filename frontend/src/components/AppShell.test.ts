@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import AppShell from './AppShell.vue'
 import { useAuthStore } from '../stores/auth'
 import SettingsPage from '../features/settings/SettingsPage.vue'
+import { setLanguage } from '../i18n'
 
 const api = vi.hoisted(() => ({ changeName: vi.fn() }))
 vi.mock('../api/services', () => ({ userApi: { changeName: api.changeName } }))
@@ -30,6 +31,7 @@ function createTestRouter() {
       children: [
         { path: '', name: 'dashboard', component: page, meta: { title: 'Overview' } },
         { path: 'ideas', name: 'ideas', component: page, meta: { title: 'Ideas & reviews' } },
+        { path: 'templates', name: 'templates', component: page },
         { path: 'applications', name: 'applications', component: page },
         { path: 'allocation', name: 'allocation', component: page },
         { path: 'formal-application', name: 'formal-application', component: page },
@@ -52,13 +54,14 @@ async function mountAt(path: string) {
 
 describe('authenticated shell profile and settings navigation', () => {
   const roleNavigation = {
-    STUDENT: ['/', '/ideas', '/applications', '/formal-application', '/grading', '/archive'],
-    TEACHER: ['/', '/ideas', '/applications', '/allocation', '/formal-application', '/grading', '/archive'],
-    ADMIN: ['/', '/ideas', '/applications', '/allocation', '/grading', '/archive', '/admin'],
+    STUDENT: ['/', '/ideas', '/templates', '/applications', '/formal-application', '/grading', '/archive'],
+    TEACHER: ['/', '/ideas', '/templates', '/applications', '/allocation', '/formal-application', '/grading', '/archive'],
+    ADMIN: ['/', '/ideas', '/templates', '/applications', '/allocation', '/grading', '/archive', '/admin'],
   } as const
 
   afterEach(() => {
     document.body.innerHTML = ''
+    setLanguage('en')
     api.changeName.mockReset()
     vi.restoreAllMocks()
   })
@@ -70,6 +73,7 @@ describe('authenticated shell profile and settings navigation', () => {
       useAuthStore().updateUser(account(role))
       const wrapper = await mountAt('/applications')
       const navigation = wrapper.get('nav[aria-label="Main navigation"]')
+      expect(navigation.findAll('a').map((link) => link.attributes('href'))).toEqual(roleNavigation[role])
       const preferences = navigation.get('a[href="/applications"]')
       expect(preferences.text().slice(1)).toBe('Applications')
       expect(wrapper.get('h1').text()).toBe('Applications')
@@ -94,9 +98,20 @@ describe('authenticated shell profile and settings navigation', () => {
     const wrapper = await mountAt('/')
     const navigation = wrapper.get('nav[aria-label="Main navigation"]')
     expect(navigation.findAll('a').map((link) => link.attributes('href'))).toEqual([
-      '/', '/ideas', '/applications', '/allocation', '/formal-application', '/grading', '/archive', '/admin',
+      '/', '/ideas', '/templates', '/applications', '/allocation', '/formal-application', '/grading', '/archive', '/admin',
     ])
     expect(wrapper.get('.profile').text()).toContain('Teacher, Administrator')
+    wrapper.unmount()
+  })
+
+  it('localizes the authenticated Templates navigation and route title', async () => {
+    setActivePinia(createPinia())
+    useAuthStore().updateUser(account('STUDENT'))
+    setLanguage('de')
+    const wrapper = await mountAt('/templates')
+    const navigation = wrapper.get('nav[aria-label="Hauptnavigation"]')
+    expect(navigation.get('a[href="/templates"]').text()).toContain('Vorlagen')
+    expect(wrapper.get('h1').text()).toBe('Vorlagen')
     wrapper.unmount()
   })
 

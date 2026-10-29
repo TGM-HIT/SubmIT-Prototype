@@ -141,6 +141,7 @@ class ApplicationResponseMapper {
                 strings(payload, "scopePoints"),
                 strings(payload, "learningTopics"),
                 payload.path("schoolYear").asText(),
+                payload.has("privatePdfBase64"),
                 specification == null ? null : specificationResponse(specification));
     }
 
@@ -427,7 +428,8 @@ class ApplicationResponseMapper {
         return new CatalogueSpecificationResponse(
                 strings(payload, "objectives"), strings(payload, "intendedUsers"),
                 strings(payload, "requirements"), strings(payload, "deliverables"),
-                payload.path("scope").asText(), strings(payload, "dependencies"));
+                payload.path("scope").asText(), strings(payload, "dependencies"),
+                payload.has("privatePdfBase64"));
     }
 
     private List<String> strings(ObjectNode payload, String field) {

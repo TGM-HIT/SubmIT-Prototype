@@ -87,6 +87,29 @@ export const applyingGroupsApi = {
 }
 
 export const ideasApi = {
+  async createPdf(metadata: { title: string; schoolYear: string; collaboratorIds: string[] }, file: File): Promise<IdeaResponse> {
+    const body = new FormData()
+    body.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }))
+    body.append('file', file, file.name)
+    return request<IdeaResponse>('/api/ideas/pdf', { method: 'POST', body })
+  },
+  async updatePdf(id: string, metadata: { title: string; schoolYear: string }, file: File): Promise<IdeaResponse> {
+    const body = new FormData()
+    body.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }))
+    body.append('file', file, file.name)
+    return request<IdeaResponse>(`/api/ideas/${encodeURIComponent(id)}/pdf`, { method: 'PUT', body })
+  },
+  async saveSpecificationPdf(id: string, file: File): Promise<SpecificationResponse> {
+    const body = new FormData()
+    body.append('file', file, file.name)
+    return request<SpecificationResponse>(`/api/ideas/${encodeURIComponent(id)}/specification/pdf`, { method: 'PUT', body })
+  },
+  pdf(id: string): Promise<Blob> {
+    return request<Blob>(`/api/ideas/${encodeURIComponent(id)}/pdf`)
+  },
+  specificationPdf(id: string): Promise<Blob> {
+    return request<Blob>(`/api/ideas/${encodeURIComponent(id)}/specification/pdf`)
+  },
   list(
     page: number,
     status?: string,
@@ -151,6 +174,10 @@ export const ideasApi = {
 }
 
 export const periodsApi = {
+  cataloguePdf(periodId: string, projectId: string, specification = false): Promise<Blob> {
+    const suffix = specification ? '/specification/pdf' : '/pdf'
+    return request<Blob>(`/api/application-periods/${encodeURIComponent(periodId)}/projects/${encodeURIComponent(projectId)}${suffix}`)
+  },
   list(page: number): Promise<Page<components['schemas']['PageResponseApplicationPeriodResponse']>> {
     return json(`/api/application-periods?${pageQuery(page)}`)
   },

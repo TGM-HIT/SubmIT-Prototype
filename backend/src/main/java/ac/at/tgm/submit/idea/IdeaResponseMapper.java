@@ -29,7 +29,8 @@ class IdeaResponseMapper {
     private static final String SUPERVISION = "supervision_preference";
     private static final String OWNER_IDS = "ownerIds";
 
-    private record ResponseContext(Map<UUID, String> names, String supervisorDisplayName, Role viewerRole) {
+    private record ResponseContext(Map<UUID, String> names, String supervisorDisplayName, Role viewerRole,
+            boolean includeHistory, boolean includePdfAvailability) {
     }
 
     private final RecordStore store;
@@ -54,11 +55,12 @@ class IdeaResponseMapper {
         ownerIds(record).forEach(userIds::add);
         reviews.stream().map(child -> UUID.fromString(child.getOwnerId())).forEach(userIds::add);
         preferences.stream().map(child -> UUID.fromString(child.getOwnerId())).forEach(userIds::add);
-        return response(record, includeHistory, reviews, preferences,
-                new ResponseContext(displayNames(userIds), supervisorDisplayName(record, viewerRole), viewerRole));
+        ResponseContext context = new ResponseContext(displayNames(userIds),
+                supervisorDisplayName(record, viewerRole), viewerRole, includeHistory, true);
+        return response(record, reviews, preferences, context);
     }
 
-    private IdeaResponse response(StoredRecord record, boolean includeHistory, List<StoredRecord> reviewRecords,
+    private IdeaResponse response(StoredRecord record, List<StoredRecord> reviewRecords,
             List<StoredRecord> preferenceRecords, ResponseContext context) {
         Map<UUID, String> names = context.names();
         Role viewerRole = context.viewerRole();
@@ -66,7 +68,7 @@ class IdeaResponseMapper {
         SpecificationResponse specification = null;
         List<ReviewResponse> reviews = List.of();
         List<SupervisionPreferenceResponse> preferences = List.of();
-        if (includeHistory) {
+        if (context.includeHistory()) {
             StoredRecord currentSpecification = store.repository()
                     .findFirstByTypeAndParentIdOrderByCreatedAtDesc(SPECIFICATION, record.getId().toString())
                     .orElse(null);
@@ -88,6 +90,7 @@ class IdeaResponseMapper {
                 payload.path("title").asText(), payload.path("description").asText(),
                 payload.path("intendedOutcome").asText(), strings(payload, "scopePoints"),
                 strings(payload, "learningTopics"), payload.path("schoolYear").asText(),
+                context.includePdfAvailability() ? payload.has("privatePdfBase64") : null,
                 context.supervisorDisplayName(), teacherIdea, specification, reviews, preferences);
     }
 
@@ -105,10 +108,11 @@ class IdeaResponseMapper {
         Set<UUID> ownerIds = records.stream().flatMap(record -> ownerIds(record).stream())
                 .collect(Collectors.toCollection(java.util.LinkedHashSet::new));
         Map<UUID, String> names = displayNames(ownerIds);
-        return records.stream()
-                .map(record -> response(record, false, List.of(), List.of(),
-                        new ResponseContext(names, supervisorDisplayName(record, viewerRole), viewerRole)))
-                .toList();
+        return records.stream().map(record -> {
+            ResponseContext context = new ResponseContext(names, supervisorDisplayName(record, viewerRole),
+                    viewerRole, false, false);
+            return response(record, List.of(), List.of(), context);
+        }).toList();
     }
 
     private List<UUID> ownerIds(StoredRecord record) {
@@ -148,7 +152,7 @@ class IdeaResponseMapper {
                 strings(payload, "objectives"), strings(payload, "intendedUsers"),
                 strings(payload, "requirements"), strings(payload, "deliverables"),
                 payload.path("scope").asText(), strings(payload, "dependencies"),
-                payload.path("revisionId").asText(null));
+                payload.path("revisionId").asText(null), payload.has("privatePdfBase64"));
     }
 
     ReviewResponse reviewResponse(StoredRecord record) {

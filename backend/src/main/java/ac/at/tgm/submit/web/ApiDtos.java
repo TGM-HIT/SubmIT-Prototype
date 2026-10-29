@@ -140,6 +140,9 @@ public final class ApiDtos {
             @NotNull @Schema(description = "Human-readable error detail.") String message) {
     }
 
+    @Schema(description = "JSON form fields for an idea narrative or values populated by the browser's Markdown parser. "
+            + "This JSON narrative shape is mutually exclusive with multipart PDF upload; PDF uploads use the dedicated "
+            + "multipart endpoints and preserve title, school year, and collaborators as manual metadata.")
     public record IdeaRequest(
             @NotBlank @Size(max = 200) @Schema(description = "Required, non-blank idea title; at most 200 characters.",
                     minLength = 1)
@@ -168,6 +171,22 @@ public final class ApiDtos {
             List<@NotNull UUID> collaboratorIds) {
     }
 
+    @Schema(description = "Manual metadata for PDF-based idea creation or replacement. Narrative values are supplied "
+            + "only by the PDF and cannot be combined with the JSON narrative request.",
+            requiredProperties = {"title", "schoolYear"})
+    public record IdeaPdfMetadataRequest(
+            @NotBlank @Size(max = 200) @Schema(description = "Manually entered idea title; at most 200 characters.")
+            String title,
+            @NotBlank @Size(max = 20) @Schema(description = "Manually selected school year; at most 20 characters.")
+            String schoolYear,
+            @Size(max = 4) @ArraySchema(arraySchema = @Schema(description =
+                    "Optional student collaborator IDs; creator is not included; maximum four."),
+                    maxItems = 4, uniqueItems = true, schema = @Schema(format = "uuid"))
+            List<@NotNull UUID> collaboratorIds) {
+    }
+
+    @Schema(description = "JSON form fields or values populated by the browser's Markdown parser. This narrative "
+            + "shape is mutually exclusive with the multipart PDF alternative; idea metadata is unchanged.")
     public record SpecificationRequest(
             @NotEmpty @ArraySchema(arraySchema = @Schema(description = "At least one objective."),
                     minItems = 1, schema = @Schema(description = "Non-blank objective; at most 2,000 characters.",
@@ -666,7 +685,7 @@ public final class ApiDtos {
     }
 
     @Schema(requiredProperties = {"id", "status", "objectives", "intendedUsers", "requirements", "deliverables",
-            "scope", "dependencies", "revisionId"})
+            "scope", "dependencies", "revisionId", "pdfPresent"})
     public record SpecificationResponse(
             @Schema(description = "Specification record ID.") UUID id,
             @Schema(description = "Current specification workflow status.") String status,
@@ -677,7 +696,9 @@ public final class ApiDtos {
             @Schema(description = "Project scope.") String scope,
             @Schema(description = "External or internal project dependencies.") List<String> dependencies,
             @Schema(description = "Identifier of the source revision, or null when unavailable.",
-                    types = {"string", "null"}) String revisionId) {
+                    types = {"string", "null"}) String revisionId,
+            @Schema(description = "Whether a private PDF narrative is associated with this specification.")
+            boolean pdfPresent) {
     }
 
     @Schema(requiredProperties = {"id", "teacherId", "teacherDisplayName", "reviewType", "decision", "feedback",
@@ -769,6 +790,9 @@ public final class ApiDtos {
             @Schema(description = "Scope points supplied for the idea.") List<String> scopePoints,
             @Schema(description = "Learning topics supplied for the idea.") List<String> learningTopics,
             @Schema(description = "School year associated with the idea.") String schoolYear,
+            @JsonInclude(JsonInclude.Include.NON_NULL)
+            @Schema(description = "Whether a private PDF narrative is associated with this idea; omitted from idea lists.")
+            Boolean pdfPresent,
             @JsonInclude(JsonInclude.Include.NON_NULL) String confirmedSupervisorDisplayName,
             @JsonInclude(JsonInclude.Include.NON_NULL)
             @Schema(description = "Whether the current author account is a teacher; included only in staff responses.")
@@ -819,18 +843,20 @@ public final class ApiDtos {
     }
 
     @Schema(requiredProperties = {"objectives", "intendedUsers", "requirements", "deliverables", "scope",
-            "dependencies"})
+            "dependencies", "pdfPresent"})
     public record CatalogueSpecificationResponse(
             @Schema(description = "Project objectives.") List<String> objectives,
             @Schema(description = "Intended users of the project.") List<String> intendedUsers,
             @Schema(description = "Project requirements.") List<String> requirements,
             @Schema(description = "Project deliverables.") List<String> deliverables,
             @Schema(description = "Project scope.") String scope,
-            @Schema(description = "Project dependencies.") List<String> dependencies) {
+            @Schema(description = "Project dependencies.") List<String> dependencies,
+            @Schema(description = "Whether a private specification PDF is available to this catalogue viewer.")
+            boolean pdfPresent) {
     }
 
     @Schema(requiredProperties = {"id", "title", "description", "intendedOutcome", "scopePoints", "learningTopics",
-            "schoolYear", "specification"})
+            "schoolYear", "specification", "pdfPresent"})
     public record CatalogueProjectResponse(
             @Schema(description = "Project idea ID.") UUID id,
             @Schema(description = "Project title.") String title,
@@ -839,6 +865,8 @@ public final class ApiDtos {
             @Schema(description = "Project scope points.") List<String> scopePoints,
             @Schema(description = "Project learning topics.") List<String> learningTopics,
             @Schema(description = "Associated school year.") String schoolYear,
+            @Schema(description = "Whether an accepted project has a PDF narrative available to catalogue viewers.")
+            boolean pdfPresent,
             @Schema(description = "Project specification, or null if it has not been recorded.",
                     types = {"object", "null"}, schemaResolution = Schema.SchemaResolution.INLINE)
             CatalogueSpecificationResponse specification) {

@@ -4,17 +4,33 @@
       <div>
         <p class="page-intro">{{ $t('ideas.intro') }}</p>
       </div>
-      <button v-if="canAuthor" id="new-idea-button" class="button" type="button" @click="startCreate">{{ $t('ideas.newIdea') }}</button>
+      <button v-if="canAuthor" id="new-idea-button" class="button" type="button" @click="startCreate($event)">{{ $t('ideas.newIdea') }}</button>
     </div>
 
     <form v-if="editorOpen" class="panel stack" @submit.prevent="saveIdea">
-      <div class="page-heading"><h2 class="section-title">{{ editingId ? $t('ideas.updateIdea') : $t('ideas.createDraft') }}</h2><button class="button button-secondary button-small" type="button" @click="editorOpen = false">{{ $t('ideas.close') }}</button></div>
+      <div class="page-heading"><h2 class="section-title">{{ editingId ? $t('ideas.updateIdea') : $t('ideas.createDraft') }}</h2><button class="button button-secondary button-small" type="button" @click="closeIdeaEditor">{{ $t('ideas.close') }}</button></div>
       <div class="grid grid-2">
         <div class="field"><label class="label" for="idea-title">{{ $t('ideas.titleLimit') }}</label><input id="idea-title" v-model="ideaForm.title" class="input" maxlength="200" required /><span class="metric">{{ number(ideaForm.title.length) }}/200</span></div>
         <div class="field"><label class="label" for="school-year">{{ $t('ideas.schoolYear') }}</label><select id="school-year" v-model="ideaForm.schoolYear" class="select" required><option value="" disabled>{{ $t('ideas.selectYear') }}</option><option v-for="year in schoolYears" :key="year" :value="year">{{ year }}</option><option v-if="ideaForm.schoolYear && !schoolYears.includes(ideaForm.schoolYear)" :value="ideaForm.schoolYear">{{ ideaForm.schoolYear }}</option></select></div>
       </div>
-      <div class="field"><label class="label" for="idea-description">{{ $t('ideas.descriptionLimit') }}</label><textarea id="idea-description" v-model="ideaForm.description" class="textarea" maxlength="5000" required /><span class="metric">{{ number(ideaForm.description.length) }}/5,000</span></div>
-      <div class="field"><label class="label" for="idea-outcome">{{ $t('ideas.intendedOutcomeLimit') }}</label><textarea id="idea-outcome" v-model="ideaForm.intendedOutcome" class="textarea" maxlength="2000" required /><span class="metric">{{ number(ideaForm.intendedOutcome.length) }}/2,000</span></div>
+      <fieldset class="field"><legend class="label">{{ $t('ideas.narrativeMode') }}</legend>
+        <label><input v-model="ideaMode" type="radio" value="form" /> {{ $t('ideas.formNarrative') }}</label>
+        <label><input v-model="ideaMode" type="radio" value="markdown" /> {{ $t('ideas.markdownUpload') }}</label>
+        <label><input v-model="ideaMode" type="radio" value="pdf" /> {{ $t('ideas.pdfUpload') }}</label>
+      </fieldset>
+      <div v-if="ideaMode === 'markdown'" class="field">
+        <label class="label" for="idea-markdown-file">{{ $t('ideas.markdownFile') }}</label>
+        <input id="idea-markdown-file" class="input" type="file" accept=".md,text/markdown" @change="importIdeaMarkdown" />
+        <p v-if="ideaImportError" class="field-error" role="alert">{{ ideaImportError }}</p>
+      </div>
+      <div v-if="ideaMode === 'pdf'" class="field">
+        <label class="label" for="idea-pdf-file">{{ $t('ideas.pdfFile') }}</label>
+        <input id="idea-pdf-file" class="input" type="file" accept=".pdf,application/pdf" @change="selectIdeaPdf" />
+      </div>
+      <template v-if="ideaMode !== 'pdf'">
+        <div class="field"><label class="label" for="idea-description">{{ $t('ideas.descriptionLimit') }}</label><textarea id="idea-description" v-model="ideaForm.description" class="textarea" maxlength="5000" required /><span class="metric">{{ number(ideaForm.description.length) }}/5,000</span></div>
+        <div class="field"><label class="label" for="idea-outcome">{{ $t('ideas.intendedOutcomeLimit') }}</label><textarea id="idea-outcome" v-model="ideaForm.intendedOutcome" class="textarea" maxlength="2000" required /><span class="metric">{{ number(ideaForm.intendedOutcome.length) }}/2,000</span></div>
+      </template>
       <fieldset v-if="!editingId && isStudent" class="panel stack collaborator-picker">
         <legend class="form-section-title">{{ $t('ideas.collaboratorsCount', { current: number(createOwners.length + 1) }) }}</legend>
         <label class="label" for="collaborator-lookup">{{ $t('ideas.findStudents') }}</label>
@@ -26,17 +42,18 @@
         <p v-if="createOwners.length > 0" class="muted">{{ createOwners.map(owner => owner.displayName).join(', ') }} <button v-for="owner in createOwners" :key="owner.id" type="button" class="text-button" :aria-label="`${$t('ideas.remove')} ${owner.displayName}`" @click="removeCreateOwner(owner.id)">{{ $t('ideas.remove') }}</button></p>
         <p v-if="createOwners.length >= 4" class="muted">{{ $t('ideas.maxOwners') }}</p>
       </fieldset>
-      <div class="grid grid-2">
+      <div v-if="ideaMode !== 'pdf'" class="grid grid-2">
         <div class="field"><label class="label" for="scope">{{ $t('ideas.scopeLabel') }}</label><textarea id="scope" v-model="scopeText" class="textarea" required /><span class="muted">{{ $t('ideas.scopeHelp') }}</span></div>
         <div class="field"><label class="label" for="learning">{{ $t('ideas.learningLabel') }}</label><textarea id="learning" v-model="learningText" class="textarea" /><span class="muted">{{ $t('ideas.learningHelp') }}</span></div>
       </div>
       <div v-if="task.error.value" class="error-box" role="alert">{{ task.error.value }}</div>
-      <div class="actions"><button class="button" :disabled="task.loading.value">{{ task.loading.value ? $t('ideas.saving') : $t('ideas.saveDraft') }}</button><button class="button button-secondary" type="button" @click="editorOpen = false">{{ $t('ideas.cancel') }}</button></div>
+      <div class="actions"><button class="button" :disabled="task.loading.value">{{ task.loading.value ? $t('ideas.saving') : $t('ideas.saveDraft') }}</button><button class="button button-secondary" type="button" @click="closeIdeaEditor">{{ $t('ideas.cancel') }}</button></div>
     </form>
 
     <ModalDialog v-if="reviewOpen && selectedIdea" :title="isSpecReview ? $t('ideas.reviewSpecification') : $t('ideas.reviewIdea')" :return-focus="reviewReturnFocus" :fallback-focus="reviewFallbackFocus" @close="closeReview">
       <form class="stack" @submit.prevent="submitReview">
         <p class="muted">{{ $t('ideas.ratingHelp') }}</p>
+        <button v-if="(isSpecReview ? selectedIdea.specification?.pdfPresent : selectedIdea.pdfPresent)" id="review-pdf-preview" class="button button-secondary button-small" type="button" @click="openPdfPreview(isSpecReview, $event)">{{ $t('ideas.previewPdf') }}</button>
         <div class="grid grid-2">
           <div class="field"><label class="label" for="decision">{{ $t('ideas.decision') }}</label><select id="decision" v-model="reviewForm.decision" class="select"><option v-if="isSpecReview" value="ACCEPT_FOR_APPLICATIONS">{{ $t('ideas.acceptForApplications') }}</option><option v-else value="APPROVE_FOR_SPECIFICATION">{{ $t('ideas.approveSpecification') }}</option><option value="REQUEST_REVISION">{{ $t('ideas.requestRevision') }}</option><option value="DECLINE">{{ $t('ideas.decline') }}</option></select></div>
           <div class="field"><label class="label" for="recommendation">{{ $t('ideas.recommendation') }}</label><input id="recommendation" v-model="reviewForm.recommendation" class="input" maxlength="2000" /></div>
@@ -73,7 +90,7 @@
               <button :id="`details-button-${idea.id}`" data-review-focus-fallback class="button button-secondary button-small" type="button" @click="openDetails(idea, $event)">{{ $t('ideas.detailsHistory') }}</button>
               <button v-if="isTeacher && canReview(idea) && !isCreator(idea)" :id="`review-button-${idea.id}`" class="button button-small" type="button" @click="startReview(idea, $event)">{{ $t('ideas.review') }}</button>
               <span v-if="isTeacher && canReview(idea) && isCreator(idea)" class="muted">{{ $t('ideas.cannotReviewOwn') }}</span>
-              <button v-if="isAuthor(idea) && editable(idea) && !hasWithdrawnSpecification(idea)" class="button button-secondary button-small" type="button" @click="editIdea(idea)">{{ $t('ideas.edit') }}</button>
+              <button v-if="isAuthor(idea) && editable(idea) && !hasWithdrawnSpecification(idea)" class="button button-secondary button-small" type="button" @click="editIdea(idea, $event)">{{ $t('ideas.edit') }}</button>
               <button v-if="isAuthor(idea) && editable(idea) && !hasWithdrawnSpecification(idea)" class="button button-small" type="button" @click="submitIdea(idea, $event)">{{ $t('ideas.submit') }}</button>
               <button v-if="isAuthor(idea) && canWithdraw(idea)" class="button button-danger button-small" type="button" @click="withdrawIdea(idea)">{{ $t('ideas.withdraw') }}</button>
             </div>
@@ -104,15 +121,15 @@
         <button v-else-if="isStudent && isOwner(selectedIdea)" id="leave-idea-button" class="button button-danger button-small" type="button" @click="requestOwnerConfirmation('leave', selectedIdea, undefined, $event)">{{ $t('ideas.leaveIdea') }}</button>
       </section>
       <div class="grid grid-2">
-        <div><p class="eyebrow">{{ $t('ideas.projectDescription') }}</p><p class="muted">{{ selectedIdea.description }}</p><p><strong>{{ $t('ideas.intendedOutcome') }}</strong><br />{{ selectedIdea.intendedOutcome }}</p><p><strong>{{ $t('ideas.initialScope') }}</strong></p><ul class="muted"><li v-for="point in selectedIdea.scopePoints ?? []" :key="point">{{ point }}</li></ul></div>
-        <div><p class="eyebrow">{{ $t('ideas.lifecycleTitle') }}</p><p><span class="status-badge">{{ readable(selectedIdea.status) }}</span></p><p class="notice">{{ lifecycleMessage(selectedIdea.status) }}</p><div v-if="selectedIdea.specification"><strong>{{ $t('ideas.specification') }}</strong><p class="muted">{{ $t('ideas.objectives') }} {{ selectedIdea.specification.objectives?.join(' · ') }}</p><p class="muted">{{ $t('ideas.scopeLabel') }} {{ selectedIdea.specification.scope }}</p></div></div>
+        <div><p class="eyebrow">{{ $t('ideas.projectDescription') }}</p><template v-if="selectedIdea.pdfPresent"><p class="muted">{{ $t('ideas.ideaPdfNarrative') }}</p><button id="idea-pdf-preview" class="button button-secondary button-small" type="button" @click="openPdfPreview(false, $event)">{{ $t('ideas.previewPdf') }}</button></template><template v-else><p class="muted">{{ selectedIdea.description }}</p><p><strong>{{ $t('ideas.intendedOutcome') }}</strong><br />{{ selectedIdea.intendedOutcome }}</p><p><strong>{{ $t('ideas.initialScope') }}</strong></p><ul class="muted"><li v-for="point in selectedIdea.scopePoints ?? []" :key="point">{{ point }}</li></ul></template></div>
+        <div><p class="eyebrow">{{ $t('ideas.lifecycleTitle') }}</p><p><span class="status-badge">{{ readable(selectedIdea.status) }}</span></p><p class="notice">{{ lifecycleMessage(selectedIdea.status) }}</p><div v-if="selectedIdea.specification"><strong>{{ $t('ideas.specification') }}</strong><template v-if="selectedIdea.specification.pdfPresent"><p class="muted">{{ $t('ideas.specificationPdfNarrative') }}</p><button id="specification-pdf-preview" class="button button-secondary button-small" type="button" @click="openPdfPreview(true, $event)">{{ $t('ideas.previewPdf') }}</button></template><template v-else><p class="muted">{{ $t('ideas.objectives') }} {{ selectedIdea.specification.objectives?.join(' · ') }}</p><p class="muted">{{ $t('ideas.scopeLabel') }} {{ selectedIdea.specification.scope }}</p></template></div></div>
       </div>
       <h3 class="form-section-title">{{ $t('ideas.teacherDecisionHistory') }}</h3>
       <div v-if="selectedIdea.reviews?.length" class="data-list"><article v-for="review in selectedIdea.reviews" :key="review.id" class="data-row"><div class="row-main"><h3>{{ readable(review.decision) }}</h3><p>{{ review.feedback }}</p><p class="muted">{{ $t('ideas.teacher') }} {{ review.teacherDisplayName }}<template v-if="review.reviewType === 'SPECIFICATION'"> · {{ $t('ideas.professionalRatings') }}</template></p><p v-if="recordedRatings(review).length" class="muted">{{ $t('ideas.ratings') }} {{ recordedRatings(review).join(' · ') }}</p></div></article></div>
       <p v-else class="muted">{{ $t('ideas.noDecisions') }}</p>
       <h3 v-if="selectedIdea.supervisionPreferences?.length" class="form-section-title">{{ $t('ideas.recordedPreferences') }}</h3>
       <div v-for="entry in selectedIdea.supervisionPreferences ?? []" :key="entry.id" class="choice-item"><span>{{ entry.teacherDisplayName }} · {{ preferenceLabel(entry.preference) }}</span><span class="muted">{{ entry.note }}</span></div>
-      <div v-if="isAuthor(selectedIdea) && canSpecify(selectedIdea)" class="actions"><button id="develop-specification" class="button" @click="startSpecification">{{ selectedIdea.status === 'WITHDRAWN' ? $t('ideas.editSpecification') : $t('ideas.developSpecification') }}</button><button v-if="selectedIdea.status === 'IDEA_APPROVED_FOR_SPECIFICATION'" id="submit-specification" class="button button-secondary" @click="submitSpecification">{{ $t('ideas.submitSpecification') }}</button></div>
+      <div v-if="isAuthor(selectedIdea) && canSpecify(selectedIdea)" class="actions"><button id="develop-specification" class="button" @click="startSpecification($event)">{{ selectedIdea.status === 'WITHDRAWN' ? $t('ideas.editSpecification') : $t('ideas.developSpecification') }}</button><button v-if="selectedIdea.status === 'IDEA_APPROVED_FOR_SPECIFICATION'" id="submit-specification" class="button button-secondary" @click="submitSpecification">{{ $t('ideas.submitSpecification') }}</button></div>
       <div v-if="isTeacher && canReview(selectedIdea) && !isCreator(selectedIdea)" class="actions"><button id="review-from-details" class="button" type="button" @click="openReview($event)">{{ selectedIdea.status === 'SPECIFICATION_SUBMITTED' ? $t('ideas.reviewSpecificationAction') : $t('ideas.reviewIdeaAction') }}</button></div>
       <p v-if="isTeacher && canReview(selectedIdea) && isCreator(selectedIdea)" class="muted" role="note">{{ $t('ideas.cannotReviewOwn') }}</p>
       <form v-if="isTeacher && !['IDEA_DRAFT','WITHDRAWN','DECLINED'].includes(selectedIdea.status ?? '')" class="panel stack" @submit.prevent="savePreference">
@@ -134,13 +151,36 @@
       <form v-if="specEditorOpen" class="panel stack" @submit.prevent="saveSpecification">
         <h2 class="section-title">{{ $t('ideas.fullSpecification', { title: selectedIdea.title }) }}</h2>
         <div class="notice">{{ $t('ideas.specificationApprovalHelp') }}</div>
-        <div class="grid grid-2"><TextListField v-model="specForm.objectives" :label="$t('ideas.objectives')" /><TextListField v-model="specForm.intendedUsers" :label="$t('applications.intendedUsers')" /><TextListField v-model="specForm.requirements" :label="$t('applications.projectRequirements')" /><TextListField v-model="specForm.deliverables" :label="$t('applications.deliverables')" /></div>
-        <div class="field"><label class="label" for="spec-scope">{{ $t('ideas.proposedScope') }}</label><textarea id="spec-scope" v-model="specForm.scope" class="textarea" maxlength="5000" required /></div>
-        <TextListField v-model="specForm.dependencies" :label="$t('ideas.resourcesDependencies')" />
+        <fieldset class="field"><legend class="label">{{ $t('ideas.narrativeMode') }}</legend>
+          <label><input v-model="specMode" type="radio" value="form" /> {{ $t('ideas.formNarrative') }}</label>
+          <label><input v-model="specMode" type="radio" value="markdown" /> {{ $t('ideas.markdownUpload') }}</label>
+          <label><input v-model="specMode" type="radio" value="pdf" /> {{ $t('ideas.pdfUpload') }}</label>
+        </fieldset>
+        <div v-if="specMode === 'markdown'" class="field">
+          <label class="label" for="spec-markdown-file">{{ $t('ideas.markdownFile') }}</label>
+          <input id="spec-markdown-file" class="input" type="file" accept=".md,text/markdown" @change="importSpecificationMarkdown" />
+          <p v-if="specImportError" class="field-error" role="alert">{{ specImportError }}</p>
+        </div>
+        <div v-if="specMode === 'pdf'" class="field">
+          <label class="label" for="specification-file">{{ $t('ideas.pdfFile') }}</label>
+          <input id="specification-file" class="input" type="file" accept=".pdf,application/pdf" @change="selectSpecificationPdf" />
+        </div>
+        <template v-if="specMode !== 'pdf'">
+          <div class="grid grid-2"><TextListField v-model="specForm.objectives" :label="$t('ideas.objectives')" /><TextListField v-model="specForm.intendedUsers" :label="$t('applications.intendedUsers')" /><TextListField v-model="specForm.requirements" :label="$t('applications.projectRequirements')" /><TextListField v-model="specForm.deliverables" :label="$t('applications.deliverables')" /></div>
+          <div class="field"><label class="label" for="spec-scope">{{ $t('ideas.proposedScope') }}</label><textarea id="spec-scope" v-model="specForm.scope" class="textarea" maxlength="5000" required /></div>
+          <TextListField v-model="specForm.dependencies" :label="$t('ideas.resourcesDependencies')" />
+        </template>
         <div v-if="task.error.value" class="error-box" role="alert">{{ task.error.value }}</div>
-        <div class="actions"><button class="button" :disabled="task.loading.value">{{ $t('ideas.saveSpecification') }}</button><button class="button button-secondary" type="button" @click="specEditorOpen = false">{{ $t('ideas.cancel') }}</button></div>
+        <div class="actions"><button class="button" :disabled="task.loading.value">{{ $t('ideas.saveSpecification') }}</button><button class="button button-secondary" type="button" @click="closeSpecificationEditor">{{ $t('ideas.cancel') }}</button></div>
       </form>
       </section>
+    </ModalDialog>
+
+    <ModalDialog v-if="pdfPreview" :title="$t('ideas.pdfPreviewTitle')" :return-focus="pdfReturnFocus" @close="closePdfPreview">
+      <p v-if="pdfPreview.loading" class="muted" role="status">{{ $t('common.loading') }}</p>
+      <div v-else-if="pdfPreview.error" class="error-box" role="alert">{{ $t('ideas.pdfPreviewError') }} <button class="button button-secondary button-small" type="button" @click="loadPdfPreview">{{ $t('common.retry') }}</button></div>
+      <iframe v-else-if="pdfPreview.url" class="pdf-preview-frame" :src="pdfPreview.url" :title="$t('ideas.pdfPreviewTitle')" />
+      <div class="actions"><button class="button button-secondary" type="button" @click="closePdfPreview">{{ $t('common.close') }}</button></div>
     </ModalDialog>
 
     <ModalDialog v-if="ownerConfirmation" :title="ownerConfirmation.type === 'leave' ? $t('ideas.leaveIdeaTitle') : $t('ideas.removeCollaboratorTitle')" :return-focus="ownerConfirmationReturnFocus" @close="ownerConfirmation = null">
@@ -164,6 +204,7 @@ import { formatNumber } from '../../i18n'
 import ModalDialog from '../../components/ModalDialog.vue'
 import AsyncPanel from '../../components/AsyncPanel.vue'
 import TextListField from './TextListField.vue'
+import { isMarkdownFile, parseMarkdownNarrative } from './markdownNarrative'
 
 type Idea = components['schemas']['IdeaResponse']
 type User = components['schemas']['UserResponse']
@@ -195,12 +236,22 @@ const selectedIdea = ref<Idea | null>(null)
 const detailsOpen = ref(false)
 const detailsReturnFocus = ref<HTMLElement | null>(null)
 const editorOpen = ref(false)
+const ideaEditorReturnFocus = ref<HTMLElement | null>(null)
 const specEditorOpen = ref(false)
+const specEditorReturnFocus = ref<HTMLElement | null>(null)
 const reviewOpen = ref(false)
 const feedbackError = ref('')
 const reviewReturnFocus = ref<HTMLElement | null>(null)
 const reviewFallbackFocus = ref<HTMLElement | null>(null)
 const editingId = ref('')
+const ideaMode = ref<'form' | 'markdown' | 'pdf'>('form')
+const specMode = ref<'form' | 'markdown' | 'pdf'>('form')
+const ideaPdfFile = ref<File | null>(null)
+const specificationPdfFile = ref<File | null>(null)
+const ideaImportError = ref('')
+const specImportError = ref('')
+const pdfPreview = ref<{ specification: boolean; url?: string; loading: boolean; error: boolean } | null>(null)
+const pdfReturnFocus = ref<HTMLElement | null>(null)
 const isSpecReview = ref(false)
 const preference = ref<components['schemas']['SupervisionPreferenceRequest']['preference']>('WILLING_TO_SUPERVISE')
 const preferenceNote = ref('')
@@ -490,27 +541,62 @@ function closeReview(): void {
   reviewOpen.value = false
   if (!detailsOpen.value) selectedIdea.value = null
 }
-function startCreate(): void {
+function startCreate(event?: MouseEvent): void {
+  ideaEditorReturnFocus.value = event?.currentTarget instanceof HTMLElement ? event.currentTarget : null
   editingId.value = ''
   Object.assign(ideaForm, { title: '', description: '', intendedOutcome: '', schoolYear: schoolYears.value[0] ?? '' })
   scopeText.value = ''
   learningText.value = ''
+  ideaMode.value = 'form'
+  ideaPdfFile.value = null
+  ideaImportError.value = ''
   createOwners.value = []
   studentQuery.value = ''
   studentLookup.value = []
   editorOpen.value = true
 }
-function editIdea(idea: Idea): void {
+function closeIdeaEditor(): void {
+  editorOpen.value = false
+  void nextTick(() => {
+    const target = ideaEditorReturnFocus.value
+    if (target?.isConnected) target.focus()
+    else document.getElementById('new-idea-button')?.focus()
+  })
+}
+function editIdea(idea: Idea, event?: MouseEvent): void {
+  ideaEditorReturnFocus.value = event?.currentTarget instanceof HTMLElement ? event.currentTarget : null
   editingId.value = idea.id ?? ''
   Object.assign(ideaForm, { title: idea.title ?? '', description: idea.description ?? '', intendedOutcome: idea.intendedOutcome ?? '', schoolYear: idea.schoolYear ?? '' })
   scopeText.value = idea.scopePoints?.join('\n') ?? ''
   learningText.value = idea.learningTopics?.join('\n') ?? ''
+  ideaMode.value = idea.pdfPresent ? 'pdf' : 'form'
+  ideaPdfFile.value = null
+  ideaImportError.value = ''
   editorOpen.value = true
 }
 function listFrom(text: string): string[] {
   return text.split('\n').map((entry) => entry.trim()).filter(Boolean)
 }
 async function saveIdea(): Promise<void> {
+  if (ideaMode.value === 'pdf') {
+    if (!ideaPdfFile.value) {
+      task.error.value = String(i18n.global.t('ideas.invalidPdfFile'))
+      return
+    }
+    const metadata = { title: ideaForm.title, schoolYear: ideaForm.schoolYear }
+    const wasEditing = Boolean(editingId.value)
+    const result = await task.run(
+      () => wasEditing
+        ? ideasApi.updatePdf(editingId.value, metadata, ideaPdfFile.value!)
+        : ideasApi.createPdf({ ...metadata, collaboratorIds: createOwners.value.map(owner => owner.id ?? '') }, ideaPdfFile.value!),
+      String(i18n.global.t('ideas.pdfSaved')),
+    )
+    if (result) {
+      editorOpen.value = false
+      await load(wasEditing ? page.value.page : 0)
+    }
+    return
+  }
   const input: IdeaInput = { ...ideaForm, scopePoints: listFrom(scopeText.value), learningTopics: listFrom(learningText.value), collaboratorIds: editingId.value ? [] : createOwners.value.map(owner => owner.id ?? '') }
   const wasEditing = Boolean(editingId.value)
   const result = await task.run(() => wasEditing ? ideasApi.update(editingId.value, input) : ideasApi.create(input), String(i18n.global.t('ideas.ideaSaved')))
@@ -542,19 +628,36 @@ async function withdrawIdea(idea: Idea): Promise<void> {
   const result = await task.run(() => ideasApi.withdraw(idea.id ?? ''), String(i18n.global.t('ideas.ideaWithdrawn')))
   if (result) await load(page.value.page)
 }
-function startSpecification(): void {
+function startSpecification(event?: MouseEvent): void {
+  specEditorReturnFocus.value = event?.currentTarget instanceof HTMLElement ? event.currentTarget : null
   const specification = selectedIdea.value?.specification
   Object.assign(specForm, {
     objectives: specification?.objectives ?? [], intendedUsers: specification?.intendedUsers ?? [],
     requirements: specification?.requirements ?? [], deliverables: specification?.deliverables ?? [],
     scope: specification?.scope ?? '', dependencies: specification?.dependencies ?? [],
   })
+  specMode.value = specification?.pdfPresent ? 'pdf' : 'form'
+  specificationPdfFile.value = null
+  specImportError.value = ''
   specEditorOpen.value = true
+}
+function closeSpecificationEditor(): void {
+  specEditorOpen.value = false
+  void nextTick(() => specEditorReturnFocus.value?.focus())
 }
 async function saveSpecification(): Promise<void> {
   if (!selectedIdea.value?.id) return
   const ideaId = selectedIdea.value.id
-  const result = await task.run(() => ideasApi.specification(selectedIdea.value!.id!, { ...specForm }), String(i18n.global.t('ideas.specificationSaved')))
+  if (specMode.value === 'pdf' && !specificationPdfFile.value) {
+    task.error.value = String(i18n.global.t('ideas.invalidPdfFile'))
+    return
+  }
+  const result = await task.run(
+    () => specMode.value === 'pdf'
+      ? ideasApi.saveSpecificationPdf(ideaId, specificationPdfFile.value!)
+      : ideasApi.specification(ideaId, { ...specForm }),
+    String(i18n.global.t(specMode.value === 'pdf' ? 'ideas.pdfSaved' : 'ideas.specificationSaved')),
+  )
   if (result) {
     specEditorOpen.value = false
     detailsOpen.value = false
@@ -564,6 +667,83 @@ async function saveSpecification(): Promise<void> {
     focusListFallback(ideaId)
   }
 }
+  async function importIdeaMarkdown(event: Event): Promise<void> {
+    const file = (event.target as HTMLInputElement).files?.[0]
+    ideaImportError.value = ''
+    if (!isMarkdownFile(file)) {
+      ideaImportError.value = String(i18n.global.t('ideas.invalidMarkdownFile'))
+      return
+    }
+    try {
+      const parsed = parseMarkdownNarrative(await file.text(), 'idea')
+      Object.assign(ideaForm, {
+        description: parsed.description, intendedOutcome: parsed.intendedOutcome,
+      })
+      scopeText.value = parsed.scopePoints.join('\n')
+      learningText.value = parsed.learningTopics.join('\n')
+    } catch {
+      ideaImportError.value = String(i18n.global.t('ideas.markdownParseError'))
+    }
+  }
+  async function importSpecificationMarkdown(event: Event): Promise<void> {
+    const file = (event.target as HTMLInputElement).files?.[0]
+    specImportError.value = ''
+    if (!isMarkdownFile(file)) {
+      specImportError.value = String(i18n.global.t('ideas.invalidMarkdownFile'))
+      return
+    }
+    try {
+      const parsed = parseMarkdownNarrative(await file.text(), 'specification')
+      Object.assign(specForm, parsed)
+    } catch {
+      specImportError.value = String(i18n.global.t('ideas.markdownParseError'))
+    }
+  }
+  function selectIdeaPdf(event: Event): void {
+    const file = (event.target as HTMLInputElement).files?.[0]
+    if (!file || !file.name.toLocaleLowerCase().endsWith('.pdf') || file.size === 0 || file.size > 10 * 1024 * 1024) {
+      ideaPdfFile.value = null
+      task.error.value = String(i18n.global.t('ideas.invalidPdfFile'))
+      return
+    }
+    task.error.value = ''
+    ideaPdfFile.value = file
+  }
+  function selectSpecificationPdf(event: Event): void {
+    const file = (event.target as HTMLInputElement).files?.[0]
+    if (!file || !file.name.toLocaleLowerCase().endsWith('.pdf') || file.size === 0 || file.size > 10 * 1024 * 1024) {
+      specificationPdfFile.value = null
+      task.error.value = String(i18n.global.t('ideas.invalidPdfFile'))
+      return
+    }
+    task.error.value = ''
+    specificationPdfFile.value = file
+  }
+  async function openPdfPreview(specification: boolean, event: MouseEvent): Promise<void> {
+    pdfReturnFocus.value = event.currentTarget instanceof HTMLElement ? event.currentTarget : null
+    pdfPreview.value = { specification, loading: true, error: false }
+    await loadPdfPreview()
+  }
+  async function loadPdfPreview(): Promise<void> {
+    if (!pdfPreview.value || !selectedIdea.value?.id) return
+    if (pdfPreview.value.url) URL.revokeObjectURL(pdfPreview.value.url)
+    pdfPreview.value.loading = true
+    pdfPreview.value.error = false
+    try {
+      const blob = pdfPreview.value.specification
+        ? await ideasApi.specificationPdf(selectedIdea.value.id)
+        : await ideasApi.pdf(selectedIdea.value.id)
+      pdfPreview.value.url = URL.createObjectURL(blob)
+    } catch {
+      pdfPreview.value.error = true
+    } finally {
+      pdfPreview.value.loading = false
+    }
+  }
+  function closePdfPreview(): void {
+    if (pdfPreview.value?.url) URL.revokeObjectURL(pdfPreview.value.url)
+    pdfPreview.value = null
+  }
 async function submitSpecification(): Promise<void> {
   if (!selectedIdea.value?.id || !confirm(String(i18n.global.t('ideas.submitSpecificationConfirm')))) return
   const ideaId = selectedIdea.value.id

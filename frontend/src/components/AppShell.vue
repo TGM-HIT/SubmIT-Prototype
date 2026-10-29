@@ -47,6 +47,7 @@ const router = useRouter()
 const allItems = [
   { to: '/', key: 'navigation.overview', icon: '⌂', roles: ['STUDENT', 'TEACHER', 'ADMIN'] },
   { to: '/ideas', key: 'navigation.ideas', icon: '✧', roles: ['STUDENT', 'TEACHER', 'ADMIN'] },
+  { to: '/templates', key: 'navigation.templates', icon: '▤', roles: ['STUDENT', 'TEACHER', 'ADMIN'] },
   { to: '/applications', key: 'navigation.applications', icon: '☷', roles: ['STUDENT', 'TEACHER', 'ADMIN'] },
   { to: '/allocation', key: 'navigation.allocation', icon: '⇄', roles: ['TEACHER', 'ADMIN'] },
   { to: '/formal-application', key: 'navigation.formal', icon: '▤', roles: ['STUDENT', 'TEACHER'] },
@@ -62,6 +63,7 @@ const navigation = computed(() => allItems.filter((item) =>
 const pageTitleKey = computed(() => ({
   dashboard: 'navigation.overview',
   ideas: 'navigation.ideas',
+  templates: 'navigation.templates',
   applications: 'navigation.applications',
   allocation: 'navigation.allocation',
   'formal-application': 'navigation.formal',
