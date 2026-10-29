@@ -6,7 +6,7 @@ Provide `make run-testing-tgm` to explore real previous-year student preferences
 
 ## Source
 
-Owner-provided [Projekte_2026_27.xlsx](../../docs/Projekte_2026_27.xlsx): use only sheets `4aHIT`, `4bHIT`, `4cHIT`, `4dHIT`; each is a class. Column A is the student's full display name, D/E/F are ordered project choices, and G–K are declared group members. The owner confirmed both clarifications:
+Owner-provided [Projekte_2026_27.xlsx](../../../docs/Projekte_2026_27.xlsx): use only sheets `4aHIT`, `4bHIT`, `4cHIT`, `4dHIT`; each is a class. Column A is the student's full display name, D/E/F are ordered project choices, and G–K are declared group members. The owner confirmed both clarifications:
 
 - Create every student account, but import an application only for three valid, distinct preferences; report skipped applications by sheet/row, without inventing preferences or weakening validation.
 - Import a shared application only when all members declare the same roster and the same three valid preferences in the same order. Otherwise import each member's valid individual application.
