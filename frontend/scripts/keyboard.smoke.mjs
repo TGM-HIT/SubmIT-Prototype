@@ -10,6 +10,50 @@ import {
   runBrowserCase,
   runKeyboardSuite,
 } from './keyboard.mjs'
+import { gradingSteps, runGradingKeyboard, expectedDraftMarkdown } from './grading-keyboard.mjs'
+
+test('grading regression is wired into the keyboard CLI and uses actual keyboard saving, visibility and return pagination', () => {
+  assert.equal(parseKeyboardArgs(['--grading-only', '--output-dir', '/tmp/evidence']).gradingOnly, true)
+  assert.throws(() => parseKeyboardArgs(['--grading-only', '--negative-focus', '--output-dir', '/tmp/evidence']),
+    /cannot be combined/)
+  for (const language of ['en', 'de']) {
+    const steps = gradingSteps(language, 'grading-case')
+    assert.equal(steps.some((step) => step.action === 'click'), false)
+    assert.equal(steps.filter((step) => step.action === 'download').length, 2)
+    assert.equal(steps.filter((step) => step.action === 'measure-overflow').length, 4)
+    assert.equal(steps.filter((step) => step.action === 'key' && step.value === 'Enter').length, 6)
+    assert.ok(steps.filter((step) => step.action === 'assert-action-visible').length >= 6)
+    assert.ok(steps.some((step) => step.action === 'tab-to' && step.value.includes('first-of-type')))
+  }
+})
+
+test('grading runner fails explicitly and persists a result when a real-browser prerequisite fails', async (context) => {
+  const outputDir = await tempEvidence(context)
+  await assert.rejects(runGradingKeyboard({ outputDir, frontendPort: 5173, backendPort: 8080 }, {
+    runPreview: async () => { throw new Error('injected Chrome prerequisite failure') },
+  }), /injected Chrome prerequisite failure/)
+  const results = JSON.parse(await readFile(path.join(outputDir, 'grading-keyboard-results.json'), 'utf8'))
+  assert.equal(results.length, 1)
+  assert.equal(results[0].status, 'failed')
+  assert.equal(results[0].viewport, 'desktop')
+})
+
+test('independent browser Markdown oracle retains third criterion and metric bounds in both locales', () => {
+  const definition = {
+    name: 'Ä draft', version: 'v1', effectiveFrom: '2026-01-01', finalGradeScale: { min: 0, max: 5, step: 1 },
+    categories: [{ name: 'Category', criteria: ['one', 'two', 'third'].map((id) => ({
+      id, name: id, subject: 'BOTH', evidenceRequired: false, scale: { min: 1, max: 5, step: 1 },
+    })) }],
+    metricDefinitions: [{ id: 'm', name: 'Metric', version: 1, min: 0, max: 99 }],
+    aggregationRules: [],
+  }
+  for (const language of ['en', 'de']) {
+    const text = expectedDraftMarkdown(definition, language)
+    assert.match(text, /### third\n\n- \*\*(?:Criterion ID|Kriterien-ID):\*\* third/)
+    assert.match(text, /0 – 99/)
+    assert.match(text, /Ä draft/)
+  }
+})
 
 async function tempEvidence(context) {
   const outputDir = await mkdtemp(path.join(os.tmpdir(), 'submit-keyboard-runner-'))

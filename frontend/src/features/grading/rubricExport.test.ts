@@ -57,6 +57,14 @@ const rubric: RubricDefinition = {
     unit: 'h',
     min: 0,
     max: null,
+  }, {
+    id: 'metric-unbounded',
+    name: 'Optional metric',
+    version: 1,
+    description: null,
+    unit: null,
+    min: null,
+    max: 10,
   }],
   aggregationRules: [{
     id: 'rule-id',
@@ -66,6 +74,14 @@ const rubric: RubricDefinition = {
     decimals: 0,
     criterionWeights: { 'criterion-id': 1.5 },
     metricWeights: { 'metric-id': 0.25 },
+  }, {
+    id: 'rule-empty-weights',
+    version: 2,
+    scope: 'PROJECT',
+    type: 'WEIGHTED_AVERAGE',
+    decimals: 2,
+    criterionWeights: {},
+    metricWeights: {},
   }],
 }
 
@@ -107,12 +123,19 @@ const labels: MarkdownLabels = {
 }
 
 describe('rubric definition exports', () => {
-  it('exports the complete reusable request structure, omitting only null optionals and publication envelope', () => {
-    const parsed: unknown = JSON.parse(rubricDefinitionJson(rubric))
+  it.each([false, true])('exports the entire request with configured optional values: %s', (configured) => {
+    const definition = {
+      ...rubric,
+      schoolYear: configured ? '2026/2027' : null,
+      effectiveTo: configured ? '2027-08-31' : null,
+      metricDefinitions: rubric.metricDefinitions!.map((metric, index) => ({ ...metric, ...(index === 0 ? { max: configured ? 42 : null } : {}) })),
+    }
+    const parsed: unknown = JSON.parse(rubricDefinitionJson(definition))
     expect(parsed).toEqual({
       version: 'v1/€',
       name: 'Ä & <Draft> #1',
       effectiveFrom: '2026-09-01',
+      ...(configured ? { schoolYear: '2026/2027', effectiveTo: '2027-08-31' } : {}),
       finalGradeScale: { min: 0, max: 5, step: 1, labels: { '0': 'Nicht | erfüllt', '5': 'Sehr gut [x]' } },
       categories: [{
         id: 'category-id',
@@ -152,6 +175,12 @@ describe('rubric definition exports', () => {
         description: 'Description',
         unit: 'h',
         min: 0,
+        ...(configured ? { max: 42 } : {}),
+      }, {
+        id: 'metric-unbounded',
+        name: 'Optional metric',
+        version: 1,
+        max: 10,
       }],
       aggregationRules: [{
         id: 'rule-id',
@@ -161,8 +190,17 @@ describe('rubric definition exports', () => {
         decimals: 0,
         criterionWeights: { 'criterion-id': 1.5 },
         metricWeights: { 'metric-id': 0.25 },
+      }, {
+        id: 'rule-empty-weights',
+        version: 2,
+        scope: 'PROJECT',
+        type: 'WEIGHTED_AVERAGE',
+        decimals: 2,
+        criterionWeights: {},
+        metricWeights: {},
       }],
     })
+
     expect(parsed).not.toHaveProperty('categories.0.criteria.0.stage')
     expect(parsed).toHaveProperty('categories.0.criteria.1.stage', 'Pilot')
     expect(parsed).toHaveProperty('categories.0.criteria.1.description', '')
@@ -176,6 +214,102 @@ describe('rubric definition exports', () => {
     expect(parsed).not.toHaveProperty('createdAt')
     expect(parsed).not.toHaveProperty('publishedAt')
     expect(parsed).not.toHaveProperty('publishedBy')
+  })
+
+  it.each([false, true])('matches the complete independently authored ordered Markdown, optional fields: %s', (configured) => {
+      const definition = {
+        ...rubric,
+        schoolYear: configured ? '2026/2027' : null,
+        effectiveTo: configured ? '2027-08-31' : null,
+        metricDefinitions: rubric.metricDefinitions!.map((metric, index) => ({ ...metric, ...(index === 0 ? { max: configured ? 42 : null } : {}) })),
+      }
+      const expected = String.raw`# Ä &amp; &lt;Draft&gt; \#1
+
+- **Version:** v1/€
+- **Applicability:** All school years
+- **Effective from:** 2026\-09\-01
+- **Final-grade scale:** Minimum: 0; Maximum: 5; Step: 1; Labels: 0 = Nicht \| erfüllt; 5 = Sehr gut \[x\]
+
+## \#\# Kategorie \[A\] \| &lt;b&gt;
+
+Category description: Authored \*\*draft\*\*${'  '}
+second line
+
+### Name \* \[1\]
+
+- **Criterion ID:** criterion\-id
+- **Description:** Unicode ÄÖÜ — &lt;tag&gt; \| \[x\] \# heading
+- **Subject:** STUDENT
+- **Stage:** —
+- **Evidence required:** No
+- **Scale:** Minimum: 1; Maximum: 5; Step: 1; Labels: 1 = Beginn; 5 = Sehr gut
+
+### Second criterion
+
+- **Criterion ID:** criterion\-second
+- **Description:**${' '}
+- **Subject:** GROUP
+- **Stage:** Pilot
+- **Evidence required:** Yes
+- **Scale:** Minimum: 0; Maximum: 2; Step: 1; Labels:${' '}
+
+## Later category
+
+### Third criterion
+
+- **Criterion ID:** criterion\-third
+- **Subject:** BOTH
+- **Stage:** —
+- **Evidence required:** No
+- **Scale:** Minimum: 1; Maximum: 5; Step: 1
+
+## Metric definitions
+
+### Metric
+
+- **Metric ID:** metric\-id
+- **Metric version:** 2
+- **Description:** Description
+- **Unit:** h
+- **Bounds:** 0 – —
+
+### Optional metric
+
+- **Metric ID:** metric\-unbounded
+- **Metric version:** 1
+- **Unit:** —
+- **Bounds:** — – 10
+
+## Aggregation rules
+
+### rule\-id
+
+- **Rule ID:** rule\-id
+- **Rule version:** 3
+- **Scope:** STUDENT
+- **Method:** WEIGHTED\_AVERAGE
+- **Precision:** 0
+- **Criterion weights:** criterion\-id = 1\.5
+- **Metric weights:** metric\-id = 0\.25
+
+### rule\-empty\-weights
+
+- **Rule ID:** rule\-empty\-weights
+- **Rule version:** 2
+- **Scope:** PROJECT
+- **Method:** WEIGHTED\_AVERAGE
+- **Precision:** 2
+- **Criterion weights:** —
+- **Metric weights:** —
+`
+      const applicable = configured ? expected
+        .replace('All school years', '2026/2027')
+        .replace('- **Final-grade scale:**', '- **Effective to:** 2027\\-08\\-31\n- **Final-grade scale:**')
+        .replace('0 – —', '0 – 42') : expected
+      expect(rubricDefinitionMarkdown(definition, labels)).toBe(applicable)
+      expect(rubricDefinitionMarkdown({ ...definition, aggregationRules: [] }, labels)).toBe(
+        applicable.slice(0, applicable.indexOf('### rule\\-id')) + 'No aggregation rules are configured.\n',
+      )
   })
 
   it('writes a readable escaped Markdown document with all configured and empty-rule details', () => {

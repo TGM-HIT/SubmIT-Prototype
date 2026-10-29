@@ -249,7 +249,7 @@ export function parseArgs(args) {
             value: argument.slice(0, separator),
             selector: argument.slice(separator + 1),
           })
-        } else if (['click', 'download', 'wait', 'read', 'focus', 'scroll', 'screenshot', 'key', 'tab-to', 'select-index',
+        } else if (['click', 'download', 'assert-action-visible', 'wait', 'read', 'focus', 'scroll', 'screenshot', 'key', 'tab-to', 'select-index',
           'navigate', 'assert-url'].includes(action) && argument) {
           if (action === 'screenshot' && path.basename(argument) !== argument) {
             throw new Error('--step screenshot must use a filename, not a path.')
@@ -538,7 +538,7 @@ export async function captureBrowserDownload(client, outputDir, trigger, { timeo
   await mkdir(outputDir, { recursive: true })
   await client.send('Browser.setDownloadBehavior', {
     behavior: 'allowAndName',
-    downloadPath: outputDir,
+    downloadPath: path.resolve(outputDir),
     eventsEnabled: true,
   })
   return new Promise((resolve, reject) => {
@@ -984,7 +984,16 @@ export function collectBrowserErrors(client) {
   const errors = []
   const requests = new Map()
   errors.requests = requests
+  errors.consoleEntries = []
   client.onEvent(({ method, params }) => {
+    if (method === 'Runtime.consoleAPICalled') {
+      errors.consoleEntries.push({
+        type: params.type,
+        text: (params.args ?? []).map((argument) => argument.value ?? argument.description ?? '').join(' '),
+      })
+    } else if (method === 'Runtime.exceptionThrown') {
+      errors.consoleEntries.push({ type: 'exception', text: params.exceptionDetails?.text ?? 'uncaught exception' })
+    }
     if (method === 'Runtime.exceptionThrown') {
       const details = params.exceptionDetails
       const location = details?.url ? ` at ${details.url}:${details.lineNumber ?? 0}:${details.columnNumber ?? 0}` : ''
@@ -1040,7 +1049,7 @@ export function networkReport(errors) {
   return [...(errors.requests?.values() ?? [])]
     .filter((request) => {
       const pathname = new URL(request.url).pathname
-      return pathname.startsWith('/api/') && !pathname.startsWith('/api/auth/')
+      return (pathname.startsWith('/api/') && !pathname.startsWith('/api/auth/')) || request.url.startsWith('blob:')
     })
     .map((request) => JSON.stringify({
       method: request.method,
@@ -1052,6 +1061,71 @@ export function networkReport(errors) {
       canceled: request.canceled ?? 'unavailable (no failure event)',
       ...(request.errorText ? { error: request.errorText } : {}),
     }))
+}
+
+export function sanitizeBrowserEvidence(value) {
+  if (typeof value === 'string') {
+    let text = value
+    for (const name of ['PREVIEW_PASSWORD', 'DADB_TESTING_PASSWORD']) {
+      if (process.env[name]) text = text.replaceAll(process.env[name], '[redacted-password]')
+    }
+    return text.replace(/Bearer\s+\S+/gi, 'Bearer [redacted]')
+      .replace(/([?&](?:token|password|secret|authorization)=)[^&\s]*/gi, '$1[redacted]')
+  }
+  if (Array.isArray(value)) return value.map(sanitizeBrowserEvidence)
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [
+      key, /^(?:token|password|authorization|cookie)$/i.test(key) ? '[redacted]' : sanitizeBrowserEvidence(item),
+    ]))
+  }
+  return value
+}
+
+export function collectDownloadEvidence(client) {
+  const events = []
+  client?.onEvent(({ method, params }) => {
+    if (!['Browser.downloadWillBegin', 'Browser.downloadProgress'].includes(method)) return
+    events.push(sanitizeBrowserEvidence({
+      event: method,
+      guid: params.guid ?? 'unavailable',
+      frameId: params.frameId ?? 'unavailable',
+      filename: params.suggestedFilename ?? 'unavailable (not supplied on this event)',
+      url: params.url ?? 'unavailable (not supplied on this event)',
+      method: 'unavailable (Browser download events do not supply a request method)',
+      initiator: 'unavailable (Browser download events do not supply an initiator)',
+      responseStatus: 'unavailable (blob save has no HTTP response)',
+      state: params.state ?? 'unavailable (begin event)',
+      totalBytes: params.totalBytes ?? 'unavailable',
+      receivedBytes: params.receivedBytes ?? 'unavailable',
+      reason: params.reason ?? 'unavailable (Chrome did not supply a reason)',
+      filePath: params.filePath ?? 'unavailable',
+    }))
+  })
+  return events
+}
+
+export async function writeBrowserEvidence(options, {
+  page = 'unavailable', fixtureSetup = {}, errors = [], interactions = [], downloads = [],
+  chromeDiagnostics = [], failure,
+} = {}) {
+  if (!options.evidenceReport) return
+  await mkdir(options.outputDir, { recursive: true })
+  const viewport = viewportFor(options)
+  const report = sanitizeBrowserEvidence({
+    outcome: failure ? 'failed' : 'completed',
+    failure: failure?.message ?? null,
+    page,
+    viewport: { width: viewport.width, height: viewport.height, mobile: viewport.mobile },
+    fixtureSetup,
+    requests: networkReport(errors).map((line) => JSON.parse(line)),
+    interactions,
+    downloads,
+    downloadRequestFields: 'Blob downloads may have no Network request event; URL/filename/progress are in downloads. Missing method/initiator/status/completion are unavailable, not inferred from API reads.',
+    consoleErrors: errors.filter((line) => /console[ .](?:exception|error)|browser log:/i.test(line)),
+    pageConsole: errors.consoleEntries ?? 'unavailable (page console collector was not attached)',
+    chromeDiagnostics: chromeDiagnostics.length ? chromeDiagnostics : ['unavailable (no Chrome stream diagnostics captured)'],
+  })
+  await writeFile(path.join(options.outputDir, options.evidenceReport), `${JSON.stringify(report, null, 2)}\n`)
 }
 
 export function expectedOfflineRequestErrors(errors, steps) {
@@ -1335,6 +1409,24 @@ export async function applyPageSteps(client, steps, { outputDir, log = console.l
         `(${expression})(${JSON.stringify(step.selector)}, ${step.index})`,
         `select option ${step.index} in ${step.selector}`)
       log(`Selected option ${step.index} (${text}) in ${step.selector}.`)
+    } else if (step.action === 'assert-action-visible') {
+      const state = await evaluatePage(client, `(() => {
+        const element = document.querySelector(${JSON.stringify(step.value)});
+        const rect = element?.getBoundingClientRect();
+        const style = element && getComputedStyle(element);
+        return {
+          focused: element === document.activeElement,
+          visible: Boolean(rect && rect.width > 0 && rect.height > 0 && rect.left >= 0 && rect.right <= innerWidth
+            && rect.top >= 0 && rect.bottom <= innerHeight && style.visibility !== 'hidden' && style.display !== 'none'),
+          enabled: Boolean(element && !element.disabled),
+          viewport: { width: innerWidth, height: innerHeight },
+          bounds: rect ? { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom } : 'unavailable',
+        };
+      })()`, `inspect focused action ${step.value}`)
+      log(`Action visibility ${step.value}: ${JSON.stringify(state)}`)
+      if (!state?.focused || !state.visible || !state.enabled) {
+        throw new Error(`Action must be focused, enabled and fully inside the viewport: ${step.value}; observed ${JSON.stringify(state)}`)
+      }
     } else if (step.action === 'download') {
       const result = await captureBrowserDownload(client.browserDownloadClient ?? client, outputDir, async () => {
         await evaluatePage(client, `(() => {
@@ -1647,6 +1739,11 @@ export async function launchBrowser(options, url, {
   const port = await unusedPort()
   let browserErrors = []
   let browserClient
+  let pageClient
+  let page
+  let downloads = []
+  const interactions = []
+  const chromeDiagnostics = []
   const browser = startBrowser(executable, [
     ...(options.headed ? [] : ['--headless=new']),
     ...(options.locale ? [`--lang=${options.locale}`] : []),
@@ -1658,15 +1755,20 @@ export async function launchBrowser(options, url, {
     `--user-data-dir=${profile}`,
     'about:blank',
   ], repoDir, 'chrome', env)
+  for (const [stream, name] of [[browser.stdout, 'stdout'], [browser.stderr, 'stderr']]) {
+    stream?.on('data', (chunk) => chromeDiagnostics.push({ stream: name, text: String(chunk) }))
+  }
   onBrowser(browser, profile)
   try {
     const response = await waitForDevtoolsReady(port, browser, signal)
     const version = await response.json()
     if (version.webSocketDebuggerUrl) browserClient = await connectCdp(version.webSocketDebuggerUrl)
+    downloads = collectDownloadEvidence(browserClient)
     const targetResponse = await fetch(`http://127.0.0.1:${port}/json/new?about:blank`, { method: 'PUT' })
     if (!targetResponse.ok) throw new Error(`Chrome could not open a page (HTTP ${targetResponse.status}).`)
     const target = await targetResponse.json()
     const client = await connectCdp(target.webSocketDebuggerUrl)
+    pageClient = client
     if (browserClient) client.browserDownloadClient = browserClient
     onClient(client)
     browserErrors = collectBrowserErrors(client)
@@ -1683,15 +1785,18 @@ export async function launchBrowser(options, url, {
     const viewport = viewportFor(options)
     await client.send('Emulation.setDeviceMetricsOverride', viewport)
     console.log(`Chrome ${version.Browser}; viewport ${viewport.width}x${viewport.height}${viewport.mobile ? ' (mobile)' : ' (desktop)'}.`)
-    await navigate(client, url, signal)
+    // Let the anonymous router settle on its public login page before evaluating
+    // the local testing-account login. A protected-route redirect can otherwise
+    // destroy the execution context while the login fetch is pending.
+    await navigate(client, options.auth ? new URL('/login', url).href : url, signal)
     if (options.auth) {
       const password = process.env[options.passwordEnv ?? 'PREVIEW_PASSWORD']
       if (!password) throw new Error(`Set ${options.passwordEnv ?? 'PREVIEW_PASSWORD'} to the documented local testing password before using --auth.`)
+      await applyPageSteps(client, [{ action: 'wait', value: '#username' }], { signal, log: () => undefined })
       await login(client, options.username, password)
       await navigate(client, url, signal)
     }
 
-    const interactions = []
     await applyPageInteractions(client, options, {
       signal,
       log: (message) => {
@@ -1705,27 +1810,22 @@ export async function launchBrowser(options, url, {
       returnByValue: true,
     })
     if (evaluation.exceptionDetails) throw new Error(`Could not inspect rendered page: ${evaluation.exceptionDetails.text}`)
+    page = evaluation.result?.value
     if (options.locale && !evaluation.result?.value?.language?.toLowerCase().startsWith(options.locale.split('-')[0].toLowerCase())) {
       throw new Error(`Chromium did not apply --locale ${options.locale}; navigator.language was ${evaluation.result?.value?.language ?? 'unavailable'}.`)
     }
     if (options.locale) console.log(`Chromium navigator.language: ${evaluation.result.value.language}.`)
     if (options.networkReport) for (const line of networkReport(browserErrors)) console.log(`Browser request: ${line}`)
-    if (options.evidenceReport) {
-      await mkdir(options.outputDir, { recursive: true })
-      const requestEvidence = networkReport(browserErrors).map((line) => JSON.parse(line))
-      const report = {
-        page: evaluation.result?.value,
-        viewport: { width: viewport.width, height: viewport.height, mobile: viewport.mobile },
-        fixtureSetup,
-        requests: requestEvidence,
-        interactions,
-        consoleErrors: browserErrors.filter((line) => /console (?:exception|error)|browser log:/i.test(line)),
-      }
-      await writeFile(path.join(options.outputDir, options.evidenceReport), `${JSON.stringify(report, null, 2)}\n`)
-      console.log(`Browser evidence report saved: ${path.join(options.outputDir, options.evidenceReport)}`)
-    }
+    await writeBrowserEvidence(options, { page, fixtureSetup, errors: browserErrors, interactions, downloads, chromeDiagnostics })
     return { browser, profile, client, errors: browserErrors, page: evaluation.result?.value }
   } catch (error) {
+    if (pageClient) {
+      page = await evaluatePage(pageClient, '({ title: document.title, url: location.href, language: navigator.language })',
+        'retain page location on failure').catch(() => 'unavailable (page inspection failed)')
+    }
+    await writeBrowserEvidence(options, {
+      page, fixtureSetup, errors: browserErrors, interactions, downloads, chromeDiagnostics, failure: error,
+    })
     if (options.networkReport) for (const line of networkReport(browserErrors)) console.error(`Browser request: ${line}`)
     for (const browserError of browserErrors) console.error(`Browser error: ${browserError}`)
     for (const request of browserErrors.requests?.values() ?? []) {
@@ -1873,7 +1973,7 @@ async function seedRequested(options, baseUrl) {
   if (!password) throw new Error(`Set ${options.passwordEnv ?? 'PREVIEW_PASSWORD'} to seed local preview data.`)
   if (options.seedRubricPaginationPreview) {
     const created = await seedTestingRubricHistory({ baseUrl, password })
-    evidence.rubricPagination = { effectiveFrom: '2090-01-01 through 2091-09-01', records: created }
+    evidence.rubricPagination = { effectiveFrom: '2090-01-01 through 2090-02-09', records: created }
     console.log(`Created ${created.length} synthetic future-effective rubric versions for the local Dev-61 pagination walkthrough.`)
   }
   if (options.seedIdeaOwner) {

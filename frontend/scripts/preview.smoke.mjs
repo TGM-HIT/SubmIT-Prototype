@@ -36,7 +36,68 @@ import {
   assertDialogContainsFocus,
   assertDialogClosed,
   captureBrowserDownload,
+  collectDownloadEvidence,
+  writeBrowserEvidence,
 } from './preview.mjs'
+
+test('canceled download retains sanitized begin/progress, request, console and Chrome diagnostics in a failed report', async () => {
+  const outputDir = await mkdtemp(path.join(tmpdir(), 'submit-failed-download-'))
+  const listeners = new Set()
+  const client = {
+    send: async () => ({}),
+    onEvent(listener) { listeners.add(listener); return () => listeners.delete(listener) },
+  }
+  const emit = (method, params) => { for (const listener of listeners) listener({ method, params }) }
+  const errors = collectBrowserErrors(client)
+  const downloads = collectDownloadEvidence(client)
+  let failure
+  try {
+    await captureBrowserDownload(client, outputDir, () => {
+      emit('Network.requestWillBeSent', { requestId: 'detail', request: {
+        url: 'http://localhost/api/grading-rubrics/test-id?token=private-token', method: 'GET',
+      }, initiator: { type: 'script', url: 'http://localhost/src/api/client.ts' } })
+      emit('Network.responseReceived', { requestId: 'detail', response: { status: 200 } })
+      emit('Network.loadingFinished', { requestId: 'detail' })
+      emit('Runtime.consoleAPICalled', { type: 'error', args: [{ value: 'Bearer private-credential' }] })
+      emit('Browser.downloadWillBegin', { guid: 'blob-save', frameId: 'frame', suggestedFilename: 'rubric-v1.json',
+        url: 'blob:http://localhost/blob-id' })
+      emit('Browser.downloadProgress', { guid: 'blob-save', state: 'canceled', receivedBytes: 0, totalBytes: 42 })
+    })
+  } catch (error) { failure = error }
+  try {
+    assert.match(failure?.message ?? '', /canceled/)
+    await writeBrowserEvidence({ outputDir, evidenceReport: 'failure.json', viewport: 'mobile' }, {
+      failure, errors, downloads, interactions: ['Tab', 'Enter'], chromeDiagnostics: [{ stream: 'stderr', text: 'GPU diagnostic' }],
+    })
+    const text = await readFile(path.join(outputDir, 'failure.json'), 'utf8')
+    const report = JSON.parse(text)
+    assert.equal(report.outcome, 'failed')
+    assert.equal(report.downloads[0].filename, 'rubric-v1.json')
+    assert.equal(report.downloads[0].url, 'blob:http://localhost/blob-id')
+    assert.equal(report.downloads[1].state, 'canceled')
+    assert.equal(report.downloads[1].receivedBytes, 0)
+    assert.match(report.downloads[1].reason, /unavailable/)
+    assert.deepEqual(report.requests[0], {
+      method: 'GET', url: 'http://localhost/api/grading-rubrics/test-id?token=[redacted]',
+      initiator: 'http://localhost/src/api/client.ts', status: 200,
+      loadingFinished: true, loadingFailed: false, canceled: 'unavailable (no failure event)',
+    })
+    assert.deepEqual(report.interactions, ['Tab', 'Enter'])
+    assert.deepEqual(report.chromeDiagnostics, [{ stream: 'stderr', text: 'GPU diagnostic' }])
+    assert.match(report.consoleErrors[0], /Bearer \[redacted\]/)
+    assert.doesNotMatch(text, /private-token|private-credential/)
+  } finally { await rm(outputDir, { recursive: true, force: true }) }
+})
+
+test('action visibility checks fail clipped or unfocused controls, not just document width', async () => {
+  assert.deepEqual(parseArgs(['--step', 'assert-action-visible:button']).steps,
+    [{ action: 'assert-action-visible', value: 'button' }])
+  const client = { send: async () => ({ result: { value: { focused: true, visible: false, enabled: true } } }) }
+  await assert.rejects(applyPageSteps(client, [{ action: 'assert-action-visible', value: 'button' }], { log: () => {} }),
+    /fully inside the viewport/)
+  client.send = async () => ({ result: { value: { focused: true, visible: true, enabled: true } } })
+  await applyPageSteps(client, [{ action: 'assert-action-visible', value: 'button' }], { log: () => {} })
+})
 
 test('G8 optional network evidence includes completion and initiator without authentication or payload data', () => {
   assert.equal(parseArgs(['--network-report']).networkReport, true)
@@ -332,6 +393,8 @@ test('launchBrowser uses the submit profile prefix and removes only its failed p
     profileRoot,
     headed: false,
     locale: 'de-DE',
+    outputDir: profileRoot,
+    evidenceReport: 'startup-failure.json',
   }, 'http://127.0.0.1:5173', {
     env: process.env,
     onBrowser: (_child, profile) => { capturedProfile = profile },
@@ -347,6 +410,11 @@ test('launchBrowser uses the submit profile prefix and removes only its failed p
   assert.ok(capturedArgs.includes('--lang=de-DE'))
   await assert.rejects(readFile(capturedProfile), { code: 'ENOENT' })
   assert.equal(await readFile(unrelatedSession, 'utf8'), 'keep')
+  const report = JSON.parse(await readFile(path.join(profileRoot, 'startup-failure.json'), 'utf8'))
+  assert.equal(report.outcome, 'failed')
+  assert.match(report.failure, /injected browser startup failure/)
+  assert.equal(report.page, 'unavailable')
+  assert.deepEqual(report.chromeDiagnostics, ['unavailable (no Chrome stream diagnostics captured)'])
 })
 
 test('successful and failed preview runs clean up only their own browser profiles', async (context) => {
@@ -582,6 +650,7 @@ test('captures and retains a completed real-browser download under its suggested
     async send(method, params) {
       assert.equal(method, 'Browser.setDownloadBehavior')
       assert.equal(params.behavior, 'allowAndName')
+      assert.equal(params.downloadPath, path.resolve(outputDir))
       assert.equal(params.eventsEnabled, true)
       return {}
     },
@@ -591,7 +660,7 @@ test('captures and retains a completed real-browser download under its suggested
     },
   }
   try {
-    const result = await captureBrowserDownload(client, outputDir, async () => {
+    const result = await captureBrowserDownload(client, path.relative(process.cwd(), outputDir), async () => {
       eventListener({ method: 'Browser.downloadWillBegin', params: {
         guid: 'download-guid', suggestedFilename: 'rubric-v1.json', url: 'http://localhost/api/grading-rubrics/id',
       } })
@@ -618,6 +687,12 @@ test('captures and retains a completed real-browser download under its suggested
       assert.equal(requests.length, 21)
       assert.equal(new Set(records.map(({ version }) => version)).size, 21)
       assert.equal(new Set(requests.map(({ body }) => body.effectiveFrom)).size, 21)
+      assert.deepEqual(requests.map(({ body }) => body.effectiveFrom), [
+        '2090-01-01', '2090-01-02', '2090-01-03', '2090-01-04', '2090-01-05', '2090-01-06',
+        '2090-01-07', '2090-01-08', '2090-01-09', '2090-01-10', '2090-01-11', '2090-01-12',
+        '2090-02-01', '2090-02-02', '2090-02-03', '2090-02-04', '2090-02-05', '2090-02-06',
+        '2090-02-07', '2090-02-08', '2090-02-09',
+      ])
       assert.equal(requests.every(({ method, url, authorization }) =>
         method === 'POST' && url.endsWith('/api/grading-rubrics') && authorization === 'Bearer private-test-token'), true)
       assert.equal(requests.every(({ body }) => body.effectiveFrom.startsWith('2090-') || body.effectiveFrom.startsWith('2091-')), true)

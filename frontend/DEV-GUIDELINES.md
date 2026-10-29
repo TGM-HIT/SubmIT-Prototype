@@ -88,6 +88,16 @@ Interactions run after authentication in the order fill, click, wait, then expan
 
 ### Real-browser keyboard regression suite
 
+The grading-page regression is available through the same browser test target:
+
+```sh
+PREVIEW_PASSWORD=testing-password npm run test:keyboard -- --grading-only --output-dir ../harness/runs/<run-id>/evidence/<revision>
+```
+
+It uses four disposable ordinary full `testing` previews (`admin01`), one for each English/German × desktop 1440 × 900/mobile 390 × 844 combination, on four successive frontend/backend ports from the configured bases. It opts into the existing 21-version rubric-pagination fixture, saves the account language through Settings, and follows **Rubrics & progress** with actual Tab/Enter input. It exercises first/next/previous/next pagination, both definition preparation controls and both real browser saves. `assert-action-visible:SELECTOR` verifies the focused action is enabled and wholly within the viewport; `measure-overflow` checks page width. The runner compares the saved filenames, entire parsed JSON and entire ordered Markdown with a test-owned expectation from the independently preserved Dev-55 resource, not the application exporter. It checks the blank project ID, unchanged active version and selected page after saving. The per-case directories contain saved payloads, page-one and post-save screenshots, focus/input/request/download/console/Chrome diagnostic traces, and the parent `grading-keyboard-results.json` records pass/fail without skipping missing prerequisites. Use a new ignored revision directory to preserve earlier evidence. Mocked smoke tests do not replace this real-browser command.
+
+Preview evidence reports are persisted on interaction/download failure as well as success. They redact authentication secrets and retain available download begin/progress, request URL/method/initiator/status/completion, page console and Chrome process diagnostics. Blob-download fields absent from CDP are explicitly unavailable, not inferred from a successful detail API read. Browser download directories are resolved to absolute paths before configuring Chrome (relative paths are not a portable CDP save destination). A canceled progress event remains a failed check; it is not a successful save. Chrome/macOS diagnostics may only be classified as host noise when completed saves and page-console/request checks establish that the observed run was unaffected.
+
 The repeatable initial keyboard regression suite runs actual Chrome/Chromium key input through the existing CDP preview and testing-session lifecycle. From `frontend/`, run:
 
 ```sh

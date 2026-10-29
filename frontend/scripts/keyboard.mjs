@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import { mkdir, rm, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { runGradingKeyboard } from './grading-keyboard.mjs'
 import {
   assertBrowserState,
   applyPageInteractions,
@@ -32,6 +33,7 @@ export function parseKeyboardArgs(args) {
     const argument = args[index]
     if (argument === '--help' || argument === '-h') options.help = true
     else if (argument === '--negative-focus') options.negativeFocus = true
+    else if (argument === '--grading-only') options.gradingOnly = true
     else if (['--output-dir', '--frontend-port', '--backend-port'].includes(argument)) {
       const value = args[index + 1]
       if (!value || value.startsWith('--')) throw new Error(`${argument} requires a value.`)
@@ -50,6 +52,7 @@ export function parseKeyboardArgs(args) {
   }
   if (!options.help && !options.outputDir) throw new Error('--output-dir is required; use the caller ignored evidence directory.')
   if (options.frontendPort === options.backendPort) throw new Error('Frontend and backend ports must differ.')
+  if (options.gradingOnly && options.negativeFocus) throw new Error('--grading-only cannot be combined with --negative-focus.')
   return options
 }
 
@@ -1016,6 +1019,7 @@ function usage() {
 Usage:
   npm run test:keyboard -- --output-dir <ignored-evidence-directory> [--frontend-port N --backend-port N]
   npm run test:keyboard -- --negative-focus --output-dir <separate-ignored-evidence-directory>
+  npm run test:keyboard -- --grading-only --output-dir <ignored-evidence-directory>
 
 Requirements:
   Node supported by the frontend dependencies, installed frontend and backend toolchains, Chrome/Chromium,
@@ -1035,6 +1039,11 @@ export async function main(args = process.argv.slice(2), dependencies = {}) {
     const options = parseKeyboardArgs(args)
     if (options.help) {
       console.log(usage())
+      return
+    }
+    if (options.gradingOnly) {
+      const results = await runGradingKeyboard(options, dependencies)
+      console.log(`Grading browser suite passed: ${results.length} locale/viewport checks.`)
       return
     }
     const results = await runKeyboardSuite(options, dependencies)
