@@ -133,6 +133,7 @@ class TgmWorkbookReaderTest {
                 () -> reader.read(INVENTED_PATH, zip(formula)));
         assertTrue(unsupported.getMessage().contains("sheet 4aHIT, row 2"));
         assertTrue(unsupported.getMessage().contains("formula"));
+        assertTrue(unsupported.getMessage().contains("required column G"));
         assertFalse(unsupported.getMessage().contains("Private"));
     }
 
@@ -151,6 +152,56 @@ class TgmWorkbookReaderTest {
                 "worksheets/three.xml", worksheet("", "", "", "", "", false),
                 "worksheets/four.xml", worksheet("", "", "", "", "", false)));
         assertThrows(IllegalStateException.class, () -> reader.read(INVENTED_PATH, zip(external)));
+    }
+
+    @Test
+    void rejectsUnreadablePackagesMissingHeadersAndMissingWorksheetParts() throws IOException {
+        IllegalStateException unreadable = assertThrows(IllegalStateException.class,
+                () -> reader.read(INVENTED_PATH, new byte[] {1, 2, 3}));
+        assertTrue(unreadable.getMessage().contains(INVENTED_PATH.toString()));
+
+        Map<String, String> noHeader = packageParts(requiredSheets(), relationships(), Map.of(
+                "worksheets/one.xml", blankWorksheet(),
+                "worksheets/two.xml", worksheet("", "", "", "", "", false),
+                "worksheets/three.xml", worksheet("", "", "", "", "", false),
+                "worksheets/four.xml", worksheet("", "", "", "", "", false)));
+        IllegalStateException headerRow = assertThrows(IllegalStateException.class,
+                () -> reader.read(INVENTED_PATH, zip(noHeader)));
+        assertTrue(headerRow.getMessage().contains("sheet 4aHIT, row 1"));
+        assertTrue(headerRow.getMessage().contains("required header row is missing"));
+
+        Map<String, String> missingColumn = packageParts(requiredSheets(), relationships(), Map.of(
+                "worksheets/one.xml", worksheetWithHeader("A", "D", "E", "F", "G", "H", "I", "J"),
+                "worksheets/two.xml", worksheet("", "", "", "", "", false),
+                "worksheets/three.xml", worksheet("", "", "", "", "", false),
+                "worksheets/four.xml", worksheet("", "", "", "", "", false)));
+        IllegalStateException headerColumn = assertThrows(IllegalStateException.class,
+                () -> reader.read(INVENTED_PATH, zip(missingColumn)));
+        assertTrue(headerColumn.getMessage().contains("required header column K is missing"));
+
+        Map<String, String> missingPart = packageParts(requiredSheets(), relationships(), Map.of(
+                "worksheets/one.xml", worksheet("", "", "", "", "", false),
+                "worksheets/two.xml", worksheet("", "", "", "", "", false),
+                "worksheets/three.xml", worksheet("", "", "", "", "", false)));
+        IllegalStateException worksheet = assertThrows(IllegalStateException.class,
+                () -> reader.read(INVENTED_PATH, zip(missingPart)));
+        assertTrue(worksheet.getMessage().contains("sheet 4dHIT, row 1"));
+        assertTrue(worksheet.getMessage().contains("worksheet is missing or unreadable"));
+    }
+
+    @Test
+    void stripsAllWhitespaceFromLoginButPreservesDisplaySpellingPunctuationAndDiacritics() throws IOException {
+        Map<String, String> worksheets = new LinkedHashMap<>();
+        worksheets.put("worksheets/one.xml",
+                worksheet("  Åda   O'Neil-3  ", "Title A", "Title B", "Title C", "", false));
+        worksheets.put("worksheets/two.xml", worksheet("Learner Two", "", "", "", "", false));
+        worksheets.put("worksheets/three.xml", worksheet("Learner Three", "", "", "", "", false));
+        worksheets.put("worksheets/four.xml", worksheet("Learner Four", "", "", "", "", false));
+        TgmWorkbookReader.WorkbookData data = reader.read(INVENTED_PATH,
+                zip(packageParts(requiredSheets(), relationships(), worksheets)));
+        TgmWorkbookReader.StudentRow special = data.students().getFirst();
+        assertEquals("Åda   O'Neil-3", special.displayName());
+        assertEquals("ÅdaO'Neil-3", special.username());
     }
 
     private static List<String> requiredSheets() {
@@ -181,10 +232,23 @@ class TgmWorkbookReaderTest {
                 + "<row r=\"4\"><c r=\"A4\"><f>SUM(1,37)</f><v>38</v></c></row></sheetData></worksheet>";
     }
 
+    private static String blankWorksheet() {
+        return "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetData>"
+                + "</sheetData></worksheet>";
+    }
+
+    private static String worksheetWithHeader(String... columns) {
+        String header = java.util.Arrays.stream(columns)
+                .map(column -> inlineCell(column + "1", "Header"))
+                .collect(java.util.stream.Collectors.joining());
+        return "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetData><row r=\"1\">"
+                + header + "</row></sheetData></worksheet>";
+    }
+
     private static String formulaWorksheet() {
         return "<worksheet xmlns=\"http://schemas.openxmlformats.org/spreadsheetml/2006/main\"><sheetData>"
                 + "<row r=\"1\">" + headerCells() + "</row><row r=\"2\"><c r=\"A2\" t=\"inlineStr\">"
-                + "<is><t>Sample Learner</t></is></c><c r=\"D2\"><f>1+1</f><v>2</v></c></row>"
+                + "<is><t>Sample Learner</t></is></c><c r=\"G2\"><f>1+1</f><v>2</v></c></row>"
                 + "</sheetData></worksheet>";
     }
 

@@ -269,7 +269,7 @@ class TgmWorkbookImportPlanner {
             } else {
                 String reason = failure;
                 candidate.members().forEach(member ->
-                        skipped.put(GROUP_PREFIX + coordinate(member), reason));
+                        skipped.putIfAbsent(GROUP_PREFIX + coordinate(member), reason));
             }
         }
         return valid;
@@ -314,7 +314,8 @@ class TgmWorkbookImportPlanner {
     private void recordOverlaps(List<Candidate> valid, Set<String> overlaps, Map<String, String> skipped) {
         valid.stream().filter(candidate -> overlaps.contains(candidate.key())).forEach(candidate ->
                 candidate.members().forEach(member ->
-                        skipped.put(GROUP_PREFIX + coordinate(member), "student is declared in overlapping groups")));
+                        skipped.putIfAbsent(GROUP_PREFIX + coordinate(member),
+                                "student is declared in overlapping groups")));
     }
 
     private TgmWorkbookReader.StudentRow findStudent(List<TgmWorkbookReader.StudentRow> students, String coordinate) {

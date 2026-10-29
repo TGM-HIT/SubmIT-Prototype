@@ -43,13 +43,13 @@ public class TestingTgmWorkbookImporter implements ApplicationRunner {
     }
 
     void importSource(Path source, byte[] bytes) {
-        String checksum = sha256(bytes);
-        if (writer.alreadyImported(checksum)) {
-            return;
-        }
-        TgmWorkbookReader.WorkbookData workbook = reader.read(source, bytes);
-        TgmImportPlan plan = planner.plan(source, workbook);
         try {
+            String checksum = sha256(bytes);
+            if (writer.alreadyImported(checksum)) {
+                return;
+            }
+            TgmWorkbookReader.WorkbookData workbook = reader.read(source, bytes);
+            TgmImportPlan plan = planner.plan(source, workbook);
             writer.write(checksum, workbook, plan);
         } finally {
             SecurityContextHolder.clearContext();
@@ -75,7 +75,7 @@ public class TestingTgmWorkbookImporter implements ApplicationRunner {
                 + " (resolved from the application working directory).");
     }
 
-    private byte[] readSource(Path source) {
+    byte[] readSource(Path source) {
         try {
             return Files.readAllBytes(source);
         } catch (IOException exception) {

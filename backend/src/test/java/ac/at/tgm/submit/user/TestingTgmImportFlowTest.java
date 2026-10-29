@@ -3,8 +3,12 @@ package ac.at.tgm.submit.user;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -17,6 +21,8 @@ import ac.at.tgm.submit.data.StoredRecord;
 import ac.at.tgm.submit.security.Role;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -28,6 +34,8 @@ import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.http.MediaType;
 import org.springframework.core.env.Environment;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
@@ -150,7 +158,10 @@ class TestingTgmImportFlowTest {
         solo.setDisplayName("Subsequent testing edit");
         users.save(solo);
         long priorRecords = store.repository().count();
+        SecurityContextHolder.getContext().setAuthentication(
+                UsernamePasswordAuthenticationToken.unauthenticated("existing-auth", "not-a-secret"));
         importer.importSource(INVENTED_PATH, source);
+        assertNull(SecurityContextHolder.getContext().getAuthentication());
         assertEquals(priorRecords, store.repository().count());
         UserAccount reloaded = users.findById(solo.getId()).orElseThrow();
         assertEquals("Subsequent testing edit", reloaded.getDisplayName());
@@ -158,7 +169,279 @@ class TestingTgmImportFlowTest {
         byte[] changed = java.util.Arrays.copyOf(source, source.length + 1);
         changed[changed.length - 1] = 1;
         assertThrows(IllegalStateException.class, () -> importer.importSource(INVENTED_PATH, changed));
+        assertNull(SecurityContextHolder.getContext().getAuthentication());
         assertEquals(priorRecords, store.repository().count());
+    }
+
+    @Test
+    void rejectsInvalidGroupMatrixWithExactSoloFallbackAndNoDuplicateEffectiveApplications() throws Exception {
+        TgmWorkbookReader.WorkbookData workbook = TgmWorkbookFixtures.invalidGroupMatrix();
+        TgmImportPlan plan = planner.plan(INVENTED_PATH, workbook);
+
+        Set<String> expectedSoloNames = Set.of(
+                "Matrix Valid Solo", "Matrix Size One",
+                "Matrix Six One", "Matrix Six Two", "Matrix Six Three",
+                "Matrix Six Four", "Matrix Six Five", "Matrix Six Six",
+                "Matrix Duplicate One", "Matrix Duplicate Two",
+                "Matrix Omit One", "Matrix Omit Two", "Matrix Omit One Extra",
+                "Matrix Unknown", "Matrix Overlap One",
+                "Matrix Nonreciprocal One", "Matrix Nonreciprocal Two",
+                "Matrix Reordered One", "Matrix Reordered Two",
+                "Matrix Invalid Member One");
+        assertEquals(expectedSoloNames, plan.solos().stream()
+                .map(TgmWorkbookReader.StudentRow::displayName).collect(Collectors.toSet()));
+        assertEquals(2, plan.groups().size());
+        assertEquals(Set.of(Set.of("Matrix Overlap Two", "Matrix Overlap Three"),
+                        Set.of("Whitespace One", "Whitespace Two")),
+                plan.groups().stream().map(group -> group.members().stream()
+                        .map(TgmWorkbookReader.StudentRow::displayName).collect(Collectors.toSet()))
+                        .collect(Collectors.toSet()));
+        assertEquals(26, plan.students().size());
+        assertEquals(4, plan.groups().stream().mapToInt(group -> group.members().size()).sum());
+        assertEquals(2, plan.validRankings().values().stream().filter(valid -> !valid).count());
+
+        Map<String, String> skipped = plan.invalidReasons();
+        assertEquals("declared roster size is outside 2–5", skipped.get("group:4aHIT!3"));
+        for (int row = 4; row <= 9; row++) {
+            assertEquals("declared roster size is outside 2–5", skipped.get("group:4aHIT!" + row));
+        }
+        assertEquals("duplicate declared member", skipped.get("group:4aHIT!10"));
+        assertEquals("roster is not reciprocal", skipped.get("group:4aHIT!11"));
+        assertEquals("declaration omits its student", skipped.get("group:4aHIT!12"));
+        assertEquals("roster is not reciprocal", skipped.get("group:4aHIT!13"));
+        assertEquals("declared roster size is outside 2–5", skipped.get("group:4aHIT!14"));
+        assertEquals("declared member does not resolve uniquely", skipped.get("group:4aHIT!15"));
+        assertEquals("roster is not reciprocal", skipped.get("group:4aHIT!16"));
+        assertEquals("roster is not reciprocal", skipped.get("group:4aHIT!17"));
+        assertEquals("roster is not reciprocal", skipped.get("group:4aHIT!19"));
+        assertEquals("declared roster size is outside 2–5", skipped.get("group:4aHIT!20"));
+        assertEquals("member preferences differ or are reordered", skipped.get("group:4aHIT!21"));
+        assertEquals("member preferences differ or are reordered", skipped.get("group:4aHIT!22"));
+        assertEquals("a member does not have three distinct valid preferences", skipped.get("group:4aHIT!23"));
+        assertEquals("fewer than three nonblank preferences", skipped.get("4aHIT!24"));
+        assertEquals("a member does not have three distinct valid preferences", skipped.get("group:4aHIT!24"));
+        assertEquals("repeated preference", skipped.get("4aHIT!27"));
+        assertTrue(skipped.keySet().stream().allMatch(key -> key.matches("(group:)?4aHIT![0-9]+")));
+        assertTrue(skipped.values().stream().noneMatch(reason -> workbook.students().stream()
+                .anyMatch(student -> reason.contains(student.displayName()))));
+
+        importerFor(workbook).importSource(INVENTED_PATH, "invalid-group-matrix".getBytes(
+                java.nio.charset.StandardCharsets.UTF_8));
+        StoredRecord period = tgmPeriod();
+        String teacherToken = login("teacher01");
+        JsonNode groupPage = getPage("/api/application-periods/{periodId}/applying-groups",
+                teacherToken, 0, 10, period.getId());
+        assertPage(groupPage, 2, 10, 1);
+        assertEquals(2, groupPage.path("content").size());
+        Set<Set<String>> publicGroupMembers = new java.util.HashSet<>();
+        for (JsonNode group : groupPage.path("content")) {
+            assertEquals("SUBMITTED", group.path("status").asText());
+            publicGroupMembers.add(group.path("members").findValuesAsText("displayName")
+                    .stream().collect(Collectors.toSet()));
+        }
+        assertEquals(Set.of(Set.of("Matrix Overlap Two", "Matrix Overlap Three"),
+                        Set.of("Whitespace One", "Whitespace Two")), publicGroupMembers);
+
+        JsonNode applications = getPage("/api/application-periods/{periodId}/applications",
+                teacherToken, 0, 100, period.getId());
+        assertPage(applications, 20, 100, 1);
+        assertEquals(expectedSoloNames, applications.path("content").findValuesAsText("studentDisplayName")
+                .stream().collect(Collectors.toSet()));
+        String fallbackToken = login("MatrixDuplicateOne");
+        JsonNode fallback = json(mockMvc.perform(get("/api/application-periods/{periodId}/applications/me",
+                        period.getId()).header("Authorization", "Bearer " + fallbackToken))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        assertEquals("SUBMITTED", fallback.path("status").asText());
+        assertEquals(3, fallback.path("preferences").size());
+        for (String invalidUsername : List.of("MatrixInvalidMemberTwo", "MatrixRepeatedRanking")) {
+            String invalidToken = login(invalidUsername);
+            mockMvc.perform(get("/api/application-periods/{periodId}/applications/me", period.getId())
+                            .header("Authorization", "Bearer " + invalidToken))
+                    .andExpect(status().isNotFound());
+        }
+    }
+
+    @Test
+    void rejectsAmbiguousStudentIdentityAndWhitespaceLoginCollisionsBeforePlanningWrites() {
+        List<TgmWorkbookReader.StudentRow> ambiguous = List.of(
+                new TgmWorkbookReader.StudentRow("4aHIT", 2, "Invented Duplicate", "InventedDuplicate",
+                        TgmWorkbookFixtures.CHOICES, List.of()),
+                new TgmWorkbookReader.StudentRow("4bHIT", 2, "Invented  Duplicate", "InventedDuplicate",
+                        TgmWorkbookFixtures.CHOICES, List.of()));
+        IllegalStateException ambiguousFailure = assertThrows(IllegalStateException.class,
+                () -> planner.plan(INVENTED_PATH, workbook(ambiguous)));
+        assertTrue(ambiguousFailure.getMessage().contains("login collides after whitespace removal"));
+        assertFalse(ambiguousFailure.getMessage().contains("Invented Duplicate"));
+
+        List<TgmWorkbookReader.StudentRow> collision = List.of(
+                new TgmWorkbookReader.StudentRow("4aHIT", 2, "Invented A B", "InventedAB",
+                        TgmWorkbookFixtures.CHOICES, List.of()),
+                new TgmWorkbookReader.StudentRow("4bHIT", 2, "Invented AB", "InventedAB",
+                        TgmWorkbookFixtures.CHOICES, List.of()));
+        IllegalStateException collisionFailure = assertThrows(IllegalStateException.class,
+                () -> planner.plan(INVENTED_PATH, workbook(collision)));
+        assertTrue(collisionFailure.getMessage().contains("login collides after whitespace removal"));
+        assertFalse(collisionFailure.getMessage().contains("Invented A B"));
+    }
+
+    @Test
+    void missingLocalSourceFailsWithPathAndNoWorkbookFallback() {
+        Path missing = Path.of("missing-invented-" + UUID.randomUUID() + ".xlsx");
+        IllegalStateException failure = assertThrows(IllegalStateException.class,
+                () -> importer().readSource(missing));
+        assertTrue(failure.getMessage().contains(missing.toString()));
+        assertTrue(failure.getMessage().contains("Unable to read required local TGM workbook"));
+    }
+
+    @Test
+    void reconcilesPaginatedPublicCollectionsBeyondDefaultPageSizeWithoutLeakingAnonymousData() throws Exception {
+        TgmWorkbookReader.WorkbookData workbook = TgmWorkbookFixtures.largeFixture(110, 24);
+        importerFor(workbook).importSource(INVENTED_PATH, ("large-fixture-" + UUID.randomUUID())
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+
+        String adminToken = login("admin01");
+        String teacherToken = login("teacher01");
+        Set<String> expectedUsernames = workbook.students().stream().map(TgmWorkbookReader.StudentRow::username)
+                .collect(Collectors.toSet());
+        Map<String, String> expectedClasses = workbook.students().stream().collect(Collectors.toMap(
+                TgmWorkbookReader.StudentRow::username, TgmWorkbookReader.StudentRow::sheet));
+        Set<String> publicUsernames = new java.util.HashSet<>();
+        for (int page = 0; page < 2; page++) {
+            JsonNode usersPage = getStudentPage(adminToken, page);
+            assertPage(usersPage, 110, 100, 2);
+            assertEquals(page == 0 ? 100 : 10, usersPage.path("content").size());
+            for (JsonNode user : usersPage.path("content")) {
+                assertTrue(user.has("username") && user.path("username").isTextual());
+                assertTrue(user.path("roles").isArray());
+                assertEquals(1, user.path("roles").size());
+                assertEquals("STUDENT", user.path("roles").get(0).asText());
+                publicUsernames.add(user.path("username").asText());
+                assertEquals(expectedClasses.get(user.path("username").asText()), user.path("className").asText());
+            }
+        }
+        assertEquals(expectedUsernames, publicUsernames);
+
+        Set<String> expectedTitles = new LinkedHashSet<>(workbook.projectTitles());
+        Set<String> publicTitles = new LinkedHashSet<>();
+        Map<String, UUID> projectIds = new LinkedHashMap<>();
+        for (int page = 0; page < 3; page++) {
+            JsonNode ideasPage = json(mockMvc.perform(get("/api/ideas")
+                            .header("Authorization", "Bearer " + teacherToken)
+                            .param("status", "ACCEPTED_FOR_APPLICATIONS").param("page", Integer.toString(page))
+                            .param("size", "10"))
+                    .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+            assertPage(ideasPage, 24, 10, 3);
+            for (JsonNode idea : ideasPage.path("content")) {
+                assertTrue(idea.path("id").isTextual());
+                assertTrue(idea.path("title").isTextual());
+                publicTitles.add(idea.path("title").asText());
+                projectIds.put(idea.path("title").asText(), UUID.fromString(idea.path("id").asText()));
+            }
+        }
+        assertEquals(expectedTitles, publicTitles);
+        StoredRecord period = tgmPeriod();
+        String catalogueStudentToken = login("InventedStudent001");
+        JsonNode periodData = store.parse(period);
+        Set<String> periodProjectIds = new java.util.HashSet<>();
+        assertTrue(periodData.path("projectIds").isArray());
+        periodData.path("projectIds").forEach(project -> periodProjectIds.add(project.asText()));
+        assertEquals(projectIds.values().stream().map(UUID::toString).collect(Collectors.toSet()), periodProjectIds);
+        JsonNode periodPage = getPage("/api/application-periods", teacherToken, 0, 1);
+        assertPage(periodPage, 1, 1, 1);
+        assertEquals(period.getId().toString(), periodPage.path("content").get(0).path("id").asText());
+        for (Map.Entry<String, UUID> project : projectIds.entrySet()) {
+            JsonNode catalogue = json(mockMvc.perform(get(
+                            "/api/application-periods/{periodId}/catalogue/{projectId}",
+                            period.getId(), project.getValue())
+                            .header("Authorization", "Bearer " + catalogueStudentToken))
+                    .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+            assertEquals(project.getKey(), catalogue.path("title").asText());
+            assertTrue(catalogue.path("specification").isObject());
+            assertTrue(catalogue.path("specification").path("scope").isTextual());
+            assertFalse(catalogue.path("specification").path("scope").asText().isBlank());
+            for (String field : List.of("objectives", "intendedUsers", "requirements", "deliverables",
+                    "dependencies")) {
+                assertTrue(catalogue.path("specification").path(field).isArray());
+                assertFalse(catalogue.path("specification").path(field).isEmpty());
+            }
+        }
+
+        Set<String> applicationStudentIds = new java.util.HashSet<>();
+        for (int page = 0; page < 2; page++) {
+            JsonNode applicationPage = getPage("/api/application-periods/{periodId}/applications",
+                    teacherToken, page, 100, period.getId());
+            assertPage(applicationPage, 108, 100, 2);
+            for (JsonNode application : applicationPage.path("content")) {
+                assertEquals("SUBMITTED", application.path("status").asText());
+                assertTrue(application.path("studentId").isTextual());
+                assertEquals(3, application.path("preferences").size());
+                applicationStudentIds.add(application.path("studentId").asText());
+            }
+        }
+        assertEquals(108, applicationStudentIds.size());
+
+        JsonNode groupPage = getPage("/api/application-periods/{periodId}/applying-groups",
+                teacherToken, 0, 1, period.getId());
+        assertPage(groupPage, 1, 1, 1);
+        JsonNode group = groupPage.path("content").get(0);
+        assertEquals("SUBMITTED", group.path("status").asText());
+        assertEquals(2, group.path("members").size());
+        Set<String> groupStudentIds = group.path("members").findValuesAsText("studentId")
+                .stream().collect(Collectors.toSet());
+        assertEquals(2, groupStudentIds.size());
+        Set<String> allEffectiveIds = new java.util.HashSet<>(applicationStudentIds);
+        assertTrue(java.util.Collections.disjoint(allEffectiveIds, groupStudentIds));
+        allEffectiveIds.addAll(groupStudentIds);
+        assertEquals(110, allEffectiveIds.size());
+        assertEquals(Set.of(users.findByUsername("InventedStudent001").orElseThrow().getId().toString(),
+                        users.findByUsername("InventedStudent002").orElseThrow().getId().toString()),
+                groupStudentIds);
+
+        mockMvc.perform(get("/api/users").param("role", "STUDENT"))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/application-periods/{periodId}/applications", period.getId()))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/application-periods/{periodId}/applying-groups", period.getId()))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/ideas")).andExpect(status().isUnauthorized());
+    }
+
+    private TestingTgmWorkbookImporter importerFor(TgmWorkbookReader.WorkbookData workbook) {
+        TgmWorkbookReader sourceReader = mock(TgmWorkbookReader.class);
+        when(sourceReader.read(any(Path.class), any(byte[].class))).thenReturn(workbook);
+        return new TestingTgmWorkbookImporter(environment, sourceReader, planner, writer);
+    }
+
+    private TgmWorkbookReader.WorkbookData workbook(List<TgmWorkbookReader.StudentRow> students) {
+        Map<String, Integer> counts = new LinkedHashMap<>();
+        TgmWorkbookReader.SHEETS.forEach(sheet -> counts.put(sheet,
+                (int) students.stream().filter(student -> student.sheet().equals(sheet)).count()));
+        return new TgmWorkbookReader.WorkbookData(students,
+                students.stream().flatMap(student -> student.choices().stream()).distinct().toList(), counts);
+    }
+
+    private JsonNode getPage(String route, String token, int page, int size, Object... pathVariables)
+            throws Exception {
+        return json(mockMvc.perform(get(route, pathVariables).header("Authorization", "Bearer " + token)
+                        .param("page", Integer.toString(page)).param("size", Integer.toString(size)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+    }
+
+    private JsonNode getStudentPage(String token, int page) throws Exception {
+        return json(mockMvc.perform(get("/api/users").header("Authorization", "Bearer " + token)
+                        .param("role", "STUDENT").param("q", "Invented Student")
+                        .param("page", Integer.toString(page)).param("size", "100"))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+    }
+
+    private void assertPage(JsonNode page, int total, int size, int pages) {
+        assertTrue(page.path("content").isArray());
+        assertTrue(page.has("totalElements") && page.path("totalElements").isIntegralNumber());
+        assertTrue(page.has("size") && page.path("size").isIntegralNumber());
+        assertTrue(page.has("totalPages") && page.path("totalPages").isIntegralNumber());
+        assertEquals(total, page.path("totalElements").asInt());
+        assertEquals(size, page.path("size").asInt());
+        assertEquals(pages, page.path("totalPages").asInt());
     }
 
     private TestingTgmWorkbookImporter importer() {
