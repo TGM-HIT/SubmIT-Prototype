@@ -1,0 +1,76 @@
+# Dev-60. Allow Markdown and PDF idea and specification submissions
+
+## Intent
+
+Students and teachers currently have to enter every idea and full-specification narrative in web-form fields. Let authors instead upload a Markdown file that fills those narrative fields or a PDF that serves as the narrative document, while keeping idea metadata in the existing form. Teachers need a safe preview of a submitted PDF while reviewing it, and authors need downloadable Markdown templates that show the supported section headings.
+
+## Scope and contract
+
+- Extend the existing idea and full-specification authoring workflows in `frontend/src/features/ideas/IdeasPage.vue`, the idea/specification API and persistence in `backend/src/main/java/ac/at/tgm/submit/idea/`, and the frontend navigation/router. Do not change submission lifecycle, ownership, collaboration limits, review decisions, or existing field validation limits.
+- Let student and teacher authors choose one narrative input mode per idea or specification: existing form fields, Markdown upload, or PDF upload. The form remains editable after Markdown is parsed. A PDF replaces only narrative fields; it is not parsed into text. For an idea, title, school year, and collaborators remain manual form inputs and are never extracted from either file. Existing idea metadata remains unchanged when adding a full specification.
+- Accept only a non-empty `.md` file for Markdown import. Reject other extensions and empty files with a localized error before parsing; no file upload is persisted by the backend.
+- Map Markdown `##` sections to the existing narrative fields. Recognize the English and German headings below, matching heading text without regard to case or surrounding whitespace:
+
+  | Workflow | Field | English heading | German heading | Content |
+  | --- | --- | --- | --- | --- |
+  | Idea | Description | `Description` | `Beschreibung` | Plain-text section body |
+  | Idea | Intended outcome | `Intended outcome` | `Beabsichtigtes Ergebnis` | Plain-text section body |
+  | Idea | Initial scope points | `Initial scope points` | `Erste Umfangspunkte` | One value per Markdown bullet |
+  | Idea | Learning topics | `Learning topics` | `Lernthemen` | One value per Markdown bullet |
+  | Specification | Objectives | `Objectives:` | `Ziele:` | One value per Markdown bullet |
+  | Specification | Intended users | `Intended users` | `Vorgesehene Nutzende` | One value per Markdown bullet |
+  | Specification | Requirements | `Requirements` | `Anforderungen` | One value per Markdown bullet |
+  | Specification | Deliverables | `Deliverables` | `Ergebnisse` | One value per Markdown bullet |
+  | Specification | Proposed scope | `Proposed scope` | `Umfang` | Plain-text section body |
+  | Specification | Dependencies or resources | `Dependencies or resources` | `Abhängigkeiten oder Ressourcen` | One value per Markdown bullet |
+
+  A section continues until the next level-two heading; a top-level document title is allowed and ignored. Strip Markdown bullet markers from list values, preserve paragraph text in scalar fields, and apply the existing field limits and validation. Reject missing or duplicate required headings, unknown level-two headings, and malformed list sections with a localized error; do not partially populate fields or discard the current form values on parse failure. The optional learning-topics section may be empty or omitted. Markdown is parsed in the browser into the existing form fields; it is not sent or stored as a separate backend file. Both English and German headings are accepted, including the displayed trailing colon on `Objectives:` and `Ziele:`.
+
+- Provide four actual downloadable `.md` template files: `frontend/src/features/templates/idea-template-en.md`, `frontend/src/features/templates/idea-template-de.md`, `frontend/src/features/templates/specification-template-en.md`, and `frontend/src/features/templates/specification-template-de.md`. Add a localized authenticated **Templates / Vorlagen** route and main-navigation item, available to the existing student, teacher, and administrator role sets. Each template must contain the supported headings for its language, concise instructions, and representative list bullets without invented project-specific content or credentials. Do not put title, school year, or collaborator headings in the idea template. Downloads must use these clear filenames.
+- Accept only a non-empty PDF no larger than the existing 10 MiB artefact-upload ceiling. Enforce file type/content and size validation on the backend, including a PDF signature/content check compatible with existing dependencies; reject empty, non-PDF, invalid-signature, and oversized files without creating or changing an idea/specification. Do not add a dependency. Keep the existing backend multipart request ceiling consistent with this limit.
+- Persist a PDF with its associated idea or specification and make its bytes available only to callers authorized to read that idea/specification under existing access rules. In the teacher review flow, offer an accessible preview modal for the submitted PDF with loading, error/retry, and close states. Serve it as private, non-cacheable `application/pdf` content with safe response headers; do not expose PDF bytes, filenames, uploader identity, or other private metadata through the public archive or unrelated responses. Existing authorized idea-detail and accepted-project catalogue viewers must retain access to the narrative through the PDF when no form narrative exists.
+- Preserve the normal submit/revision lifecycle: authors may replace their current PDF only while the existing lifecycle permits editing; submitted content stays immutable during review. A revised full specification must retain the PDF associated with each existing submitted revision/review rather than silently changing the document a teacher previously reviewed.
+- Update `docs/SPEC.md`, `backend/SPEC.md`, and `frontend/SPEC.md` to document the alternative narrative modes, manual metadata, field mapping/templates, PDF review and access rules, and validation. Check all related idea/specification and privacy statements in each file for contradictions.
+- Extend the existing local browser preview tooling with a reusable `set-file:SELECTOR=REPOSITORY_RELATIVE_PATH` step if it cannot already select a repository-local file, and document the supported step in `frontend/DEV-GUIDELINES.md`. Keep this limited to selecting a named local fixture for browser verification. Include a small valid PDF fixture at `frontend/src/features/ideas/__fixtures__/valid-preview.pdf`; do not use production or personal documents.
+- No other prerequisites or scope-gate allowances are required; application source, preview tooling/guidance, test fixtures, and the three named specification files are within the existing commit-scope gate.
+- API request/response annotations and validation must describe the existing JSON narrative fields and PDF alternative, including mutually exclusive request shapes; Markdown maps into the existing JSON fields and has no separate API upload mode. Regenerate and review `contracts/openapi.yaml`; regenerate `frontend/src/api/schema.d.ts` when consumed contract types change. Do not hand-edit generated files or commit ignored generated output.
+
+## Mechanical checks (the Evaluator re-runs)
+
+Durable automated tests (join the build):
+
+- Backend API tests for creating and updating idea and specification narratives through the form, Markdown-derived fields, and PDF upload; verify response/persistence and current lifecycle constraints for student and teacher authors.
+- Backend validation tests for empty, non-PDF, invalid-signature, and over-10-MiB uploads on both idea and specification paths; assert the request fails and leaves the idea, specification, revision history, and audit state unchanged. Verify valid uploads at the supported size boundary and reject simultaneous PDF and form narrative inputs.
+- Backend authorization/content tests for an authorized author, an authorized teacher reviewer, an authorized student reading an accepted catalogue project, an unrelated student, and an unauthenticated caller; only callers already allowed to read the associated idea/specification may retrieve its PDF. Verify private content is absent from public archive responses and unrelated idea/list responses.
+- Backend contract tests for the JSON and multipart request alternatives, PDF content response media type/headers, validation descriptions, and generated OpenAPI request/response schemas.
+- Frontend tests for each English/German Markdown heading mapping, bullet/scalar parsing, optional learning topics, malformed/missing/duplicate/unknown headings, and parse failures preserving existing form and metadata values without partial mutation.
+- Frontend tests that empty and non-`.md` files are rejected without changing form values, and valid Markdown imports populate fields without creating a separate uploaded-file record.
+- Frontend tests that title, school year, and collaborator selection remain manual and unchanged when Markdown or PDF is selected; switching input modes does not silently submit stale narrative or overwrite metadata. Verify existing form validation limits apply to parsed Markdown values.
+- Frontend tests for all four downloadable templates, matching route/navigation labels for student, teacher, administrator, and dual-role accounts, clear filenames, absence of metadata headings, and presence of every recognized heading.
+- Frontend tests for PDF selection in both idea and specification authoring, validation feedback, cancel-without-mutation, successful-save refreshed content, teacher preview modal content, loading/error/retry, close/cancel focus restoration, and successful review refresh/focus. Verify authorized catalogue details can preview an accepted PDF and unauthorized/public views cannot retrieve or render it.
+- Backend regression test that replacing a full-specification PDF after a revision request preserves the exact earlier PDF bytes associated with the previously submitted revision/review.
+- If preview tooling changes, add parser/behavior regression coverage for its repository-local file-input step and run `npm run preview:test`.
+
+Standard project checks (all must pass):
+
+- Backend changes from `backend/`: `./gradlew test` and `./gradlew checkstyleMain`.
+- Backend API annotation/request/response/validation changes: from `backend/`, run `./gradlew generateOpenApi`, review the `contracts/openapi.yaml` diff, then from `frontend/` run `npm run api:types` if consumed by the frontend.
+- Frontend changes from `frontend/`: `npm run typecheck`, `npm run test`, and `npm run build`.
+- Specification and developer-guideline changes: check the resulting documents for contradictory requirements and run `git diff --check`.
+
+## One-time manual verification (in addition to automated tests)
+
+- **Implementor-performed:** From `frontend/`, use the documented persistent local preview session and testing-only accounts/password in `backend/DEV-GUIDELINES.md`; do not hard-code credentials. Start with `npm run preview -- --session-start`. Authenticate as `student01`, open `/templates` (no idea/period API data is required there) and download the English or German idea and specification templates. Then open `/ideas`; its initial list and idea-form school-year selector require successful `GET /api/ideas` and `GET /api/school-years` responses, provided by the full `testing` profile. Import the idea template using `set-file:#idea-markdown-file=frontend/src/features/templates/idea-template-en.md`, enter title and school year manually, save through the idea creation request, and submit through `POST /api/ideas/{id}/submit`. Authenticate in a separate preview invocation as `teacher01`, open `/ideas`, load the submitted idea details with `GET /api/ideas/{id}`, review it, and approve it through `POST /api/ideas/{id}/reviews`. Return as `student01`, load the approved idea details, enter a valid PDF for the full specification using `set-file:#specification-file=frontend/src/features/ideas/__fixtures__/valid-preview.pdf`, save the specification, and submit it through `POST /api/ideas/{id}/specification/submit`. Return as `teacher01`, open the specification review and PDF preview modal. These are supported UI-created prerequisites; do not call private setup endpoints or navigate to application flows that require absent application records. Capture desktop and mobile screenshots of the template page, author form, and teacher PDF preview under `harness/runs/<run-id>/evidence/`. Check the localized labels, rendered PDF, responsive layout, modal keyboard/close behavior, and focus return. Inspect console and request errors; stop the preview session with `npm run preview -- --session-stop`.
+- If a UI state cannot be reached, report the exact failing request and state; do not work around the UI with direct API calls or arbitrary waits. If preview file selection fails after its documented retry, report it and do not claim the PDF preview check passed.
+
+## Acceptance criteria (the Evaluator judges)
+
+- A student or teacher can author an idea or specification using exactly one of the existing form, a supported Markdown upload, or a PDF upload. Markdown populates the corresponding editable narrative fields according to the table; PDF remains a document and replaces only the narrative content.
+- The idea title and school year remain required manual fields and collaborators remain manual selections under the existing optional/ownership rules for both upload modes; neither file can set or change them. Existing idea fields, validation limits, owner rules, review workflow, and specification lifecycle continue to work.
+- The four downloadable templates are available from the localized **Templates / Vorlagen** navigation item for all existing authenticated role sets. Each localized template matches the parser's heading support and the field mapping above.
+- Markdown parse failures are visible and localized; no form value is partially changed and no request is submitted. The optional learning-topics section may be absent or empty.
+- Valid PDFs through 10 MiB can be uploaded for ideas and specifications. Empty, non-PDF, invalid-signature, oversized, or conflicting narrative inputs fail server-side without changing persisted content or history.
+- During teacher review, the authorized reviewer can open and close a PDF preview modal. The preview is private, not cached, and exposes no bytes or metadata to unauthorized or public-archive callers. Existing authorized catalogue viewers can read the PDF narrative for an accepted project.
+- PDF content reviewed for a submitted full-specification revision remains the same content associated with that revision after later edits/resubmission.
+- On successful save/upload, the existing detail/list view shows the refreshed narrative mode and content; canceling parse, upload, or preview leaves persisted data unchanged and returns focus to the initiating control. Errors preserve valid form values and provide a retry where applicable.
+- All named automated scenarios and standard project checks pass; the three product specifications and preview guidance describe the implemented behavior without contradictions.
