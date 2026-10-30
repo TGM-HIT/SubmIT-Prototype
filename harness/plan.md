@@ -159,6 +159,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Feature-25](tickets/done/Feature-25.md) | done | Allow teacher and administrator roles on one account |
 | [Feature-26](tickets/done/Feature-26.md) | done | Browse teacher Formal proposals by project and period |
 | [Feature-27](tickets/done/Feature-27.md) | done | Select Rubrics & progress projects by name and membership |
+| [Feature-28](tickets/Feature-28.md) | to-do | Prioritize projects within an application period's allocation |
 
 ### Optimizations
 
