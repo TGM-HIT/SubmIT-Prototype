@@ -119,7 +119,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-58](tickets/done/Dev-58.md) | done | Automate frontend browser keyboard navigation tests |
 | [Dev-59](tickets/done/Dev-59.md) | done | Load TGM workbook preferences in a dedicated testing profile |
 | [Dev-60](tickets/done/Dev-60.md) | done | Allow Markdown and PDF idea and specification submissions |
-| [Dev-61](tickets/Dev-61.md) | to-do | Make rubric definitions self-contained JSON and downloadable |
+| [Dev-61](tickets/done/Dev-61.md) | done | Make rubric definitions self-contained JSON and downloadable |
 
 ### Agents
 

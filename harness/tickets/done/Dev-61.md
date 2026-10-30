@@ -8,7 +8,7 @@ Dev-55 already stores the draft descriptors in `backend/src/main/resources/testi
 
 ## Source
 
-Owner request: save the Dev-55 draft as JSON rather than hard-coded backend content, and make existing rubrics downloadable as JSON and Markdown. Owner confirmed that JSON downloads should be reusable definitions for editing and publishing a new version, not database/API snapshots: exclude internal record IDs and publication metadata. Related ticket: [Dev-55](done/Dev-55.md).
+Owner request: save the Dev-55 draft as JSON rather than hard-coded backend content, and make existing rubrics downloadable as JSON and Markdown. Owner confirmed that JSON downloads should be reusable definitions for editing and publishing a new version, not database/API snapshots: exclude internal record IDs and publication metadata. Related ticket: [Dev-55](Dev-55.md).
 
 ## Scope and contract
 
