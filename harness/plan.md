@@ -161,6 +161,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Feature-27](tickets/done/Feature-27.md) | done | Select Rubrics & progress projects by name and membership |
 | [Feature-28](tickets/Feature-28.md) | to-do | Prioritize projects within an application period's allocation |
 | [Feature-29](tickets/Feature-29.md) | to-do | Move rubric browsing and authoring to a dedicated Rubrics page |
+| [Feature-30](tickets/Feature-30.md) | to-do | Grade all student criteria in separate routine and final assessment modes |
 
 ### Optimizations
 
