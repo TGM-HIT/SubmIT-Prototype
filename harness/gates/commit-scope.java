@@ -9,8 +9,6 @@ class CommitScope {
         "frontend/scripts/"
     };
     static final String[] ALLOWED_FILES = {
-        "backend/build.gradle",
-        "scripts/check-startup-config.py",
         ".gitignore",
         ".env.example",
         "Makefile",
