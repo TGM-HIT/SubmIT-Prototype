@@ -298,6 +298,7 @@ class TestingDraftRubricApiTest {
     }
 
     @Test
+    @Transactional
     void selfContainedFixturePublishesAsAReusableDefinitionOnlyAfterChoosingANewVersion() throws Exception {
         JsonNode definition;
         try (var input = new ClassPathResource("testing/grading-rubric-draft.json").getInputStream()) {
@@ -329,8 +330,7 @@ class TestingDraftRubricApiTest {
                 .andExpect(status().isConflict());
 
         var newVersion = ((com.fasterxml.jackson.databind.node.ObjectNode) definition.deepCopy())
-                .put("version", "dev61-reusable-definition-test")
-                .put("effectiveFrom", "2099-01-01");
+                .put("version", "dev61-reusable-definition-test");
         JsonNode published = response(mockMvc.perform(bearer(post("/api/grading-rubrics")
                         .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsBytes(newVersion)),
                         loginAdmin()))
@@ -341,6 +341,12 @@ class TestingDraftRubricApiTest {
             publishedDefinition.remove(metadata);
         }
         assertRequestFieldsPreserved(newVersion, publishedDefinition, "rubric");
+        assertEquals("2020-01-01", definition.path("effectiveFrom").asText());
+        assertEquals(definition.path("effectiveFrom"), publishedDefinition.path("effectiveFrom"),
+                "The original effective-from date must be preserved.");
+        assertFalse(definition.has("effectiveTo"));
+        assertTrue(publishedDefinition.path("effectiveTo").isNull(),
+                "The response must not introduce an effective-to date.");
         assertEquals(newVersion.path("categories").size(), published.path("categories").size());
         for (int categoryIndex = 0; categoryIndex < newVersion.path("categories").size(); categoryIndex++) {
             JsonNode expectedCategory = newVersion.path("categories").get(categoryIndex);
@@ -464,6 +470,12 @@ class TestingDraftRubricApiTest {
             for (var entry : expected.properties()) {
                 assertTrue(actual.has(entry.getKey()), path + "." + entry.getKey() + " must be present");
                 assertRequestFieldsPreserved(entry.getValue(), actual.get(entry.getKey()), path + "." + entry.getKey());
+            }
+            for (var entry : actual.properties()) {
+                if (!expected.has(entry.getKey())) {
+                    assertTrue(entry.getValue().isNull(),
+                            path + "." + entry.getKey() + " must not add non-null definition data");
+                }
             }
         } else if (expected.isArray()) {
             assertEquals(expected.size(), actual.size(), path + " array length/order");
