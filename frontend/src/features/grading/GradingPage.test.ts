@@ -108,6 +108,10 @@ async function loadTeacherProject(page: ReturnType<typeof mount>, title = "River
   await flushPromises()
 }
 
+async function waitForDownloadLink(page: ReturnType<typeof mount>, filename: string) {
+  await vi.waitFor(() => expect(page.find(`a[download="${filename}"]`).exists()).toBe(true))
+}
+
 async function selectStudentProject(page: ReturnType<typeof mount>, projectId = "project-1") {
   await flushPromises()
   const option = page.get("#grading-student-project").findAll("option")
@@ -671,9 +675,10 @@ describe("grading student identities", () => {
     await flushPromises()
 
     expect(api.rubric).toHaveBeenCalledExactlyOnceWith("reader-rubric-id")
+    await waitForDownloadLink(page, "rubric-v1-3bfc269594ef649228e9a74bab00f042efc91d5acc6fbee31a382e80d42388fe.json")
     expect(createUrl).toHaveBeenCalledOnce()
     expect((createUrl.mock.calls[0][0] as Blob).type).toBe("application/json;charset=utf-8")
-    const downloadLink = page.get('a[download="rubric-v1.json"]')
+    const downloadLink = page.get('a[download="rubric-v1-3bfc269594ef649228e9a74bab00f042efc91d5acc6fbee31a382e80d42388fe.json"]')
     expect(document.activeElement).toBe(downloadLink.element)
     downloadLink.element.addEventListener("click", (event) => event.preventDefault(), { once: true })
     await downloadLink.trigger("click")
@@ -786,6 +791,7 @@ describe("grading student identities", () => {
     const jsonButton = page.findAll("button").find((button) => button.text() === "Download JSON")!
     await jsonButton.trigger("click")
     await flushPromises()
+    await waitForDownloadLink(page, "rubric-past-2025-07c66025e62557df88f714171cd4f5cd246c7503fc9ca13bce04caa5047bdcff.json")
     expect(api.rubric).toHaveBeenCalledExactlyOnceWith("inactive-rubric-id")
     expect(createUrl).toHaveBeenCalledOnce()
     const jsonBlob = createUrl.mock.calls[0][0] as Blob
@@ -798,7 +804,7 @@ describe("grading student identities", () => {
     })
     expect(json).not.toHaveProperty("id")
     expect(json).not.toHaveProperty("publishedBy")
-    const jsonLink = page.get('a[download="rubric-past-2025.json"]')
+    const jsonLink = page.get('a[download="rubric-past-2025-07c66025e62557df88f714171cd4f5cd246c7503fc9ca13bce04caa5047bdcff.json"]')
     expect(document.activeElement).toBe(jsonLink.element)
     jsonLink.element.addEventListener("click", (event) => event.preventDefault(), { once: true })
     await jsonLink.trigger("click")
@@ -810,13 +816,14 @@ describe("grading student identities", () => {
     const markdownButton = page.findAll("button").find((button) => button.text() === "Download Markdown")!
     await markdownButton.trigger("click")
     await flushPromises()
+    await waitForDownloadLink(page, "rubric-past-2025-07c66025e62557df88f714171cd4f5cd246c7503fc9ca13bce04caa5047bdcff.md")
     expect(api.rubric).toHaveBeenCalledTimes(2)
     const markdownBlob = createUrl.mock.calls[1][0] as Blob
     expect(markdownBlob.type).toBe("text/markdown;charset=utf-8")
     expect(await markdownBlob.text()).toContain("## Category")
     expect(await markdownBlob.text()).toContain("Criterion ID")
     expect(await markdownBlob.text()).toContain("No aggregation rules are configured")
-    const markdownLink = page.get('a[download="rubric-past-2025.md"]')
+    const markdownLink = page.get('a[download="rubric-past-2025-07c66025e62557df88f714171cd4f5cd246c7503fc9ca13bce04caa5047bdcff.md"]')
     expect(document.activeElement).toBe(markdownLink.element)
     markdownLink.element.addEventListener("click", (event) => event.preventDefault(), { once: true })
     await markdownLink.trigger("click")
@@ -895,8 +902,10 @@ describe("grading student identities", () => {
     await flushPromises()
     expect(api.rubric).toHaveBeenNthCalledWith(1, "retry-detail-id")
     expect(api.rubric).toHaveBeenNthCalledWith(2, "retry-detail-id")
+    const retryFilename = "rubric-retry-06b29bb318814108e94270528fe7994c096308b3692923723bf1ae6f98d50b4f.json"
+    await waitForDownloadLink(page, retryFilename)
     expect(page.text()).toContain("The JSON definition is ready.")
-    const retryLink = page.get('a[download="rubric-retry.json"]')
+    const retryLink = page.get(`a[download="${retryFilename}"]`)
     retryLink.element.addEventListener("click", (event) => event.preventDefault(), { once: true })
     await retryLink.trigger("click")
     await flushPromises()
@@ -921,6 +930,7 @@ describe("grading student identities", () => {
       await flushPromises()
       await page.findAll("button").find((button) => button.text() === "Download JSON")!.trigger("click")
       await flushPromises()
+      await waitForDownloadLink(page, "rubric-v1-3bfc269594ef649228e9a74bab00f042efc91d5acc6fbee31a382e80d42388fe.json")
       expect(page.find('a[download]').exists()).toBe(true)
       api.rubric.mockImplementationOnce(() => new Promise((resolve) => { resolveDetail = resolve }))
       await page.findAll("button").find((button) => button.text() === "Download Markdown")!.trigger("click")
@@ -980,6 +990,49 @@ describe("grading student identities", () => {
     expect(page.text()).not.toContain("JSON download started.")
     page.unmount()
     createUrl.mockRestore()
+  })
+
+  it("discards a filename digest that completes after pagination", async () => {
+    api.rubrics.mockImplementation(async (pageIndex = 0) => ({
+      content: [rubricSummary(pageIndex === 0 ? "old-id" : "new-id", pageIndex === 0 ? "old" : "new")],
+      page: pageIndex,
+      size: 20,
+      totalElements: 21,
+      totalPages: 2,
+    }))
+    api.rubric.mockResolvedValue({
+      id: "old-id",
+      version: "old",
+      name: "Old detail",
+      effectiveFrom: "2025-01-01",
+      finalGradeScale: { min: 1, max: 5, step: 1 },
+      categories: [],
+      metricDefinitions: [],
+      aggregationRules: [],
+    })
+    const pendingDigest = deferred<ArrayBuffer>()
+    const digest = vi.spyOn(globalThis.crypto.subtle, "digest").mockReturnValue(pendingDigest.promise)
+    const createUrl = vi.spyOn(URL, "createObjectURL")
+    const page = mount(GradingPage)
+    try {
+      await flushPromises()
+      await page.findAll("button").find((button) => button.text() === "Download JSON")!.trigger("click")
+      await vi.waitFor(() => expect(digest).toHaveBeenCalledOnce())
+      await page.get('[aria-label="Rubric version pages"] button:last-of-type').trigger("click")
+      await flushPromises()
+      expect(page.text()).toContain("Rubric new · new")
+
+      pendingDigest.resolve(new Uint8Array(32).buffer)
+      await pendingDigest.promise
+      await flushPromises()
+      expect(createUrl).not.toHaveBeenCalled()
+      expect(page.find('a[download]').exists()).toBe(false)
+      expect(page.text()).not.toContain("Old detail")
+    } finally {
+      page.unmount()
+      digest.mockRestore()
+      createUrl.mockRestore()
+    }
   })
 
   it("does not render a late list response or start a download after unmount", async () => {
@@ -1060,6 +1113,7 @@ describe("grading student identities", () => {
     expect(page.findAll(".toolbar").some((toolbar) => toolbar.attributes("aria-label") === String(i18n.global.t("grading.versionPages")))).toBe(true)
     await page.findAll("button").find((item) => item.text() === String(i18n.global.t("grading.downloadMarkdown")))!.trigger("click")
     await flushPromises()
+    await waitForDownloadLink(page, "rubric-locale-77d9bce4a13de264ff0526e2f26923e29ecf2de9f156d077ff6408bfc352007a.md")
     const markdown = await (createUrl.mock.calls[0][0] as Blob).text()
     expect((createUrl.mock.calls[0][0] as Blob).type).toBe("text/markdown;charset=utf-8")
     expect(markdown).toContain("Authored category")
@@ -1069,7 +1123,7 @@ describe("grading student identities", () => {
     expect(markdown).toContain(language === "de" ? "**Nachweis erforderlich:** Nein" : "**Evidence required:** No")
     expect(markdown).toContain(language === "de" ? "## Metrikdefinitionen" : "## Metric definitions")
     expect(markdown).toContain(language === "de" ? "## Aggregationsregeln" : "## Aggregation rules")
-    const downloadLink = page.get('a[download="rubric-locale.md"]')
+    const downloadLink = page.get('a[download="rubric-locale-77d9bce4a13de264ff0526e2f26923e29ecf2de9f156d077ff6408bfc352007a.md"]')
     expect(document.activeElement).toBe(downloadLink.element)
     page.unmount()
     createUrl.mockRestore()

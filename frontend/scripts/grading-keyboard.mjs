@@ -9,6 +9,7 @@ const section = '[aria-labelledby="rubric-download-heading"]'
 const next = `${section} .toolbar button:last-of-type`
 const previous = `${section} .toolbar button:first-of-type`
 const version = 'dev55-draft-testing-v1'
+const versionDigest = 'b96ebf8299df1cea07d3d1f27e5ca86d4a534d8d8c0bbb10166f99b9a1acafe3'
 
 // Test-owned labels and expected document, not the application serializer or locale catalog.
 const vocabulary = {
@@ -97,7 +98,7 @@ export function gradingSteps(language, name) {
     { action: 'wait', value: button('json') }, { action: 'measure-overflow' },
   ]
   for (const [format, extension] of [['json', 'json'], ['markdown', 'md']]) {
-    const link = `a[download="rubric-${version}.${extension}"]`
+    const link = `a[download="rubric-${version}-${versionDigest}.${extension}"]`
     steps.push({ action: 'tab-to', value: button(format) }, { action: 'assert-action-visible', value: button(format) },
       { action: 'key', value: 'Enter' }, { action: 'wait', value: link },
       { action: 'tab-to', value: link }, { action: 'assert-action-visible', value: link },
@@ -152,8 +153,8 @@ export async function runGradingKeyboard(options, { runPreview = run } = {}) {
           },
         })
         const files = await readdir(outputDir)
-        const jsonFile = `rubric-${version}.json`
-        const markdownFile = `rubric-${version}.md`
+        const jsonFile = `rubric-${version}-${versionDigest}.json`
+        const markdownFile = `rubric-${version}-${versionDigest}.md`
         assert.ok(files.includes(jsonFile) && files.includes(markdownFile), 'both browser-saved suggested filenames must exist')
         assert.deepEqual(JSON.parse(await readFile(path.join(outputDir, jsonFile), 'utf8')), requestDefinition(definition))
         assert.equal(await readFile(path.join(outputDir, markdownFile), 'utf8'), expectedDraftMarkdown(definition, language))

@@ -381,8 +381,35 @@ second line
     expect(parsed).toHaveProperty('aggregationRules', [])
   })
 
-  it('uses a safe version-specific filename with the requested extension', () => {
-    expect(safeRubricFilename('2026/27 €', 'json')).toBe('rubric-2026-27.json')
-    expect(safeRubricFilename('v1', 'md')).toBe('rubric-v1.md')
+  it('uses a path-safe, version-distinguishing filename with a bounded byte length for both formats', async () => {
+    const extensions = ['json', 'md'] as const
+    for (const extension of extensions) {
+      const filename = (version: string) => safeRubricFilename(version, extension)
+      expect(await filename('2026/27 €')).toBe(
+        `rubric-2026-27-0a842418f2dcb110020fd2ce750e23615c19770ea1a8da5d90dfbac786e206b5.${extension}`,
+      )
+      expect(await filename('v1')).toBe(
+        `rubric-v1-3bfc269594ef649228e9a74bab00f042efc91d5acc6fbee31a382e80d42388fe.${extension}`,
+      )
+
+      const fallbackLabels = ['€', '🙂', '???', '!!!', 'version']
+      const fallbackFilenames = await Promise.all(fallbackLabels.map(filename))
+      expect(new Set(fallbackFilenames).size).toBe(fallbackLabels.length)
+
+      const sameSlugLabels = ['a/b', 'a?b', 'a-b']
+      const sameSlugFilenames = await Promise.all(sameSlugLabels.map(filename))
+      expect(new Set(sameSlugFilenames).size).toBe(sameSlugLabels.length)
+
+      const fallbackFilename = await filename('€')
+      const fallbackRepresentation = fallbackFilename.slice('rubric-'.length, -`.${extension}`.length)
+      expect(await filename(fallbackRepresentation)).not.toBe(fallbackFilename)
+
+      const longLabels = ['🙂'.repeat(50), 'Ⅷ'.repeat(100)]
+      const longFilenames = await Promise.all(longLabels.map(filename))
+      expect(longFilenames.every((candidate) => Buffer.byteLength(candidate, 'utf8') <= 255)).toBe(true)
+      for (const candidate of [...fallbackFilenames, ...sameSlugFilenames, ...longFilenames]) {
+        expect(candidate).toMatch(/^rubric-[a-zA-Z0-9._-]+\.(json|md)$/)
+      }
+    }
   })
 })

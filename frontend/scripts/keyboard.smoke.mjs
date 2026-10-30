@@ -24,6 +24,10 @@ test('grading regression is wired into the keyboard CLI and uses actual keyboard
     assert.equal(steps.filter((step) => step.action === 'key' && step.value === 'Enter').length, 6)
     assert.ok(steps.filter((step) => step.action === 'assert-action-visible').length >= 6)
     assert.ok(steps.some((step) => step.action === 'tab-to' && step.value.includes('first-of-type')))
+    assert.ok(steps.some((step) => step.action === 'download'
+      && step.value === 'a[download="rubric-dev55-draft-testing-v1-b96ebf8299df1cea07d3d1f27e5ca86d4a534d8d8c0bbb10166f99b9a1acafe3.json"]'))
+    assert.ok(steps.some((step) => step.action === 'download'
+      && step.value === 'a[download="rubric-dev55-draft-testing-v1-b96ebf8299df1cea07d3d1f27e5ca86d4a534d8d8c0bbb10166f99b9a1acafe3.md"]'))
   }
 })
 

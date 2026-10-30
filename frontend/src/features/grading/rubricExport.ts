@@ -172,10 +172,13 @@ export function rubricDefinitionMarkdown(rubric: RubricDefinition, labels: Markd
   return `${lines.join('\n').trimEnd()}\n`
 }
 
-export function safeRubricFilename(version: string, extension: 'json' | 'md'): string {
+export async function safeRubricFilename(version: string, extension: 'json' | 'md'): Promise<string> {
   const safeVersion = version
     .normalize('NFKD')
     .replace(/[^a-zA-Z0-9._-]+/g, '-')
     .replace(/^-+|-+$/g, '') || 'version'
-  return `rubric-${safeVersion}.${extension}`
+  const boundedVersion = safeVersion.slice(0, 100)
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(version))
+  const versionHash = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('')
+  return `rubric-${boundedVersion}-${versionHash}.${extension}`
 }

@@ -59,7 +59,7 @@ test('canceled download retains sanitized begin/progress, request, console and C
       emit('Network.responseReceived', { requestId: 'detail', response: { status: 200 } })
       emit('Network.loadingFinished', { requestId: 'detail' })
       emit('Runtime.consoleAPICalled', { type: 'error', args: [{ value: 'Bearer private-credential' }] })
-      emit('Browser.downloadWillBegin', { guid: 'blob-save', frameId: 'frame', suggestedFilename: 'rubric-v1.json',
+      emit('Browser.downloadWillBegin', { guid: 'blob-save', frameId: 'frame', suggestedFilename: 'rubric-v1-3bfc269594ef649228e9a74bab00f042efc91d5acc6fbee31a382e80d42388fe.json',
         url: 'blob:http://localhost/blob-id' })
       emit('Browser.downloadProgress', { guid: 'blob-save', state: 'canceled', receivedBytes: 0, totalBytes: 42 })
     })
@@ -72,7 +72,7 @@ test('canceled download retains sanitized begin/progress, request, console and C
     const text = await readFile(path.join(outputDir, 'failure.json'), 'utf8')
     const report = JSON.parse(text)
     assert.equal(report.outcome, 'failed')
-    assert.equal(report.downloads[0].filename, 'rubric-v1.json')
+    assert.equal(report.downloads[0].filename, 'rubric-v1-3bfc269594ef649228e9a74bab00f042efc91d5acc6fbee31a382e80d42388fe.json')
     assert.equal(report.downloads[0].url, 'blob:http://localhost/blob-id')
     assert.equal(report.downloads[1].state, 'canceled')
     assert.equal(report.downloads[1].receivedBytes, 0)
@@ -662,7 +662,7 @@ test('captures and retains a completed real-browser download under its suggested
   try {
     const result = await captureBrowserDownload(client, path.relative(process.cwd(), outputDir), async () => {
       eventListener({ method: 'Browser.downloadWillBegin', params: {
-        guid: 'download-guid', suggestedFilename: 'rubric-v1.json', url: 'http://localhost/api/grading-rubrics/id',
+        guid: 'download-guid', suggestedFilename: 'rubric-v1-3bfc269594ef649228e9a74bab00f042efc91d5acc6fbee31a382e80d42388fe.json', url: 'http://localhost/api/grading-rubrics/id',
       } })
       await writeFile(path.join(outputDir, 'download-guid'), '{"version":"v1"}', 'utf8')
       eventListener({ method: 'Browser.downloadProgress', params: { guid: 'download-guid', state: 'completed' } })
@@ -701,8 +701,8 @@ test('captures and retains a completed real-browser download under its suggested
         && body.categories[0].criteria[0].scale.max === 5), true)
       assert.deepEqual(records[0], { version: 'dev61-preview-01', recordId: 'record-1', status: 201 })
     })
-    assert.equal(result.filename, 'rubric-v1.json')
-    assert.equal(result.suggestedFilename, 'rubric-v1.json')
+    assert.equal(result.filename, 'rubric-v1-3bfc269594ef649228e9a74bab00f042efc91d5acc6fbee31a382e80d42388fe.json')
+    assert.equal(result.suggestedFilename, 'rubric-v1-3bfc269594ef649228e9a74bab00f042efc91d5acc6fbee31a382e80d42388fe.json')
     assert.equal(await readFile(result.outputPath, 'utf8'), '{"version":"v1"}')
   } finally {
     await rm(outputDir, { recursive: true, force: true })
@@ -723,7 +723,7 @@ test('download page step activates its focused button with browser Enter and cap
       if (method === 'Input.dispatchKeyEvent' && params.type === 'keyDown') {
         eventListener({ method: 'Browser.downloadWillBegin', params: {
           guid: 'keyboard-download-guid',
-          suggestedFilename: 'rubric-dev55-draft-testing-v1.json',
+          suggestedFilename: 'rubric-dev55-draft-testing-v1-b96ebf8299df1cea07d3d1f27e5ca86d4a534d8d8c0bbb10166f99b9a1acafe3.json',
           url: 'http://localhost/api/grading-rubrics/definition-id',
         } })
         await writeFile(path.join(outputDir, 'keyboard-download-guid'), '{"version":"dev55-draft-testing-v1"}', 'utf8')
@@ -752,8 +752,8 @@ test('download page step activates its focused button with browser Enter and cap
     ])
     assert.match(logs.join(' '), /Keyboard activation sequence: Enter/)
     assert.match(logs.join(' '), /Browser download completed by keyboard activation/)
-    assert.deepEqual(await readdir(outputDir), ['rubric-dev55-draft-testing-v1.json'])
-    assert.equal(await readFile(path.join(outputDir, 'rubric-dev55-draft-testing-v1.json'), 'utf8'),
+    assert.deepEqual(await readdir(outputDir), ['rubric-dev55-draft-testing-v1-b96ebf8299df1cea07d3d1f27e5ca86d4a534d8d8c0bbb10166f99b9a1acafe3.json'])
+    assert.equal(await readFile(path.join(outputDir, 'rubric-dev55-draft-testing-v1-b96ebf8299df1cea07d3d1f27e5ca86d4a534d8d8c0bbb10166f99b9a1acafe3.json'), 'utf8'),
       '{"version":"dev55-draft-testing-v1"}')
   } finally {
     await rm(outputDir, { recursive: true, force: true })

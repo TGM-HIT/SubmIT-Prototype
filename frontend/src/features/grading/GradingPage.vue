@@ -513,7 +513,9 @@ async function downloadRubric(rubric: RubricSummary, format: DownloadFormat): Pr
       ? rubricDefinitionJson(definition)
       : rubricDefinitionMarkdown(definition, markdownExportLabels())
     const mimeType = format === 'json' ? 'application/json;charset=utf-8' : 'text/markdown;charset=utf-8'
-    const filename = safeRubricFilename(definition.version, format === 'json' ? 'json' : 'md')
+    const filename = await safeRubricFilename(definition.version, format === 'json' ? 'json' : 'md')
+    if (!mounted || listVersion !== rubricListVersion || selectedPage !== rubricPage.value
+      || userId !== auth.user?.id || !rubrics.value.content.some((entry) => String(entry.id) === id)) return
     const url = prepareBrowserDownload(content, mimeType)
     rubricDownloadStates[key] = { pending: false, success: false, error: '', url, filename }
     await nextTick()
