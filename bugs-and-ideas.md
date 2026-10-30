@@ -1,7 +1,9 @@
 # List of bugs and ideas
 
-## Make a real run with DA-Excel from the last few years.
+## Adapt the grading view: don't show the full rubric as text on top of the page. Make a new menu item "rubrics" where you can show/edit/upload/download those rubrics.
 
-## For the formal proposal: don't enter a project ID, but make a pulldown with all eligible projects for the logged in student.
+## Adapt the grading view: always show all critera when selecting a student. Save only those that have been set.
 
-## Make the frontend multilingual. Add a language setting to the user account, currently only English (already exists) and German (needs to be translated) should be supported.
+## Make it possible for an administrator to mark projects as "priority" - when running an allocation those projects should be priorized even if they are not the first priority of the student applications.
+
+
