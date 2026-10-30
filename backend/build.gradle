@@ -50,13 +50,13 @@ tasks.register('verifyDeprecationEnforcement') {
 
         File fixtureRoot = layout.buildDirectory.dir('tmp/dev33-deprecation-enforcement').get().asFile
         delete(fixtureRoot)
-        File apiSource = new File(fixtureRoot, 'api/ac/at/tgm/submit/dev33/DeprecationFixtureApi.java')
-        File productionSource = new File(fixtureRoot, 'production/ac/at/tgm/submit/dev33/ProductionFixtureUse.java')
-        File testSource = new File(fixtureRoot, 'test/ac/at/tgm/submit/dev33/TestFixtureUse.java')
+        File apiSource = new File(fixtureRoot, 'api/at/ac/tgm/submit/dev33/DeprecationFixtureApi.java')
+        File productionSource = new File(fixtureRoot, 'production/at/ac/tgm/submit/dev33/ProductionFixtureUse.java')
+        File testSource = new File(fixtureRoot, 'test/at/ac/tgm/submit/dev33/TestFixtureUse.java')
         apiSource.parentFile.mkdirs()
         productionSource.parentFile.mkdirs()
         testSource.parentFile.mkdirs()
-        apiSource.text = '''package ac.at.tgm.submit.dev33;
+        apiSource.text = '''package at.ac.tgm.submit.dev33;
 public final class DeprecationFixtureApi {
     private DeprecationFixtureApi() {}
     @Deprecated public static void deprecatedCall() {}
@@ -64,7 +64,7 @@ public final class DeprecationFixtureApi {
     public static void supported() {}
 }
 '''
-        productionSource.text = '''package ac.at.tgm.submit.dev33;
+        productionSource.text = '''package at.ac.tgm.submit.dev33;
 final class ProductionFixtureUse {
     void verify() {
         DeprecationFixtureApi.deprecatedCall();
@@ -73,7 +73,7 @@ final class ProductionFixtureUse {
     }
 }
 '''
-        testSource.text = '''package ac.at.tgm.submit.dev33;
+        testSource.text = '''package at.ac.tgm.submit.dev33;
 final class TestFixtureUse {
     void verify() {
         DeprecationFixtureApi.deprecatedCall();
@@ -263,15 +263,91 @@ tasks.register('generateOpenApi') {
     }
 }
 
+tasks.register('verifyJavaNamespaceInventory') {
+    group = 'verification'
+    description = 'Verifies backend source and compiled-class inventories retain the migrated namespace.'
+    dependsOn tasks.named('compileTestJava')
+    doLast {
+        String namespacePath = 'at/ac/tgm/submit/'
+        String namespacePackage = 'at.ac.tgm.submit'
+        Map<String, Map<String, Object>> expected = [
+                main: [
+                        sourceCount: 159,
+                        sourceHash: '12441bca02759793d60f688829f2bf93af4ac1ce214e4745dc35b16a51be22d8',
+                        classCount: 349,
+                        classHash: '4b330f7da6b7df86ea42c6f39c8933fc8f2746c215a24aec2c569ede121f8fa4'
+                ],
+                test: [
+                        sourceCount: 63,
+                        sourceHash: '7912cc915257c957c258cc083cfb4f5f476516ce6e15820cce5392d86211e3b5',
+                        classCount: 103,
+                        classHash: '873649b22962b7f228dea1a0f59a17913b2ba2e40f33ef85aab68f2f42101775'
+                ]
+        ]
+        def fingerprint = { Collection<String> lines ->
+            String contents = lines.toList().sort().join('\n') + '\n'
+            byte[] digest = java.security.MessageDigest.getInstance('SHA-256')
+                    .digest(contents.getBytes(java.nio.charset.StandardCharsets.UTF_8))
+            digest.collect { String.format('%02x', it & 0xff) }.join()
+        }
+
+        expected.each { String sourceSetName, Map<String, Object> baseline ->
+            File sourceRoot = file("src/${sourceSetName}/java")
+            List<File> sources = sourceSets.getByName(sourceSetName).allJava.files.toList()
+            List<String> sourceInventory = sources.collect { File source ->
+                String relativePath = sourceRoot.toPath().relativize(source.toPath()).toString()
+                        .replace(File.separatorChar, '/' as char)
+                if (!relativePath.startsWith(namespacePath)) {
+                    throw new GradleException("${sourceSetName} source is outside ${namespacePackage}: ${relativePath}")
+                }
+                def packageMatcher = source.text =~ /(?m)^\s*package\s+([A-Za-z0-9_.]+)\s*;/
+                if (!packageMatcher.find()) {
+                    throw new GradleException("${sourceSetName} source has no package declaration: ${relativePath}")
+                }
+                String packageName = packageMatcher.group(1)
+                int packageEnd = relativePath.lastIndexOf('/')
+                String packagePath = packageEnd >= namespacePath.length()
+                        ? relativePath.substring(namespacePath.length(), packageEnd).replace('/', '.')
+                        : ''
+                String expectedPackage = namespacePackage + (packagePath.isEmpty() ? '' : ".${packagePath}")
+                if (packageName != expectedPackage) {
+                    throw new GradleException("${relativePath} declares ${packageName}, expected ${expectedPackage}")
+                }
+                relativePath.substring(namespacePath.length()) + '|' +
+                        packageName.substring(namespacePackage.length())
+            }
+            File classesRoot = layout.buildDirectory.dir("classes/java/${sourceSetName}").get().asFile
+            List<File> classFiles = fileTree(classesRoot).matching { include '**/*.class' }.files.toList()
+            List<String> classInventory = classFiles.collect { File compiledClass ->
+                String relativePath = classesRoot.toPath().relativize(compiledClass.toPath()).toString()
+                        .replace(File.separatorChar, '/' as char)
+                if (!relativePath.startsWith(namespacePath)) {
+                    throw new GradleException("${sourceSetName} class is outside ${namespacePackage}: ${relativePath}")
+                }
+                relativePath.substring(namespacePath.length())
+            }
+            if (sources.size() != baseline.sourceCount
+                    || fingerprint(sourceInventory) != baseline.sourceHash) {
+                throw new GradleException("${sourceSetName} Java source inventory differs from the pre-migration baseline.")
+            }
+            if (classFiles.size() != baseline.classCount
+                    || fingerprint(classInventory) != baseline.classHash) {
+                throw new GradleException("${sourceSetName} compiled class inventory differs from the pre-migration baseline.")
+            }
+            logger.lifecycle("Verified ${sourceSetName} namespace inventory (${sources.size()} sources, ${classFiles.size()} classes).")
+        }
+    }
+}
+
 tasks.register('verifyBootJarPackaging') {
     group = 'verification'
     description = 'Verifies the executable archive uses the renamed SubmIT entry point.'
-    dependsOn tasks.named('bootJar')
+    dependsOn tasks.named('bootJar'), tasks.named('verifyJavaNamespaceInventory')
     doLast {
         File archive = tasks.named('bootJar').get().archiveFile.get().asFile
-        String applicationEntry = 'BOOT-INF/classes/ac/at/tgm/submit/SubmITlication.class'
+        String applicationEntry = 'BOOT-INF/classes/at/ac/tgm/submit/SubmITlication.class'
         def verifyEntries = { List<String> entries, String startClass ->
-            if (startClass != 'ac.at.tgm.submit.SubmITlication') {
+            if (startClass != 'at.ac.tgm.submit.SubmITlication') {
                 throw new GradleException("Unexpected executable archive Start-Class: ${startClass}")
             }
             if (entries.count { it == applicationEntry } != 1) {
@@ -279,10 +355,10 @@ tasks.register('verifyBootJarPackaging') {
             }
             List<String> foreignClasses = entries.findAll {
                 it.startsWith('BOOT-INF/classes/') && it.endsWith('.class')
-                        && !it.startsWith('BOOT-INF/classes/ac/at/tgm/submit/')
+                        && !it.startsWith('BOOT-INF/classes/at/ac/tgm/submit/')
             }
             if (!foreignClasses.isEmpty()) {
-                throw new GradleException("Application classes outside ac.at.tgm.submit namespace: ${foreignClasses}")
+                throw new GradleException("Application classes outside at.ac.tgm.submit namespace: ${foreignClasses}")
             }
         }
 
@@ -300,7 +376,7 @@ tasks.register('verifyBootJarPackaging') {
         try {
             java.util.jar.Manifest manifest = new java.util.jar.Manifest()
             manifest.mainAttributes.putValue('Manifest-Version', '1.0')
-            manifest.mainAttributes.putValue('Start-Class', 'ac.at.tgm.submit.SubmITlication')
+            manifest.mainAttributes.putValue('Start-Class', 'at.ac.tgm.submit.SubmITlication')
             new java.util.jar.JarOutputStream(new FileOutputStream(testArchive), manifest).withCloseable { output ->
                 [applicationEntry, 'BOOT-INF/classes/org/example/Foreign.class'].each { name ->
                     output.putNextEntry(new java.util.jar.JarEntry(name))
@@ -330,7 +406,7 @@ tasks.register('verifyBootJarPackaging') {
 }
 
 tasks.named('check') {
-    dependsOn tasks.named('verifyBootJarPackaging')
+    dependsOn tasks.named('verifyBootJarPackaging'), tasks.named('verifyJavaNamespaceInventory')
 }
 
 tasks.named('test') {

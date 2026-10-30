@@ -11,7 +11,7 @@ SAMPLE_PATH = ROOT / ".env.example"
 COMPOSE_PATH = ROOT / "compose.yaml"
 BOOTSTRAP_PATH = (
     ROOT
-    / "backend/src/main/java/ac/at/tgm/submit/user/BootstrapAdminConfiguration.java"
+    / "backend/src/main/java/at/ac/tgm/submit/user/BootstrapAdminConfiguration.java"
 )
 
 
