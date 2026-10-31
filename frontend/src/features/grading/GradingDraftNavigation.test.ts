@@ -121,6 +121,69 @@ function assertNoWrites() {
   }
 }
 
+const cachedTransitions = [
+  { name: 'same-account teacher to admin-only', user: { id: 'teacher-1', roles: ['ADMIN'] } },
+  { name: 'different teacher account', user: { id: 'teacher-2', roles: ['TEACHER'] } },
+]
+
+const assessmentDraft = {
+  'student-id': 'private-student',
+  'grade-criterion': 'criterion-1',
+  'grade-grade': '4',
+  'grade-date': '2026-10-15',
+  'grade-evidence': 'Private individual evidence',
+  'grade-comments': 'Private individual comments',
+  'grade-transition': 'Private individual transition',
+  'group-criterion': 'criterion-1',
+  'group-grade': '3',
+  'group-date': '2026-10-16',
+  'group-evidence': 'Private group evidence',
+  'group-comments': 'Private group comments',
+  'group-transition': 'Private group transition',
+  'metric-id': 'metric-1',
+  'metric-value': '17',
+  'metric-note': 'Private metric note',
+  'metric-transition': 'Private metric transition',
+}
+const finalDraft = {
+  rule: 'project-rule',
+  'final-grade': '4',
+  rationale: 'Private project rationale',
+  'final-transition': 'Private project transition',
+  'final-student-id': 'private-final-student',
+  'student-rule': 'student-rule',
+  'student-final-grade': '3',
+  'student-rationale': 'Private student rationale',
+  'student-transition': 'Private student transition',
+}
+
+function draftField(wrapper: Awaited<ReturnType<typeof mountApplication>>, id: string) {
+  // Both existing GradeFields instances use the default grade-* IDs; scope group fields to their form.
+  if (id.startsWith('group-') && id !== 'group-transition') {
+    return wrapper.findAll('form').find((form) => form.find('#group-transition').exists())!
+      .get(`#${id.replace('group-', 'grade-')}`)
+  }
+  return wrapper.get(`#${id}`)
+}
+
+function fieldValue(wrapper: Awaited<ReturnType<typeof mountApplication>>, id: string) {
+  return (draftField(wrapper, id).element as HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement).value
+}
+
+async function selectTab(wrapper: Awaited<ReturnType<typeof mountApplication>>, index: number) {
+  await wrapper.findAll('[role="tab"]')[index]!.trigger('click')
+}
+
+async function selectCurrentProject(wrapper: Awaited<ReturnType<typeof mountApplication>>) {
+  if (auth.user?.roles.includes('TEACHER')) {
+    await wrapper.get('button.proposal-result').trigger('click')
+  } else {
+    await wrapper.get('#project-id').setValue('project-1')
+    await wrapper.findAll('form').find((form) => form.find('#project-id').exists())!.trigger('submit')
+  }
+  await flushPromises()
+}
+
 describe('grading draft across rubric navigation', () => {
   beforeEach(() => {
     vi.resetAllMocks()
@@ -192,6 +255,147 @@ describe('grading draft across rubric navigation', () => {
     expect(wrapper.find('#student-id').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('Old account private draft')
     expect(wrapper.find('button.proposal-result').exists()).toBe(true)
+    assertNoWrites()
+    wrapper.unmount()
+  })
+
+  it.each(cachedTransitions)('clears populated grading state and all draft controls while cached: $name', async ({ user }) => {
+    api.activeRubric.mockResolvedValue({
+      ...rubric,
+      metricDefinitions: [{ id: 'metric-1', name: 'Observed hours', unit: 'hours' }],
+      aggregationRules: [
+        { id: 'project-rule', version: 1, scope: 'PROJECT' },
+        { id: 'student-rule', version: 1, scope: 'STUDENT' },
+      ],
+    })
+    api.grades.mockResolvedValueOnce({ ...emptyPage, content: [{
+      id: 'saved-individual', criterionId: 'criterion-1', grade: 2, evidence: 'Saved private individual history',
+    }] })
+    api.groupGrades.mockResolvedValueOnce({ ...emptyPage, content: [{
+      id: 'saved-group', criterionId: 'criterion-1', grade: 3, evidence: 'Saved private group history',
+    }] })
+    api.metrics.mockResolvedValueOnce({ ...emptyPage, content: [{
+      id: 'saved-metric', metricId: 'metric-1', value: 12, note: 'Saved private metric history',
+    }] })
+    api.finalGrade.mockResolvedValueOnce({ project: { grade: 2, rationale: 'Saved private final history' } })
+    const wrapper = await mountApplication()
+    await flushPromises()
+    const gradingElement = wrapper.getComponent(GradingPage).element
+    await selectCurrentProject(wrapper)
+    expect(wrapper.get('.page-heading').text()).toContain('River Lab')
+    expect(wrapper.text()).toContain('Saved private individual history')
+
+    const defaults = Object.fromEntries(Object.keys(assessmentDraft).map((id) => [id, fieldValue(wrapper, id)]))
+    for (const [id, value] of Object.entries(assessmentDraft)) {
+      await draftField(wrapper, id).setValue(value)
+      expect(fieldValue(wrapper, id)).toBe(value)
+    }
+    await selectTab(wrapper, 1)
+    expect(wrapper.text()).toContain('Saved private group history')
+    await selectTab(wrapper, 2)
+    expect(wrapper.text()).toContain('Saved private metric history')
+    await selectTab(wrapper, 3)
+    expect(wrapper.get('pre').text()).toContain('Saved private final history')
+    const finalDefaults = Object.fromEntries(Object.keys(finalDraft).map((id) => [id, fieldValue(wrapper, id)]))
+    for (const [id, value] of Object.entries(finalDraft)) {
+      await wrapper.get(`#${id}`).setValue(value)
+      expect(fieldValue(wrapper, id)).toBe(value)
+    }
+
+    await wrapper.get('nav a[href="/rubrics"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('h1').text()).toBe('Rubrics')
+    expect(wrapper.findComponent(GradingPage).exists()).toBe(false)
+    auth.user = user
+    await flushPromises()
+    expect(wrapper.get('h1').text()).toBe('Rubrics')
+    assertNoWrites()
+    await wrapper.get('nav a[href="/grading"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.getComponent(GradingPage).element).toBe(gradingElement)
+    expect(wrapper.find('.page-heading').exists()).toBe(false)
+    expect(wrapper.find('[role="tab"]').exists()).toBe(false)
+    for (const id of [...Object.keys(assessmentDraft), ...Object.keys(finalDraft)]) {
+      expect(wrapper.find(`#${id}`).exists()).toBe(false)
+    }
+    expect(wrapper.text()).not.toContain('Saved private')
+    expect(wrapper.text()).not.toContain('Private')
+    if (user.roles.includes('ADMIN')) {
+      expect(fieldValue(wrapper, 'project-id')).toBe('')
+      expect(wrapper.find('button.proposal-result').exists()).toBe(false)
+    } else {
+      expect(wrapper.find('button.proposal-result').exists()).toBe(true)
+    }
+
+    await selectCurrentProject(wrapper)
+    for (const index of [0, 1, 2, 3]) {
+      await selectTab(wrapper, index)
+      expect(wrapper.text()).not.toContain('Saved private')
+    }
+    if (user.roles.includes('TEACHER')) {
+      for (const [id, value] of Object.entries({ ...defaults, ...finalDefaults })) {
+        expect(fieldValue(wrapper, id)).toBe(value)
+      }
+    } else {
+      for (const id of [...Object.keys(assessmentDraft), ...Object.keys(finalDraft)]) {
+        expect(wrapper.find(`#${id}`).exists()).toBe(false)
+      }
+    }
+    assertNoWrites()
+    wrapper.unmount()
+  })
+
+  it.each(cachedTransitions)('isolates a deferred privileged project read while cached: $name', async ({ user }) => {
+    let resolveOldGrades!: (value: typeof emptyPage) => void
+    api.grades.mockImplementationOnce(() => new Promise((resolve) => { resolveOldGrades = resolve }))
+    api.groupGrades.mockResolvedValueOnce({ ...emptyPage, content: [{
+      id: 'late-group', evidence: 'Stale private group history',
+    }] })
+    api.metrics.mockResolvedValueOnce({ ...emptyPage, content: [{
+      id: 'late-metric', note: 'Stale private metric history',
+    }] })
+    api.finalGrade.mockResolvedValueOnce({ project: { rationale: 'Stale private final history' } })
+    const wrapper = await mountApplication()
+    await flushPromises()
+    const gradingElement = wrapper.getComponent(GradingPage).element
+    await wrapper.get('button.proposal-result').trigger('click')
+    await flushPromises()
+    expect(api.grades).toHaveBeenCalledExactlyOnceWith('project-1')
+    expect(api.groupGrades).toHaveBeenCalledExactlyOnceWith('project-1')
+    expect(api.metrics).toHaveBeenCalledExactlyOnceWith('project-1')
+    expect(api.finalGrade).toHaveBeenCalledExactlyOnceWith('project-1')
+    expect(wrapper.get('.page-heading').text()).toContain('River Lab')
+    expect(wrapper.find('[role="tab"]').exists()).toBe(false)
+
+    await wrapper.get('nav a[href="/rubrics"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.get('h1').text()).toBe('Rubrics')
+    expect(wrapper.findComponent(GradingPage).exists()).toBe(false)
+    auth.user = user
+    await flushPromises()
+    resolveOldGrades({ ...emptyPage, content: [{
+      id: 'late-individual', evidence: 'Stale private individual history',
+    }] })
+    await flushPromises()
+    expect(wrapper.get('h1').text()).toBe('Rubrics')
+    assertNoWrites()
+
+    await wrapper.get('nav a[href="/grading"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.getComponent(GradingPage).element).toBe(gradingElement)
+    expect(wrapper.find('.page-heading').exists()).toBe(false)
+    expect(wrapper.find('[role="tab"]').exists()).toBe(false)
+    expect(wrapper.find('#student-id').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('Stale private')
+    if (user.roles.includes('ADMIN')) expect(fieldValue(wrapper, 'project-id')).toBe('')
+    else expect(wrapper.find('button.proposal-result').exists()).toBe(true)
+
+    await selectCurrentProject(wrapper)
+    expect(api.grades).toHaveBeenCalledTimes(2)
+    for (const index of [0, 1, 2, 3]) {
+      await selectTab(wrapper, index)
+      expect(wrapper.text()).not.toContain('Stale private')
+    }
     assertNoWrites()
     wrapper.unmount()
   })
