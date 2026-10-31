@@ -20,6 +20,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -41,6 +42,7 @@ class AllocationPriorityApiTest {
     @Autowired private ObjectMapper mapper;
     @Autowired private RecordStore store;
     @Autowired private UserAccountRepository users;
+    @Autowired private AllocationDeadlineScheduler deadlineScheduler;
     private String adminToken;
     private String teacherToken;
     private String studentToken;
@@ -174,6 +176,92 @@ class AllocationPriorityApiTest {
     }
 
     @Test
+    void priorityBearingEarlyRunKeepsPeriodOpenAndHiddenFromStudents() throws Exception {
+        List<UUID> eligibleStudents = new ArrayList<>();
+        List<String> studentTokens = new ArrayList<>();
+        for (String username : List.of("student13", "student14", "student15")) {
+            var user = users.findByUsername(username).orElseThrow();
+            user.setRole(Role.STUDENT);
+            users.saveAndFlush(user);
+            eligibleStudents.add(user.getId());
+            studentTokens.add(login(username));
+        }
+        updatePeriod(periodId, Instant.now().plusSeconds(86_400), eligibleStudents);
+        putPriorities(periodId, List.of(projectIds.get(1)));
+        for (String token : studentTokens) {
+            MvcResult application = mockMvc.perform(post("/api/application-periods/{id}/applications", periodId)
+                            .header("Authorization", bearer(token)).contentType(MediaType.APPLICATION_JSON)
+                            .content(mapper.writeValueAsString(Map.of("projectIds",
+                                    List.of(projectIds.get(1), projectIds.get(0), projectIds.get(2))))))
+                    .andReturn();
+            assertEquals(201, application.getResponse().getStatus(),
+                    application.getResponse().getContentAsString());
+        }
+
+        JsonNode early = startRun(periodId);
+        assertTrue(early.path("early").asBoolean());
+        assertTrue(early.path("result").path("assignments").isArray());
+        assertEquals(3, early.path("result").path("assignedStudents").asInt());
+        assertEquals(eligibleStudents.stream().map(UUID::toString).collect(java.util.stream.Collectors.toSet()),
+                Set.copyOf(early.path("result").path("assignments").findValuesAsText("studentId")));
+        assertEquals(List.of(projectIds.get(1).toString()), stringArray(early.path("prioritizedProjectIds")));
+        assertTrue(early.path("result").path("assignments").findValuesAsText("projectId").stream()
+                .allMatch(projectIds.get(1).toString()::equals));
+
+        mockMvc.perform(get("/api/application-periods/{id}", periodId)
+                        .header("Authorization", bearer(adminToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("OPEN"));
+        JsonNode staffDetail = mapper.readTree(mockMvc.perform(get("/api/allocation-runs/{id}",
+                        early.path("id").asText()).header("Authorization", bearer(teacherToken)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        assertEquals(List.of(projectIds.get(1).toString()), stringArray(staffDetail.path("prioritizedProjectIds")));
+
+        for (String token : studentTokens) {
+            mockMvc.perform(get("/api/application-periods/{id}", periodId)
+                            .header("Authorization", bearer(token)))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.status").value("OPEN"))
+                    .andExpect(jsonPath("$.studentAssignment.state").value("NO_RESULT"))
+                    .andExpect(jsonPath("$.studentAssignment.projectTitle").value(org.hamcrest.Matchers.nullValue()))
+                    .andExpect(jsonPath("$.prioritizedProjectIds").doesNotExist())
+                    .andExpect(jsonPath("$.priorityProjectIds").doesNotExist());
+        }
+    }
+
+    @Test
+    void automaticDueInitialRunSnapshotsPrioritiesAndStaffCanReadTheSnapshot() throws Exception {
+        UUID duePeriod = createPeriod("2026/2027", Instant.now().minusSeconds(3600),
+                Instant.now().plusSeconds(86_400), projectIds);
+        List<UUID> expectedPriorities = List.of(projectIds.get(2), projectIds.get(0));
+        putPriorities(duePeriod, expectedPriorities);
+        updatePeriod(duePeriod, Instant.now().minusSeconds(1), List.of());
+
+        deadlineScheduler.startDueAllocations();
+
+        List<StoredRecord> initialRuns = store.repository().findByTypeAndParentId("allocation_run", duePeriod.toString())
+                .stream().filter(run -> store.parse(run).path("initial").asBoolean()).toList();
+        assertEquals(1, initialRuns.size(), "The scheduler creates exactly one automatic initial run.");
+        StoredRecord initialRunRecord = initialRuns.getFirst();
+        ObjectNode initialRun = store.parse(initialRunRecord);
+        assertEquals("COMPLETED", initialRunRecord.getStatus());
+        assertTrue(initialRun.path("early").isBoolean());
+        assertFalse(initialRun.path("early").asBoolean());
+        assertEquals(sortedStrings(expectedPriorities.stream().map(UUID::toString).toList()),
+                sortedStrings(stringArray(initialRun.path("prioritizedProjectIds"))));
+
+        JsonNode staffDetail = mapper.readTree(mockMvc.perform(get("/api/allocation-runs/{id}",
+                        initialRunRecord.getId()).header("Authorization", bearer(teacherToken)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        assertEquals(sortedStrings(expectedPriorities.stream().map(UUID::toString).toList()),
+                sortedStrings(stringArray(staffDetail.path("prioritizedProjectIds"))));
+        mockMvc.perform(get("/api/application-periods/{id}", duePeriod)
+                        .header("Authorization", bearer(adminToken)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("ALLOCATED"));
+    }
+
+    @Test
     void postDeadlineReplacementRunsUseTheCurrentPrioritySet() throws Exception {
         UUID closedPeriod = createPeriod("2026/2027", Instant.now().minusSeconds(86_400),
                 Instant.now().minusSeconds(60), projectIds);
@@ -235,6 +323,22 @@ class AllocationPriorityApiTest {
                 .andExpect(status().isOk());
     }
 
+    private void updatePeriod(UUID id, Instant closesAt, List<UUID> eligibleStudents) throws Exception {
+        ObjectNode period = store.parse(store.get("application_period", id));
+        ObjectNode request = store.object().put("label", period.path("label").asText())
+                .put("schoolYear", period.path("schoolYear").asText())
+                .put("opensAt", period.path("opensAt").asText())
+                .put("closesAt", closesAt.toString())
+                .put("eligibilityMode", "SELECTED");
+        request.set("projectIds", period.path("projectIds").deepCopy());
+        request.set("eligibleStudentIds", store.value(eligibleStudents));
+        request.putArray("eligibleClassIds");
+        mockMvc.perform(put("/api/application-periods/{id}", id)
+                        .header("Authorization", bearer(adminToken))
+                        .contentType(MediaType.APPLICATION_JSON).content(mapper.writeValueAsString(request)))
+                .andExpect(status().isOk());
+    }
+
     private JsonNode startRun(UUID id) throws Exception {
         MvcResult result = mockMvc.perform(post("/api/application-periods/{periodId}/allocation-runs", id)
                         .header("Authorization", bearer(adminToken)))
@@ -263,8 +367,12 @@ class AllocationPriorityApiTest {
     }
 
     private List<String> stringArray(JsonNode array) {
+        assertTrue(array.isArray());
         List<String> values = new ArrayList<>();
-        array.forEach(value -> values.add(value.asText()));
+        array.forEach(value -> {
+            assertTrue(value.isTextual());
+            values.add(value.textValue());
+        });
         return values;
     }
 

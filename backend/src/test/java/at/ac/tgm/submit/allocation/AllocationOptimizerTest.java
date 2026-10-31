@@ -438,6 +438,55 @@ class AllocationOptimizerTest {
     }
 
     @Test
+    void priorityObjectiveIsExactOnBranchAndBoundWithIndependentProjectsAndSharedUnit() {
+        List<String> projectIds = new ArrayList<>(List.of("A", "B"));
+        List<Application> applications = new ArrayList<>();
+        applications.addAll(students("priority-conflict-", 6, "A", "B"));
+        applications.add(new Application("priority-unit-1", List.of("A", "B"), "priority-unit"));
+        applications.add(new Application("priority-unit-2", List.of("A", "B"), "priority-unit"));
+
+        // Eleven independent three-student groups make all 13 projects viable and select branch-and-bound.
+        // Each padding assignment contributes 13 preference points; the eight conflict students contribute
+        // 3*13 to A and 5*12 to priority B, for an independently expected total of 528.
+        for (int index = 0; index < 11; index++) {
+            String project = "P" + index;
+            projectIds.add(project);
+            applications.addAll(students(project + "-", 3, project));
+        }
+        assertEquals(13, projectIds.size(),
+                "A, B and eleven independently supported projects exceed the legacy 12-project crossover.");
+        for (String project : projectIds) {
+            assertTrue(applications.stream().filter(application -> application.rankedProjectIds().contains(project))
+                    .count() >= 3, project + " must be independently viable from its preference demand.");
+        }
+        Request request = new Request(projectIds.stream().map(Project::new).toList(), applications,
+                Set.of(), Set.of("B"));
+
+        Result result = optimizer.optimize(request);
+        Result repeated = optimizer.optimize(request);
+
+        assertEquals(result, repeated, "The priority-enabled branch-and-bound result must be deterministic.");
+        assertEquals(41, result.assignedStudents(), "All 33 padding students and eight conflict students fit.");
+        assertEquals(3, result.assignments().stream().filter(row -> row.projectId().equals("A")).count());
+        assertEquals(5, result.assignments().stream().filter(row -> row.projectId().equals("B")).count());
+        assertEquals(5, result.assignments().stream().filter(row -> row.projectId().equals("B")
+                && row.preferenceRank() == 2).count(),
+                "The priority tier sends the shared unit and three lower-ranked students to B.");
+        assertEquals(528, result.preferenceScore());
+        assertEquals(Set.copyOf(projectIds), result.assignments().stream().map(Assignment::projectId)
+                .collect(java.util.stream.Collectors.toSet()));
+        List<Assignment> sharedUnit = result.assignments().stream()
+                .filter(row -> row.studentId().startsWith("priority-unit-")).toList();
+        assertEquals(2, sharedUnit.size());
+        assertEquals(1, sharedUnit.stream().map(Assignment::projectId).distinct().count());
+        assertEquals("B", sharedUnit.getFirst().projectId());
+        assertTrue(result.assignments().stream().collect(java.util.stream.Collectors.groupingBy(
+                Assignment::projectId, java.util.stream.Collectors.counting())).values().stream()
+                .allMatch(size -> size >= 3 && size <= 5));
+        assertExactAccountingAndObjective(request, result);
+    }
+
+    @Test
     void undersizedProjectBranchingBeyondTwelveProjectsPreservesPinsAndNoPreferenceAccounting() {
         List<String> projectIds = new ArrayList<>(List.of("A", "D"));
         List<Application> applications = new ArrayList<>();
