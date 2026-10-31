@@ -46,7 +46,7 @@ Run the scripts defined in `frontend/package.json` after frontend code changes:
 
 ## Full-lifecycle local documentation
 
-The public entry point is **repository-root** `make doc LANGUAGE=de`, not a frontend-local npm command. Set `PREVIEW_PASSWORD` through the existing environment-based testing-account convention in `backend/DEV-GUIDELINES.md`; never put credentials in templates or generated guides. Requires Make, the existing Java/Gradle setup, installed frontend dependencies (`make install`), the preview tool's supported Node version and Chrome/Chromium (`CHROME_BIN` may select an executable).
+The public entry point is the **repository-root** `make doc LANGUAGE=en` or `make doc LANGUAGE=de`, not a frontend-local npm command. Set `PREVIEW_PASSWORD` through the existing environment-based testing-account convention in `backend/DEV-GUIDELINES.md`; never put credentials in templates or generated guides. Requires Make, the existing Java/Gradle setup, installed frontend dependencies (`make install`), the preview tool's supported Node version and Chrome/Chromium (`CHROME_BIN` may select an executable).
 
 The command starts and owns a fresh backend JVM in the `testing` profile and Vite, refuses an existing preview session or occupied ports 8080/5173, runs the shared Chrome/CDP lifecycle, validates all Markdown links and PNGs, then replaces the selected local guide set. No application needs to be prestarted. It never reuses or stops an unrelated preview session. Missing, unsupported or incomplete `LANGUAGE` fails before startup or output replacement; no language fallback is used.
 
@@ -56,7 +56,7 @@ Generated Markdown and desktop screenshots (1440 × 1000) live only in ignored `
 
 On failure/interruption, the command exits nonzero, preserves the previous guide set, and removes its services, browser profiles, staging directory and owned lock. Fix the reported stage/prerequisite and rerun the same root command. Do not clear an unrelated shared session. If a host crash or SIGKILL prevents normal cleanup, first inspect the PID in `frontend/.preview/documentation.lock` and confirm it no longer owns processes or ports before removing that stale lock; never delete a live run's lock.
 
-`npm run preview:test` includes Node-runner documentation tests for locale/input validation, guide/reference/PNG integrity, atomic output replacement, injected failures and repeatable inventory, alongside ordinary preview/session smoke tests. The durable real-browser lifecycle is the root `make doc LANGUAGE=de` command itself; run it twice for repeatability and compare the checkpoint and guide-reference inventories in its report. Inspect every generated guide and image for German clarity and accurate, legible UI state; structural tests do not replace presentation judgement.
+`npm run preview:test` includes Node-runner documentation tests for locale/input validation, guide/reference/PNG integrity, atomic output replacement, injected failures and repeatable inventory, alongside ordinary preview/session smoke tests. The durable real-browser lifecycles are the root `make doc LANGUAGE=en` and `make doc LANGUAGE=de` commands; run each for its own language and compare the checkpoint and guide-reference inventories in its report. Inspect generated English and German guides and images for language clarity and accurate, legible UI state; structural tests do not replace presentation judgement.
 
 To add a language, follow [`scripts/documentation/README.md`](scripts/documentation/README.md).
 

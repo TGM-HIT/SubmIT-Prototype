@@ -167,6 +167,8 @@ import { formalApi, gradingApi } from '../../api/services'
 import { ApiError } from '../../api/client'
 import { useAuthStore } from '../../stores/auth'
 import { useTask } from '../../composables/useTask'
+
+defineOptions({ name: 'GradingPage' })
 import { formatDateOnly, formatNumber, formatTimestamp, i18n } from '../../i18n'
 import GradeFields from './GradeFields.vue'
 
@@ -541,13 +543,36 @@ async function saveStudentFinalGrade(): Promise<void> {
     String(i18n.global.t('grading.individualFinalGradeRecorded')))
   if (result) await loadProject()
 }
-watch(() => auth.user?.id, (userId) => {
+watch(() => `${auth.user?.id ?? ''}|${auth.user?.roles.join(',') ?? ''}`, () => {
+  ++teacherListVersion
+  ++studentListVersion
+  ++projectLoadVersion
   ++activeRubricVersion
-  if (!userId) {
-    activeRubric.value = null
-    return
-  }
+  projectId.value = ''
+  selectedContext.value = ''
+  projectLoading.value = false
+  projectError.value = ''
+  teacherProjects.value = []
+  teacherProjectsLoading.value = false
+  teacherProjectsError.value = ''
+  studentProjects.value = []
+  studentProjectsLoading.value = false
+  studentProjectsError.value = ''
+  teacherQuery.value = ''
+  teacherSearchDraft.value = ''
+  supervisedOnly.value = true
+  teacherPage.value = 0
+  teacherTotalPages.value = 0
+  teacherTotalElements.value = 0
+  activeRubric.value = null
+  task.loading.value = false
+  task.error.value = ''
+  task.success.value = ''
+  clearProjectData()
+  if (!mounted || !auth.user) return
   void loadActiveRubric()
+  if (isTeacher.value) void loadTeacherProjects()
+  else if (isStudent.value) void loadStudentProjects()
 })
 onMounted(() => {
   mounted = true

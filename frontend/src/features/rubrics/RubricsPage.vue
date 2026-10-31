@@ -17,7 +17,7 @@
       <p v-if="loading" class="notice" role="status">{{ $t('grading.loadingRubrics') }}</p>
       <div v-if="listError" class="error-box" role="alert">
         <p>{{ listError }}</p>
-        <button class="button button-secondary" type="button" :disabled="loading" @click="loadPage(page)">
+        <button class="button button-secondary" type="button" :disabled="loading || publishing" @click="loadPage(page)">
           {{ $t('grading.retryRubrics') }}
         </button>
       </div>
@@ -35,17 +35,17 @@
                 · {{ $t('grading.effectiveTo') }} {{ date(rubric.effectiveTo) }}</span></p>
           </div>
           <button class="button button-secondary" type="button" :aria-label="`${$t('rubrics.viewVersion')}: ${rubric.name} · ${rubric.version}`"
-            :aria-pressed="selectedId === String(rubric.id)" :disabled="detailLoading"
+            :aria-pressed="selectedId === String(rubric.id)" :disabled="detailLoading || publishing"
             @click="selectVersion(rubric)">{{ $t('rubrics.viewVersion') }}</button>
         </article>
         <div class="toolbar rubric-version-pagination" :aria-label="$t('grading.versionPages')">
-          <button class="button button-secondary" type="button" :disabled="loading || page === 0"
+          <button class="button button-secondary" type="button" :disabled="loading || publishing || page === 0"
             @click="loadPage(page - 1)">{{ $t('grading.previousPage') }}</button>
           <span role="status">{{ $t('grading.rubricPageSummary', {
             current: page + 1, total: Math.max(versions.totalPages, 1), count: versions.totalElements,
           }) }}</span>
           <button class="button button-secondary" type="button"
-            :disabled="loading || page + 1 >= versions.totalPages" @click="loadPage(page + 1)">
+            :disabled="loading || publishing || page + 1 >= versions.totalPages" @click="loadPage(page + 1)">
             {{ $t('grading.nextPage') }}
           </button>
         </div>
@@ -53,7 +53,7 @@
       <p v-if="detailLoading" class="notice" role="status">{{ $t('rubrics.loadingDetail') }}</p>
       <div v-if="detailError" class="error-box" role="alert">
         <p>{{ detailError }}</p>
-        <button class="button button-secondary" type="button" :disabled="detailLoading" @click="retryDetail">
+        <button class="button button-secondary" type="button" :disabled="detailLoading || publishing" @click="retryDetail">
           {{ $t('rubrics.retryDetail') }}
         </button>
       </div>
@@ -129,7 +129,7 @@
           :disabled="!selected || publishing" @click="copySelected">{{ $t('rubrics.copyVersion') }}</button>
         <label class="button button-secondary" :class="{ 'is-disabled': publishing }">
           {{ $t('rubrics.loadJson') }}
-          <input type="file" accept="application/json,.json" class="sr-only"
+          <input ref="draftFileInput" type="file" accept="application/json,.json" class="sr-only"
             :disabled="publishing" @change="readDraftFile" />
         </label>
       </div>
@@ -142,7 +142,7 @@
       <div v-if="draft !== null" class="stack">
         <div class="field"><label class="label" for="rubric-draft-json">{{ $t('rubrics.draftJson') }}</label>
           <textarea id="rubric-draft-json" ref="draftEditor" v-model="draft" class="textarea" rows="18"
-            spellcheck="false" :disabled="publishing" @input="publishError = ''" /></div>
+            spellcheck="false" :disabled="publishing" @input="onDraftInput" /></div>
         <div class="toolbar">
           <button class="button" type="button" :disabled="publishing || !draft.trim()" @click="publishDraft">
             {{ publishing ? $t('rubrics.publishing') : $t('grading.publish') }}</button>
@@ -205,11 +205,14 @@ const draftEditor = ref<HTMLTextAreaElement | null>(null)
 const detailHeading = ref<HTMLElement | null>(null)
 const newDraftButton = ref<HTMLButtonElement | null>(null)
 const copyButton = ref<HTMLButtonElement | null>(null)
+const draftFileInput = ref<HTMLInputElement | null>(null)
 const draftDirty = computed(() => draft.value !== null && draft.value !== originalDraft.value)
 let listEpoch = 0
 let detailEpoch = 0
 let fileEpoch = 0
 let publishEpoch = 0
+let browseEpoch = 0
+let draftEpoch = 0
 let mounted = false
 let accountKey = ''
 let discardControl: HTMLButtonElement | null = null
@@ -250,6 +253,7 @@ function clearDownloads(): void {
   markdownStarted.value = false
   downloadPending.value = false
   pendingFormat.value = null
+  downloadError.value = ''
 }
 function normalizePage<T extends { content?: unknown[] }>(value: T): Page<Summary> {
   return value as unknown as Page<Summary>
@@ -267,6 +271,12 @@ async function loadActive(): Promise<void> {
   }
 }
 async function loadPage(nextPage = page.value): Promise<void> {
+  if (publishing.value) return
+  await loadPageRequest(nextPage)
+}
+async function loadPageRequest(nextPage: number, selectFirst = true): Promise<void> {
+  ++browseEpoch
+  invalidatePendingFile()
   const epoch = ++listEpoch
   ++detailEpoch
   selectedId.value = ''
@@ -283,14 +293,17 @@ async function loadPage(nextPage = page.value): Promise<void> {
     if (!mounted || epoch !== listEpoch) return
     versions.value = result
     loaded.value = true
-    if (!selectedId.value && result.content[0]) void selectVersion(result.content[0])
+    if (selectFirst && !selectedId.value && result.content[0]) void selectVersion(result.content[0])
   } catch (error) {
     if (mounted && epoch === listEpoch) listError.value = errorText(error, String(i18n.global.t('grading.rubricsLoadFailed')))
   } finally {
     if (epoch === listEpoch) loading.value = false
   }
 }
-async function selectVersion(summary: Summary): Promise<void> {
+async function selectVersion(summary: Summary, publicationRefresh = false): Promise<void> {
+  if (publishing.value && !publicationRefresh) return
+  ++browseEpoch
+  invalidatePendingFile()
   const id = String(summary.id)
   selectedId.value = id
   selected.value = null
@@ -312,12 +325,22 @@ function retryDetail(): void {
   const summary = versions.value.content.find((entry) => String(entry.id) === selectedId.value)
   if (summary) void selectVersion(summary)
 }
+function invalidatePendingFile(): void {
+  ++fileEpoch
+  fileError.value = ''
+  if (draftFileInput.value) draftFileInput.value.value = ''
+}
+function onDraftInput(): void {
+  ++draftEpoch
+  publishError.value = ''
+}
 function replaceDraft(next: string, trigger: HTMLButtonElement | null): void {
   if (publishing.value) return
   if (draftDirty.value && !globalThis.confirm(String(i18n.global.t('rubrics.discardConfirm')))) return
   discardControl = trigger
   draft.value = next
   originalDraft.value = next
+  ++draftEpoch
   fileError.value = ''
   publishError.value = ''
   void nextTick(() => draftEditor.value?.focus())
@@ -348,6 +371,8 @@ async function readDraftFile(event: Event): Promise<void> {
   const file = input.files?.[0]
   if (!file) return
   const epoch = ++fileEpoch
+  const browseContext = browseEpoch
+  const draftContext = draftEpoch
   const id = auth.user?.id
   const roleSnapshot = isAdmin.value
   fileError.value = ''
@@ -357,7 +382,8 @@ async function readDraftFile(event: Event): Promise<void> {
     try { text = new TextDecoder('utf-8', { fatal: true }).decode(bytes) } catch {
       throw new Error(String(i18n.global.t('rubrics.invalidJson')))
     }
-    if (!mounted || epoch !== fileEpoch || id !== auth.user?.id || !roleSnapshot || !isAdmin.value) return
+    if (!mounted || epoch !== fileEpoch || browseContext !== browseEpoch || draftContext !== draftEpoch
+      || id !== auth.user?.id || !roleSnapshot || !isAdmin.value) return
     let parsed: unknown
     try { parsed = JSON.parse(text) } catch { throw new Error(String(i18n.global.t('rubrics.invalidJson'))) }
     if (!validDefinition(parsed)) throw new Error(String(i18n.global.t('rubrics.incompatibleJson')))
@@ -365,13 +391,18 @@ async function readDraftFile(event: Event): Promise<void> {
     await nextTick()
     if (draft.value !== null) draftEditor.value?.focus()
   } catch (error) {
-    if (mounted && epoch === fileEpoch) fileError.value = error instanceof Error ? error.message : String(i18n.global.t('rubrics.fileReadFailed'))
+    if (mounted && epoch === fileEpoch && browseContext === browseEpoch && draftContext === draftEpoch
+      && id === auth.user?.id && roleSnapshot && isAdmin.value) {
+      fileError.value = error instanceof Error ? error.message : String(i18n.global.t('rubrics.fileReadFailed'))
+    }
   } finally {
-    input.value = ''
+    if (epoch === fileEpoch) input.value = ''
   }
 }
 function cancelDraft(): void {
   ++fileEpoch
+  ++draftEpoch
+  if (draftFileInput.value) draftFileInput.value.value = ''
   draft.value = null
   originalDraft.value = ''
   fileError.value = ''
@@ -432,19 +463,22 @@ async function publishDraft(): Promise<void> {
   if (!validDefinition(parsed)) { publishError.value = String(i18n.global.t('rubrics.incompatibleJson')); return }
   const epoch = ++publishEpoch
   const actor = accountKey
+  const context = browseEpoch
   publishing.value = true
   try {
     const result = await gradingApi.publishRubric(parsed)
-    if (!mounted || epoch !== publishEpoch || actor !== accountKey || !isAdmin.value) return
+    if (!mounted || epoch !== publishEpoch || actor !== accountKey || !isAdmin.value || context !== browseEpoch) return
     draft.value = null
     originalDraft.value = ''
-    await Promise.all([loadActive(), loadPage(0)])
+    ++draftEpoch
+    await Promise.all([loadActive(), loadPageRequest(0, false)])
+    if (!mounted || epoch !== publishEpoch || actor !== accountKey || !isAdmin.value) return
     const summary = versions.value.content.find((entry) => String(entry.id) === String(result.id))
-    if (summary) await selectVersion(summary)
+    if (summary) await selectVersion(summary, true)
     await nextTick()
     detailHeading.value?.focus()
   } catch (error) {
-    if (mounted && epoch === publishEpoch && actor === accountKey) {
+    if (mounted && epoch === publishEpoch && actor === accountKey && context === browseEpoch) {
       publishError.value = errorText(error, String(i18n.global.t('grading.rubricDownloadFailed')))
     }
   } finally {
@@ -452,10 +486,11 @@ async function publishDraft(): Promise<void> {
   }
 }
 function resetForAccount(): void {
-  ++listEpoch; ++detailEpoch; ++fileEpoch; ++publishEpoch
+  ++listEpoch; ++detailEpoch; ++fileEpoch; ++publishEpoch; ++browseEpoch; ++draftEpoch
   versions.value = { content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 }
   selectedId.value = ''; selected.value = null; activeRubric.value = null
   draft.value = null; originalDraft.value = ''; fileError.value = ''; publishError.value = ''
+  if (draftFileInput.value) draftFileInput.value.value = ''
   listError.value = ''; detailError.value = ''; activeError.value = ''
   loading.value = false; detailLoading.value = false; publishing.value = false
   clearDownloads()
@@ -467,8 +502,9 @@ watch(() => auth.user?.id, (id) => {
 })
 watch(() => auth.user?.roles.join(','), () => {
   if (!isAdmin.value) {
-    ++fileEpoch; ++publishEpoch
+    ++fileEpoch; ++publishEpoch; ++browseEpoch; ++draftEpoch
     draft.value = null; originalDraft.value = ''; fileError.value = ''; publishError.value = ''
+    if (draftFileInput.value) draftFileInput.value.value = ''
     publishing.value = false
   }
 }, { immediate: true })
@@ -479,7 +515,7 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
   mounted = false
-  ++listEpoch; ++detailEpoch; ++fileEpoch; ++publishEpoch
+  ++listEpoch; ++detailEpoch; ++fileEpoch; ++publishEpoch; ++browseEpoch; ++draftEpoch
   clearDownloads()
 })
 </script>

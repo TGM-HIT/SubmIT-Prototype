@@ -16,7 +16,7 @@ export async function generate(language, {
   // Validate all input before starting services, acquiring resources or touching previous outputs.
   const locale = await load(language)
   const password = env.PREVIEW_PASSWORD
-  if (!password) throw new Error('Set PREVIEW_PASSWORD to the documented local testing password; then run make doc LANGUAGE=de.')
+  if (!password) throw new Error('Set PREVIEW_PASSWORD to the documented local testing password; then run make doc LANGUAGE=en or LANGUAGE=de.')
   const evidenceReport = env.DOCUMENTATION_REPORT ? path.resolve(root, env.DOCUMENTATION_REPORT) : undefined
   if (evidenceReport && (!evidenceReport.startsWith(path.join(root, 'harness/runs') + path.sep) ||
       !evidenceReport.includes(`${path.sep}evidence${path.sep}`) || !evidenceReport.endsWith('.json'))) {
@@ -138,7 +138,7 @@ export async function generate(language, {
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   try {
     if (process.argv.length !== 4 || process.argv[2] !== '--language') {
-      throw new Error('Usage: make doc LANGUAGE=de')
+      throw new Error('Usage: make doc LANGUAGE=en|de')
     }
     await generate(process.argv[3])
   } catch (error) {

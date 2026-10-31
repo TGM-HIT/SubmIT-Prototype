@@ -29,7 +29,11 @@
         <div><p class="eyebrow">{{ $t('navigation.schoolProjects') }}</p><h1>{{ pageTitle }}</h1></div>
         <span class="role-chip">{{ auth.user ? roleLabel(auth.user.roles) : '' }}</span>
       </header>
-      <RouterView />
+      <RouterView v-slot="{ Component }">
+        <KeepAlive include="GradingPage">
+          <component :is="Component" />
+        </KeepAlive>
+      </RouterView>
     </main>
   </div>
 </template>

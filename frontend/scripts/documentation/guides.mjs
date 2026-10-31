@@ -49,7 +49,7 @@ export function validatePng(png) {
 
 export function validateLocale(locale, language) {
   if (!/^[a-z]{2}(?:-[A-Z]{2})?$/.test(language ?? '') || locale?.language !== language) {
-    throw new Error('Usage: make doc LANGUAGE=de — select an explicitly supported language.')
+    throw new Error('Usage: make doc LANGUAGE=en|de — select an explicitly supported language.')
   }
   for (const key of ['title', 'overview', 'example']) {
     if (!locale[key] || typeof locale[key] !== 'object' && typeof locale[key] !== 'string') {
@@ -109,13 +109,13 @@ export function validateLocale(locale, language) {
 
 export async function loadLocale(language, directory = new URL('./locales/', import.meta.url)) {
   if (!/^[a-z]{2}(?:-[A-Z]{2})?$/.test(language ?? '')) {
-    throw new Error('Usage: make doc LANGUAGE=de — LANGUAGE is required.')
+    throw new Error('Usage: make doc LANGUAGE=en|de — LANGUAGE is required.')
   }
   let locale
   try {
     locale = JSON.parse(await readFile(new URL(`${language}.json`, directory), 'utf8'))
   } catch (error) {
-    throw new Error(`Unsupported or invalid language "${language}". Usage: make doc LANGUAGE=de. ${error.code ?? error.message}`)
+    throw new Error(`Unsupported or invalid language "${language}". Usage: make doc LANGUAGE=en|de. ${error.code ?? error.message}`)
   }
   return validateLocale(locale, language)
 }

@@ -1,0 +1,202 @@
+{
+  "language": "en",
+  "title": "SubmIT — A guide to the project year",
+  "overview": "These locally generated guides follow one synthetic project, the School Garden Sensor, through the application. Start with the guide for your role and follow its links. Every image is captured from the real testing application at desktop size 1440 × 1000. All names and content are synthetic; credentials are never published. English controls are used and explained. Preparation creates two supporting accepted projects and a valid rubric through authorized APIs. Initial valid rankings and provisional final grades are prepared only as technical read prerequisites, not represented as UI actions. The main idea, its revision, and later decisions are completed through the actual interfaces.",
+  "example": {
+    "registrationDisplayName": "Documentation Model Account",
+    "className": "Documentation Model Class",
+    "subjectName": "Environmental Sensors",
+    "title": "School Garden Sensor",
+    "description": "A synthetic school project about economical watering of a model garden.",
+    "outcome": "A safe, public-ready measurement overview without personal data.",
+    "scope": "Measure soil moisture\nPresent readings clearly",
+    "learning": "Sensors\nPrivacy",
+    "revision": "The model garden is studied without personal data and with documented measurement limits.",
+    "feedback": "Please clarify the measurement limits and privacy safeguards.",
+    "approval": "The revised idea is well scoped; the full specification may be developed.",
+    "acceptance": "The complete specification is ready for the application catalogue.",
+    "specification": {
+      "objectives": ["Explain watering needs with evidence"],
+      "intendedUsers": ["School garden team"],
+      "requirements": ["Present synthetic readings clearly"],
+      "deliverables": ["Website snapshot", "Poster", "Source data"],
+      "scope": "One bounded model garden; no personal measurements.",
+      "dependencies": ["Synthetic sensor"]
+    },
+    "supportTitles": ["Rainwater Model", "Solar Garden Model"],
+    "period": "Documentation — Project Choices",
+    "formalTopic": "School Garden Sensor — Group Proposal",
+    "situation": "A model garden is watered without recorded measurements.",
+    "objective": "Explain economical watering using synthetic readings.",
+    "memberTopics": ["Sensors", "Analysis", "Presentation"],
+    "concern": "How can watering needs be identified reliably?",
+    "result": "A documented and verifiable part of the model study.",
+    "milestone": "Model study and documentation complete",
+    "formalFeedback": "Responsibilities and milestone are clear. The project work is approved.",
+    "rubricName": "Model Project — Assessment",
+    "categoryName": "Implementation and collaboration",
+    "criterionName": "Evidence-based implementation",
+    "groupCriterionName": "Collaboration",
+    "metricName": "Documented trials",
+    "evidence": "The model study and its limits are supported by synthetic test cases.",
+    "metricNote": "Three documented trials in the model garden.",
+    "rationale": "Teacher decision: implementation and documented trials were reviewed together; no automatic weighting.",
+    "draftRationale": "Prepared record for the first authorized view; not yet the final UI confirmation.",
+    "artifactTitles": ["Garden — Website", "Garden — Poster", "Garden — Source Data"],
+    "artifactDescription": "Synthetic model study without personal content.",
+    "publicationNote": "Content checked for personal information and active content.",
+    "publicWebsite": "<!doctype html><html lang=\"en\"><meta charset=\"utf-8\"><title>School Garden</title><h1>Model Garden</h1><p>Synthetic watering study.</p></html>",
+    "publicPoster": "School garden — synthetic watering study. Three readings, one model.",
+    "publicData": "trial,moisture\n1,40\n2,45\n3,42\n"
+  },
+  "guides": {
+    "schueler": {
+      "title": "Student guide",
+      "intro": "Prerequisites: a student account and, later, a finalized group assignment. In this story student01 creates the main idea; student02 and student03 also apply. The same project continues through each role and stage.",
+      "chapters": [
+        {
+          "id": "account",
+          "title": "Account and workspace",
+          "text": "Create a student account on `/register` with **Create account**, or sign in on `/login` with **Sign in**. Never publish passwords. Your personal workspace is `/`. On `/settings`, edit **Account name** and choose **Save changes**. The account name does not change the username or role. An administrator assigns classes and elective subjects; see [account administration](administration.md#accounts).",
+          "images": [
+            {"key": "workspace", "alt": "Personal workspace for the signed-in synthetic student account", "caption": "The workspace belongs to the authenticated student."},
+            {"key": "accounts", "alt": "Administration view of synthetic account and class settings", "caption": "Account administration is available only to an authenticated administrator."}
+          ]
+        },
+        {
+          "id": "idea",
+          "title": "Create and submit an idea",
+          "text": "On `/ideas`, choose **＋ New idea** and complete **Title**, **School year**, **Description**, **Intended outcome**, and **Initial scope points**. Use **Find students by display name** and **Add** to invite up to four additional owners. The creator manages collaborators under **Details & history**. **Save draft** saves changes; **Edit** reopens the draft; **Submit** sends it for review. Editing is unavailable during review. **Withdraw** is an alternative, not the successful path. Teachers may create ideas but may not review their own work. Continue to [teacher review](lehrkraefte.md#idea-review).",
+          "images": [
+            {"key": "idea-draft", "alt": "Saved School Garden Sensor idea draft with edit and submit actions", "caption": "A saved draft can be edited before submission."},
+            {"key": "idea-submitted", "alt": "Submitted main idea in the student account", "caption": "After submission, another teacher reviews the same idea."}
+          ]
+        },
+        {
+          "id": "revision",
+          "title": "Respond to feedback and complete the specification",
+          "text": "After **Request revision**, open **Details & history** to read the teacher's feedback. Use **Edit**, **Save draft**, and **Submit** to revise and resubmit the same idea. After **Approve full specification work**, open **Details & history → Develop full specification**. Complete objectives, intended users, requirements, deliverables, scope, and dependencies; **Save specification** saves and closes the editor. Reopen **Details & history** and choose **Submit specification for acceptance review**. Permission to develop a specification is not catalogue acceptance; [a separate teacher decision](lehrkraefte.md#acceptance) is required before applications.",
+          "images": [
+            {"key": "idea-revision", "alt": "Main idea returned for revision with teacher feedback", "caption": "This lifecycle includes an actual request for revision and resubmission."},
+            {"key": "specification", "alt": "Complete submitted specification for the main idea", "caption": "The specification awaits a separate acceptance decision."}
+          ]
+        },
+        {
+          "id": "choices",
+          "title": "Review projects and save choices",
+          "text": "An open [application period](administration.md#period) and at least three accepted projects are required. On `/applications`, **Accepted projects** lists eligible projects. Choose **Apply individually** or **Apply together**, then rank at least three distinct projects and save. This lifecycle uses three students and the shared group workflow. A submitted ranking is not a finalized allocation; students cannot see early preliminary runs.",
+          "images": [
+            {"key": "period", "alt": "Application period configured for the synthetic project lifecycle", "caption": "The period has a bounded opening and deadline."},
+            {"key": "preferences", "alt": "Student's saved project ranking for the open application period", "caption": "The student submits real choices through the application interface."}
+          ]
+        },
+        {
+          "id": "allocation",
+          "title": "Confirm the group and submit its proposal",
+          "text": "After the deadline, allocation is finalized by an administrator. A preliminary result is not final membership. On `/applications`, **Assignment** shows the finalized group. On `/formal-application`, enter the eligible project and choose **Start a formal proposal**. Complete a topic, investigation concern, and planned result for every allocated member, plus the shared situation, objective, and milestones. Choose **Save draft**, then **Edit formal proposal** and **Submit for teacher review**. Only [formal teacher approval](lehrkraefte.md#formal-approval) authorizes project work.",
+          "images": [
+            {"key": "allocation", "alt": "Administrator reviews and finalizes the completed allocation", "caption": "Finalization creates the membership used by the proposal workflow."},
+            {"key": "group", "alt": "Finalized School Garden Sensor group in the student account", "caption": "All three students belong to the group after finalization."},
+            {"key": "formal", "alt": "Submitted official group proposal for the allocated project", "caption": "The official proposal is separate from the earlier project ranking."}
+          ]
+        },
+        {
+          "id": "grading",
+          "title": "View your assessment and project completion",
+          "text": "After formal approval, use `/grading` to open your eligible project. Students see only their own individual grades; rubric version, date, and evidence remain associated with each assessment. Teachers record [assessments and final grades](lehrkraefte.md#grading). On `/archive`, choose **Load private artefacts** and upload the website snapshot, poster, and source data with **Upload privately**. Check files for personal information and active content. **Request publication review** only submits a file for review. The anonymous archive appears only after [teacher review and project completion](lehrkraefte.md#completion).",
+          "images": [
+            {"key": "own-grades", "alt": "The signed-in group member's individual assessment with rubric version", "caption": "A student cannot view other members' individual grades."}
+          ]
+        }
+      ]
+    },
+    "lehrkraefte": {
+      "title": "Teacher guide",
+      "intro": "Prerequisites: a teacher account and the existing authorization for each project. teacher01 reviews the main idea created by student01. Administrators do not make a teacher's academic decisions.",
+      "chapters": [
+        {
+          "id": "idea-review",
+          "title": "Review an idea and guide its revision",
+          "text": "On `/ideas`, open the submitted main idea with **Review**. Choose **Decision → Request revision**, enter **Written feedback**, and select **Record decision**. After the student [revises and resubmits](schueler.md#revision), **Approve full specification work** allows specification development. **Decline** is an alternative. Optional ratings and **Overall recommendation** support the review but do not decide automatically. **Your supervision preference** is separate from approval. Teachers cannot review their own ideas.",
+          "images": [
+            {"key": "teacher-review", "alt": "Teacher reviews another person's main idea and records a reasoned revision request", "caption": "The reviewer is not the idea's author."}
+          ]
+        },
+        {
+          "id": "acceptance",
+          "title": "Accept the completed specification",
+          "text": "Review the submitted specification using **Work size**, **Curriculum relevance**, **Technical complexity**, **Feasibility**, **Learning value**, **Resource needs**, **Risk & dependencies**, and **Overall recommendation**. These fields are distinct from optional ratings in the initial idea review. **Accept for student applications** followed by **Record decision** makes the project available in the application catalogue. This is separate from the earlier approval to develop a specification. An administrator then [configures the period and supervision](administration.md#period).",
+          "images": [
+            {"key": "accepted", "alt": "Teacher accepts the completed School Garden Sensor specification", "caption": "Acceptance makes the project eligible for student applications."}
+          ]
+        },
+        {
+          "id": "formal-approval",
+          "title": "Approve the official group proposal",
+          "text": "Prerequisites: finalized allocation and a submitted group proposal with member contributions and milestones. On `/formal-application`, select the project and review its topic, situation, objective, and decision history. Under **Teacher decision**, choose **Approve — group may begin**, enter reasoned **Feedback**, and select **Record teacher decision**. **Request revisions** and **Decline** are alternatives. Work is not authorized before approval.",
+          "images": [
+            {"key": "formal-approved", "alt": "Teacher-approved official proposal with project work visibly authorized", "caption": "Approval applies to the project actually assigned to this group."}
+          ]
+        },
+        {
+          "id": "grading",
+          "title": "Record assessments, metrics, and final grades",
+          "text": "Prerequisites: an approved project and a [published rubric](administration.md#rubric). On `/grading`, select the project. Complete criterion, group member, value, date, evidence, and comments in **Record individual assessment**; use **Record group assessment** for a configured group criterion. **Record observation** stores a configured metric. The history tabs show the original rubric version. A version transition requires an explicit reason. Preparation creates only the minimum final-grade records needed for the initial view; the teacher then confirms the actual decision using **Save final project grade** and **Save individual final grade** with a rationale. Without a configured aggregation rule, a grade is a teacher decision, not an invented average or formula.",
+          "images": [
+            {"key": "rubric", "alt": "Administrator's immutable rubric version with configured criteria and metrics", "caption": "The rubric is configuration, not an invented grading formula."},
+            {"key": "assessment", "alt": "Teacher view of a saved individual assessment and its evidence", "caption": "An assessment remains associated with the rubric version used to record it."},
+            {"key": "metrics", "alt": "Saved observation showing three documented model trials", "caption": "A metric is an observation, not an invented grade formula."},
+            {"key": "final-grade", "alt": "Saved final grade with an explicit teacher rationale", "caption": "The teacher explains the decision; no calculation rule is invented."}
+          ]
+        },
+        {
+          "id": "completion",
+          "title": "Review private files and complete the project",
+          "text": "On `/archive`, choose **Load private artefacts**. A private upload enters review only after **Request publication review**. **Approve publication** makes only the reviewed file public; **Reject** keeps it private. A synthetic control file remains deliberately unreviewed. Before completion, an authorized teacher may choose **Unpublish**; removable private files can be removed while the project remains active. After required files and final grades are ready, choose **Confirm project completion**. The archive is then read-only. Only a completed project has an anonymous `/archive/{projectId}` view. The approved snapshot download contains no identities, membership, applications, grades, feedback, private metrics, or audit data.",
+          "images": [
+            {"key": "artifact-review", "alt": "Authenticated review shows approved files and a separate private control file", "caption": "File approval and project completion are separate actions."},
+            {"key": "public-archive", "alt": "Anonymous completed-project archive containing only approved synthetic files", "caption": "The public view and downloads contain only approved synthetic content."}
+          ]
+        }
+      ]
+    },
+    "administration": {
+      "title": "Administration guide",
+      "intro": "Prerequisite: an administrator account. Administration manages accounts, catalogue entries, application periods, allocation, and rubric versions; it does not replace a teacher's academic decisions.",
+      "chapters": [
+        {
+          "id": "accounts",
+          "title": "Manage accounts and classes",
+          "text": "On `/admin`, **Users & roles** manages accounts. Registration creates student accounts and server-side authorization controls role changes. Under **Classes & subjects**, use **Add class** and **Add subject** to create entries and **Rename** to update an existing entry. Find the synthetic student account, choose **Edit**, select **Class**, mark up to four **Elective subjects**, and choose **Save**. Use synthetic testing accounts only; do not change their base roles for this guide. Students maintain their own display name in [settings](schueler.md#account).",
+          "images": [
+            {"key": "accounts", "alt": "Administration view of synthetic accounts and class assignments", "caption": "Only authenticated administrators can manage accounts."}
+          ]
+        },
+        {
+          "id": "period",
+          "title": "Configure the application period and supervision",
+          "text": "At least three [accepted projects](lehrkraefte.md#acceptance) are needed. Configure an application period with a short future deadline, attach the eligible projects, and assign a confirmed supervisor. Students then submit actual individual or group rankings before the deadline. The run uses the ordinary scheduler and finalization workflow; it does not override allocation behavior.",
+          "images": [
+            {"key": "period", "alt": "Administrator configures the synthetic project application period", "caption": "The application period has a bounded opening and deadline."}
+          ]
+        },
+        {
+          "id": "allocation",
+          "title": "Review and finalize allocation",
+          "text": "After the deadline, inspect the completed allocation through `/allocation`. A preliminary result is not a final membership. Review the eligible result and explicitly finalize the valid group before students start their official proposal. The [student guide](schueler.md#allocation) follows the resulting group workflow.",
+          "images": [
+            {"key": "allocation", "alt": "Administrator reviews a completed allocation before finalization", "caption": "The group proposal uses finalized memberships, not a preliminary run."}
+          ]
+        },
+        {
+          "id": "rubric",
+          "title": "Publish an immutable rubric version",
+          "text": "On `/rubrics`, view existing versions or start a local draft. Copy a saved version or load reusable UTF-8 JSON, edit the definition, and explicitly choose **Publish immutable version** with a unique version label. Copying, editing, and uploading are local only; they do not publish or activate anything. A published version is immutable, and earlier assessments retain their associated version. `/grading` is for project assessment and history. Only configured aggregation rules calculate results; this guide invents no formula. Continue to [teacher grading](lehrkraefte.md#grading).",
+          "images": [
+            {"key": "rubric", "alt": "Immutable rubric version with configured assessment criteria and metrics", "caption": "Rubrics are managed separately from project assessment."}
+          ]
+        }
+      ]
+    }
+  }
+}

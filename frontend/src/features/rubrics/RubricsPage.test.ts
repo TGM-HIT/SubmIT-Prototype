@@ -3,7 +3,7 @@ import { reactive } from 'vue'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiError } from '../../api/client'
 import RubricsPage from './RubricsPage.vue'
-import { setLanguage } from '../../i18n'
+import { formatDateOnly, setLanguage } from '../../i18n'
 
 const api = vi.hoisted(() => ({
   roles: ['ADMIN'] as string[],
@@ -75,6 +75,12 @@ function setRoles(roles: string[]) {
   api.roles = roles
   if (auth?.user) auth.user.roles = roles
 }
+function setAccount(id: string, roles = ['ADMIN']) {
+  if (auth?.user) {
+    auth.user.id = id
+    auth.user.roles = roles
+  }
+}
 
 describe('dedicated rubric browser and administrator draft', () => {
   beforeEach(() => {
@@ -97,11 +103,20 @@ describe('dedicated rubric browser and administrator draft', () => {
     const wrapper = mount(RubricsPage)
     await flushPromises()
     expect(wrapper.text()).toContain('Configured rubric')
+    expect(wrapper.text()).toContain('2026/2027')
+    expect(wrapper.text()).toContain(formatDateOnly('2026-09-01'))
+    expect(wrapper.text()).not.toContain('effective to')
+    expect(wrapper.text()).toContain('{"min":1,"max":5,"step":1,"labels":{"1":"Beginning","5":"Advanced"}}')
     expect(wrapper.text()).toContain('Category name · category-id')
+    expect(wrapper.text()).toContain('Category details')
+    expect(wrapper.text()).toContain('Criterion name · criterion-id')
     expect(wrapper.text()).toContain('Criterion details')
+    expect(wrapper.text()).toContain('Assessment subject: STUDENT · Stage: Design · Evidence required: Yes')
+    expect(wrapper.text()).toContain('{"min":1,"max":5,"step":1,"labels":{"1":"Beginning","5":"Advanced"}}')
     expect(wrapper.text()).toContain('Advanced')
     expect(wrapper.text()).toContain('Hours · metric-id · v2')
-    expect(wrapper.text()).toContain('rule-id')
+    expect(wrapper.text()).toContain('Logged hours · h · 0–99')
+    expect(wrapper.text()).toContain('Rule ID rule-id · Rule version 3 · Scope PROJECT · Method WEIGHTED_AVERAGE · Decimal places 2 · Criterion weights {"criterion-id":1.5} · Metric weights {"metric-id":0.25}')
     expect(wrapper.find('#rubric-draft-json').exists()).toBe(false)
     expect(wrapper.find('input[type="file"]').exists()).toBe(false)
     expect(api.rubric).toHaveBeenCalledWith('record-1')
@@ -116,7 +131,84 @@ describe('dedicated rubric browser and administrator draft', () => {
     expect(wrapper.text()).toContain('No rubric is active today')
     expect(wrapper.text()).toContain('Configured rubric')
     expect(wrapper.text()).not.toContain('Unable to load rubric versions')
+    const newDraft = wrapper.findAll('button').find((button) => button.text() === 'Start a new draft')!
+    expect(newDraft).toBeDefined()
+    await newDraft.trigger('click')
+    expect(wrapper.find('#rubric-draft-json').exists()).toBe(true)
     wrapper.unmount()
+  })
+
+  it('ignores delayed file results and errors after changing selected version or page', async () => {
+    api.rubrics.mockImplementation(async (pageIndex = 0) => {
+      if (pageIndex === 0) return page([summary('record-1', 'v1'), summary('record-2', 'v2')], 0, 2)
+      return page([summary('record-3', 'v3')], 1, 2)
+    })
+    api.rubric.mockImplementation(async (id: string) => ({
+      ...definition, id, version: id === 'record-2' ? 'v2' : id === 'record-3' ? 'v3' : 'v1',
+    }))
+    const wrapper = mount(RubricsPage)
+    await flushPromises()
+    const input = wrapper.get('input[type="file"]')
+    const firstRead = deferred<ArrayBuffer>()
+    const firstFile = new File(['pending'], 'stale-version.json', { type: 'application/json' })
+    vi.spyOn(firstFile, 'arrayBuffer').mockReturnValue(firstRead.promise)
+    Object.defineProperty(input.element, 'files', { configurable: true, value: [firstFile] })
+    await input.trigger('change')
+    await wrapper.findAll('button').find((button) => button.attributes('aria-label')?.includes('Configured rubric v2'))!.trigger('click')
+    await flushPromises()
+    firstRead.resolve(new TextEncoder().encode(JSON.stringify({
+      version: 'stale-file-v2', name: 'Stale file', effectiveFrom: '2099-01-01',
+      finalGradeScale: { min: 1, max: 5, step: 1 }, categories: [],
+    })).buffer as ArrayBuffer)
+    await flushPromises()
+    expect(wrapper.get('#rubric-detail-heading').text()).toContain('Configured rubric · v2')
+    expect(wrapper.find('#rubric-draft-json').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('stale-file-v2')
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+
+    const secondRead = deferred<ArrayBuffer>()
+    const secondFile = new File(['pending'], 'stale-page.json', { type: 'application/json' })
+    vi.spyOn(secondFile, 'arrayBuffer').mockReturnValue(secondRead.promise)
+    Object.defineProperty(input.element, 'files', { configurable: true, value: [secondFile] })
+    await input.trigger('change')
+    await wrapper.findAll('button').find((button) => button.text() === 'Next page')!.trigger('click')
+    await flushPromises()
+    secondRead.resolve(new TextEncoder().encode('{invalid').buffer as ArrayBuffer)
+    await flushPromises()
+    expect(wrapper.get('#rubric-detail-heading').text()).toContain('Configured rubric · v3')
+    expect(wrapper.find('#rubric-draft-json').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('not valid UTF-8 JSON')
+    expect(wrapper.text()).not.toContain('stale-file-v2')
+    wrapper.unmount()
+  })
+
+  it('reports failed download preparation and retries the same format successfully', async () => {
+    const createUrl = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:download-retry')
+    api.rubric.mockResolvedValueOnce({ ...definition, id: 'record-1', version: 'v1' })
+      .mockRejectedValueOnce(new ApiError('Temporary detail failure', 503))
+      .mockResolvedValueOnce({ ...definition, id: 'record-1', version: 'v1' })
+    const wrapper = mount(RubricsPage)
+    await flushPromises()
+    const download = wrapper.findAll('button').find((button) => button.text().startsWith('Download JSON:'))!
+    await download.trigger('click')
+    await flushPromises()
+    expect(wrapper.get('[role="alert"]').text()).toContain('Temporary detail failure')
+    expect(wrapper.find('a[download]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('Preparing JSON download')
+    expect(wrapper.findAll('button').find((button) => button.text().startsWith('Download JSON:'))!.attributes('disabled')).toBeUndefined()
+    expect(api.publishRubric).not.toHaveBeenCalled()
+
+    await download.trigger('click')
+    await flushPromises()
+    await vi.waitFor(() => expect(wrapper.find('a[download$=".json"]').exists()).toBe(true))
+    const link = wrapper.get('a[download$=".json"]')
+    expect(link.attributes('href')).toBe('blob:download-retry')
+    expect(link.attributes('download')).toContain('.json')
+    expect(JSON.parse(await (createUrl.mock.calls[0][0] as Blob).text()).version).toBe('v1')
+    expect(wrapper.text()).not.toContain('Temporary detail failure')
+    expect(api.publishRubric).not.toHaveBeenCalled()
+    wrapper.unmount()
+    createUrl.mockRestore()
   })
 
   it('keeps a selected version not-found state explicit and retries that exact version', async () => {
@@ -315,6 +407,52 @@ describe('dedicated rubric browser and administrator draft', () => {
     expect(wrapper.text()).not.toContain('pending-v2')
     wrapper.unmount()
   })
+
+  it.each(['account-change', 'unmount'] as const)(
+    'keeps a pending publication isolated from browsing and %s',
+    async (transition) => {
+      const pending = deferred<typeof definition>()
+      api.publishRubric.mockReturnValue(pending.promise)
+      api.rubrics.mockResolvedValue(page([summary('record-1', 'v1'), summary('record-2', 'v2')], 0, 2))
+      api.rubric.mockImplementation(async (id: string) => ({
+        ...definition, id, version: id === 'record-2' ? 'v2' : 'v1',
+      }))
+      const wrapper = mount(RubricsPage)
+      await flushPromises()
+      await wrapper.findAll('button').find((button) => button.text() === 'Start a new draft')!.trigger('click')
+      await wrapper.get('#rubric-draft-json').setValue(JSON.stringify({
+        version: 'pending-context-v2', name: 'Pending context', effectiveFrom: '2099-01-01',
+        finalGradeScale: { min: 1, max: 5, step: 1 }, categories: [],
+      }))
+      await wrapper.findAll('button').find((button) => button.text() === 'Publish immutable version')!.trigger('click')
+      await flushPromises()
+      expect(wrapper.findAll('button').find((button) => button.text() === 'Next page')!.attributes('disabled')).toBeDefined()
+      expect(wrapper.findAll('button').find((button) => button.text() === 'View exact version')!.attributes('disabled')).toBeDefined()
+      expect(wrapper.findAll('button').find((button) => button.text() === 'Start a new draft')!.attributes('disabled')).toBeDefined()
+      const readCount = api.rubrics.mock.calls.length
+      await wrapper.findAll('button').find((button) => button.text() === 'Next page')!.trigger('click')
+      await wrapper.findAll('button').find((button) => button.attributes('aria-label')?.includes('Configured rubric v2'))!.trigger('click')
+      expect(api.rubrics).toHaveBeenCalledTimes(readCount)
+      expect(wrapper.get('#rubric-detail-heading').text()).toContain('Configured rubric · v1')
+
+      if (transition === 'account-change') {
+        setAccount('different-admin')
+        await flushPromises()
+        pending.resolve({ ...definition, id: 'late-account-result', version: 'pending-context-v2' })
+        await flushPromises()
+        expect(wrapper.find('#rubric-draft-json').exists()).toBe(false)
+        expect(wrapper.text()).not.toContain('pending-context-v2')
+        expect(api.publishRubric).toHaveBeenCalledTimes(1)
+      } else {
+        const readsBeforeNavigation = api.rubrics.mock.calls.length
+        wrapper.unmount()
+        pending.resolve({ ...definition, id: 'late-unmounted-result', version: 'pending-context-v2' })
+        await flushPromises()
+        expect(api.rubrics).toHaveBeenCalledTimes(readsBeforeNavigation)
+        expect(api.rubric).toHaveBeenCalledTimes(1)
+      }
+    },
+  )
 
   it('copies a reusable definition without publication metadata and publishes only on explicit action', async () => {
     const wrapper = mount(RubricsPage, { attachTo: document.body })

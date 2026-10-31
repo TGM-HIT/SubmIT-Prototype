@@ -4,6 +4,7 @@ Run from the repository root:
 
 ```sh
 # Supply PREVIEW_PASSWORD from your local testing-account environment.
+make doc LANGUAGE=en
 make doc LANGUAGE=de
 ```
 
@@ -11,13 +12,13 @@ Make, the existing Java/Gradle and Node setup, installed frontend dependencies, 
 
 ## Sources and outputs
 
-- `locales/de.json` contains all German guide prose, chapters, captions, meaningful alt text and synthetic example content.
+- `locales/en.json` and `locales/de.json` contain the independently authored English and German guide prose, chapters, captions, meaningful alt text and synthetic example content.
 - `scenario.mjs` is the single language-independent lifecycle and capture sequence. It uses the existing preview tool's real Chrome/CDP interactions, screenshots, error collector and process ownership. Actual control labels identify UI actions; translating application labels is not part of this tool.
 - `guides.mjs` renders the locale's three role guides and entry points, checks local links/anchors, checks every required checkpoint and decodes PNG payloads with CRC/dimension checks at the declared desktop 1440 × 1000 viewport.
 - `run.mjs` validates input before service startup, selects only this JVM's existing minimal testing fixtures, owns ignored staging, and promotes a fully validated output tree only after capture and cleanup succeed.
 - `documentation.smoke.mjs` joins `npm run preview:test`, using the existing Node runner without new libraries. Mocked pixels/process failures are confined to bounded unit tests; the public generation command never uses mock screenshots.
 
-`docs/user-guide/README.md`, `docs/user-guide/de/README.md`, `schueler.md`, `lehrkraefte.md`, `administration.md` and `de/images/*.png` are local, ignored outputs. Never add or force-add them. Temporary browser profiles, staging, reports and failure evidence remain in ignored `frontend/.preview/`, outside the generated tree. The command reads passwords only from the existing environment convention. Reports omit sessions and bearer tokens.
+`docs/user-guide/README.md`, `docs/user-guide/en/`, `docs/user-guide/de/`, the role guide Markdown files and their `images/*.png` are local, ignored outputs. Never add or force-add them. Temporary browser profiles, staging, reports and failure evidence remain in ignored `frontend/.preview/`, outside the generated tree. The command reads passwords only from the existing environment convention. Reports omit sessions and bearer tokens.
 
 ## Story and preparation
 
@@ -34,11 +35,11 @@ No direct database mutation, new backend endpoint, scheduler override, ordinary 
 
 ## Another language
 
-1. Add `locales/<language>.json` using an explicit two-letter language identifier (optionally a region, such as `pt-BR`). Supply the same complete shape as `de`, with independently authored title, overview, role-guide introductions, chapter text, image captions/alt text and synthetic examples. Keep the stable checkpoint keys, role filenames and cross-guide anchor/link contract.
+1. Add `locales/<language>.json` using an explicit two-letter language identifier (optionally a region, such as `pt-BR`). Supply the same complete shape as `en` or `de`, with independently authored title, overview, role-guide introductions, chapter text, image captions/alt text and synthetic examples. Keep the stable checkpoint keys, role filenames and cross-guide anchor/link contract.
 2. Translate the content and example files, not `scenario.mjs`. UI control names must remain the application's actual labels, with explanations in the documentation language. Do not add credentials or real personal data.
 3. Run `make doc LANGUAGE=<language>`. The shared scenario captures that locale's synthetic example and renders its guides and screenshots exclusively under `docs/user-guide/<language>/`. Successful generation retains previously generated other languages; failed generation leaves the whole prior set intact. Missing/incomplete locales fail without falling back to German.
 4. Run `npm run preview:test` from `frontend/`. Its temporary second-language configuration proves shared capture orchestration and separate output paths; it is not a second published translation.
-5. Run the real root command twice and inspect all new-language guides/images. Compare stable checkpoint/reference inventories in `frontend/.preview/documentation-report.json`, not random IDs, timestamps or byte-identical screenshots. Review the actual language and UI framing manually.
+5. Run the real root command twice for repeatability and inspect all generated guides/images. Compare stable checkpoint/reference inventories in `frontend/.preview/documentation-report.json`, not random IDs, timestamps or byte-identical screenshots. Review the actual language and UI framing manually.
 
 On normal errors or Ctrl-C, owned processes and temporary profiles are removed. The previous guide set remains intact. See the development guide for crash-only stale-lock recovery. Never remove another run's session, lock or processes.
 

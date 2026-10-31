@@ -21,7 +21,7 @@ FRONTEND_DEV := cd $(FRONTEND) && (npm ci || npm install) && npm run dev
 help: ## Show this help
 	@awk 'BEGIN {FS = ":.*##"} /^[a-zA-Z_-]+:.*##/ {printf "  \033[36m%-16s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
-doc: ## Generate local screenshot guides: make doc LANGUAGE=de
+doc: ## Generate local screenshot guides: make doc LANGUAGE=en|de
 	node frontend/scripts/documentation/run.mjs --language "$(LANGUAGE)"
 
 env: ## Create .env from .env.example if missing

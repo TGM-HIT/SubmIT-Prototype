@@ -114,24 +114,26 @@ for (const [method, selector] of [
   })
 }
 
-test('D1 German guides cover all lifecycle checkpoints and navigable chapters', async (t) => {
-  const root = await temporary(t)
-  const locale = await loadLocale('de')
-  await renderGuides(root, locale)
-  await images(root, 'de')
-  const inventory = await validateGuides(root, 'de')
-  assert.equal(inventory.files.length, 5)
-  assert.deepEqual(inventory.checkpoints, [...checkpoints].sort())
-  for (const role of roles) {
-    const text = await readFile(path.join(root, 'de', `${role}.md`), 'utf8')
-    for (const chapter of locale.guides[role].chapters) {
-      assert.ok(text.includes(`](#${chapter.id})`))
-      assert.ok(text.includes(`id="${chapter.id}"`))
-      assert.ok(text.includes(chapter.text))
-      for (const image of chapter.images) assert.ok(text.includes(`![${image.alt}]`))
+for (const language of ['en', 'de']) {
+  test(`D1 ${language.toUpperCase()} guides cover all lifecycle checkpoints and navigable chapters`, async (t) => {
+    const root = await temporary(t)
+    const locale = await loadLocale(language)
+    await renderGuides(root, locale)
+    await images(root, language)
+    const inventory = await validateGuides(root, language)
+    assert.equal(inventory.files.length, 5)
+    assert.deepEqual(inventory.checkpoints, [...checkpoints].sort())
+    for (const role of roles) {
+      const text = await readFile(path.join(root, language, `${role}.md`), 'utf8')
+      for (const chapter of locale.guides[role].chapters) {
+        assert.ok(text.includes(`](#${chapter.id})`))
+        assert.ok(text.includes(`id="${chapter.id}"`))
+        assert.ok(text.includes(chapter.text))
+        for (const image of chapter.images) assert.ok(text.includes(`![${image.alt}]`))
+      }
     }
-  }
-})
+  })
+}
 
 for (const failure of ['missing', 'corrupt', 'dimensions', 'payload', 'link', 'anchor', 'secret', 'absolute']) {
   test(`D1 rejects ${failure} output`, async (t) => {
@@ -359,7 +361,7 @@ test('D7 repository-root Make entrypoint forwards language, advertises doc and p
   assert.match(execFileSync('make', ['help'], { cwd: repo, encoding: 'utf8' }), /\bdoc\b/)
   for (const args of [['doc'], ['doc', 'LANGUAGE=unsupported']]) {
     assert.throws(() => execFileSync('make', args, { cwd: repo, encoding: 'utf8', stdio: 'pipe' }),
-      (error) => error.status !== 0 && /Usage: make doc LANGUAGE=de/.test(error.stderr))
+      (error) => error.status !== 0 && /Usage: make doc LANGUAGE=en\|de/.test(error.stderr))
   }
   const ignored = ['docs/user-guide/README.md', 'docs/user-guide/de/schueler.md', 'docs/user-guide/de/images/group.png',
     'frontend/.preview/documentation-report.json', 'frontend/.preview/documentation-lock/profile/file']
