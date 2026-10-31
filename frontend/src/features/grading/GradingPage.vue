@@ -1,30 +1,14 @@
 <template>
   <section class="page">
     <p class="page-intro">{{ $t('grading.intro') }}</p>
-    <div class="grid grid-2">
-      <section class="panel">
-        <div class="page-heading"><div><p class="eyebrow">{{ $t('grading.effectiveToday') }}</p><h2 class="section-title">{{ activeRubric?.name ?? $t('grading.activeRubric') }}</h2></div><span v-if="activeRubric?.version" class="status-badge">{{ activeRubric.version }}</span></div>
-        <p v-if="activeRubric?.effectiveFrom" class="muted">{{ $t('grading.effective') }} {{ date(activeRubric.effectiveFrom) }}<span v-if="activeRubric.schoolYear"> · {{ $t('grading.schoolYear', { year: activeRubric.schoolYear }) }}</span></p>
-        <p v-if="!activeRubric?.version" class="empty">{{ $t('grading.noActiveRubric') }}</p>
-        <div v-for="category in categories" :key="String(category.id)" class="stack">
-          <h3 class="form-section-title">{{ category.name }}</h3><p v-if="category.description" class="muted">{{ category.description }}</p>
-          <div v-for="criterion in list<RubricCriterion>(category.criteria)" :key="String(criterion.id)" class="data-row">
-            <div class="row-main"><h3>{{ criterion.name }} <span class="status-badge">{{ criterion.subject }}</span></h3><p>{{ criterion.description }}</p><p class="muted">{{ $t('grading.scaleRange', { min: displayNumber(scaleField(criterion.scale, 'min')), max: displayNumber(scaleField(criterion.scale, 'max')), step: displayNumber(scaleField(criterion.scale, 'step')) }) }} <span v-if="criterion.evidenceRequired"> · {{ $t('grading.evidenceRequired') }}</span></p></div>
-          </div>
-        </div>
-        <h3 class="form-section-title">{{ $t('grading.metricsRules') }}</h3>
-        <div v-for="metric in metricsDefinitions" :key="String(metric.id)" class="choice-item"><span>{{ metric.name }} · {{ metric.unit || $t('grading.unitUnspecified') }}</span><span class="muted">v{{ metric.version }}</span></div>
-        <div v-for="rule in aggregationRules" :key="String(rule.id)" class="notice">{{ $t('grading.configuredRule', { scope: rule.scope, id: rule.id, version: number(rule.version), type: rule.type }) }} {{ $t('grading.ruleDisplayed') }}</div>
-      </section>
-      <section v-if="auth.user?.roles.includes('ADMIN')" class="panel">
-        <h2 class="section-title">{{ $t('grading.publishTitle') }}</h2>
-        <p class="muted">{{ $t('grading.immutableHelp') }}</p>
-        <div class="field"><label class="label" for="rubric-json">{{ $t('grading.rubricJson') }}</label><textarea id="rubric-json" v-model="rubricJson" class="textarea" rows="16" spellcheck="false" /></div>
-        <p class="muted">{{ $t('grading.requiredFields') }}</p>
-        <div v-if="jsonError" class="field-error" role="alert">{{ jsonError }}</div>
-        <button class="button stack" :disabled="task.loading.value" @click="publishRubric">{{ $t('grading.publish') }}</button>
-      </section>
-    </div>
+    <section class="panel">
+      <h2 class="section-title">{{ activeRubric?.name ?? $t('grading.activeRubric') }}
+        <span v-if="activeRubric?.version" class="status-badge">{{ activeRubric.version }}</span>
+      </h2>
+      <p v-if="activeRubric?.effectiveFrom" class="muted">{{ $t('grading.effective') }} {{ date(activeRubric.effectiveFrom) }}</p>
+      <p v-if="!activeRubric?.version" class="empty">{{ $t('grading.noActiveRubric') }}</p>
+      <p><a href="/rubrics">{{ $t('rubrics.openPage') }}</a></p>
+    </section>
     <div class="panel stack">
       <h2 class="section-title">{{ $t('grading.projectHistory') }}</h2>
       <div v-if="isTeacher && !projectId" class="stack">
@@ -172,72 +156,6 @@
       <div v-if="task.error.value" class="error-box stack" role="alert">{{ task.error.value }}</div>
       <p v-if="task.success.value" class="success-note" role="status">{{ task.success.value }}</p>
     </div>
-    <section class="panel stack" aria-labelledby="rubric-download-heading">
-      <h2 id="rubric-download-heading" class="section-title">{{ $t('grading.downloadVersions') }}</h2>
-      <p class="muted">{{ $t('grading.reusableDefinitionHelp') }}</p>
-      <p v-if="rubricsLoading" class="notice" role="status">{{ $t('grading.loadingRubrics') }}</p>
-      <div v-if="rubricsError" class="error-box" role="alert">
-        <p>{{ rubricsError }}</p>
-        <button class="button button-secondary" type="button" :disabled="rubricsLoading" @click="loadRubricPage()">
-          {{ $t('grading.retryRubrics') }}
-        </button>
-      </div>
-      <p v-if="rubricsLoaded && !rubricsError && !rubrics.content.length" class="notice" role="status">
-        {{ $t('grading.noRubrics') }}
-      </p>
-      <div v-if="rubrics.content.length && !rubricsError" class="stack">
-        <article v-for="rubric in rubrics.content" :key="String(rubric.id)" class="data-row">
-          <div class="row-main">
-            <h3>{{ rubric.name }} · {{ rubric.version }}</h3>
-            <p>
-              {{ rubric.schoolYear ?? $t('grading.allSchoolYears') }} ·
-              {{ $t('grading.effectiveFrom') }} {{ date(rubric.effectiveFrom) }}
-              <span v-if="rubric.effectiveTo"> · {{ $t('grading.effectiveTo') }} {{ date(rubric.effectiveTo) }}</span>
-            </p>
-            <p v-if="downloadStatus(rubric.id, 'json').pending" class="notice" role="status">{{ $t('grading.downloadingJson') }}</p>
-            <p v-if="downloadStatus(rubric.id, 'markdown').pending" class="notice" role="status">{{ $t('grading.downloadingMarkdown') }}</p>
-            <p v-if="downloadStatus(rubric.id, 'json').url && !downloadStatus(rubric.id, 'json').success" class="notice" role="status">{{ $t('grading.jsonDownloadReady') }}</p>
-            <p v-if="downloadStatus(rubric.id, 'markdown').url && !downloadStatus(rubric.id, 'markdown').success" class="notice" role="status">{{ $t('grading.markdownDownloadReady') }}</p>
-            <p v-if="downloadStatus(rubric.id, 'json').success" class="success-note" role="status">{{ $t('grading.jsonDownloadStarted') }}</p>
-            <p v-if="downloadStatus(rubric.id, 'markdown').success" class="success-note" role="status">{{ $t('grading.markdownDownloadStarted') }}</p>
-            <p v-if="downloadStatus(rubric.id, 'json').error" class="field-error" role="alert">{{ downloadStatus(rubric.id, 'json').error }}</p>
-            <p v-if="downloadStatus(rubric.id, 'markdown').error" class="field-error" role="alert">{{ downloadStatus(rubric.id, 'markdown').error }}</p>
-          </div>
-          <div class="flex flex-wrap gap-2">
-            <a v-if="downloadStatus(rubric.id, 'json').url" :ref="(element) => setRubricDownloadButton(rubric.id, 'json', element)"
-              class="button button-secondary" :href="downloadStatus(rubric.id, 'json').url"
-              :download="downloadStatus(rubric.id, 'json').filename" :aria-label="downloadButtonLabel(rubric, 'json')"
-              @click="markRubricDownloadStarted(rubric.id, 'json')">{{ $t('grading.downloadJson') }}</a>
-            <button v-else :ref="(element) => setRubricDownloadButton(rubric.id, 'json', element)" class="button button-secondary"
-              type="button" :disabled="downloadStatus(rubric.id, 'json').pending"
-              :aria-label="downloadButtonLabel(rubric, 'json')" @click="downloadRubric(rubric, 'json')">
-              {{ downloadStatus(rubric.id, 'json').error ? $t('grading.retryJsonDownload') : $t('grading.downloadJson') }}
-            </button>
-            <a v-if="downloadStatus(rubric.id, 'markdown').url" :ref="(element) => setRubricDownloadButton(rubric.id, 'markdown', element)"
-              class="button button-secondary" :href="downloadStatus(rubric.id, 'markdown').url"
-              :download="downloadStatus(rubric.id, 'markdown').filename" :aria-label="downloadButtonLabel(rubric, 'markdown')"
-              @click="markRubricDownloadStarted(rubric.id, 'markdown')">{{ $t('grading.downloadMarkdown') }}</a>
-            <button v-else :ref="(element) => setRubricDownloadButton(rubric.id, 'markdown', element)" class="button button-secondary"
-              type="button" :disabled="downloadStatus(rubric.id, 'markdown').pending"
-              :aria-label="downloadButtonLabel(rubric, 'markdown')" @click="downloadRubric(rubric, 'markdown')">
-              {{ downloadStatus(rubric.id, 'markdown').error ? $t('grading.retryMarkdownDownload') : $t('grading.downloadMarkdown') }}
-            </button>
-          </div>
-        </article>
-        <div class="toolbar" :aria-label="$t('grading.versionPages')">
-          <button class="button button-secondary" type="button" :disabled="rubricsLoading || rubricPage === 0"
-            @click="changeRubricPage(-1)">{{ $t('grading.previousPage') }}</button>
-          <span role="status">{{ $t('grading.rubricPageSummary', {
-            current: rubricPage + 1,
-            total: Math.max(rubrics.totalPages, 1),
-            count: rubrics.totalElements,
-          }) }}</span>
-          <button class="button button-secondary" type="button"
-            :disabled="rubricsLoading || rubricPage + 1 >= rubrics.totalPages"
-            @click="changeRubricPage(1)">{{ $t('grading.nextPage') }}</button>
-        </div>
-      </div>
-    </section>
   </section>
 </template>
 
@@ -251,12 +169,6 @@ import { useAuthStore } from '../../stores/auth'
 import { useTask } from '../../composables/useTask'
 import { formatDateOnly, formatNumber, formatTimestamp, i18n } from '../../i18n'
 import GradeFields from './GradeFields.vue'
-import {
-  rubricDefinitionJson,
-  rubricDefinitionMarkdown,
-  safeRubricFilename,
-  type MarkdownLabels,
-} from './rubricExport'
 
 type Rubric = components['schemas']['RubricResponse']
 type RubricCategory = Rubric['categories'][number]
@@ -266,16 +178,12 @@ type AggregationRule = NonNullable<Rubric['aggregationRules']>[number]
 type Grade = components['schemas']['GradeResponse']
 type Metric = components['schemas']['MetricResponse']
 type FinalGradeHistory = components['schemas']['FinalGradeHistory']
-type PublishRubricRequest = components['schemas']['PublishRubricRequest']
 type StudentGradeRequest = components['schemas']['StudentGradeRequest']
 type GroupGradeRequest = components['schemas']['GroupGradeRequest']
 type MetricRequest = components['schemas']['MetricRequest']
 type FinalGradesRequest = components['schemas']['FinalGradesRequest']
 type TeacherProject = components['schemas']['FormalApplicationSummaryResponse']
 type StudentProject = components['schemas']['EligibleFormalProjectResponse']
-type RubricSummary = components['schemas']['RubricSummary']
-type DownloadFormat = 'json' | 'markdown'
-type DownloadState = { pending: boolean; success: boolean; error: string; url?: string; filename?: string }
 const auth = useAuthStore()
 const isTeacher = computed(() => auth.user?.roles.includes('TEACHER') ?? false)
 const isStudent = computed(() => auth.user?.roles.includes('STUDENT') ?? false)
@@ -291,14 +199,6 @@ function studentProjectOptionValue(project: StudentProject): string {
 }
 const task = useTask()
 const activeRubric = ref<Rubric | null>(null)
-const rubrics = ref<Page<RubricSummary>>({ content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 })
-const rubricPage = ref(0)
-const rubricsLoading = ref(false)
-const rubricsLoaded = ref(false)
-const rubricsError = ref('')
-const rubricDownloadStates = reactive<Record<string, DownloadState>>({})
-const rubricDownloadButtons = new Map<string, HTMLElement>()
-const temporaryObjectUrls = new Set<string>()
 const projectId = ref('')
 const selectedContext = ref('')
 const projectLoaded = ref(false)
@@ -323,7 +223,6 @@ const teacherResultButtons = new Map<string, HTMLButtonElement>()
 let teacherListVersion = 0
 let studentListVersion = 0
 let projectLoadVersion = 0
-let rubricListVersion = 0
 let activeRubricVersion = 0
 let mounted = false
 const activeTab = ref('individual')
@@ -337,8 +236,6 @@ const gradeEntries = ref<Page<Grade>>(emptyPage())
 const groupEntries = ref<Page<Grade>>(emptyPage())
 const metricEntries = ref<Page<Metric>>(emptyPage())
 const finalGrade = ref<FinalGradeHistory | null>(null)
-const rubricJson = ref('')
-const jsonError = ref('')
 const gradeForm = reactive({ studentId: '', criterionId: '', grade: '', assessedOn: new Date().toISOString().slice(0, 10), evidence: '', comments: '', transitionReason: '' })
 const groupForm = reactive({ criterionId: '', grade: '', assessedOn: new Date().toISOString().slice(0, 10), evidence: '', comments: '', transitionReason: '' })
 const metricForm = reactive({ metricId: '', value: 0, note: '', transitionReason: '' })
@@ -427,118 +324,6 @@ async function loadActiveRubric(): Promise<void> {
     const current = await gradingApi.activeRubric()
     if (version === activeRubricVersion && mounted) activeRubric.value = current
   })
-}
-function clearRubricDownloadStates(): void {
-  for (const state of Object.values(rubricDownloadStates)) {
-    if (state.url) revokeObjectUrl(state.url)
-  }
-  for (const key of Object.keys(rubricDownloadStates)) delete rubricDownloadStates[key]
-}
-async function loadRubricPage(page = rubricPage.value): Promise<void> {
-  const version = ++rubricListVersion
-  rubricPage.value = page
-  rubricsLoading.value = true
-  rubricsLoaded.value = false
-  rubricsError.value = ''
-  rubrics.value = emptyPage()
-  clearRubricDownloadStates()
-  try {
-    const result = await gradingApi.rubrics(page)
-    if (version !== rubricListVersion || !mounted) return
-    rubrics.value = result
-    rubricsLoaded.value = true
-  } catch {
-    if (version === rubricListVersion && mounted) {
-      rubricsError.value = String(i18n.global.t('grading.rubricsLoadFailed'))
-    }
-  } finally {
-    if (version === rubricListVersion) rubricsLoading.value = false
-  }
-}
-function changeRubricPage(offset: number): void {
-  const next = rubricPage.value + offset
-  if (next < 0 || next >= rubrics.value.totalPages || rubricsLoading.value) return
-  void loadRubricPage(next)
-}
-function downloadStateKey(id: unknown, format: DownloadFormat): string {
-  return `${String(id)}:${format}`
-}
-function downloadStatus(id: unknown, format: DownloadFormat): DownloadState {
-  return rubricDownloadStates[downloadStateKey(id, format)] ?? { pending: false, success: false, error: '' }
-}
-function setRubricDownloadButton(id: unknown, format: DownloadFormat, element: unknown): void {
-  const key = downloadStateKey(id, format)
-  if (element instanceof HTMLButtonElement || element instanceof HTMLAnchorElement) rubricDownloadButtons.set(key, element)
-  else rubricDownloadButtons.delete(key)
-}
-function downloadButtonLabel(rubric: RubricSummary, format: DownloadFormat): string {
-  const labelKey = format === 'json' ? 'grading.downloadJson' : 'grading.downloadMarkdown'
-  return `${String(i18n.global.t(labelKey))}: ${rubric.name} · ${rubric.version}`
-}
-function markdownExportLabels(): MarkdownLabels {
-  const fields: (keyof MarkdownLabels)[] = [
-    'version', 'applicability', 'schoolYear', 'allSchoolYears', 'effectiveFrom', 'effectiveTo', 'finalGradeScale',
-    'minimum', 'maximum', 'step', 'labels', 'categoryDescription', 'criterionId', 'description',
-    'subject', 'stage', 'evidenceRequired', 'yes', 'no', 'scale', 'metricDefinitions', 'metricId',
-    'metricVersion', 'unit', 'bounds', 'aggregationRules', 'ruleId', 'ruleVersion', 'scope', 'method',
-    'precision', 'criterionWeights', 'metricWeights', 'noRules',
-  ]
-  return Object.fromEntries(fields.map((field) => [
-    field,
-    String(i18n.global.t(`grading.export.${field}`)),
-  ])) as unknown as MarkdownLabels
-}
-function revokeObjectUrl(url: string): void {
-  if (!temporaryObjectUrls.delete(url)) return
-  URL.revokeObjectURL(url)
-}
-function prepareBrowserDownload(content: string, mediaType: string): string {
-  const url = URL.createObjectURL(new Blob([content], { type: mediaType }))
-  temporaryObjectUrls.add(url)
-  return url
-}
-async function downloadRubric(rubric: RubricSummary, format: DownloadFormat): Promise<void> {
-  const id = String(rubric.id)
-  const key = downloadStateKey(id, format)
-  if (downloadStatus(id, format).pending || !id || id === 'undefined') return
-  const listVersion = rubricListVersion
-  const selectedPage = rubricPage.value
-  const userId = auth.user?.id
-  rubricDownloadStates[key] = { pending: true, success: false, error: '' }
-  try {
-    const definition = await gradingApi.rubric(id)
-    if (!mounted || listVersion !== rubricListVersion || selectedPage !== rubricPage.value
-      || userId !== auth.user?.id || !rubrics.value.content.some((entry) => String(entry.id) === id)) return
-    const content = format === 'json'
-      ? rubricDefinitionJson(definition)
-      : rubricDefinitionMarkdown(definition, markdownExportLabels())
-    const mimeType = format === 'json' ? 'application/json;charset=utf-8' : 'text/markdown;charset=utf-8'
-    const filename = await safeRubricFilename(definition.version, format === 'json' ? 'json' : 'md')
-    if (!mounted || listVersion !== rubricListVersion || selectedPage !== rubricPage.value
-      || userId !== auth.user?.id || !rubrics.value.content.some((entry) => String(entry.id) === id)) return
-    const url = prepareBrowserDownload(content, mimeType)
-    rubricDownloadStates[key] = { pending: false, success: false, error: '', url, filename }
-    await nextTick()
-    if (listVersion === rubricListVersion && userId === auth.user?.id) rubricDownloadButtons.get(key)?.focus()
-  } catch {
-    if (mounted && listVersion === rubricListVersion && userId === auth.user?.id) {
-      rubricDownloadStates[key] = {
-        pending: false,
-        success: false,
-        error: String(i18n.global.t('grading.rubricDownloadFailed')),
-      }
-      await nextTick()
-      rubricDownloadButtons.get(key)?.focus()
-    }
-  } finally {
-    if (mounted && listVersion === rubricListVersion && rubricDownloadStates[key]?.pending) {
-      rubricDownloadStates[key] = { pending: false, success: false, error: '' }
-    }
-  }
-}
-function markRubricDownloadStarted(id: unknown, format: DownloadFormat): void {
-  const state = rubricDownloadStates[downloadStateKey(id, format)]
-  if (state?.url) state.success = true
 }
 async function loadProject(): Promise<void> {
   const selectedProjectId = projectId.value
@@ -756,47 +541,17 @@ async function saveStudentFinalGrade(): Promise<void> {
     String(i18n.global.t('grading.individualFinalGradeRecorded')))
   if (result) await loadProject()
 }
-async function publishRubric(): Promise<void> {
-  jsonError.value = ''
-  let payload: PublishRubricRequest
-  try {
-    const parsed = JSON.parse(rubricJson.value)
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-      jsonError.value = String(i18n.global.t('grading.jsonObjectExpected'))
-      return
-    }
-    payload = parsed
-  } catch {
-    jsonError.value = String(i18n.global.t('grading.invalidJson'))
-    return
-  }
-  if (!confirm(i18n.global.t('grading.publishConfirm'))) return
-  const result = await task.run(() => gradingApi.publishRubric(payload), String(i18n.global.t('grading.rubricPublished')))
-  if (result) {
-    await loadActiveRubric()
-    await loadRubricPage(rubricPage.value)
-  }
-}
 watch(() => auth.user?.id, (userId) => {
   ++activeRubricVersion
-  ++rubricListVersion
-  rubricPage.value = 0
-  rubrics.value = emptyPage()
-  rubricsLoaded.value = false
-  rubricsError.value = ''
-  clearRubricDownloadStates()
   if (!userId) {
     activeRubric.value = null
-    rubricsLoading.value = false
     return
   }
   void loadActiveRubric()
-  void loadRubricPage(0)
 })
 onMounted(() => {
   mounted = true
   void loadActiveRubric()
-  void loadRubricPage(0)
   if (isTeacher.value) void loadTeacherProjects()
   else if (isStudent.value) void loadStudentProjects()
 })
@@ -806,9 +561,5 @@ onBeforeUnmount(() => {
   ++studentListVersion
   ++projectLoadVersion
   ++activeRubricVersion
-  ++rubricListVersion
-  for (const url of temporaryObjectUrls) URL.revokeObjectURL(url)
-  temporaryObjectUrls.clear()
-  rubricDownloadButtons.clear()
 })
 </script>

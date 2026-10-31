@@ -2,6 +2,7 @@ package at.ac.tgm.submit.grading;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -319,6 +320,40 @@ class GradingWriteAuthorizationApiTest {
             assertEquals(text(active, "version"), text(detail, "version"));
             assertTrue(detail.path("categories").isArray() && !detail.path("categories").isEmpty());
         }
+    }
+
+    @Test
+    void laterPublicationPreservesOlderRubricDefinitionAndSavedAssessmentAssociation() throws Exception {
+        JsonNode originalDefinition = body(mockMvc.perform(bearer(
+                        get("/api/grading-rubrics/{rubricId}", rubricId), teacherToken))
+                .andExpect(status().isOk()).andReturn());
+        String originalVersion = text(originalDefinition, "version");
+
+        JsonNode createdGrade = body(request(
+                post("/api/projects/{projectId}/student-grades", projectId), teacherToken, studentGrade())
+                .andExpect(status().isCreated()).andReturn());
+        String gradeId = text(createdGrade, "id");
+
+        UUID laterRubricId = publishRubric("later-publication-" + UUID.randomUUID());
+        JsonNode laterDefinition = body(mockMvc.perform(bearer(
+                        get("/api/grading-rubrics/{rubricId}", laterRubricId), teacherToken))
+                .andExpect(status().isOk()).andReturn());
+        assertNotEquals(rubricId.toString(), text(laterDefinition, "id"));
+        assertEquals(text(laterDefinition, "version"),
+                text(body(mockMvc.perform(bearer(get("/api/grading-rubrics/active"), teacherToken))
+                        .andExpect(status().isOk()).andReturn()), "version"));
+
+        JsonNode gradePage = body(mockMvc.perform(bearer(
+                        get("/api/projects/{projectId}/student-grades", projectId), teacherToken))
+                .andExpect(status().isOk()).andReturn());
+        JsonNode persistedGrade = findById(array(gradePage, "content"), gradeId);
+        assertEquals(rubricId.toString(), text(persistedGrade, "rubricId"));
+        assertEquals(originalVersion, text(persistedGrade, "rubricVersion"));
+        JsonNode unchangedOriginal = body(mockMvc.perform(bearer(
+                        get("/api/grading-rubrics/{rubricId}", rubricId), teacherToken))
+                .andExpect(status().isOk()).andReturn());
+        assertEquals(originalDefinition, unchangedOriginal,
+                "Publishing another version must not alter an existing immutable definition.");
     }
 
     private void assertForbiddenWithoutMutation(

@@ -12,7 +12,7 @@ import {
 } from './keyboard.mjs'
 import { gradingSteps, runGradingKeyboard, expectedDraftMarkdown } from './grading-keyboard.mjs'
 
-test('grading regression is wired into the keyboard CLI and uses actual keyboard saving, visibility and return pagination', () => {
+test('grading/rubric regression is wired into the keyboard CLI and uses actual keyboard saving and rubric pagination', () => {
   assert.equal(parseKeyboardArgs(['--grading-only', '--output-dir', '/tmp/evidence']).gradingOnly, true)
   assert.throws(() => parseKeyboardArgs(['--grading-only', '--negative-focus', '--output-dir', '/tmp/evidence']),
     /cannot be combined/)
@@ -21,13 +21,13 @@ test('grading regression is wired into the keyboard CLI and uses actual keyboard
     assert.equal(steps.some((step) => step.action === 'click'), false)
     assert.equal(steps.filter((step) => step.action === 'download').length, 2)
     assert.equal(steps.filter((step) => step.action === 'measure-overflow').length, 4)
-    assert.equal(steps.filter((step) => step.action === 'key' && step.value === 'Enter').length, 6)
+    assert.equal(steps.filter((step) => step.action === 'key' && step.value === 'Enter').length, 7)
     assert.ok(steps.filter((step) => step.action === 'assert-action-visible').length >= 6)
     assert.ok(steps.some((step) => step.action === 'tab-to' && step.value.includes('first-of-type')))
     assert.ok(steps.some((step) => step.action === 'download'
-      && step.value === 'a[download="rubric-dev55-draft-testing-v1-b96ebf8299df1cea07d3d1f27e5ca86d4a534d8d8c0bbb10166f99b9a1acafe3.json"]'))
+      && step.value === 'a[download="rubric-dev61-preview-01-4e3989d3aba3732432333ce3683dfca73ab3f4ecc54e929145d8e7fa49c022f7.json"]'))
     assert.ok(steps.some((step) => step.action === 'download'
-      && step.value === 'a[download="rubric-dev55-draft-testing-v1-b96ebf8299df1cea07d3d1f27e5ca86d4a534d8d8c0bbb10166f99b9a1acafe3.md"]'))
+      && step.value === 'a[download="rubric-dev61-preview-01-4e3989d3aba3732432333ce3683dfca73ab3f4ecc54e929145d8e7fa49c022f7.md"]'))
   }
 })
 

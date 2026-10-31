@@ -5,6 +5,7 @@ import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import test from 'node:test'
+import { runInNewContext } from 'node:vm'
 import { fileURLToPath } from 'node:url'
 import {
   applyPageInteractions,
@@ -197,6 +198,42 @@ test('G8 parses scoped attribute selectors without consuming assignment characte
   assert.deepEqual(parsed.selectByKey[0], { selector: '[data-kind="shared"] select', value: 'Project=c' })
 })
 
+test('set-json-field parses the draft locator and edits a textarea object with input/change events', async () => {
+  const parsed = parseArgs(['--step', 'set-json-field:#rubric-draft-json=version=feature-29-v2'])
+  assert.deepEqual(parsed.steps, [{
+    action: 'set-json-field',
+    selector: '#rubric-draft-json',
+    field: 'version',
+    value: 'feature-29-v2',
+  }])
+  assert.throws(() => parseArgs(['--step', 'set-json-field:#rubric-draft-json=version']), /FIELD=VALUE/)
+  const events = []
+  class HTMLTextAreaElement {
+    constructor(value) { this._value = value }
+    get value() { return this._value }
+    set value(value) { this._value = value }
+    dispatchEvent(event) { events.push(event.type); return true }
+  }
+  class Event { constructor(type) { this.type = type } }
+  const textarea = new HTMLTextAreaElement('{"version":"old","effectiveFrom":"2020-01-01"}')
+  const context = {
+    document: { querySelector: (selector) => selector === '#rubric-draft-json' ? textarea : null },
+    HTMLTextAreaElement,
+    Event,
+  }
+  const client = {
+    async send(method, { expression }) {
+      assert.equal(method, 'Runtime.evaluate')
+      return { result: { value: runInNewContext(expression, context) } }
+    },
+  }
+  const logs = []
+  await applyPageSteps(client, parsed.steps, { log: (message) => logs.push(message) })
+  assert.deepEqual(JSON.parse(textarea.value), { version: 'feature-29-v2', effectiveFrom: '2020-01-01' })
+  assert.deepEqual(events, ['input', 'change'])
+  assert.match(logs.join(' '), /Updated JSON field version/)
+})
+
 test('set-file parses a repository-relative fixture and selects it only on a file input', async () => {
   const parsed = parseArgs(['--step', 'set-file:#idea-markdown-file=frontend/src/features/templates/idea-template-en.md'])
   assert.deepEqual(parsed.steps, [{
@@ -273,12 +310,12 @@ test('parses preview options and rejects incomplete or invalid invocations', () 
     { action: 'tab-to', value: '#rubric-next-page' },
   ])
   assert.equal(parseArgs([
-    '--seed-rubric-pagination-preview', '--auth', '--username', 'admin01', '--path', '/grading',
+    '--seed-rubric-pagination-preview', '--auth', '--username', 'admin01', '--path', '/rubrics',
   ]).seedRubricPaginationPreview, true)
   assert.equal(parseArgs(['--evidence-report', 'rubric-evidence.json']).evidenceReport, 'rubric-evidence.json')
   assert.throws(() => parseArgs(['--evidence-report', '../private.json']), /filename, not a path/)
   assert.throws(() => parseArgs(['--seed-rubric-pagination-preview', '--auth', '--username', 'admin01']),
-    /requires a started admin01 preview at \/grading/)
+    /requires a started admin01 preview at \/rubrics/)
   assert.deepEqual(parseArgs(['--step', 'reject-confirms']).steps, [
     { action: 'reject-confirms' },
   ])

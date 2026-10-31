@@ -36,6 +36,7 @@ function createTestRouter() {
         { path: 'allocation', name: 'allocation', component: page },
         { path: 'formal-application', name: 'formal-application', component: page },
         { path: 'grading', name: 'grading', component: page },
+        { path: 'rubrics', name: 'rubrics', component: page },
         { path: 'archive', name: 'archive', component: page },
         { path: 'admin', name: 'admin', component: page },
         { path: 'settings', name: 'settings', component: SettingsPage, meta: { title: 'User Settings' } },
@@ -54,9 +55,9 @@ async function mountAt(path: string) {
 
 describe('authenticated shell profile and settings navigation', () => {
   const roleNavigation = {
-    STUDENT: ['/', '/ideas', '/templates', '/applications', '/formal-application', '/grading', '/archive'],
-    TEACHER: ['/', '/ideas', '/templates', '/applications', '/allocation', '/formal-application', '/grading', '/archive'],
-    ADMIN: ['/', '/ideas', '/templates', '/applications', '/allocation', '/grading', '/archive', '/admin'],
+    STUDENT: ['/', '/ideas', '/templates', '/applications', '/formal-application', '/grading', '/rubrics', '/archive'],
+    TEACHER: ['/', '/ideas', '/templates', '/applications', '/allocation', '/formal-application', '/grading', '/rubrics', '/archive'],
+    ADMIN: ['/', '/ideas', '/templates', '/applications', '/allocation', '/grading', '/rubrics', '/archive', '/admin'],
   } as const
 
   afterEach(() => {
@@ -98,7 +99,7 @@ describe('authenticated shell profile and settings navigation', () => {
     const wrapper = await mountAt('/')
     const navigation = wrapper.get('nav[aria-label="Main navigation"]')
     expect(navigation.findAll('a').map((link) => link.attributes('href'))).toEqual([
-      '/', '/ideas', '/templates', '/applications', '/allocation', '/formal-application', '/grading', '/archive', '/admin',
+      '/', '/ideas', '/templates', '/applications', '/allocation', '/formal-application', '/grading', '/rubrics', '/archive', '/admin',
     ])
     expect(wrapper.get('.profile').text()).toContain('Teacher, Administrator')
     wrapper.unmount()
@@ -113,6 +114,25 @@ describe('authenticated shell profile and settings navigation', () => {
     expect(navigation.get('a[href="/templates"]').text()).toContain('Vorlagen')
     expect(wrapper.get('h1').text()).toBe('Vorlagen')
     wrapper.unmount()
+  })
+
+  it('localizes and activates the dedicated Rubrics page for a reader', async () => {
+    setActivePinia(createPinia())
+    useAuthStore().updateUser(account('STUDENT'))
+    const wrapper = await mountAt('/rubrics')
+    const navigation = wrapper.get('nav[aria-label="Main navigation"]')
+    expect(navigation.get('a[href="/rubrics"]').text()).toContain('Rubrics')
+    expect(navigation.get('a[href="/rubrics"]').classes()).toContain('router-link-exact-active')
+    expect(wrapper.get('h1').text()).toBe('Rubrics')
+    wrapper.unmount()
+
+    setActivePinia(createPinia())
+    useAuthStore().updateUser(account('TEACHER'))
+    setLanguage('de')
+    const german = await mountAt('/rubrics')
+    expect(german.get('nav[aria-label="Hauptnavigation"] a[href="/rubrics"]').text()).toContain('Rubriken')
+    expect(german.get('h1').text()).toBe('Rubriken')
+    german.unmount()
   })
 
   it.each(['STUDENT', 'TEACHER', 'ADMIN'] as const)(

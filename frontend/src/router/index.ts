@@ -8,6 +8,7 @@ import ApplicationsPage from '../features/applications/ApplicationsPage.vue'
 import AllocationPage from '../features/allocation/AllocationPage.vue'
 import FormalApplicationPage from '../features/formal/FormalApplicationPage.vue'
 import GradingPage from '../features/grading/GradingPage.vue'
+import RubricsPage from '../features/rubrics/RubricsPage.vue'
 import ArchivePage from '../features/archive/ArchivePage.vue'
 import AdminPage from '../features/admin/AdminPage.vue'
 import SettingsPage from '../features/settings/SettingsPage.vue'
@@ -30,6 +31,7 @@ export const router = createRouter({
         { path: 'allocation', name: 'allocation', component: AllocationPage },
         { path: 'formal-application', name: 'formal-application', component: FormalApplicationPage },
         { path: 'grading', name: 'grading', component: GradingPage },
+        { path: 'rubrics', name: 'rubrics', component: RubricsPage },
         { path: 'archive', name: 'archive', component: ArchivePage, props: { publicOnly: false } },
         { path: 'admin', name: 'admin', component: AdminPage },
         { path: 'settings', name: 'settings', component: SettingsPage },

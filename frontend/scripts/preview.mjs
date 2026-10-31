@@ -217,6 +217,18 @@ export function parseArgs(args) {
           const assignment = assignmentSeparator(argument)
           if (assignment < 1) throw new Error('--step fill must use fill:SELECTOR=VALUE.')
           options.steps.push({ action, selector: argument.slice(0, assignment), value: argument.slice(assignment + 1) })
+        } else if (action === 'set-json-field' && argument) {
+          const assignment = assignmentSeparator(argument)
+          const fieldSeparator = argument.indexOf('=', assignment + 1)
+          if (assignment < 1 || fieldSeparator < 0 || fieldSeparator === assignment + 1) {
+            throw new Error('--step set-json-field must use set-json-field:SELECTOR=FIELD=VALUE.')
+          }
+          options.steps.push({
+            action,
+            selector: argument.slice(0, assignment),
+            field: argument.slice(assignment + 1, fieldSeparator),
+            value: argument.slice(fieldSeparator + 1),
+          })
         } else if (action === 'set-file' && argument) {
           const assignment = assignmentSeparator(argument)
           if (assignment < 1) throw new Error('--step set-file must use set-file:SELECTOR=REPOSITORY_RELATIVE_PATH.')
@@ -278,7 +290,7 @@ export function parseArgs(args) {
           'assert-dialog-contained', 'assert-dialog-closed'].includes(action) && !argument) {
           options.steps.push({ action })
         } else {
-          throw new Error('--step must be fill:SELECTOR=VALUE, set-file:SELECTOR=REPOSITORY_RELATIVE_PATH, select-index:SELECTOR=INDEX, click-record-action:TITLE_OR_ID|SELECTOR, read-record:TITLE_OR_ID, click:SELECTOR, download:SELECTOR, tab-to:SELECTOR, wait:SELECTOR, read:SELECTOR, focus:SELECTOR, scroll:SELECTOR, navigate:/SAME_ORIGIN_PATH, assert-url:PATH_AND_QUERY, reload, screenshot:FILE, key:SUPPORTED_KEY, assert-dialog-contained, assert-dialog-closed, accept-confirms, reject-confirms, offline, online, or measure-overflow.')
+          throw new Error('--step must be fill:SELECTOR=VALUE, set-json-field:SELECTOR=FIELD=VALUE, set-file:SELECTOR=REPOSITORY_RELATIVE_PATH, select-index:SELECTOR=INDEX, click-record-action:TITLE_OR_ID|SELECTOR, read-record:TITLE_OR_ID, click:SELECTOR, download:SELECTOR, tab-to:SELECTOR, wait:SELECTOR, read:SELECTOR, focus:SELECTOR, scroll:SELECTOR, navigate:/SAME_ORIGIN_PATH, assert-url:PATH_AND_QUERY, reload, screenshot:FILE, key:SUPPORTED_KEY, assert-dialog-contained, assert-dialog-closed, accept-confirms, reject-confirms, offline, online, or measure-overflow.')
         }
       } else {
         options[name] = value
@@ -325,8 +337,8 @@ export function parseArgs(args) {
     throw new Error('--seed-allocation-pin-preview requires a started preview authenticated as admin01.')
   }
   if (options.seedRubricPaginationPreview
-      && (!options.start || options.session || !options.auth || options.username !== 'admin01' || options.pagePath !== '/grading')) {
-    throw new Error('--seed-rubric-pagination-preview requires a started admin01 preview at /grading.')
+      && (!options.start || options.session || !options.auth || options.username !== 'admin01' || options.pagePath !== '/rubrics')) {
+    throw new Error('--seed-rubric-pagination-preview requires a started admin01 preview at /rubrics.')
   }
   if (options.evidenceReport && path.basename(options.evidenceReport) !== options.evidenceReport) {
     throw new Error('--evidence-report must be a filename, not a path.')
@@ -1377,6 +1389,25 @@ export async function applyPageSteps(client, steps, { outputDir, log = console.l
       }`
       await evaluatePage(client, `(${expression})(${JSON.stringify(step.selector)}, ${JSON.stringify(step.value)})`, `fill ${step.selector}`)
       log(`Filled ${step.selector}.`)
+    } else if (step.action === 'set-json-field') {
+      const expression = `(selector, field, value) => {
+        const element = document.querySelector(selector);
+        if (!(element instanceof HTMLTextAreaElement)) throw new Error('Element is not a JSON draft textarea: ' + selector);
+        const definition = JSON.parse(element.value);
+        if (!definition || typeof definition !== 'object' || Array.isArray(definition)) {
+          throw new Error('JSON draft must have an object root: ' + selector);
+        }
+        definition[field] = value;
+        Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(
+          element, JSON.stringify(definition, null, 2));
+        element.dispatchEvent(new Event('input', { bubbles: true }));
+        element.dispatchEvent(new Event('change', { bubbles: true }));
+        return true;
+      }`
+      await evaluatePage(client,
+        `(${expression})(${JSON.stringify(step.selector)}, ${JSON.stringify(step.field)}, ${JSON.stringify(step.value)})`,
+        `set JSON field ${step.field} in ${step.selector}`)
+      log(`Updated JSON field ${step.field} in ${step.selector}.`)
     } else if (step.action === 'set-file') {
       const candidate = path.resolve(repoDir, step.value)
       const resolved = await realpath(candidate)
@@ -1893,7 +1924,7 @@ Options:
   --auth --username USER          Authenticate using the local testing account
   --seed-idea-owner USER           Create and submit a synthetic idea using a student testing account before opening the page
   --seed-idea-history USER         Create a synthetic idea with review and preference history for display verification
-  --seed-rubric-pagination-preview Seed 21 synthetic future-effective versions for an admin01 /grading walkthrough
+  --seed-rubric-pagination-preview Seed 21 synthetic future-effective versions for an admin01 /rubrics walkthrough
   --seed-allocation-pin-preview    Opt in to a testing-profile period with 21 pins and 22 applications
   --seed-idea-title TITLE          Distinctive title for the seeded idea so a later invocation can find it
   --fill SELECTOR=VALUE           Fill an input, textarea, or select; may be repeated
@@ -1908,6 +1939,7 @@ Options:
                                   Ideas list, click-record-action:TITLE_OR_ID|SELECTOR (or |text:BUTTON_TEXT, e.g. text:Edit)
                                   and read-record:TITLE_OR_ID
                                   (exact title or idea ID; fails if no or several rows match), and
+                                  set-json-field:SELECTOR=FIELD=VALUE for a JSON draft textarea
                                   set-file:SELECTOR=REPOSITORY_RELATIVE_PATH for a repository-local fixture
   --password-env NAME             Environment variable containing its password (default PREVIEW_PASSWORD)
   --frontend-port N               Vite port (default 5173)

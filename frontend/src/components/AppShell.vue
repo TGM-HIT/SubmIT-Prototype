@@ -52,6 +52,7 @@ const allItems = [
   { to: '/allocation', key: 'navigation.allocation', icon: '⇄', roles: ['TEACHER', 'ADMIN'] },
   { to: '/formal-application', key: 'navigation.formal', icon: '▤', roles: ['STUDENT', 'TEACHER'] },
   { to: '/grading', key: 'navigation.grading', icon: '◷', roles: ['STUDENT', 'TEACHER', 'ADMIN'] },
+  { to: '/rubrics', key: 'navigation.rubrics', icon: '▤', roles: ['STUDENT', 'TEACHER', 'ADMIN'] },
   { to: '/archive', key: 'navigation.archive', icon: '▣', roles: ['STUDENT', 'TEACHER', 'ADMIN'] },
   { to: '/admin', key: 'navigation.administration', icon: '⚙', roles: ['ADMIN'] },
 ]
@@ -68,6 +69,7 @@ const pageTitleKey = computed(() => ({
   allocation: 'navigation.allocation',
   'formal-application': 'navigation.formal',
   grading: 'navigation.grading',
+  rubrics: 'navigation.rubrics',
   archive: 'navigation.archive',
   admin: 'navigation.administration',
   settings: 'navigation.settings',

@@ -637,9 +637,10 @@ export class Lifecycle {
     await this.shot('formal-approved', `document.body.textContent.includes('Teacher approved this formal proposal.')`, 'section.panel.stack')
 
     this.stage = 'project-work-and-assessment'
-    await this.as('admin01', '/grading')
+    await this.as('admin01', '/rubrics')
     const rubric = { ...this.rubric, version: 'doc-v2', effectiveFrom: new Date().toISOString().slice(0, 10) }
-    await this.fill('#rubric-json', JSON.stringify(rubric, null, 2))
+    await this.button('Start a new draft')
+    await this.fill('#rubric-draft-json', JSON.stringify(rubric, null, 2))
     await this.button('Publish immutable version')
     await this.wait(`document.body.textContent.includes('doc-v2')`, 'rubric v2 published')
     await this.shot('rubric', `document.body.textContent.includes('doc-v2')`)
