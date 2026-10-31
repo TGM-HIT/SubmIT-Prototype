@@ -249,6 +249,47 @@ describe('dedicated rubric browser and administrator draft', () => {
     wrapper.unmount()
   })
 
+  it('loads the downloaded JSON unchanged into a draft and publishes only after changing its version label', async () => {
+    const createUrl = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:rubric-roundtrip')
+    const wrapper = mount(RubricsPage, { attachTo: document.body })
+    await flushPromises()
+
+    const jsonDownload = wrapper.findAll('button').find((button) => button.text().startsWith('Download JSON:'))!
+    await jsonDownload.trigger('click')
+    await flushPromises()
+    await vi.waitFor(() => expect(wrapper.find('a[download$=".json"]').exists()).toBe(true))
+    const downloadedBlob = createUrl.mock.calls[0][0] as Blob
+    const downloadedDefinition = JSON.parse(await downloadedBlob.text())
+    expect(downloadedDefinition).toMatchObject({
+      version: 'v1',
+      name: 'Configured rubric',
+      effectiveFrom: '2026-09-01',
+      categories: definition.categories,
+      metricDefinitions: definition.metricDefinitions,
+      aggregationRules: definition.aggregationRules,
+    })
+    expect(downloadedDefinition).not.toHaveProperty('id')
+    expect(downloadedDefinition).not.toHaveProperty('publishedBy')
+
+    await wrapper.findAll('button').find((button) => button.text() === 'Start a new draft')!.trigger('click')
+    const input = wrapper.get('input[type="file"]')
+    const file = new File([await downloadedBlob.text()], 'downloaded-rubric.json', { type: 'application/json' })
+    Object.defineProperty(input.element, 'files', { configurable: true, value: [file] })
+    await input.trigger('change')
+    await flushPromises()
+    const editor = wrapper.get('#rubric-draft-json')
+    const loadedDefinition = JSON.parse((editor.element as HTMLTextAreaElement).value)
+    expect(loadedDefinition).toEqual(downloadedDefinition)
+    expect(api.publishRubric).not.toHaveBeenCalled()
+
+    const publication = { ...loadedDefinition, version: 'future-v2' }
+    await editor.setValue(JSON.stringify(publication))
+    await wrapper.findAll('button').find((button) => button.text() === 'Publish immutable version')!.trigger('click')
+    await flushPromises()
+    expect(api.publishRubric).toHaveBeenCalledWith(publication)
+    wrapper.unmount()
+  })
+
   it('prevents duplicate publication and suppresses a late result after administrator permission loss', async () => {
     const pending = deferred<typeof definition>()
     api.publishRubric.mockReturnValue(pending.promise)
