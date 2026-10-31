@@ -90,6 +90,40 @@ class OpenApiContractTest {
     }
 
     @Test
+    void priorityConfigurationAndRunSnapshotHaveExactSchemas() throws Exception {
+        JsonNode document = apiDocument();
+        JsonNode paths = document.path("paths");
+        JsonNode get = paths.path("/api/application-periods/{periodId}/priority-projects").path("get");
+        JsonNode put = paths.path("/api/application-periods/{periodId}/priority-projects").path("put");
+        assertTrue(get.isObject());
+        assertTrue(put.isObject());
+        assertTrue(get.path("responses").has("401"));
+        assertTrue(get.path("responses").has("403"));
+        assertTrue(get.path("responses").has("404"));
+        assertTrue(put.path("responses").has("400"));
+        assertTrue(put.path("responses").has("401"));
+        assertTrue(put.path("responses").has("403"));
+        assertTrue(put.path("responses").has("404"));
+        assertTrue(put.path("responses").has("409"));
+
+        JsonNode schemas = document.path("components").path("schemas");
+        JsonNode request = schemas.path("AllocationPriorityRequest");
+        assertEquals(Set.of("projectIds"), textualMembers(request.path("required")));
+        JsonNode projectIds = request.path("properties").path("projectIds");
+        assertEquals("array", projectIds.path("type").asText());
+        assertTrue(projectIds.path("uniqueItems").asBoolean());
+        assertFalse(projectIds.has("minItems"), "An empty replacement is a valid request.");
+        assertEquals("uuid", projectIds.path("items").path("format").asText());
+
+        JsonNode run = schemas.path("AllocationRunResponse");
+        assertTrue(textualMembers(run.path("required")).contains("prioritizedProjectIds"));
+        JsonNode runPriorities = run.path("properties").path("prioritizedProjectIds");
+        assertEquals("array", runPriorities.path("type").asText());
+        assertEquals("uuid", runPriorities.path("items").path("format").asText());
+        assertTrue(runPriorities.path("description").asText().contains("empty for runs created before"));
+    }
+
+    @Test
     void teacherFormalProposalListHasTheDocumentedAuthenticatedQueryAndExactSummaryContract() throws Exception {
         JsonNode document = apiDocument();
         JsonNode operation = document.path("paths").path("/api/formal-applications").path("get");
@@ -434,7 +468,7 @@ class OpenApiContractTest {
             Map.entry("AllocationResultResponse", contract(
                     "assignments,unassignedStudents,unassignedProjects,assignedStudents,preferenceScore", "", "")),
             Map.entry("AllocationRunResponse", contract(
-                    "id,status,periodId,createdAt,initial,early,projectIds,applications,pins",
+                    "id,status,periodId,createdAt,initial,early,projectIds,prioritizedProjectIds,applications,pins",
                     "result,error,inputSnapshotComplete,finalizedAt,applyingUnits,excludedApplyingUnits", "")),
             Map.entry("ExcludedApplyingUnitResponse", contract(
                     "groupId,reason,memberIds,memberDisplayNames", "", "")),
@@ -777,7 +811,7 @@ class OpenApiContractTest {
 
         List<String> failures = new ArrayList<>();
         int operations = checkOperations(document.path("paths"), failures);
-        assertEquals(93, operations, "The generated API operation count should be reviewed when endpoints change.");
+        assertEquals(95, operations, "The generated API operation count should be reviewed when endpoints change.");
         JsonNode schemas = document.path("components").path("schemas");
         checkComponentSchemas(schemas, failures);
         checkResponseRequiredness(schemas, failures);
@@ -1485,8 +1519,8 @@ class OpenApiContractTest {
                 }
             }
         }
-        assertEquals(93, operationCount);
-        assertEquals(89, protectedCount);
+        assertEquals(95, operationCount);
+        assertEquals(91, protectedCount);
         assertTrue(failures.isEmpty(), () -> String.join(System.lineSeparator(), failures));
     }
 
@@ -1494,7 +1528,7 @@ class OpenApiContractTest {
     void operationsDocumentApplicableStandardErrorResponses() throws Exception {
         JsonNode paths = apiDocument().path("paths");
         List<String> failures = new ArrayList<>();
-        assertEquals(87, TICKET_ERROR_CODES.size(), "The independent ticket oracle must list all operations.");
+        assertEquals(89, TICKET_ERROR_CODES.size(), "The independent ticket oracle must list all operations.");
         Set<String> actualOperations = new java.util.TreeSet<>();
         paths.properties().forEach(path -> path.getValue().properties().forEach(method -> {
             if (HTTP_METHODS.contains(method.getKey())) {
@@ -1775,7 +1809,7 @@ class OpenApiContractTest {
             }
             baselineCodes.computeIfAbsent(location, unused -> new TreeSet<>()).add(expected.status());
         }
-        assertEquals(88, BASELINE_SUCCESS_RESPONSES.size(), "The checked-in baseline must cover all operations.");
+        assertEquals(90, BASELINE_SUCCESS_RESPONSES.size(), "The checked-in baseline must cover all operations.");
 
         for (Map.Entry<String, Set<String>> route : TICKET_ERROR_CODES.entrySet()) {
             String[] parts = route.getKey().split(" ", 2);
@@ -1958,6 +1992,8 @@ class OpenApiContractTest {
                 get|/api/application-periods/{periodId}/projects/{projectId}/specification/pdf|400,403,404
                 get|/api/application-periods/{periodId}/applications/me|400,403,404
                 get|/api/application-periods/{periodId}/allocation-pins|400,403,404
+                get|/api/application-periods/{periodId}/priority-projects|400,403,404
+                put|/api/application-periods/{periodId}/priority-projects|400,403,404,409
                 get|/api/allocation-runs/{id}|400,403,404
                 delete|/api/ideas/{id}/owners/{studentId}|400,403,404,409
                 delete|/api/ideas/{id}/owners/me|400,403,404,409
@@ -2086,6 +2122,13 @@ class OpenApiContractTest {
                 delete|/api/application-periods/{periodId}/allocation-pins/{studentId}|403|Administrator role
                 delete|/api/application-periods/{periodId}/allocation-pins/{studentId}|404|Period or pin not found
                 delete|/api/application-periods/{periodId}/allocation-pins/{studentId}|409|Period is finalized
+                get|/api/application-periods/{periodId}/priority-projects|400|UUID
+                get|/api/application-periods/{periodId}/priority-projects|403|administrators
+                get|/api/application-periods/{periodId}/priority-projects|404|application period
+                put|/api/application-periods/{periodId}/priority-projects|400|UUID;required;unique;accepted catalogue
+                put|/api/application-periods/{periodId}/priority-projects|403|administrators
+                put|/api/application-periods/{periodId}/priority-projects|404|application period
+                put|/api/application-periods/{periodId}/priority-projects|409|finalized
                 get|/api/application-periods/{id}|400|period ID;UUID
                 get|/api/application-periods/{id}|404|application period does not exist
                 put|/api/application-periods/{id}|400|period ID;configuration;absent, ineligible, or out-of-catalogue
@@ -2397,6 +2440,8 @@ class OpenApiContractTest {
                 delete|/api/applications/{id}|204|
                 put|/api/application-periods/{periodId}/allocation-pins/{studentId}|200|#/components/schemas/AllocationPinResponse
                 delete|/api/application-periods/{periodId}/allocation-pins/{studentId}|204|
+                get|/api/application-periods/{periodId}/priority-projects|200|#/components/schemas/AllocationPriorityResponse
+                put|/api/application-periods/{periodId}/priority-projects|200|#/components/schemas/AllocationPriorityResponse
                 get|/api/application-periods/{id}|200|#/components/schemas/ApplicationPeriodResponse
                 put|/api/application-periods/{id}|200|#/components/schemas/ApplicationPeriodResponse
                 get|/api/student-classes|200|#/components/schemas/PageResponseCatalogueEntryResponse

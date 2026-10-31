@@ -165,6 +165,13 @@ public class ApplicationPeriodService {
         }
         ensureEligibleProjects(projectIds, payload.path(SCHOOL_YEAR).asText());
         var proposed = projectIds;
+        var currentPeriodData = store.parse(period);
+        var previousPriorities = new java.util.ArrayList<String>();
+        currentPeriodData.path("priorityProjectIds").forEach(priorityId -> previousPriorities.add(priorityId.asText()));
+        var resultingPriorities = previousPriorities.stream()
+                .filter(proposed::contains).distinct().sorted().toList();
+        var savedPriorities = payload.putArray("priorityProjectIds");
+        resultingPriorities.forEach(savedPriorities::add);
         boolean removesPinnedProject = store.repository().findByTypeAndParentId("allocation_pin", id.toString()).stream()
                 .map(pin -> store.parse(pin).path("projectId").asText()).anyMatch(project -> !proposed.contains(project));
         if (removesPinnedProject) {
@@ -172,6 +179,10 @@ public class ApplicationPeriodService {
         }
         lifecycle.ensureInitialRunIfDue(period);
         store.update(period, periodStatus(payload), payload);
+        if (!previousPriorities.stream().distinct().sorted().toList().equals(resultingPriorities)) {
+            audit.recordPriorityChange(caller, id, previousPriorities.stream().distinct().sorted().toList(),
+                    resultingPriorities);
+        }
         audit.record(caller, "APPLICATION_PERIOD_UPDATED", PERIOD, id);
         return mapper.period(period, false, null, true);
     }

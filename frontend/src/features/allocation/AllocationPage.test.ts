@@ -19,6 +19,8 @@ const api = vi.hoisted(() => ({
   savePin: vi.fn(),
   removePin: vi.fn(),
   startRun: vi.fn(),
+  priorityProjects: vi.fn(),
+  savePriorityProjects: vi.fn(),
 }))
 const state = vi.hoisted(() => ({ role: 'TEACHER' }))
 
@@ -30,6 +32,8 @@ vi.mock('../../api/services', () => ({
     list: api.listPeriods,
     runs: api.listRuns,
     startRun: api.startRun,
+    priorityProjects: api.priorityProjects,
+    savePriorityProjects: api.savePriorityProjects,
     pins: api.listPins,
     applications: api.listApplications,
     savePin: api.savePin,
@@ -74,6 +78,8 @@ describe('allocation supervisor display', () => {
       },
     })
     api.getIdea.mockResolvedValue({ id: 'project-1' })
+    api.priorityProjects.mockResolvedValue({ projectIds: [] })
+    api.savePriorityProjects.mockResolvedValue({ projectIds: [] })
     api.listPins.mockResolvedValue({ content: [], page: 0, size: 20, totalElements: 0, totalPages: 0 })
     api.listIdeas.mockResolvedValue({ content: [{ id: 'project-1', title: 'Project One' }] })
     api.listApplications.mockResolvedValue({ content: [] })
@@ -97,6 +103,104 @@ describe('allocation supervisor display', () => {
     await flushPromises()
     expect(page.text()).toContain('Selected period: Allocation preview · school year 2026/2027')
     expect(page.text()).toContain('Unknown')
+  })
+
+  it('shows period-specific priorities with English and German explanatory labels only to administrators', async () => {
+    state.role = 'ADMIN'
+    api.priorityProjects.mockResolvedValue({ projectIds: ['project-1'] })
+    const page = mountPage()
+    await flushPromises()
+
+    expect(api.priorityProjects).toHaveBeenCalledWith('period-1')
+    expect(page.text()).toContain('Priority projects')
+    expect(page.text()).toContain('Currently a priority')
+    expect(page.get('input[type="checkbox"]').element).toHaveProperty('checked', true)
+    expect(page.text()).toContain('Priorities break ties only after pinned assignments')
+
+    setLanguage('de')
+    await flushPromises()
+    expect(page.text()).toContain('Priorisierte Projekte')
+    expect(page.text()).toContain('Derzeit priorisiert')
+    page.unmount()
+
+    state.role = 'TEACHER'
+    setLanguage('en')
+    const staffPage = mountPage()
+    await flushPromises()
+    expect(staffPage.text()).not.toContain('Save priority projects')
+    expect(api.priorityProjects).toHaveBeenCalledTimes(1)
+  })
+
+  it('retains the administrator draft after a failed priority save and focuses the save control on success', async () => {
+    state.role = 'ADMIN'
+    api.savePriorityProjects.mockRejectedValueOnce(new Error('network unavailable'))
+    const page = mountPage()
+    await flushPromises()
+    const prioritySection = page.get('[aria-labelledby="priorities-heading"]')
+    const checkbox = page.get('input[type="checkbox"]')
+    await checkbox.setValue(true)
+    await prioritySection.get('button').trigger('click')
+    await flushPromises()
+
+    expect(api.savePriorityProjects).toHaveBeenCalledWith('period-1', { projectIds: ['project-1'] })
+    expect(page.text()).toContain('Your draft selection is retained')
+
+    api.savePriorityProjects.mockResolvedValueOnce({ projectIds: ['project-1'] })
+    await prioritySection.get('.error-box button').trigger('click')
+    await flushPromises()
+    expect(api.savePriorityProjects).toHaveBeenCalledTimes(2)
+    expect(api.savePriorityProjects).toHaveBeenLastCalledWith('period-1', { projectIds: ['project-1'] })
+    expect(page.get('input[type="checkbox"]').element).toHaveProperty('checked', true)
+    expect(document.activeElement).toBe(prioritySection.get('button').element)
+  })
+
+  it('renders the loading, empty-priority and empty-catalogue states', async () => {
+    state.role = 'ADMIN'
+    let resolvePriorities!: (value: { projectIds: string[] }) => void
+    api.priorityProjects.mockReturnValueOnce(new Promise((resolve) => { resolvePriorities = resolve }))
+    const loadingPage = mountPage()
+    await flushPromises()
+    expect(loadingPage.text()).toContain('Loading priority projects')
+    resolvePriorities({ projectIds: [] })
+    await flushPromises()
+    expect(loadingPage.text()).toContain('Not currently a priority')
+    expect(loadingPage.get('input[type="checkbox"]').element).toHaveProperty('checked', false)
+    loadingPage.unmount()
+
+    api.listPeriods.mockResolvedValue({
+      content: [{ id: 'period-1', label: 'Allocation preview', schoolYear: '2026/2027', status: 'ALLOCATED', projectIds: [] }],
+    })
+    const emptyPage = mountPage()
+    await flushPromises()
+    expect(emptyPage.text()).toContain('No accepted projects are available in this period')
+  })
+
+  it('shows saved run priorities to staff and never requests configuration for a non-admin', async () => {
+    api.getRun.mockResolvedValue({
+      id: 'run-1',
+      status: 'COMPLETED',
+      prioritizedProjectIds: ['project-1'],
+      result: { assignments: [] },
+    })
+    api.getIdea.mockResolvedValue({ id: 'project-1', title: 'Priority Project' })
+    const page = mountPage()
+    await flushPromises()
+    await page.get('button').trigger('click')
+    await flushPromises()
+
+    expect(api.priorityProjects).not.toHaveBeenCalled()
+    expect(page.text()).toContain('Priority projects used in this run')
+    expect(page.text()).toContain('Priority Project')
+  })
+
+  it('does not expose administrator priority settings in the student-facing view', async () => {
+    state.role = 'STUDENT'
+    const page = mountPage()
+    await flushPromises()
+
+    expect(api.priorityProjects).not.toHaveBeenCalled()
+    expect(page.text()).not.toContain('Save priority projects')
+    expect(page.text()).not.toContain('Currently a priority')
   })
 
   it('localizes allocation status and route labels while preserving backend error text and project names', async () => {

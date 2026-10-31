@@ -29,6 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class AllocationService {
+    private static final String PROJECT_IDS = "projectIds";
     private static final String PERIOD = "application_period";
     private static final String RUN = "allocation_run";
     private static final String APPLICATION = "student_application";
@@ -38,6 +39,8 @@ public class AllocationService {
     private static final String EARLY_FIELD = "early";
     private static final String ASSIGNMENTS_FIELD = "assignments";
     private static final String PROJECT_ID_FIELD = "projectId";
+    private static final String PRIORITY_PROJECT_IDS_FIELD = "priorityProjectIds";
+    private static final String PRIORITIZED_PROJECT_IDS_FIELD = "prioritizedProjectIds";
     private static final String STUDENT_ID_FIELD = "studentId";
     private static final String UNASSIGNED_STUDENTS_FIELD = "unassignedStudents";
     private static final String UNASSIGNED_PROJECTS_FIELD = "unassignedProjects";
@@ -111,6 +114,41 @@ public class AllocationService {
     }
 
     @Transactional(readOnly = true)
+    @PreAuthorize("hasRole('ADMIN')")
+    public List<UUID> priorityProjects(AuthenticatedUser caller, UUID periodId) {
+        StoredRecord period = findPeriod(periodId);
+        return readPriorityProjectIds(store.parse(period).path(PRIORITY_PROJECT_IDS_FIELD)).stream()
+                .map(UUID::fromString).toList();
+    }
+
+    @Transactional
+    @PreAuthorize("hasRole('ADMIN')")
+    public List<UUID> replacePriorityProjects(AuthenticatedUser caller, UUID periodId, List<UUID> requestedIds) {
+        StoredRecord period = store.lock(PERIOD, periodId);
+        if (FINALIZED.equals(period.getStatus())) {
+            throw conflict("A finalized application period cannot be changed.");
+        }
+        if (requestedIds == null || new HashSet<>(requestedIds).size() != requestedIds.size()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Project IDs must be unique.");
+        }
+        ObjectNode payload = store.parse(period);
+        Set<String> catalogue = new HashSet<>(readIds(payload.path(PROJECT_IDS), PROJECT_IDS));
+        List<String> requested = requestedIds.stream().map(UUID::toString).sorted().toList();
+        if (!catalogue.containsAll(requested)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST,
+                    "Every priority project must belong to the period catalogue.");
+        }
+        List<String> previous = readPriorityProjectIds(payload.path(PRIORITY_PROJECT_IDS_FIELD));
+        if (!new HashSet<>(previous).equals(new HashSet<>(requested))) {
+            ArrayNode priorities = payload.putArray(PRIORITY_PROJECT_IDS_FIELD);
+            requested.forEach(priorities::add);
+            store.update(period, period.getStatus(), payload);
+            audit.recordPriorityChange(caller, periodId, previous, requested);
+        }
+        return requested.stream().map(UUID::fromString).toList();
+    }
+
+    @Transactional(readOnly = true)
     @PreAuthorize("hasAnyRole('TEACHER','ADMIN')")
     public PageResponse<ObjectNode> listRuns(AuthenticatedUser caller, UUID periodId, int page, int size) {
         findPeriod(periodId);
@@ -162,7 +200,8 @@ public class AllocationService {
 
     private StoredRecord createRun(AuthenticatedUser caller, StoredRecord period, boolean initial, boolean early) {
         ObjectNode periodData = store.parse(period);
-        List<String> projectIds = readIds(periodData.path("projectIds"), "projectIds");
+        List<String> projectIds = readIds(periodData.path(PROJECT_IDS), PROJECT_IDS);
+        List<String> priorityProjectIds = readPriorityProjectIds(periodData.path(PRIORITY_PROJECT_IDS_FIELD));
         List<String> eligibleIds = runtime.eligibleStudents(period).stream()
                 .map(user -> user.getId().toString()).toList();
         Set<String> eligible = Set.copyOf(eligibleIds);
@@ -173,6 +212,8 @@ public class AllocationService {
                 .filter(id -> !excludedMembers.contains(id)).toList();
         List<StoredRecord> pins = eligiblePins(period.getId(), eligible, excludedMembers);
         ObjectNode snapshot = snapshot(projectIds, List.of(), pins);
+        ArrayNode savedPriorities = snapshot.putArray(PRIORITIZED_PROJECT_IDS_FIELD);
+        priorityProjectIds.forEach(savedPriorities::add);
         snapshot.set("eligibleStudentIds", store.value(eligibleIds));
         snapshot.put("initial", initial);
         snapshot.put(EARLY_FIELD, early);
@@ -188,7 +229,7 @@ public class AllocationService {
             snapshot.set("applyingUnits", engine.serializeUnits(eligibleGroups));
             applications = new ArrayList<>(applications);
             applications.addAll(eligibleGroups);
-            Object result = engine.optimize(projectIds, applications, pins, candidateIds);
+            Object result = engine.optimize(projectIds, priorityProjectIds, applications, pins, candidateIds);
             snapshot.set(RESULT_FIELD, store.value(result));
             store.update(run, "COMPLETED", snapshot);
             if (!early) {
@@ -290,7 +331,7 @@ public class AllocationService {
 
     private ObjectNode snapshot(List<String> projects, List<StoredRecord> applications, List<StoredRecord> pins) {
         ObjectNode snapshot = store.object();
-        ArrayNode projectIds = snapshot.putArray("projectIds");
+        ArrayNode projectIds = snapshot.putArray(PROJECT_IDS);
         projects.forEach(projectIds::add);
         snapshot.set("applications", serializeApplications(applications));
         ArrayNode savedPins = snapshot.putArray("pins");
@@ -346,6 +387,14 @@ public class AllocationService {
         return result;
     }
 
+    private List<String> readPriorityProjectIds(JsonNode ids) {
+        if (!ids.isArray()) {
+            return List.of();
+        }
+        return java.util.stream.StreamSupport.stream(ids.spliterator(), false)
+                .map(JsonNode::asText).distinct().sorted().toList();
+    }
+
     private StoredRecord findPeriod(UUID id) {
         return store.repository().findById(id).filter(record -> PERIOD.equals(record.getType()))
                 .orElseThrow(() -> new EntityNotFoundException("Application period was not found."));
@@ -363,6 +412,9 @@ public class AllocationService {
         response.put("periodId", record.getParentId());
         if (!response.has(EARLY_FIELD)) {
             response.put(EARLY_FIELD, false);
+        }
+        if (!response.has(PRIORITIZED_PROJECT_IDS_FIELD) || !response.path(PRIORITIZED_PROJECT_IDS_FIELD).isArray()) {
+            response.putArray(PRIORITIZED_PROJECT_IDS_FIELD);
         }
         JsonNode storedResult = response.path(RESULT_FIELD);
         if (storedResult.isObject()) {

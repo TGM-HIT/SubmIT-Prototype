@@ -84,6 +84,114 @@ class AllocationOptimizerTest {
     }
 
     @Test
+    void priorityNeverReducesTheTotalNumberAssigned() {
+        List<Application> applicants = concat(students("flex-", 3, "A", "B"),
+                students("a-only-", 2, "A"));
+        Result result = optimizer.optimize(new Request(projects("A", "B"), applicants, Set.of(), Set.of("B")));
+
+        assertEquals(5, result.assignedStudents());
+        assertEquals(10, result.preferenceScore());
+        assertEquals(Set.of("A"), result.assignments().stream().map(Assignment::projectId)
+                .collect(java.util.stream.Collectors.toSet()));
+    }
+
+    @Test
+    void priorityAssignmentsOutrankPreferencesWhenTheAssignedCountIsEqual() {
+        List<Application> applicants = students("student-", 6, "A", "B");
+        Request request = new Request(projects("A", "B"), applicants, Set.of(), Set.of("B"));
+
+        Result result = optimizer.optimize(request);
+
+        assertEquals(6, result.assignedStudents());
+        assertEquals(3, result.assignments().stream().filter(entry -> entry.projectId().equals("B")).count());
+        assertEquals(9, result.preferenceScore(),
+                "Three second-ranked priority assignments beat a higher preference score with no priority assignments.");
+        assertTrue(result.assignments().stream().collect(java.util.stream.Collectors.groupingBy(
+                Assignment::projectId, java.util.stream.Collectors.counting())).values().stream()
+                .allMatch(size -> size >= 3 && size <= 5));
+        assertEquals(result, optimizer.optimize(request), "The priority result must remain deterministic.");
+    }
+
+    @Test
+    void preferenceScoreBreaksTiesAfterPriorityAssignments() {
+        List<Application> applicants = concat(students("prefer-A-", 3, "A", "B"),
+                students("prefer-B-", 3, "B", "A"));
+        Result result = optimizer.optimize(new Request(projects("A", "B"), applicants, Set.of(), Set.of("B")));
+
+        assertEquals(6, result.assignedStudents());
+        assertEquals(3, result.assignments().stream().filter(entry -> entry.projectId().equals("B")).count());
+        assertEquals(12, result.preferenceScore());
+        assertTrue(result.assignments().stream().allMatch(entry -> entry.preferenceRank() == 1));
+    }
+
+    @Test
+    void priorityProjectsAreEqualAndPreferencesBreakTheirAssignmentTie() {
+        List<Application> applicants = concat(students("prefer-A-", 3, "A", "B"),
+                students("prefer-B-", 3, "B", "A"));
+        Result result = optimizer.optimize(new Request(projects("A", "B"), applicants,
+                Set.of(), Set.of("A", "B")));
+
+        assertEquals(6, result.assignedStudents());
+        assertEquals(3, result.assignments().stream().filter(entry -> entry.projectId().equals("A")).count());
+        assertEquals(3, result.assignments().stream().filter(entry -> entry.projectId().equals("B")).count());
+        assertEquals(12, result.preferenceScore());
+        assertTrue(result.assignments().stream().allMatch(entry -> entry.preferenceRank() == 1));
+    }
+
+    @Test
+    void pinnedStudentsRemainOnTheirPinnedNonPriorityProjectAndSharedUnitsStayWhole() {
+        List<Application> applicants = new ArrayList<>();
+        applicants.add(new Application("pinned", List.of("A"), null, false));
+        applicants.add(student("a-first", "A"));
+        applicants.addAll(students("a-second-", 4, "B", "A"));
+        applicants.addAll(students("b-only-", 5, "B"));
+        Result pinnedResult = optimizer.optimize(new Request(projects("A", "B"), applicants,
+                Set.of("pinned"), Set.of("B")));
+
+        Assignment pin = pinnedResult.assignments().stream()
+                .filter(entry -> entry.studentId().equals("pinned")).findFirst().orElseThrow();
+        assertEquals("A", pin.projectId());
+        assertEquals(10, pinnedResult.assignedStudents());
+        assertEquals(5, pinnedResult.assignments().stream().filter(entry -> entry.projectId().equals("B")).count());
+        assertEquals(15, pinnedResult.preferenceScore(),
+                "The feasible pinned solution wins over an equal-count, equal-priority-count alternative "
+                        + "with preference score 16 that leaves the pinned student unassigned.");
+        assertTrue(pinnedResult.assignments().stream().collect(java.util.stream.Collectors.groupingBy(
+                Assignment::projectId, java.util.stream.Collectors.counting())).values().stream()
+                .allMatch(size -> size >= 3 && size <= 5));
+
+        List<Application> unitApplicants = new ArrayList<>();
+        unitApplicants.add(new Application("unit-1", List.of("B", "A"), "shared"));
+        unitApplicants.add(new Application("unit-2", List.of("B", "A"), "shared"));
+        unitApplicants.addAll(students("solo-", 4, "A", "B"));
+        Result unitResult = optimizer.optimize(new Request(projects("A", "B"), unitApplicants,
+                Set.of(), Set.of("B")));
+
+        Map<String, String> destinations = unitResult.assignments().stream()
+                .collect(java.util.stream.Collectors.toMap(Assignment::studentId, Assignment::projectId));
+        assertEquals(destinations.get("unit-1"), destinations.get("unit-2"));
+        assertEquals("B", destinations.get("unit-1"));
+        assertEquals(6, unitResult.assignedStudents());
+        assertTrue(unitResult.assignments().stream().collect(java.util.stream.Collectors.groupingBy(
+                Assignment::projectId, java.util.stream.Collectors.counting())).values().stream()
+                .allMatch(size -> size >= 3 && size <= 5));
+    }
+
+    @Test
+    void emptyPrioritySetPreservesTheEstablishedPreferenceFixtureAndDeterminism() {
+        List<Application> applicants = concat(students("prefer-A-", 3, "A", "B"),
+                students("prefer-B-", 3, "B", "A"));
+        Request request = new Request(projects("A", "B"), applicants, Set.of(), Set.of());
+
+        Result first = optimizer.optimize(request);
+
+        assertEquals(6, first.assignedStudents());
+        assertEquals(12, first.preferenceScore());
+        assertTrue(first.assignments().stream().allMatch(entry -> entry.preferenceRank() == 1));
+        assertEquals(first, optimizer.optimize(request));
+    }
+
+    @Test
     void allocatesEligibleStudentsWithoutPreferencesToFeasibleCatalogueProjectsAtZeroSatisfaction() {
         List<Application> eligible = IntStream.range(0, 3)
                 .mapToObj(index -> new Application("eligible-" + index, List.of(), null, false)).toList();

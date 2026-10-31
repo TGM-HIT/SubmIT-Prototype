@@ -189,6 +189,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/application-periods/{periodId}/priority-projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get priority projects for an application period. */
+        get: operations["priorityProjects"];
+        /** Replace priority projects for an application period. */
+        put: operations["replacePriorityProjects"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/application-periods/{periodId}/allocation-pins/{studentId}": {
         parameters: {
             query?: never;
@@ -2011,6 +2029,14 @@ export interface components {
             /** @description Current elective subject names; only included in authenticated teacher and administrator responses. */
             electiveSubjectNames?: string[];
         };
+        AllocationPriorityRequest: {
+            /** @description Complete replacement set of priority project IDs for this period. Required, may be empty; IDs must be unique and belong to the period's accepted catalogue. */
+            projectIds: string[];
+        };
+        AllocationPriorityResponse: {
+            /** @description Current complete priority project ID set for the application period; may be empty. */
+            projectIds: string[];
+        };
         AllocationPinRequest: {
             /**
              * Format: uuid
@@ -2871,6 +2897,8 @@ export interface components {
             early: boolean;
             /** @description Project IDs included in the run snapshot. */
             projectIds: string[];
+            /** @description Priority project IDs used by this run; empty for runs created before priority settings were introduced. */
+            prioritizedProjectIds: string[];
             /** @description Application snapshots used by the run. */
             applications: components["schemas"]["AllocationApplicationSnapshot"][];
             /** @description Administrator pin snapshots used by the run. */
@@ -4723,6 +4751,135 @@ export interface operations {
                 };
             };
             /** @description The application period or application state does not permit deletion. A submitted shared application represents the caller. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    priorityProjects: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                periodId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Current priority project IDs. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AllocationPriorityResponse"];
+                };
+            };
+            /** @description The period UUID is not valid. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Authentication is required. Missing or invalid bearer authentication credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Only administrators may read priority projects. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Application period was not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    replacePriorityProjects: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                periodId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AllocationPriorityRequest"];
+            };
+        };
+        responses: {
+            /** @description Saved priority project IDs. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AllocationPriorityResponse"];
+                };
+            };
+            /** @description Period ID must be a UUID; projectIds is required and IDs must be unique and belong to the period's accepted catalogue. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Authentication is required. Missing or invalid bearer authentication credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Only administrators may change priority projects. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Application period was not found. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Finalized periods cannot be changed. */
             409: {
                 headers: {
                     [name: string]: unknown;

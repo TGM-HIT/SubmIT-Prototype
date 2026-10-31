@@ -1,6 +1,7 @@
 package at.ac.tgm.submit.audit;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import com.fasterxml.jackson.databind.node.ArrayNode;
 import at.ac.tgm.submit.data.RecordStore;
 import at.ac.tgm.submit.data.StoredRecord;
 import at.ac.tgm.submit.security.AuthenticatedUser;
@@ -28,10 +29,29 @@ public class AuditService {
 
     @Transactional
     public void record(AuthenticatedUser actor, String action, String entityType, UUID entityId) {
+        recordChange(actor, action, entityType, entityId, null);
+    }
+
+    @Transactional
+    public void recordPriorityChange(AuthenticatedUser actor, UUID periodId, List<String> previousProjectIds,
+            List<String> resultingProjectIds) {
+        ObjectNode fields = store.object();
+        ArrayNode previous = fields.putArray("previousProjectIds");
+        ArrayNode resulting = fields.putArray("resultingProjectIds");
+        previousProjectIds.forEach(previous::add);
+        resultingProjectIds.forEach(resulting::add);
+        recordChange(actor, "ALLOCATION_PRIORITIES_CHANGED", "application_period", periodId, fields);
+    }
+
+    private void recordChange(AuthenticatedUser actor, String action, String entityType, UUID entityId,
+            ObjectNode fields) {
         ObjectNode payload = store.object().put("actorId", actor.id().toString())
                 .put("actorUsername", actor.username()).put("action", action)
                 .put("entityType", entityType).put("entityId", entityId.toString())
                 .put("occurredAt", Instant.now().toString());
+        if (fields != null) {
+            payload.setAll(fields);
+        }
         contextResolver.snapshotActor(payload, actor);
         String label = contextResolver.snapshotResource(entityType, entityId);
         if (label != null) {

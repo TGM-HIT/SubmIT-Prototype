@@ -506,7 +506,7 @@ public final class ApiDtos {
     }
 
     @Schema(requiredProperties = {"id", "status", "periodId", "createdAt", "initial", "early", "projectIds",
-            "applications", "pins"})
+            "applications", "pins", "prioritizedProjectIds"})
     public record AllocationRunResponse(
             @Schema(description = "Allocation-run ID.") UUID id,
             @Schema(description = "Current allocation-run status.") String status,
@@ -518,6 +518,10 @@ public final class ApiDtos {
                     defaultValue = "false")
             Boolean early,
             @Schema(description = "Project IDs included in the run snapshot.") List<UUID> projectIds,
+            @NotNull @ArraySchema(arraySchema = @Schema(description = "Priority project IDs used by this run; "
+                    + "empty for runs created before priority settings were introduced."),
+                    schema = @Schema(format = "uuid"))
+            List<UUID> prioritizedProjectIds,
             @Schema(description = "Application snapshots used by the run.") List<AllocationApplicationSnapshot> applications,
             @Schema(description = "Administrator pin snapshots used by the run.") List<AllocationPinSnapshot> pins,
             AllocationResultResponse result, String error,
@@ -565,6 +569,23 @@ public final class ApiDtos {
                     format = "uuid") UUID projectId,
             @Schema(description = "Explicitly acknowledge that the student did not rank the selected project.",
                     defaultValue = "false") Boolean acknowledgeUnranked) {
+    }
+
+    @Schema(requiredProperties = {"projectIds"})
+    public record AllocationPriorityRequest(
+            @NotNull @ArraySchema(arraySchema = @Schema(description = "Complete replacement set of priority project "
+                    + "IDs for this period. Required, may be empty; IDs must be unique and belong to the period's "
+                    + "accepted catalogue."),
+                    uniqueItems = true, schema = @Schema(format = "uuid"))
+            List<@NotNull UUID> projectIds) {
+    }
+
+    @Schema(requiredProperties = {"projectIds"})
+    public record AllocationPriorityResponse(
+            @NotNull @ArraySchema(arraySchema = @Schema(description = "Current complete priority project ID set "
+                    + "for the application period; may be empty."),
+                    schema = @Schema(format = "uuid"))
+            List<UUID> projectIds) {
     }
 
     @Schema(requiredProperties = {"studentId", "studentDisplayName", "projectId", "projectTitle", "rankedChoice",

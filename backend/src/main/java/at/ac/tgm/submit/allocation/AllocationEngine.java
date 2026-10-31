@@ -47,14 +47,14 @@ class AllocationEngine {
         units.persistOrigin(group, run);
     }
 
-    Object optimize(List<String> projectIds, List<StoredRecord> records, List<StoredRecord> pinRecords,
-            List<String> eligibleStudentIds) {
+    Object optimize(List<String> projectIds, List<String> priorityProjectIds, List<StoredRecord> records,
+            List<StoredRecord> pinRecords, List<String> eligibleStudentIds) {
         List<Project> projects = projectIds.stream().map(Project::new).toList();
         Map<String, String> pinnedProjects = readPins(projectIds, pinRecords);
         units.expandPins(records, pinnedProjects);
         Map<String, Integer> originalRanks = new HashMap<>();
         List<Application> applications = buildApplications(records, pinnedProjects, originalRanks, eligibleStudentIds);
-        Request request = new Request(projects, applications, pinnedProjects.keySet());
+        Request request = new Request(projects, applications, pinnedProjects.keySet(), Set.copyOf(priorityProjectIds));
         ObjectNode result = (ObjectNode) store.value(optimizer.optimize(request));
         Set<String> preferenceStudents = applications.stream().filter(Application::hasPreferences)
                 .map(Application::studentId).collect(java.util.stream.Collectors.toSet());

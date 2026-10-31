@@ -487,6 +487,15 @@ public class StandardErrorResponseCustomizer implements OpenApiCustomizer {
                 FORBIDDEN, "Only administrators may start allocation runs.",
                 NOT_FOUND, PERIOD_NOT_FOUND,
                 CONFLICT, "The period is not open for the requested run or has already been finalized.");
+        add(result, GET, "/api/application-periods/{periodId}/priority-projects",
+                BAD_REQUEST, "The period UUID is not valid.",
+                FORBIDDEN, "Only administrators may read priority projects.",
+                NOT_FOUND, PERIOD_NOT_FOUND);
+        add(result, PUT, "/api/application-periods/{periodId}/priority-projects",
+                BAD_REQUEST, "The period UUID or submitted priority project IDs are invalid or duplicated.",
+                FORBIDDEN, "Only administrators may change priority projects.",
+                NOT_FOUND, PERIOD_NOT_FOUND,
+                CONFLICT, "A finalized application period cannot be changed.");
         add(result, POST, "/api/allocation-runs/{id}/finalize",
                 BAD_REQUEST, "The allocation-run ID is not a valid UUID.",
                 FORBIDDEN, "Only administrators may finalize allocation runs.",

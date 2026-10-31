@@ -21,6 +21,8 @@ type SupervisorRequest = components['schemas']['SupervisorRequest']
 type SupervisorResponse = components['schemas']['SupervisorResponse']
 type CatalogueProjectResponse = components['schemas']['CatalogueProjectResponse']
 type AllocationRunResponse = components['schemas']['AllocationRunResponse']
+type AllocationPriorityRequest = components['schemas']['AllocationPriorityRequest']
+type AllocationPriorityResponse = components['schemas']['AllocationPriorityResponse']
 type FormalReviewResponse = components['schemas']['FormalReviewResponse']
 type RubricResponse = components['schemas']['RubricResponse']
 type PublishRubricRequest = components['schemas']['PublishRubricRequest']
@@ -217,6 +219,12 @@ export const periodsApi = {
   },
   removePin(periodId: string, studentId: string): Promise<void> {
     return json(`/api/application-periods/${encodeURIComponent(periodId)}/allocation-pins/${encodeURIComponent(studentId)}`, "DELETE")
+  },
+  priorityProjects(periodId: string): Promise<AllocationPriorityResponse> {
+    return json(`/api/application-periods/${encodeURIComponent(periodId)}/priority-projects`)
+  },
+  savePriorityProjects(periodId: string, input: AllocationPriorityRequest): Promise<AllocationPriorityResponse> {
+    return json(`/api/application-periods/${encodeURIComponent(periodId)}/priority-projects`, 'PUT', input)
   },
   runs(periodId: string, page: number): Promise<Page<components['schemas']['AllocationRunPageResponse']>> {
     return json(`/api/application-periods/${encodeURIComponent(periodId)}/allocation-runs?${pageQuery(page)}`)

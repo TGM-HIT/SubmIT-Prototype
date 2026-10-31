@@ -27,6 +27,19 @@
           </form>
         </template>
       </section>
+      <section v-if="selectedPeriod && auth.user?.roles.includes('ADMIN')" class="panel stack" aria-labelledby="priorities-heading">
+        <div><h2 id="priorities-heading" class="section-title">{{ $t('allocation.prioritiesHeading') }}</h2><p class="muted">{{ $t('allocation.prioritiesHelp') }}</p></div>
+        <p v-if="priorityError" class="error-box" role="alert">{{ priorityError }} <button class="button button-secondary button-small" type="button" @click="prioritySaveFailed ? savePriorities() : loadPriorities()">{{ $t('allocation.retry') }}</button></p>
+        <p v-if="priorityLoading" class="notice" role="status">{{ $t('allocation.loadingPriorities') }}</p>
+        <template v-else-if="!priorityLoadFailed">
+          <p v-if="catalogueProjects.length === 0" class="empty">{{ $t('allocation.noPriorityProjects') }}</p>
+          <label v-for="project in catalogueProjects" :key="String(project.id)" class="data-row">
+            <span class="row-main">{{ project.title }} · {{ priorityProjectIds.includes(String(project.id)) ? $t('allocation.currentlyPriority') : $t('allocation.currentlyNotPriority') }}</span>
+            <input v-model="priorityDraft" type="checkbox" :value="String(project.id)" :aria-label="$t('allocation.priorityToggle', { title: project.title })" :disabled="prioritySaving || selectedPeriod.status === 'FINALIZED'">
+          </label>
+          <button ref="prioritySaveControl" class="button" type="button" :disabled="prioritySaving || priorityLoading || selectedPeriod.status === 'FINALIZED'" @click="savePriorities">{{ prioritySaving ? $t('allocation.saving') : $t('allocation.savePriorities') }}</button>
+        </template>
+      </section>
       <p class="notice">{{ $t('allocation.groupRules') }}</p>
       <AsyncPanel :loading="task.loading.value" :error="task.error.value" @retry="loadRuns">
         <div v-if="runs.content.length" class="data-list">
@@ -43,6 +56,11 @@
       <div class="page-heading"><div><h2 ref="selectedRunHeading" class="section-title" tabindex="-1">{{ $t('allocation.runOutcome') }}</h2><p>{{ runKind(selectedRun) }}</p><p class="muted">{{ $t('allocation.snapshot', { date: selectedRun.createdAt ? date(String(selectedRun.createdAt)) : $t('allocation.timeUnavailable') }) }}</p></div><button class="button button-secondary button-small" @click="selectedRun = null">{{ $t('allocation.closeResult') }}</button></div>
       <span class="status-badge" :class="`status-${statusOf(selectedRun).toLowerCase()}`">{{ statusLabel(selectedRun) }}</span>
       <p v-if="selectedRun.error" class="error-box">{{ $t('allocation.runError') }}: {{ selectedRun.error }}</p>
+      <section v-if="auth.user?.roles.includes('ADMIN') || auth.user?.roles.includes('TEACHER')" class="stack" aria-labelledby="run-priorities-heading">
+        <h3 id="run-priorities-heading" class="form-section-title">{{ $t('allocation.runPriorities') }}</h3>
+        <p v-if="priorityNames(selectedRun).length" class="staff-display-label">{{ priorityNames(selectedRun).join(', ') }}</p>
+        <p v-else class="muted">{{ $t('allocation.noRunPriorities') }}</p>
+      </section>
       <div v-for="assignment in assignments(selectedRun)" :key="assignment.projectId" class="data-row allocation-assignment">
         <div class="row-main"><h3 class="staff-display-label">{{ assignment.projectTitle }}</h3><p>{{ $t('allocation.assignedStudents', { count: number(assignment.students.length) }) }}</p><p>{{ $t('allocation.supervisor') }}: {{ supervisors[assignment.projectId] || $t('allocation.noSupervisor') }}</p><p class="muted">{{ $t('allocation.staffPrivacy') }}</p></div>
         <div class="choice-list"><span v-for="(student, index) in assignment.students" :key="student.id || index" class="status-badge staff-member-label">{{ student.name }}<strong v-if="student.pinned"> · {{ $t('allocation.fixedByAdmin') }}</strong><strong v-if="student.hadPreferences === false"> · {{ $t('applications.assignedWithoutPreferences') }}</strong><strong v-else-if="student.hadPreferences === true"> · {{ $t('applications.preferencesUsed') }}</strong><strong v-else> · {{ $t('applications.preferenceStateUnavailable') }}</strong> · {{ $t('allocation.class') }} {{ student.className || $t('allocation.notAssigned') }} · {{ $t('allocation.electiveSubjects') }} {{ student.electiveSubjectNames.join(', ') || $t('allocation.none') }} · {{ applyingOrigin(selectedRun, student.id) }}</span></div>
@@ -104,6 +122,15 @@ const submittedApplications = ref<StudentApplication[]>([])
 const submittedApplyingGroups = ref<components['schemas']['GroupResponse'][]>([])
 const addPinControl = ref<HTMLButtonElement | null>(null)
 const pinControls = new Map<string, HTMLElement>()
+const priorityProjectIds = ref<string[]>([])
+const priorityDraft = ref<string[]>([])
+const priorityLoading = ref(false)
+const prioritySaving = ref(false)
+const priorityError = ref('')
+const priorityLoadFailed = ref(false)
+const prioritySaveFailed = ref(false)
+const prioritySaveControl = ref<HTMLButtonElement | null>(null)
+const priorityProjectTitles = ref<Record<string, string>>({})
 const selectedPeriod = computed(() => periods.value.find((period) => period.id === periodId.value))
 const deadlinePassed = computed(() => Boolean(selectedPeriod.value?.closesAt && Date.now() >= new Date(selectedPeriod.value.closesAt).getTime()))
 const unrankedSelection = computed(() => Boolean(pinStudentId.value && pinProjectId.value && !isRanked(pinStudentId.value, pinProjectId.value)))
@@ -128,6 +155,10 @@ function applyingOrigin(run: Run, studentId: string): string {
   if (!Array.isArray(run.applyingUnits)) return String(i18n.global.t('allocation.originUnavailable'))
   const index = run.applyingUnits.findIndex(unit => Array.isArray(unit.studentIds) && unit.studentIds.includes(studentId))
   return index < 0 ? String(i18n.global.t('allocation.appliedAdded')) : String(i18n.global.t('allocation.cohort', { number: number(index + 1) }))
+}
+function priorityNames(run: Run): string[] {
+  return (run.prioritizedProjectIds ?? []).map((id) => priorityProjectTitles.value[String(id)])
+    .filter((title): title is string => Boolean(title))
 }
 function assignments(run: Run): { projectId: string; projectTitle: string; students: { id: string; name: string; className?: string; electiveSubjectNames: string[]; pinned: boolean; hadPreferences?: boolean }[] }[] {
   const groups = new Map<string, { title: string; students: Map<string, { name: string; className?: string; electiveSubjectNames: string[]; pinned: boolean; hadPreferences?: boolean }> }>()
@@ -238,6 +269,51 @@ async function loadPins(): Promise<void> {
     pinLoading.value = false
   }
 }
+async function loadPriorities(): Promise<void> {
+  if (!periodId.value || !selectedPeriod.value || !auth.user?.roles.includes('ADMIN')) return
+  priorityLoading.value = true
+  priorityError.value = ''
+  priorityLoadFailed.value = false
+  prioritySaveFailed.value = false
+  try {
+    const [saved, ideas] = await Promise.all([
+      periodsApi.priorityProjects(periodId.value),
+      ideasApi.list(0, 'ACCEPTED_FOR_APPLICATIONS', 100),
+    ])
+    const ids = Array.isArray(selectedPeriod.value.projectIds) ? selectedPeriod.value.projectIds.map(String) : []
+    catalogueProjects.value = ideas.content.filter((idea) => ids.includes(String(idea.id ?? '')))
+    priorityProjectIds.value = saved.projectIds.map(String)
+    priorityDraft.value = [...priorityProjectIds.value]
+    priorityLoadFailed.value = false
+  } catch (error) {
+    priorityError.value = apiMessage(error, 'allocation.loadPrioritiesFailed')
+    priorityLoadFailed.value = true
+  } finally {
+    priorityLoading.value = false
+  }
+}
+async function savePriorities(): Promise<void> {
+  if (!selectedPeriod.value || selectedPeriod.value.status === 'FINALIZED' || prioritySaving.value) return
+  prioritySaving.value = true
+  priorityError.value = ''
+  prioritySaveFailed.value = false
+  let savedSuccessfully = false
+  try {
+    const saved = await periodsApi.savePriorityProjects(periodId.value, { projectIds: [...priorityDraft.value] })
+    priorityProjectIds.value = saved.projectIds.map(String)
+    priorityDraft.value = [...priorityProjectIds.value]
+    savedSuccessfully = true
+  } catch (error) {
+    priorityError.value = apiMessage(error, 'allocation.savePrioritiesFailed')
+    prioritySaveFailed.value = true
+  } finally {
+    prioritySaving.value = false
+  }
+  if (savedSuccessfully) {
+    await nextTick()
+    prioritySaveControl.value?.focus()
+  }
+}
 async function lookupStudents(event: Event): Promise<void> {
   const input = event.target as HTMLInputElement
   studentQuery.value = input.value
@@ -306,7 +382,8 @@ async function removePin(pin: Pin, index: number, event: Event): Promise<void> {
   }
 }
 async function loadPeriodData(): Promise<void> {
-  await Promise.all([loadRuns(), loadPins()])
+  await Promise.all([loadRuns(), loadPins(),
+    ...(auth.user?.roles.includes('ADMIN') ? [loadPriorities()] : [])])
 }
 async function loadRuns(page = 0): Promise<void> {
   selectedRun.value = null
@@ -328,6 +405,16 @@ async function loadResult(id: string): Promise<void> {
     }
   }))
   supervisors.value = Object.fromEntries(names)
+  const priorityNames = await Promise.all((result.prioritizedProjectIds ?? []).map(async (projectId) => {
+    try {
+      const idea = await ideasApi.get(String(projectId))
+      return [String(projectId), idea.title] as const
+    } catch (error) {
+      task.error.value = apiMessage(error, 'allocation.priorityProjectFailed')
+      return [String(projectId), ''] as const
+    }
+  }))
+  priorityProjectTitles.value = Object.fromEntries(priorityNames)
 }
 async function startReplacement(): Promise<void> {
   if (!selectedPeriod.value) return
@@ -360,8 +447,7 @@ async function load(): Promise<void> {
     periods.value = page.content
     if (!periodId.value && page.content[0]?.id) {
       periodId.value = page.content[0].id
-      runs.value = await periodsApi.runs(periodId.value, 0)
-      await loadPins()
+      await loadPeriodData()
     }
   })
 }

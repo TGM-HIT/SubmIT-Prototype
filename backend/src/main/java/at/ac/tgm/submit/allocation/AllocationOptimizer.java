@@ -8,8 +8,9 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * Exact, deterministic optimizer: first maximizes assigned pinned students, then total assignments, then ranked
- * preference score. Groups contain three to five students; applying units are indivisible.
+ * Exact, deterministic optimizer: first maximizes assigned pinned students, then total assignments, then assignments
+ * to priority projects, then ranked preference score. Groups contain three to five students; applying units are
+ * indivisible.
  *
  * <p>Small instances retain the established project-subset traversal. Larger instances use exact branch-and-bound:
  * min-cost flow relaxes minimum group sizes and unresolved applying-unit indivisibility, and a branch is introduced only
@@ -20,19 +21,26 @@ import java.util.Set;
 public final class AllocationOptimizer {
 
     /** Accepted projects and student applications. Ids are non-blank; projects are unique; rankings name known projects. */
-    public record Request(List<Project> projects, List<Application> applications, Set<String> pinnedStudentIds) {
+    public record Request(List<Project> projects, List<Application> applications, Set<String> pinnedStudentIds,
+            Set<String> priorityProjectIds) {
 
         public Request(List<Project> projects, List<Application> applications) {
-            this(projects, applications, Set.of());
+            this(projects, applications, Set.of(), Set.of());
+        }
+
+        public Request(List<Project> projects, List<Application> applications, Set<String> pinnedStudentIds) {
+            this(projects, applications, pinnedStudentIds, Set.of());
         }
 
         public Request {
             Objects.requireNonNull(projects, "projects must not be null");
             Objects.requireNonNull(applications, "applications must not be null");
             Objects.requireNonNull(pinnedStudentIds, "pinnedStudentIds must not be null");
+            Objects.requireNonNull(priorityProjectIds, "priorityProjectIds must not be null");
             projects = List.copyOf(projects);
             applications = List.copyOf(applications);
             pinnedStudentIds = Set.copyOf(pinnedStudentIds);
+            priorityProjectIds = Set.copyOf(priorityProjectIds);
             Set<String> projectIds = new HashSet<>();
             for (Project project : projects) {
                 if (!projectIds.add(project.projectId())) {
@@ -50,6 +58,13 @@ public final class AllocationOptimizer {
             }
             if (!studentIds.containsAll(pinnedStudentIds)) {
                 throw new IllegalArgumentException("pinned student must be in the request");
+            }
+            validatePriorityProjects(projectIds, priorityProjectIds);
+        }
+
+        private static void validatePriorityProjects(Set<String> projectIds, Set<String> priorityProjectIds) {
+            if (!projectIds.containsAll(priorityProjectIds)) {
+                throw new IllegalArgumentException("priority project must be in the request");
             }
         }
     }
@@ -160,8 +175,10 @@ public final class AllocationOptimizer {
         private final long[][] profit;
         private final int[] interest;
         private final boolean[] pinned;
+        private final boolean[] priority;
         private final long pinWeight;
         private final long countWeight;
+        private final long priorityWeight;
         private final List<String> projectIds;
         private final java.util.Map<String, Integer> projectIndexes = new java.util.HashMap<>();
         private final List<int[]> applyingUnits;
@@ -175,12 +192,26 @@ public final class AllocationOptimizer {
             profit = new long[students][projects];
             interest = new int[projects];
             pinned = new boolean[students];
-            countWeight = Math.addExact(Math.multiplyExact((long) students, projects), 1);
-            pinWeight = Math.addExact(Math.multiplyExact((long) students,
-                    Math.addExact(countWeight, projects)), 1);
+            priority = new boolean[projects];
+            long preferenceBound = Math.multiplyExact((long) students, projects);
+            if (request.priorityProjectIds().isEmpty()) {
+                // Retain the established scoring scale and tie traversal when the feature is not configured.
+                countWeight = Math.addExact(preferenceBound, 1);
+                pinWeight = Math.addExact(Math.multiplyExact((long) students,
+                        Math.addExact(countWeight, projects)), 1);
+                priorityWeight = 0;
+            } else {
+                priorityWeight = Math.addExact(preferenceBound, 1);
+                long priorityBound = Math.addExact(Math.multiplyExact((long) students, priorityWeight),
+                        preferenceBound);
+                countWeight = Math.addExact(priorityBound, 1);
+                long countBound = Math.addExact(Math.multiplyExact((long) students, countWeight), priorityBound);
+                pinWeight = Math.addExact(countBound, 1);
+            }
             projectIds = request.projects().stream().map(Project::projectId).toList();
             for (int p = 0; p < projects; p++) {
                 projectIndexes.put(projectIds.get(p), p);
+                priority[p] = request.priorityProjectIds().contains(projectIds.get(p));
             }
             for (int s = 0; s < students; s++) {
                 Application application = request.applications().get(s);
@@ -302,7 +333,8 @@ public final class AllocationOptimizer {
 
         private long mandatoryBonus() {
             return Math.addExact(Math.multiplyExact((long) students,
-                    Math.addExact(pinWeight, Math.addExact(countWeight, projects))), 1);
+                    Math.addExact(pinWeight, Math.addExact(countWeight,
+                            Math.addExact(priorityWeight, projects)))), 1);
         }
 
         private void mergeFixedStudents(int[] assignment, int[] fixed) {
@@ -508,7 +540,8 @@ public final class AllocationOptimizer {
         private int[] solveRemaining(int[] open, int[] reserved, int[] fixed) {
             long[][] weighted = weighted(open);
             long bonus = Math.addExact(Math.multiplyExact((long) students,
-                    Math.addExact(pinWeight, Math.addExact(countWeight, projects))), 1);
+                    Math.addExact(pinWeight, Math.addExact(countWeight,
+                            Math.addExact(priorityWeight, projects)))), 1);
             boolean[] mandatory = new boolean[projects];
             for (int project : open) {
                 mandatory[project] = true;
@@ -545,14 +578,28 @@ public final class AllocationOptimizer {
 
         private long weight(int student, int project) {
             if (profit[student][project] > 0) {
-                return countWeight + profit[student][project] + (pinned[student] ? pinWeight : 0);
+                return rankedWeight(student, project);
             }
-            Application application = request.applications().get(student);
-            if (!application.hasPreferences()
-                    && (!pinned[student] || application.rankedProjectIds().contains(projectIds.get(project)))) {
-                return countWeight + (pinned[student] ? pinWeight : 0);
+            return nonPreferenceWeight(student, project);
+        }
+
+        private long rankedWeight(int student, int project) {
+            return countWeight + (priority[project] ? priorityWeight : 0) + profit[student][project]
+                    + (pinned[student] ? pinWeight : 0);
+        }
+
+        private long nonPreferenceWeight(int student, int project) {
+            if (allowsUnrankedAssignment(student, project)) {
+                return countWeight + (priority[project] ? priorityWeight : 0)
+                        + (pinned[student] ? pinWeight : 0);
             }
             return 0;
+        }
+
+        private boolean allowsUnrankedAssignment(int student, int project) {
+            Application application = request.applications().get(student);
+            return !application.hasPreferences()
+                    && (!pinned[student] || application.rankedProjectIds().contains(projectIds.get(project)));
         }
 
         private long value(int[] assignment) {
@@ -560,7 +607,8 @@ public final class AllocationOptimizer {
             for (int student = 0; student < students; student++) {
                 int project = assignment[student];
                 if (project >= 0) {
-                    total += countWeight + profit[student][project] + (pinned[student] ? pinWeight : 0);
+                    total += countWeight + (priority[project] ? priorityWeight : 0)
+                            + profit[student][project] + (pinned[student] ? pinWeight : 0);
                 }
             }
             return total;
