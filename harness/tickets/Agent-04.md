@@ -1,4 +1,4 @@
-# Dev-69. Distinguish stopped outcomes from failed ledger status
+# Agent-04. Distinguish stopped outcomes from failed ledger status
 
 Draft from Compliance-06-20261101-2115: needs Ticket Author refinement before implementation
 
@@ -8,7 +8,7 @@ The plan describes a stopped ticket as failed, but the owning Orchestrator expli
 
 ## Source
 
-Source: Compliance-06-20261101-2115, report finding 2; repository revision: 0ceeaaaa0aa12d8090d6f1d988127535c0647ed0; harness/plan.md:9 (“`failed`: explicitly stopped or terminally failed”); harness/roles/orchestrator.md:116 (“`Outcome: stopped`, `Ledger: in-progress`”); harness/roles/orchestrator.md:120 (“a run with a recorded `Outcome: stopped` and final `## Metrics` is closed, even when its plan row remains `in-progress`”).
+Source: Compliance-06-20261101-2115, report finding 2; repository revision: 63253791e3a62c2b615dd8c5b49b2e0aa23375ea; harness/plan.md:9 (“`failed`: explicitly stopped or terminally failed”); harness/roles/orchestrator.md:116 (“`Outcome: stopped`, `Ledger: in-progress`”); harness/roles/orchestrator.md:120 (“a run with a recorded `Outcome: stopped` and final `## Metrics` is closed, even when its plan row remains `in-progress`”).
 
 ## Scope and contract
 

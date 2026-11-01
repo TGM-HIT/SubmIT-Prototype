@@ -130,8 +130,6 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-65](tickets/Dev-65.md) | to-do | Make Compliance-03 evidence method-aware and auditable |
 | [Dev-66](tickets/Dev-66.md) | to-do | Resolve missing historical run-record links |
 | [Dev-67](tickets/Dev-67.md) | to-do | Reconcile Feature-29 ledger path and status |
-| [Dev-68](tickets/Dev-68.md) | to-do | Reconcile Compliance-06 follow-up taxonomy with the Auditor contract |
-| [Dev-69](tickets/Dev-69.md) | to-do | Distinguish stopped outcomes from failed ledger status |
 
 ### Agents
 
@@ -139,6 +137,8 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | --- | --- | --- |
 | [Agent-01](tickets/done/Agent-01.md) | done | Add a dedicated Agent ticket category |
 | [Agent-02](tickets/done/Agent-02.md) | done | Remove named ticket references from agent contracts |
+| [Agent-03](tickets/Agent-03.md) | to-do | Reconcile Compliance-06 follow-up taxonomy with the Auditor contract |
+| [Agent-04](tickets/Agent-04.md) | to-do | Distinguish stopped outcomes from failed ledger status |
 
 ### Features
 
@@ -192,5 +192,5 @@ Recurring documentation and contract checks, run by the [Auditor role](roles/aud
 | [Compliance-03](checks/Compliance-03.md) | After API changes; at least monthly | 2026-11-01T17:58+0100 | findings: 5 ticketed, 0 fixed, 1 duplicate, 0 decision needed; historical exclusion verification unverified | Compliance-03-20261101-1758 | OpenAPI contract compliance |
 | [Compliance-04](checks/Compliance-04.md) | Weekly and after file moves or renames | 2026-11-01T20:12+0100 | findings: 2 ticketed, 2 fixed, 0 duplicate, 0 decision needed | Compliance-04-20261101-2012 | Link and format validation |
 | [Compliance-05](checks/Compliance-05.md) | Quarterly and before planning | 2026-11-01T20:51+0100 | findings: 0 ticketed, 0 fixed, 1 duplicate, 0 decision needed; excluded-path status/enumeration scope unverified | Compliance-05-20261101-2051 | Documentation health |
-| [Compliance-06](checks/Compliance-06.md) | After each role-contract change or lesson application; at least monthly | 2026-11-01T21:15+0100 | findings: 2 ticketed, 0 fixed, 1 duplicate, 0 decision needed; reference completeness and out-of-scope role semantics unverified | Compliance-06-20261101-2115 | Agent role consistency and role-file validation |
+| [Compliance-06](checks/Compliance-06.md) | After each role-contract change or lesson application; at least monthly | 2026-11-01T21:15+0100 | findings: 2 ticketed, 0 fixed, 1 duplicate, 0 decision needed; out-of-scope role semantics unverified | Compliance-06-20261101-2115 | Agent role consistency and role-file validation |
 | [Compliance-07](checks/Compliance-07.md) | After user-facing lifecycle, role, UI or guide-generation changes; at least monthly | — | — | — | User documentation completeness and correctness |
