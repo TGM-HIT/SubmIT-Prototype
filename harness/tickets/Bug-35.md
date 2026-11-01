@@ -17,6 +17,7 @@ Source: Compliance-02-20261101-1603, report.md Finding 1, evidence: “No assert
 - A generic publication-review approval or note alone is not proof that the required content checks occurred.
 - Keep existing completion, authorization, audit, and public response privacy boundaries. Do not change unrelated archive, grading, or project lifecycle behavior.
 - Do not choose a new content format, scanning vendor, or school privacy/retention policy in this ticket. Any implementation approach must satisfy the stated safeguards and have observable tests.
+- Scope-gate allowances: `harness/tickets/Bug-35.md`, `harness/plan.md`.
 - No OpenAPI or frontend contract change is expected unless required by the refined implementation; if backend API annotations/models change, follow the generation/review steps below.
 
 ## Mechanical checks (the Evaluator re-runs)
