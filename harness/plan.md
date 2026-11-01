@@ -56,6 +56,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Bug-34](tickets/done/Bug-34.md) | done | Remove fixed allocation size ceilings without weakening optimization |
 | [Bug-35](tickets/Bug-35.md) | to-do | Verify archive content safety before publication |
 | [Bug-36](tickets/Bug-36.md) | to-do | Document malformed formal-list query errors |
+| [Bug-37](tickets/Bug-37.md) | to-do | Declare nonblank Idea PDF metadata strings in OpenAPI |
 
 ### Development
 
@@ -123,6 +124,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-60](tickets/done/Dev-60.md) | done | Allow Markdown and PDF idea and specification submissions |
 | [Dev-61](tickets/done/Dev-61.md) | done | Make rubric definitions self-contained JSON and downloadable |
 | [Dev-62](tickets/Dev-62.md) | to-do | Establish atomic SPEC-to-test traceability |
+| [Dev-63](tickets/Dev-63.md) | to-do | Derive remaining API service filters from generated types |
 
 ### Agents
 
@@ -180,7 +182,7 @@ Recurring documentation and contract checks, run by the [Auditor role](roles/aud
 | --- | --- | --- | --- | --- | --- |
 | [Compliance-01](checks/Compliance-01.md) | Monthly and after SPEC or guide changes | 2026-11-01T09:47+0100 | findings: 0 ticketed, 0 fixed, 0 duplicate, 0 decision needed; diff-check scope unverified | Compliance-01-20261101-0947 | Specification and guideline consistency |
 | [Compliance-02](checks/Compliance-02.md) | After each closed Feature or Bug; at least monthly | 2026-11-01T16:03+0100 | findings: 2 ticketed, 0 fixed, 2 duplicate, 0 decision needed; historical exclusion scope unverified; revision-2 status-metadata scope unverified | Compliance-02-20261101-1603 | Documentation and code parity |
-| [Compliance-03](checks/Compliance-03.md) | After API changes; at least monthly | 2026-11-01T17:58+0100 | findings: 1 ticketed, 0 fixed, 1 duplicate, 0 decision needed | Compliance-03-20261101-1758 | OpenAPI contract compliance |
+| [Compliance-03](checks/Compliance-03.md) | After API changes; at least monthly | 2026-11-01T17:58+0100 | findings: 3 ticketed, 0 fixed, 1 duplicate, 0 decision needed; historical exclusion verification unverified | Compliance-03-20261101-1758 | OpenAPI contract compliance |
 | [Compliance-04](checks/Compliance-04.md) | Weekly and after file moves or renames | 2026-10-22T08:47+0200 | findings: 1 ticketed, 3 fixed, 0 duplicate, 0 decision needed | Compliance-04-20261022-0847 | Link and format validation |
 | [Compliance-05](checks/Compliance-05.md) | Quarterly and before planning | 2026-10-22T09:58+0200 | findings: 2 ticketed, 0 fixed, 0 duplicate, 0 decision needed | Compliance-05-20261022-0958 | Documentation health |
 | [Compliance-06](checks/Compliance-06.md) | After each role-contract change or lesson application; at least monthly | 2026-10-22T12:54+0200 | findings: 2 ticketed, 0 fixed, 1 duplicate, 1 decision needed | Compliance-06-20261022-1254 | Agent role consistency and role-file validation |
