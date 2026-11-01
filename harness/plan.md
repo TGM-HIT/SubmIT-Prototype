@@ -175,7 +175,7 @@ Recurring documentation and contract checks, run by the [Auditor role](roles/aud
 
 | Check | Cadence | Last run | Result | Run | Definition |
 | --- | --- | --- | --- | --- | --- |
-| [Compliance-01](checks/Compliance-01.md) | Monthly and after SPEC or guide changes | 2026-10-21T22:25+0200 | findings: 2 ticketed, 1 fixed, 0 duplicate, 0 decision needed | Compliance-01-20261021-2225 | Specification and guideline consistency |
+| [Compliance-01](checks/Compliance-01.md) | Monthly and after SPEC or guide changes | 2026-11-01T09:47+0100 | clean: 0 ticketed, 0 fixed, 0 duplicate, 0 decision needed | Compliance-01-20261101-0947 | Specification and guideline consistency |
 | [Compliance-02](checks/Compliance-02.md) | After each closed Feature or Bug; at least monthly | 2026-10-21T23:31+0200 | findings: 7 ticketed, 0 fixed, 1 duplicate, 1 decision needed | Compliance-02-20261021-2331 | Documentation and code parity |
 | [Compliance-03](checks/Compliance-03.md) | After API changes; at least monthly | 2026-10-22T07:44+0200 | findings: 5 ticketed, 0 fixed, 0 duplicate, 0 decision needed | Compliance-03-20261022-0744 | OpenAPI contract compliance |
 | [Compliance-04](checks/Compliance-04.md) | Weekly and after file moves or renames | 2026-10-22T08:47+0200 | findings: 1 ticketed, 3 fixed, 0 duplicate, 0 decision needed | Compliance-04-20261022-0847 | Link and format validation |
