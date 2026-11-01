@@ -267,6 +267,49 @@ describe('CriterionAssessmentEditor', () => {
       .toHaveProperty('value', 'x'.repeat(4001))
   })
 
+  it('prevalidates every populated scale before issuing any routine writes', async () => {
+    const configured = rubric('ROUTINE')
+    configured.categories[0].criteria[2].scale = {
+      min: 0,
+      max: 1000,
+      step: 1,
+      labels: null,
+    }
+    configured.categories[0].criteria[3].scale = {
+      min: 1,
+      max: 1000,
+      step: 1,
+      labels: null,
+    }
+    const wrapper = mountEditor()
+    await wrapper.setProps({ routineRubric: configured })
+    await selectStudent(wrapper)
+    await wrapper.get('#criterion-ROUTINE-criterion-1-grade').setValue('4')
+    await wrapper.get('#criterion-ROUTINE-criterion-2-grade').setValue('3')
+    await wrapper.get('#criterion-ROUTINE-criterion-2-evidence').setValue('Valid evidence')
+    await wrapper.get('#criterion-ROUTINE-criterion-3-grade').setValue('0.3')
+    await wrapper.get('#criterion-ROUTINE-criterion-4-grade').setValue('1001')
+    expect(wrapper.get('#criterion-ROUTINE-criterion-3-grade').element).toHaveProperty('value', '0.3')
+    expect(wrapper.get('#criterion-ROUTINE-criterion-4-grade').element).toHaveProperty('value', '1001')
+
+    await saveButton(wrapper).trigger('click')
+    await flushPromises()
+
+    expect(api.recordGrade).not.toHaveBeenCalled()
+    expect(api.reviseGrade).not.toHaveBeenCalled()
+    const invalidStepRow = wrapper.findAll('.criterion-row')
+      .find((row) => row.find('legend').text() === 'ROUTINE Criterion 3')!
+    const outOfRangeRow = wrapper.findAll('.criterion-row')
+      .find((row) => row.find('legend').text() === 'ROUTINE Criterion 4')!
+    expect(invalidStepRow.text()).toContain('Choose a value within the configured scale and step.')
+    expect(outOfRangeRow.text()).toContain('Choose a value within the configured scale and step.')
+    expect(wrapper.get('#criterion-ROUTINE-criterion-1-grade').element).toHaveProperty('value', '4')
+    expect(wrapper.get('#criterion-ROUTINE-criterion-2-grade').element).toHaveProperty('value', '3')
+    expect(wrapper.get('#criterion-ROUTINE-criterion-2-evidence').element).toHaveProperty('value', 'Valid evidence')
+    expect(wrapper.get('#criterion-ROUTINE-criterion-3-grade').element).toHaveProperty('value', '0.3')
+    expect(wrapper.get('#criterion-ROUTINE-criterion-4-grade').element).toHaveProperty('value', '1001')
+  })
+
   it('preserves an explicitly chosen optional zero grade', async () => {
     const wrapper = mountEditor()
     await selectStudent(wrapper)
@@ -457,6 +500,39 @@ describe('CriterionAssessmentEditor', () => {
     expect((wrapper.get('#criterion-FINAL-criterion-2-grade').element as HTMLSelectElement).value).toBe('3')
     expect(wrapper.get('#criterion-FINAL-criterion-2-evidence').element).toHaveProperty('value', 'Existing evidence')
     wrapper.unmount()
+  })
+
+  it('rejects clearing a saved final grade without writing or losing its current value', async () => {
+    const current = savedGrade('FINAL-criterion-1', 'saved-final-1', { grade: 4 })
+    api.grades.mockResolvedValueOnce(page([]))
+      .mockResolvedValueOnce(page([current]))
+      .mockResolvedValueOnce(page([]))
+      .mockResolvedValueOnce(page([current]))
+    const wrapper = mountEditor()
+    await selectStudent(wrapper)
+    await wrapper.get('#criterion-assessment-mode').setValue('FINAL')
+    await flushPromises()
+    await wrapper.get('#criterion-FINAL-criterion-1-grade').setValue('')
+
+    await saveButton(wrapper).trigger('click')
+    await flushPromises()
+
+    expect(api.recordGrade).not.toHaveBeenCalled()
+    expect(api.reviseGrade).not.toHaveBeenCalled()
+    const clearedRow = wrapper.findAll('.criterion-row')
+      .find((row) => row.find('legend').text() === 'FINAL Criterion 1')!
+    expect(clearedRow.text()).toContain('Choose a grade before saving evidence, comments or a date.')
+    expect((wrapper.get('#criterion-FINAL-criterion-1-grade').element as HTMLSelectElement).value).toBe('')
+    wrapper.unmount()
+
+    const reloaded = mountEditor()
+    await selectStudent(reloaded)
+    await reloaded.get('#criterion-assessment-mode').setValue('FINAL')
+    await flushPromises()
+    expect((reloaded.get('#criterion-FINAL-criterion-1-grade').element as HTMLSelectElement).value).toBe('4')
+    expect(api.recordGrade).not.toHaveBeenCalled()
+    expect(api.reviseGrade).not.toHaveBeenCalled()
+    reloaded.unmount()
   })
 
   it('creates a new final row while every saved row remains unchanged', async () => {

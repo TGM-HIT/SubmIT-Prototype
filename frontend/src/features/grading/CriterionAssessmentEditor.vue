@@ -15,6 +15,7 @@
       <div class="field">
         <label class="label" for="criterion-assessment-student">{{ $t('grading.criteria.student') }}</label>
         <select id="criterion-assessment-student" ref="studentSelect" class="select" :value="studentId"
+          :data-options-ready="!membersLoading && !membersError && members.length > 0"
           :disabled="saving || disabled || membersLoading || !members.length"
           @change="changeStudent(($event.target as HTMLSelectElement).value)">
           <option value="">{{ $t('grading.criteria.chooseStudent') }}</option>

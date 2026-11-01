@@ -138,6 +138,7 @@ export function parseArgs(args) {
     selectByKey: [],
     nativeSelectByKey: [],
     expandSelect: [],
+    selectOption: [],
     steps: [],
   }
   const valueOptions = new Map([
@@ -166,6 +167,7 @@ export function parseArgs(args) {
     ['--tab-to', 'tabTo'],
     ['--select-by-key', 'selectByKey'],
     ['--native-select-by-key', 'nativeSelectByKey'],
+    ['--select-option', 'selectOption'],
     ['--expand-select', 'expandSelect'],
     ['--step', 'steps'],
   ])
@@ -209,6 +211,15 @@ export function parseArgs(args) {
         const interaction = { selector: value.slice(0, separator), value: value.slice(separator + 1) }
         options.selectByKey.push(interaction)
         if (name === 'nativeSelectByKey') options.nativeSelectByKey.push(interaction)
+      } else if (name === 'selectOption') {
+        const separator = assignmentSeparator(value)
+        if (separator < 1 || separator === value.length - 1) {
+          throw new Error('--select-option must use SELECTOR=EXPECTED_OPTION_LABEL.')
+        }
+        options.selectOption.push({
+          selector: value.slice(0, separator),
+          label: value.slice(separator + 1),
+        })
       } else if (name === 'steps') {
         const separator = value.indexOf(':')
         const action = separator < 0 ? value : value.slice(0, separator)
@@ -262,7 +273,7 @@ export function parseArgs(args) {
             selector: argument.slice(separator + 1),
           })
         } else if (['click', 'download', 'assert-action-visible', 'wait', 'read', 'focus', 'scroll', 'screenshot', 'key', 'tab-to', 'select-index',
-          'select-by-key',
+              'select-by-key', 'select-option', 'click-by-name', 'wait-text', 'assert-disabled',
           'navigate', 'assert-url'].includes(action) && argument) {
           if (action === 'screenshot' && path.basename(argument) !== argument) {
             throw new Error('--step screenshot must use a filename, not a path.')
@@ -294,6 +305,36 @@ export function parseArgs(args) {
               selector: argument.slice(0, assignment),
               value: argument.slice(assignment + 1),
             })
+          } else if (action === 'wait-text') {
+            const assignment = assignmentSeparator(argument)
+            if (assignment < 1 || assignment === argument.length - 1) {
+              throw new Error('--step wait-text must use wait-text:SELECTOR=EXPECTED_TEXT.')
+            }
+            options.steps.push({
+              action,
+              selector: argument.slice(0, assignment),
+              value: argument.slice(assignment + 1),
+            })
+          } else if (action === 'select-option') {
+            const assignment = assignmentSeparator(argument)
+            if (assignment < 1 || assignment === argument.length - 1) {
+              throw new Error('--step select-option must use select-option:SELECTOR=EXPECTED_OPTION_LABEL.')
+            }
+            options.steps.push({
+              action,
+              selector: argument.slice(0, assignment),
+              label: argument.slice(assignment + 1),
+            })
+          } else if (action === 'click-by-name') {
+            const assignment = assignmentSeparator(argument)
+            if (assignment < 1 || assignment === argument.length - 1) {
+              throw new Error('--step click-by-name must use click-by-name:SELECTOR=EXPECTED_NAME.')
+            }
+            options.steps.push({
+              action,
+              selector: argument.slice(0, assignment),
+              value: argument.slice(assignment + 1),
+            })
           } else {
             options.steps.push({ action, value: argument })
           }
@@ -301,7 +342,7 @@ export function parseArgs(args) {
           'assert-dialog-contained', 'assert-dialog-closed'].includes(action) && !argument) {
           options.steps.push({ action })
         } else {
-          throw new Error('--step must be fill:SELECTOR=VALUE, set-json-field:SELECTOR=FIELD=VALUE, set-file:SELECTOR=REPOSITORY_RELATIVE_PATH, select-index:SELECTOR=INDEX, select-by-key:SELECTOR=VALUE, click-record-action:TITLE_OR_ID|SELECTOR, read-record:TITLE_OR_ID, click:SELECTOR, download:SELECTOR, tab-to:SELECTOR, wait:SELECTOR, read:SELECTOR, focus:SELECTOR, scroll:SELECTOR, navigate:/SAME_ORIGIN_PATH, assert-url:PATH_AND_QUERY, reload, screenshot:FILE, key:SUPPORTED_KEY, assert-dialog-contained, assert-dialog-closed, accept-confirms, reject-confirms, offline, online, or measure-overflow.')
+          throw new Error('--step must be fill:SELECTOR=VALUE, set-json-field:SELECTOR=FIELD=VALUE, set-file:SELECTOR=REPOSITORY_RELATIVE_PATH, select-index:SELECTOR=INDEX, select-by-key:SELECTOR=VALUE, select-option:SELECTOR=EXPECTED_OPTION_LABEL, click-by-name:SELECTOR=EXPECTED_NAME, wait-text:SELECTOR=EXPECTED_TEXT, assert-disabled:SELECTOR, click-record-action:TITLE_OR_ID|SELECTOR, read-record:TITLE_OR_ID, click:SELECTOR, download:SELECTOR, tab-to:SELECTOR, wait:SELECTOR, read:SELECTOR, focus:SELECTOR, scroll:SELECTOR, navigate:/SAME_ORIGIN_PATH, assert-url:PATH_AND_QUERY, reload, screenshot:FILE, key:SUPPORTED_KEY, assert-dialog-contained, assert-dialog-closed, accept-confirms, reject-confirms, offline, online, or measure-overflow.')
         }
       } else {
         options[name] = value
@@ -1186,6 +1227,125 @@ export async function evaluatePage(client, expression, description) {
   return evaluation.result?.value
 }
 
+export async function selectEnabledOptionByLabel(client, selector, expectedLabel, {
+  timeoutMs = 10_000,
+  intervalMs = 50,
+} = {}) {
+  if (!selector || !expectedLabel.trim()) {
+    throw new Error('Named option selection requires a selector and a non-blank expected label.')
+  }
+  const inspect = `(selector, expectedLabel) => {
+    const select = document.querySelector(selector);
+    if (!(select instanceof HTMLSelectElement)) return { ready: false, controlFound: false };
+    if (select.disabled || select.dataset.optionsReady !== 'true') {
+      return { ready: false, controlFound: true, enabled: !select.disabled };
+    }
+    const normalize = (value) => value.replace(/\\s+/g, ' ').trim();
+    const matches = Array.from(select.options).filter((option) =>
+      !option.disabled && option.value !== '' && normalize(option.textContent || '').includes(normalize(expectedLabel)));
+    return {
+      ready: true,
+      matches: matches.map((option) => ({ value: option.value, label: normalize(option.textContent || '') })),
+    };
+  }`
+  const deadline = Date.now() + timeoutMs
+  let state
+  do {
+    state = await evaluatePage(client,
+      `(${inspect})(${JSON.stringify(selector)}, ${JSON.stringify(expectedLabel)})`,
+      `wait for enabled options in ${selector}`)
+    if (state.ready) {
+      if (state.matches.length === 0) {
+        throw new Error(`Named option missing in ${selector}: no enabled option contains ${JSON.stringify(expectedLabel)}.`)
+      }
+      if (state.matches.length > 1) {
+        throw new Error(`Named option ambiguous in ${selector}: ${state.matches.length} enabled options contain ${JSON.stringify(expectedLabel)}.`)
+      }
+      const selected = await evaluatePage(client, `((selector, expectedLabel) => {
+        const select = document.querySelector(selector);
+        if (!(select instanceof HTMLSelectElement) || select.disabled || select.dataset.optionsReady !== 'true') {
+          throw new Error('Control is not ready or enabled.');
+        }
+        const normalize = (value) => value.replace(/\\s+/g, ' ').trim();
+        const matches = Array.from(select.options).filter((option) =>
+          !option.disabled && option.value !== '' && normalize(option.textContent || '').includes(normalize(expectedLabel)));
+        if (matches.length !== 1) throw new Error('Named option changed before selection.');
+        select.value = matches[0].value;
+        select.dispatchEvent(new Event('input', { bubbles: true }));
+        select.dispatchEvent(new Event('change', { bubbles: true }));
+        return { value: select.value, label: normalize(matches[0].textContent || '') };
+      })(${JSON.stringify(selector)}, ${JSON.stringify(expectedLabel)})`,
+      `select unique option ${JSON.stringify(expectedLabel)} in ${selector}`)
+      return selected
+    }
+    if (Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, intervalMs))
+  } while (Date.now() < deadline)
+  throw new Error(`Named option not-ready in ${selector}: the enabled control did not report data-options-ready="true" within ${timeoutMs}ms.`)
+}
+
+export async function clickEnabledControlByName(client, selector, expectedName, {
+  timeoutMs = 10_000,
+  intervalMs = 50,
+} = {}) {
+  if (!selector || !expectedName.trim()) {
+    throw new Error('Named control selection requires a selector and a non-blank expected name.')
+  }
+  const expression = `(selector, expectedName) => {
+    const normalize = (value) => value.replace(/\\s+/g, ' ').trim();
+    const controls = Array.from(document.querySelectorAll(selector));
+    const ready = controls.filter((control) => control.dataset.optionsReady === 'true');
+    if (!ready.length) return { ready: false };
+    const matches = ready.filter((control) => !control.disabled
+      && normalize(control.textContent || '').includes(normalize(expectedName)));
+    return { ready: true, count: matches.length };
+  }`
+  const deadline = Date.now() + timeoutMs
+  let state
+  do {
+    state = await evaluatePage(client, `(${expression})(${JSON.stringify(selector)}, ${JSON.stringify(expectedName)})`,
+      `wait for enabled ${selector} matching ${JSON.stringify(expectedName)}`)
+    if (state.ready) {
+      if (state.count === 0) {
+        throw new Error(`Named control missing in ${selector}: no enabled control contains ${JSON.stringify(expectedName)}.`)
+      }
+      if (state.count > 1) {
+        throw new Error(`Named control ambiguous in ${selector}: ${state.count} enabled controls contain ${JSON.stringify(expectedName)}.`)
+      }
+      await evaluatePage(client, `((selector, expectedName) => {
+        const normalize = (value) => value.replace(/\\s+/g, ' ').trim();
+        const matches = Array.from(document.querySelectorAll(selector)).filter((control) =>
+          control.dataset.optionsReady === 'true' && !control.disabled
+          && normalize(control.textContent || '').includes(normalize(expectedName)));
+        if (matches.length !== 1) throw new Error('Named control changed before activation.');
+        matches[0].click();
+        return true;
+      })(${JSON.stringify(selector)}, ${JSON.stringify(expectedName)})`,
+      `activate unique enabled control matching ${JSON.stringify(expectedName)}`)
+      return
+    }
+    if (Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, intervalMs))
+  } while (Date.now() < deadline)
+  throw new Error(`Named control not-ready in ${selector}: no enabled result reported data-options-ready="true" within ${timeoutMs}ms.`)
+}
+
+export async function waitForText(client, selector, expectedText, {
+  timeoutMs = 10_000,
+  intervalMs = 50,
+} = {}) {
+  const expression = `(selector) => {
+    const element = document.querySelector(selector);
+    return element ? (element.textContent || '').replace(/\\s+/g, ' ').trim() : null;
+  }`
+  const deadline = Date.now() + timeoutMs
+  let observed
+  do {
+    observed = await evaluatePage(client, `(${expression})(${JSON.stringify(selector)})`, `read text from ${selector}`)
+    if (typeof observed === 'string' && observed.includes(expectedText)) return observed
+    if (Date.now() < deadline) await new Promise((resolve) => setTimeout(resolve, intervalMs))
+  } while (Date.now() < deadline)
+  throw new Error(`Timed out waiting for ${JSON.stringify(expectedText)} in ${selector}; observed ${JSON.stringify(observed)}.`)
+}
+
 export async function applyPageInteractions(client, options, {
   nativeInput = sendMacNativeSelectKeys,
   log = console.log,
@@ -1235,6 +1395,10 @@ export async function applyPageInteractions(client, options, {
     })`
     await evaluatePage(client, `(${expression})(${JSON.stringify(selector)})`, `wait for ${selector}`)
     console.log(`Found ${selector}.`)
+  }
+  for (const { selector, label } of options.selectOption ?? []) {
+    const selected = await selectEnabledOptionByLabel(client, selector, label)
+    log(`Selected unique enabled option ${JSON.stringify(selected.label)} in ${selector}.`)
   }
   for (const selector of options.expandSelect ?? []) {
     const expression = `(selector) => {
@@ -1382,6 +1546,8 @@ export async function applyPageSteps(client, steps, {
   signal,
   headed = false,
   nativeInput = sendMacNativeSelectKeys,
+  optionWaitTimeoutMs = 10_000,
+  optionPollIntervalMs = 50,
 } = {}) {
   for (const step of steps) {
     if (step.action === 'navigate') {
@@ -1473,6 +1639,12 @@ export async function applyPageSteps(client, steps, {
         `(${expression})(${JSON.stringify(step.selector)}, ${step.index})`,
         `select option ${step.index} in ${step.selector}`)
       log(`Selected option ${step.index} (${text}) in ${step.selector}.`)
+    } else if (step.action === 'select-option') {
+      const selected = await selectEnabledOptionByLabel(client, step.selector, step.label, {
+        timeoutMs: optionWaitTimeoutMs,
+        intervalMs: optionPollIntervalMs,
+      })
+      log(`Selected unique enabled option ${JSON.stringify(selected.label)} in ${step.selector}.`)
     } else if (step.action === 'select-by-key') {
       const state = await evaluatePage(client, `((selector, value) => {
         const select = document.querySelector(selector);
@@ -1564,6 +1736,32 @@ export async function applyPageSteps(client, steps, {
       }`
       await evaluatePage(client, `(${expression})(${JSON.stringify(step.value)})`, `click ${step.value}`)
       log(`Clicked ${step.value}.`)
+    } else if (step.action === 'click-by-name') {
+      await clickEnabledControlByName(client, step.selector, step.value, {
+        timeoutMs: optionWaitTimeoutMs,
+        intervalMs: optionPollIntervalMs,
+      })
+      log(`Activated unique enabled control in ${step.selector} matching ${JSON.stringify(step.value)}.`)
+    } else if (step.action === 'wait-text') {
+      const observed = await waitForText(client, step.selector, step.value, {
+        timeoutMs: optionWaitTimeoutMs,
+        intervalMs: optionPollIntervalMs,
+      })
+      log(`Text in ${step.selector} contains ${JSON.stringify(step.value)}: ${observed}`)
+    } else if (step.action === 'assert-disabled') {
+      const state = await evaluatePage(client, `(() => {
+        const element = document.querySelector(${JSON.stringify(step.value)});
+        const rect = element?.getBoundingClientRect();
+        return {
+          found: Boolean(element),
+          disabled: Boolean(element && 'disabled' in element && element.disabled),
+          visible: Boolean(rect && rect.width > 0 && rect.height > 0),
+        };
+      })()`, `inspect disabled control ${step.value}`)
+      log(`Control state ${step.value}: ${JSON.stringify(state)}`)
+      if (!state?.found || !state.disabled) {
+        throw new Error(`Expected disabled control ${step.value}; observed ${JSON.stringify(state)}.`)
+      }
     } else if (step.action === 'click-row-action') {
       const expression = `(text, selector) => {
         const row = [...document.querySelectorAll('article.data-row')].find((candidate) =>
@@ -2009,8 +2207,9 @@ Options:
   --tab-to SELECTOR               Reach an element using Tab; may be repeated
   --select-by-key SELECTOR=VALUE  Select an enabled native option using keyboard input; may be repeated
   --native-select-by-key SELECTOR=VALUE  Use macOS keyboard input on a headed collapsed popup
+  --select-option SELECTOR=LABEL Wait for exactly one enabled option with the exact visible label and select it
   --expand-select SELECTOR        Show all native select options inline for screenshot inspection
-  --step ACTION:VALUE             Run ordered interactions; supports select-by-key:SELECTOR=VALUE,
+  --step ACTION:VALUE             Run ordered interactions; supports   select-by-key:SELECTOR=VALUE, select-option:SELECTOR=LABEL,
                                   click-row-action:USERNAME|SELECTOR and, on the
                                   Ideas list, click-record-action:TITLE_OR_ID|SELECTOR (or |text:BUTTON_TEXT, e.g. text:Edit)
                                   and read-record:TITLE_OR_ID

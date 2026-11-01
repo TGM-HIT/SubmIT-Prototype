@@ -538,6 +538,44 @@ class GradingWriteAuthorizationApiTest {
     }
 
     @Test
+    void missingOrBlankFinalRevisionReasonIsRejectedWithoutChangingHistoryOrAudit() throws Exception {
+        JsonNode original = body(request(post("/api/projects/{projectId}/student-grades", projectId),
+                teacherToken, Map.of("rubricId", rubricId, "assessmentType", "FINAL",
+                        "studentId", studentId, "criterionId", "individual", "grade", 4))
+                .andExpect(status().isCreated()).andReturn());
+        String originalId = text(original, "id");
+        long recordsBefore = store.repository().findAll().size();
+        long auditsBefore = store.repository().findByType("audit",
+                org.springframework.data.domain.PageRequest.of(0, 1000)).getTotalElements();
+
+        request(post("/api/projects/{projectId}/student-grades/{gradeId}/revisions",
+                        projectId, originalId),
+                teacherToken, Map.of("grade", 3)).andExpect(status().isBadRequest());
+        assertEquals(recordsBefore, store.repository().findAll().size());
+        assertEquals(auditsBefore, store.repository().findByType("audit",
+                org.springframework.data.domain.PageRequest.of(0, 1000)).getTotalElements());
+
+        request(post("/api/projects/{projectId}/student-grades/{gradeId}/revisions",
+                        projectId, originalId),
+                teacherToken, Map.of("reason", "  ", "grade", 3)).andExpect(status().isBadRequest());
+        assertEquals(recordsBefore, store.repository().findAll().size());
+        assertEquals(auditsBefore, store.repository().findByType("audit",
+                org.springframework.data.domain.PageRequest.of(0, 1000)).getTotalElements());
+
+        JsonNode history = body(mockMvc.perform(bearer(
+                        get("/api/projects/{projectId}/student-grades", projectId), teacherToken)
+                        .param("studentId", studentId).param("assessmentType", "FINAL")
+                        .param("rubricId", rubricId.toString()))
+                .andExpect(status().isOk()).andReturn());
+        JsonNode onlyCurrent = findById(array(history, "content"), originalId);
+        assertEquals(1, array(history, "content").size());
+        assertEquals("ACTIVE", text(onlyCurrent, "status"));
+        assertNumber(onlyCurrent, "grade", 4);
+        assertEquals(null, onlyCurrent.get("supersededById") == null
+                || onlyCurrent.get("supersededById").isNull() ? null : onlyCurrent.get("supersededById").asText());
+    }
+
+    @Test
     void configuredRuleRejectsOverlappingFinalStudentAndRoutineGroupCriterionIds() throws Exception {
         UUID finalRubricId = publishRubricWithDifferentStudentScale(
                 "overlapping-rule-final-" + UUID.randomUUID());

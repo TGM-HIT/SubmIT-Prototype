@@ -34,6 +34,9 @@ import {
   waitForReady,
   SUPPORTED_BROWSER_KEYS,
   dispatchBrowserKey,
+  clickEnabledControlByName,
+  selectEnabledOptionByLabel,
+  waitForText,
   assertBrowserState,
   assertDialogContainsFocus,
   assertDialogClosed,
@@ -130,6 +133,99 @@ test('ordered select-by-key verifies a keyboard-selected enabled option after pr
   })
   assert.deepEqual(nativeKeys, [{ x: 100, y: 200 }, 40, 4])
   assert.match(log.join(' '), /Selected "4" in #criterion-grade with the browser keyboard/)
+})
+
+test('named option matcher waits for readiness and uniquely selects the exact readable label', async () => {
+  const parsed = parseArgs(['--step', 'select-option:#member=Emily Carter — Class 10A · Biology'])
+  assert.deepEqual(parsed.steps, [{
+    action: 'select-option',
+    selector: '#member',
+    label: 'Emily Carter — Class 10A · Biology',
+  }])
+  const states = [
+    { ready: false, controlFound: true, enabled: true },
+    { ready: true, matches: [{ value: 'member-id', label: 'Emily Carter — Class 10A · Biology' }] },
+    { value: 'member-id', label: 'Emily Carter — Class 10A · Biology' },
+  ]
+  const client = {
+    async send(method) {
+      assert.equal(method, 'Runtime.evaluate')
+      return { result: { value: states.shift() } }
+    },
+  }
+  const selected = await selectEnabledOptionByLabel(client, '#member', 'Emily Carter — Class 10A · Biology', {
+    timeoutMs: 100,
+    intervalMs: 1,
+  })
+  assert.deepEqual(selected, { value: 'member-id', label: 'Emily Carter — Class 10A · Biology' })
+})
+
+test('named option matcher distinguishes missing, ambiguous and not-ready controls', async () => {
+  const clientWith = (state) => ({
+    async send() { return { result: { value: state } } },
+  })
+  await assert.rejects(selectEnabledOptionByLabel(
+    clientWith({ ready: true, matches: [] }), '#rubric', 'Routine rubric v1',
+  ), /Named option missing/)
+  await assert.rejects(selectEnabledOptionByLabel(
+    clientWith({ ready: true, matches: [
+      { value: 'rubric-a', label: 'Routine rubric v1' },
+      { value: 'rubric-b', label: 'Routine rubric v1' },
+    ] }), '#rubric', 'Routine rubric v1',
+  ), /Named option ambiguous.*2 enabled options/)
+  await assert.rejects(selectEnabledOptionByLabel(
+    clientWith({ ready: false, controlFound: true, enabled: false }), '#project', 'River Lab',
+    { timeoutMs: 5, intervalMs: 1 },
+  ), /Named option not-ready/)
+})
+
+test('named project control waits for the loaded result and activates by human-readable name', async () => {
+  const parsed = parseArgs(['--step', 'click-by-name:.proposal-result=Grading Selection Preview — River Lab'])
+  assert.deepEqual(parsed.steps, [{
+    action: 'click-by-name',
+    selector: '.proposal-result',
+    value: 'Grading Selection Preview — River Lab',
+  }])
+  const states = [
+    { ready: false },
+    { ready: true, count: 1 },
+    true,
+  ]
+  const client = {
+    async send() { return { result: { value: states.shift() } } },
+  }
+  await clickEnabledControlByName(client, '.proposal-result', 'Grading Selection Preview — River Lab', {
+    timeoutMs: 100,
+    intervalMs: 1,
+  })
+})
+
+test('wait-text observes an asynchronous visible save result without fixed sleeps', async () => {
+  const parsed = parseArgs(['--step', 'wait-text:[role=status]=Saved 2'])
+  assert.deepEqual(parsed.steps, [{
+    action: 'wait-text',
+    selector: '[role=status]',
+    value: 'Saved 2',
+  }])
+  const states = ['Saving…', 'Saved 2 criterion assessments.']
+  const client = {
+    async send() { return { result: { value: states.shift() ?? 'Saved 2 criterion assessments.' } } },
+  }
+  assert.equal(await waitForText(client, '[role=status]', 'Saved 2', { timeoutMs: 100, intervalMs: 1 }),
+    'Saved 2 criterion assessments.')
+})
+
+test('assert-disabled distinguishes a present disabled control from an enabled one', async () => {
+  const parsed = parseArgs(['--step', 'assert-disabled:#criterion-assessment-student'])
+  assert.deepEqual(parsed.steps, [{ action: 'assert-disabled', value: '#criterion-assessment-student' }])
+  const client = {
+    async send() { return { result: { value: { found: true, disabled: true, visible: true } } } },
+  }
+  const messages = []
+  await applyPageSteps(client, parsed.steps, { log: (message) => messages.push(message) })
+  assert.match(messages.join(' '), /disabled":true/)
+  client.send = async () => ({ result: { value: { found: true, disabled: false, visible: true } } })
+  await assert.rejects(applyPageSteps(client, parsed.steps, { log: () => {} }), /Expected disabled control/)
 })
 
 test('G8 optional network evidence includes completion and initiator without authentication or payload data', () => {

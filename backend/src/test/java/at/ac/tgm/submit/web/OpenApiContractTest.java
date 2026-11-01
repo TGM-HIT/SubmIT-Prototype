@@ -244,6 +244,11 @@ class OpenApiContractTest {
                 fieldNames(revisionRequest.path("properties")));
         assertEquals(Set.of("reason", "grade"), textualMembers(revisionRequest.path("required")));
         assertEquals(Set.of(), nullableProperties(revisionRequest.path("properties")));
+        JsonNode revisionReason = revisionRequest.path("properties").path("reason");
+        assertEquals(1, revisionReason.path("minLength").asInt());
+        assertEquals(2000, revisionReason.path("maxLength").asInt());
+        assertEquals("Required, non-blank reason for reassessment; at most 2,000 characters.",
+                revisionReason.path("description").asText());
         String revisionDescription = revisionRequest.path("description").asText().toLowerCase(Locale.ROOT);
         assertTrue(revisionDescription.contains("phase") && revisionDescription.contains("rubric")
                 && revisionDescription.contains("student") && revisionDescription.contains("criterion")

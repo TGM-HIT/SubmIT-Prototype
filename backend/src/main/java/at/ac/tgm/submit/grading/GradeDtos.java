@@ -139,7 +139,7 @@ public final class GradeDtos {
             + "inherited from that source and cannot be changed in the request. The source entry is retained as "
             + "superseded on its original rubric version.")
     public record GradeRevisionRequest(
-            @NotBlank @Size(max = 2000)
+            @NotBlank @Size(min = 1, max = 2000)
             @Schema(description = "Required, non-blank reason for reassessment; at most 2,000 characters.",
                     minLength = 1)
             String reason,

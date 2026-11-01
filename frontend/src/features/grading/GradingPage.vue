@@ -37,6 +37,7 @@
           <article v-for="project in teacherProjects" :key="project.formalApplicationId" class="data-row" role="listitem">
             <button class="proposal-result" type="button"
               :data-formal-application-id="project.formalApplicationId"
+              :data-options-ready="!teacherProjectsLoading && !teacherProjectsError"
               :ref="(element) => setTeacherResultButton(project.formalApplicationId, element)"
               :aria-pressed="project.projectId === projectId"
               :disabled="teacherProjectsLoading || projectLoading || task.loading.value"
@@ -69,6 +70,7 @@
         <div class="field">
           <label class="label" for="grading-student-project">{{ $t('grading.chooseProject') }}</label>
           <select id="grading-student-project" ref="studentProjectSelect" :value="projectId" class="select"
+            :data-options-ready="!studentProjectsLoading && !studentProjectsError"
             :disabled="studentProjectsLoading || !!studentProjectsError || projectLoading || task.loading.value"
             @change="selectStudentProject">
             <option value="">{{ $t('grading.chooseProjectPrompt') }}</option>
@@ -114,6 +116,7 @@
           <div class="field">
             <label class="label" for="routine-rubric-selection">{{ $t('grading.rubricSelection.routine') }}</label>
             <select id="routine-rubric-selection" :value="routineRubricDraft" class="select"
+              :data-options-ready="!rubricSelectionLoading && !rubricSelectionError"
               :disabled="rubricSelectionLoading || rubricSaving || assessmentSaving"
               @change="setRoutineRubricDraft($event)">
               <option value="">{{ $t('grading.rubricSelection.unselected') }}</option>
@@ -128,6 +131,7 @@
           <div class="field">
             <label class="label" for="final-rubric-selection">{{ $t('grading.rubricSelection.final') }}</label>
             <select id="final-rubric-selection" :value="finalRubricDraft" class="select"
+              :data-options-ready="!rubricSelectionLoading && !rubricSelectionError"
               :disabled="rubricSelectionLoading || rubricSaving || assessmentSaving"
               @change="setFinalRubricDraft($event)">
               <option value="">{{ $t('grading.rubricSelection.unselected') }}</option>
