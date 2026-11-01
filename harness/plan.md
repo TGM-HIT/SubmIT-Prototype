@@ -127,6 +127,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-62](tickets/Dev-62.md) | to-do | Establish atomic SPEC-to-test traceability |
 | [Dev-63](tickets/Dev-63.md) | to-do | Derive remaining API service filters from generated types |
 | [Dev-64](tickets/Dev-64.md) | to-do | Document exact catalogue rename routes |
+| [Dev-65](tickets/Dev-65.md) | to-do | Make Compliance-03 evidence method-aware and auditable |
 
 ### Agents
 
