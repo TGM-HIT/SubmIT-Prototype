@@ -4,11 +4,11 @@ Draft from Compliance-04-20261101-2012: needs Ticket Author refinement before im
 
 ## Intent
 
-The Compliance ledger lists Feature-29 as `in-progress` at the open-ticket path, but that path is missing while a Feature-29 ticket exists under `harness/tickets/done/`. This leaves the ledger status and ticket location inconsistent and prevents the row from navigating to its specification.
+The Compliance ledger lists Feature-29 as `in-progress` at the open-ticket path, but that path is missing while a Feature-29 ticket exists at `harness/tickets/done/Feature-29.md`. This leaves the ledger status and ticket location inconsistent and prevents the row from navigating to its specification.
 
 ## Source
 
-Source: Compliance-04-20261101-2012, finding 3; quoted evidence: “[Feature-29](tickets/Feature-29.md) | in-progress” while the tracked ticket is `harness/tickets/done/Feature-29.md`.
+Source: Compliance-04-20261101-2012, finding 4; quoted evidence: “[Feature-29](tickets/Feature-29.md) | in-progress” while the tracked ticket is `harness/tickets/done/Feature-29.md`.
 
 ## Scope and contract
 

@@ -8,7 +8,7 @@ Several completed tickets point to historical human-acceptance or evaluation rec
 
 ## Source
 
-Source: Compliance-04-20261101-2012, finding 2; quoted evidence: “harness/runs/Dev-44-20261025-1637/human-acceptance.md (missing)” and “harness/runs/Dev-39-20261025-0933/evaluation-1.md (missing).”
+Source: Compliance-04-20261101-2012, finding 3; quoted evidence: “harness/runs/Dev-44-20261025-1637/human-acceptance.md (missing)” and “harness/runs/Dev-39-20261025-0933/evaluation-1.md (missing).”
 
 ## Scope and contract
 
