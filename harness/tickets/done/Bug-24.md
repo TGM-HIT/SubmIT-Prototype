@@ -6,7 +6,7 @@ Draft from Compliance-02-20261021-2331, refined for implementation and evaluatio
 
 Application periods with scheduled opening and closing times do not reliably follow their configured lifecycle. A future period can remain stored as `DRAFT` after its opening time, preventing student applications and group formation. The deadline scheduler only scans the first 100 periods and can miss periods already changed to `CLOSED` or `ALLOCATED` by an administrator action. As a result, some periods never receive the required initial allocation run.
 
-Students, administrators, and teachers relying on application and allocation results are affected. The governing behavior appears in the application-period and allocation sections of [`docs/SPEC.md`](../../../docs/SPEC.md), [`backend/SPEC.md`](../../../backend/SPEC.md), and [`frontend/SPEC.md`](../../../frontend/SPEC.md). Relevant implementation includes [`ApplicationPeriodService.java`](../../../backend/src/main/java/ac/at/tgm/submit/application/ApplicationPeriodService.java), [`ApplyingGroupRecords.java`](../../../backend/src/main/java/ac/at/tgm/submit/application/ApplyingGroupRecords.java), [`AllocationService.java`](../../../backend/src/main/java/ac/at/tgm/submit/allocation/AllocationService.java), and [`AllocationDeadlineScheduler.java`](../../../backend/src/main/java/ac/at/tgm/submit/allocation/AllocationDeadlineScheduler.java).
+Students, administrators, and teachers relying on application and allocation results are affected. The governing behavior appears in the application-period and allocation sections of [`docs/SPEC.md`](../../../docs/SPEC.md), [`backend/SPEC.md`](../../../backend/SPEC.md), and [`frontend/SPEC.md`](../../../frontend/SPEC.md). Relevant implementation includes [`ApplicationPeriodService.java`](../../../backend/src/main/java/at/ac/tgm/submit/application/ApplicationPeriodService.java), [`ApplyingGroupRecords.java`](../../../backend/src/main/java/at/ac/tgm/submit/application/ApplyingGroupRecords.java), [`AllocationService.java`](../../../backend/src/main/java/at/ac/tgm/submit/allocation/AllocationService.java), and [`AllocationDeadlineScheduler.java`](../../../backend/src/main/java/at/ac/tgm/submit/allocation/AllocationDeadlineScheduler.java).
 
 ## Scope and contract
 
@@ -53,11 +53,11 @@ Standard project checks:
 - Early-run classification, replacement behavior after an initial run, allocation optimization, pins, and unrelated behavior remain unchanged; the named existing regression tests continue to pass.
 - No contradictory lifecycle or deadline text remains across the three updated specifications. All applicable backend checks pass; no unrelated cleanup is included; generated artifacts are never hand-edited and are regenerated and reviewed when applicable; no check is claimed that was not performed.
 
-## Current-state triage
+## Optional: Current-state triage
 
 Before implementation, reproduce each reported defect with a failing automated test: a period that remains `DRAFT` after `opensAt`, a due period beyond the first 100 records, and an initial run suppressed by a post-deadline administrator action. Record the failing scenarios in the implementation handoff. A no-op is acceptable only if every acceptance criterion is already met and every applicable standard check passes.
 
-## Specification changes
+## Optional: Specification changes
 
 - Review all application-period and allocation lifecycle statements in [`docs/SPEC.md`](../../../docs/SPEC.md), [`backend/SPEC.md`](../../../backend/SPEC.md), and [`frontend/SPEC.md`](../../../frontend/SPEC.md). Clarify effective opening and closing boundaries, that due initial runs remain mandatory despite post-deadline edits or replacement runs, and that period reads including `projectTitles` and catalogue details remain available through the exact closing timestamp even if deadline processing has changed the stored status. Preserve the strict-before-deadline rule for application and applying-group changes. Leave the specifications consistent and without contradictions.
 - These are specification changes; no generated contract change is required unless backend API annotations, response models, or validation also change.

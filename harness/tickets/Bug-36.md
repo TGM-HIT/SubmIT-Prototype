@@ -17,7 +17,7 @@ Source: Compliance-03-20261101-1758, report finding 2; `backend/SPEC.md` defines
 - The `400` description must state the actual query-conversion trigger and use the shared `ApiErrorResponse` schema. Do not add a blanket response to unrelated operations.
 - Update only the backend OpenAPI annotations/customizer needed to express those responses and any backend regression tests. Regenerate `contracts/openapi.yaml`; never hand-edit or commit that ignored file. Regenerate `frontend/src/api/schema.d.ts` and commit it only if generation changes the tracked output.
 
-## Mechanical checks
+## Mechanical checks (the Evaluator re-runs)
 
 Durable automated tests:
 
@@ -30,11 +30,11 @@ Standard project checks:
 - From `backend/`: `./gradlew generateOpenApi`, review the generated contract; from `frontend/`: `npm run api:types`.
 - Frontend typecheck, tests, and build are required only if tracked generated types change.
 
-## One-time manual verification
+## One-time manual verification (in addition to automated tests)
 
 - No manual verification required; the HTTP-level tests cover the affected request conversion behavior.
 
-## Acceptance criteria
+## Acceptance criteria (the Evaluator judges)
 
 - Both operations document the applicable malformed-query `400` with accurate trigger text and `ApiErrorResponse`.
 - Existing success, `401`, and `403` response declarations and runtime behavior are unchanged.

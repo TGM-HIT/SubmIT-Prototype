@@ -52,6 +52,6 @@ Standard project checks:
 
 This ticket is being continued after a failed run (`harness/runs/Feature-01-20261007-2033/`). The target branch already contains earlier implementation commits for this ticket (`d4e1116`, `0ea96c2`, `a554fd7`). Before editing, inspect the current implementation against every scope item and acceptance criterion and record which are already met. Change only what is unmet or untested; a documented no-op for an already-met criterion is acceptable. Previous manual verification does not carry over to behavior changed in this pass: re-perform the manual steps that the new changes affect and say plainly which were not re-performed.
 
-## Optional: Revision notes
+### Revision notes
 
 - Revised after the first run failed: legacy-entry handling made explicitly out of scope (no legacy data exists); explicit-`null` rating rejection added; filter and pagination focus cases made explicit.

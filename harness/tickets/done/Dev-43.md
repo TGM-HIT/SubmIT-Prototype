@@ -8,7 +8,7 @@ Paginated operations expose a `page` query parameter without consistently descri
 
 Source: Compliance-03-20261022-0744, report finding 4; `backend/SPEC.md` sections 1 and 2; `UserController.lookupStudents`; existing `OpenApiContractTest.everyCollectionSizeParameterDocumentsNormalizationAndDefault`.
 
-## Product-owner decision (2026-10-25)
+### Product-owner decision (2026-10-25)
 
 The owner selected option A in `harness/runs/Dev-43-20261025-1916/human-acceptance.md`: “A” — amend Dev-43 to count all existing query `page` parameters in the baseline inventory, 22 total with five already described, preserving every existing parameter.
 

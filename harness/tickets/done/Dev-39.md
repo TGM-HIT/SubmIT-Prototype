@@ -52,6 +52,6 @@ Standard checks: documentation-only changes require no project build or test run
 - No contradictory statement about these rules remains in the three changed specifications, and no other files are changed.
 - Standard (all tickets): existing behavior outside the stated scope is unchanged; no unrelated cleanups; generated artifacts are never hand-edited and are regenerated and reviewed when applicable; commit generated output only when repository conventions require it; no check is claimed that was not performed.
 
-## Specification changes
+## Optional: Specification changes
 
 Only `docs/SPEC.md`, `backend/SPEC.md`, and `frontend/SPEC.md` may change. Declare the exact specification updates in the handoff. No developer-guide change is needed.

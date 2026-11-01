@@ -6,7 +6,7 @@ Draft from Compliance-02-20261018-0945, refined for implementation and evaluatio
 
 An anonymous visitor to a completed project's public archive can download an approved website snapshot but cannot browse the preserved site. The public archive must offer an accessible way to browse that snapshot without running untrusted active content in the application's origin.
 
-The requirement is established by the archive sections of [`docs/SPEC.md`](../../docs/SPEC.md), [`backend/SPEC.md`](../../backend/SPEC.md), and [`frontend/SPEC.md`](../../frontend/SPEC.md). The owner has selected the Web Archive Collection Zipped (WACZ) format for website snapshots. Currently, [`ArchivePage.vue`](../../frontend/src/features/archive/ArchivePage.vue) offers downloads from `/archive/:projectId`; [`PublicArchiveController.java`](../../backend/src/main/java/ac/at/tgm/submit/archive/PublicArchiveController.java) serves public artifact bytes as attachments. [`ArtifactServiceTest.java`](../../backend/src/test/java/ac/at/tgm/submit/archive/ArtifactServiceTest.java) checks attachment behavior but does not verify browser isolation.
+The requirement is established by the archive sections of [`docs/SPEC.md`](../../docs/SPEC.md), [`backend/SPEC.md`](../../backend/SPEC.md), and [`frontend/SPEC.md`](../../frontend/SPEC.md). The owner has selected the Web Archive Collection Zipped (WACZ) format for website snapshots. Currently, [`ArchivePage.vue`](../../frontend/src/features/archive/ArchivePage.vue) offers downloads from `/archive/:projectId`; [`PublicArchiveController.java`](../../backend/src/main/java/at/ac/tgm/submit/archive/PublicArchiveController.java) serves public artifact bytes as attachments. [`ArtifactServiceTest.java`](../../backend/src/test/java/at/ac/tgm/submit/archive/ArtifactServiceTest.java) checks attachment behavior but does not verify browser isolation.
 
 ## Scope and contract
 
@@ -53,7 +53,7 @@ Standard project checks:
 - The opt-in preview fixture exercises the approved-completed lifecycle without changing ordinary or production data. Its durable fixture test verifies the enabled and disabled cases; the preview option is documented and tested.
 - All applicable standard checks pass; existing behavior outside this scope is unchanged; no unrelated cleanup is included; generated artifacts are never hand-edited and are regenerated and reviewed when applicable; no check is claimed that was not performed.
 
-## Specification changes
+## Optional: Specification changes
 
 - Update the archive requirements in [`docs/SPEC.md`](../../docs/SPEC.md), [`backend/SPEC.md`](../../backend/SPEC.md), and [`frontend/SPEC.md`](../../frontend/SPEC.md) to establish WACZ as the website snapshot format and retain the requirements for safe, anonymous browsing, privacy, publication approval, completion, and direct retrieval. In `backend/SPEC.md`, replace the statement that no particular file format is implied with the selected WACZ format. Review all archive statements in each named specification and leave no contradictions.
 - These are source specification changes only; regenerate `contracts/openapi.yaml` only if backend API annotations, models, or validation change, following the API generation instructions above.

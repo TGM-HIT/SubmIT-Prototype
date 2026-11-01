@@ -36,7 +36,7 @@ The owner confirmed that allocation remains synchronous and selected the documen
 - Automatic initial runs, early runs, replacement runs, allocation results, and finalization behavior remain otherwise unchanged. The existing `AllocationEarlyRunApiTest` and relevant `ApplyingGroupApiTest` scenarios remain the implementation baseline and are not weakened.
 - Only the applicable specification files change; there is no application-code, test, API-contract, or generated-type change. No unrelated cleanup is included, generated artifacts are not hand-edited, and no check is claimed that was not performed.
 
-## Specification changes
+## Optional: Specification changes
 
 - Review all occurrences concerning application-period states, deadline-triggered initial runs, allocation-run states, and allocation completion in [`docs/SPEC.md`](../../../docs/SPEC.md), [`backend/SPEC.md`](../../../backend/SPEC.md), and [`frontend/SPEC.md`](../../../frontend/SPEC.md), not only the named lifecycle paragraph. Update the two contradictory requirements above and ensure the three specifications contain no conflicting lifecycle description.
 - No OpenAPI regeneration is required because API annotations, request/response models, and validation are unchanged.

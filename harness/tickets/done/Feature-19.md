@@ -6,7 +6,7 @@ The student-grade list already accepts an optional `studentId` filter for staff 
 
 Source: Compliance-03-20261018-1757, report finding 7. The human decision record at [`human-acceptance.md`](../../runs/archive/Compliance-03-20261018-1757/human-acceptance.md) selects option A: preserve the teacher filter and document its behavior and student restrictions. `GradingController` exposes the optional query parameter and `GradeService.listStudentGrades` applies it for staff callers while restricting students to their own grades.
 
-## Product-owner decision
+### Product-owner decision
 
 - On 2026-10-18, Markus Schabel selected: “Preserve the teacher `studentId` filter and document its intended behavior and student restrictions.”
 - No additional rationale was supplied in the decision record.

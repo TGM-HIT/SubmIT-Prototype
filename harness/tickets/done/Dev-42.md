@@ -35,6 +35,6 @@ Source: Compliance-03-20261022-0744, report finding 2; `docs/SPEC.md` section 4;
 - No unrelated requirement text or other file changes.
 - Standard (all tickets): existing behavior outside the stated scope is unchanged; no unrelated cleanups; generated artifacts are never hand-edited and are regenerated and reviewed when applicable; commit generated output only when repository conventions require it; no check is claimed that was not performed.
 
-## Specification changes
+## Optional: Specification changes
 
 Only `backend/SPEC.md` may change. Declare that change in the handoff. No API or generated-contract regeneration is needed.
