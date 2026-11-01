@@ -57,7 +57,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Bug-35](tickets/Bug-35.md) | to-do | Verify archive content safety before publication |
 | [Bug-36](tickets/Bug-36.md) | to-do | Document malformed formal-list query errors |
 | [Bug-37](tickets/Bug-37.md) | to-do | Declare nonblank Idea PDF metadata strings in OpenAPI |
-| [Bug-38](tickets/Bug-38.md) | to-do | Document request-ceiling 413 for project artefact uploads |
+| [Bug-38](tickets/Bug-38.md) | to-do | Document multipart upload size-limit responses accurately |
 
 ### Development
 
