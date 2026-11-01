@@ -54,6 +54,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Bug-32](tickets/done/Bug-32.md) | done | Diagnose root-only blank page and restore reliable login landing |
 | [Bug-33](tickets/done/Bug-33.md) | done | Load supervisor-free finalized groups in student Formal proposals |
 | [Bug-34](tickets/done/Bug-34.md) | done | Remove fixed allocation size ceilings without weakening optimization |
+| [Bug-35](tickets/Bug-35.md) | to-do | Verify archive content safety before publication |
 
 ### Development
 
@@ -176,7 +177,7 @@ Recurring documentation and contract checks, run by the [Auditor role](roles/aud
 | Check | Cadence | Last run | Result | Run | Definition |
 | --- | --- | --- | --- | --- | --- |
 | [Compliance-01](checks/Compliance-01.md) | Monthly and after SPEC or guide changes | 2026-11-01T09:47+0100 | findings: 0 ticketed, 0 fixed, 0 duplicate, 0 decision needed; diff-check scope unverified | Compliance-01-20261101-0947 | Specification and guideline consistency |
-| [Compliance-02](checks/Compliance-02.md) | After each closed Feature or Bug; at least monthly | 2026-11-01T16:03+0100 | clean: 0 ticketed, 0 fixed, 0 duplicate, 0 decision needed | Compliance-02-20261101-1603 | Documentation and code parity |
+| [Compliance-02](checks/Compliance-02.md) | After each closed Feature or Bug; at least monthly | 2026-11-01T16:03+0100 | findings: 1 ticketed, 0 fixed, 0 duplicate, 0 decision needed; historical exclusion scope unverified | Compliance-02-20261101-1603 | Documentation and code parity |
 | [Compliance-03](checks/Compliance-03.md) | After API changes; at least monthly | 2026-10-22T07:44+0200 | findings: 5 ticketed, 0 fixed, 0 duplicate, 0 decision needed | Compliance-03-20261022-0744 | OpenAPI contract compliance |
 | [Compliance-04](checks/Compliance-04.md) | Weekly and after file moves or renames | 2026-10-22T08:47+0200 | findings: 1 ticketed, 3 fixed, 0 duplicate, 0 decision needed | Compliance-04-20261022-0847 | Link and format validation |
 | [Compliance-05](checks/Compliance-05.md) | Quarterly and before planning | 2026-10-22T09:58+0200 | findings: 2 ticketed, 0 fixed, 0 duplicate, 0 decision needed | Compliance-05-20261022-0958 | Documentation health |
