@@ -2,11 +2,16 @@
   <section class="page">
     <p class="page-intro">{{ $t('grading.intro') }}</p>
     <section class="panel">
-      <h2 class="section-title">{{ activeRubric?.name ?? $t('grading.activeRubric') }}
-        <span v-if="activeRubric?.version" class="status-badge">{{ activeRubric.version }}</span>
-      </h2>
-      <p v-if="activeRubric?.effectiveFrom" class="muted">{{ $t('grading.effective') }} {{ date(activeRubric.effectiveFrom) }}</p>
-      <p v-if="!activeRubric?.version" class="empty">{{ $t('grading.noActiveRubric') }}</p>
+      <h2 class="section-title">{{ $t('grading.phaseRubrics') }}</h2>
+      <p class="muted">{{ $t('grading.phaseRubricsHelp') }}</p>
+      <p v-if="routineRubric" class="muted">
+        {{ $t('grading.rubricSelection.routineCurrent') }}: {{ routineRubric.name }} · {{ routineRubric.version }}
+        · {{ date(routineRubric.effectiveFrom) }}
+      </p>
+      <p v-if="finalRubric" class="muted">
+        {{ $t('grading.rubricSelection.finalCurrent') }}: {{ finalRubric.name }} · {{ finalRubric.version }}
+        · {{ date(finalRubric.effectiveFrom) }}
+      </p>
       <p><a href="/rubrics">{{ $t('rubrics.openPage') }}</a></p>
     </section>
     <div class="panel stack">
@@ -96,27 +101,72 @@
         </div>
       </div>
       <p class="notice">{{ $t('grading.privacyHelp') }}</p>
+      <section v-if="projectLoaded && isTeacher" class="panel stack">
+        <h3 class="form-section-title">{{ $t('grading.rubricSelection.title') }}</h3>
+        <p>{{ $t('grading.rubricSelection.help') }}</p>
+        <p v-if="rubricSelectionLoading" class="notice" role="status">{{ $t('grading.rubricSelection.loading') }}</p>
+        <div v-if="rubricSelectionError" class="error-box" role="alert">
+          <p>{{ rubricSelectionError }}</p>
+          <button class="button button-secondary" type="button" :disabled="rubricSelectionLoading"
+            @click="loadRubricSelection(projectId)">{{ $t('grading.rubricSelection.retry') }}</button>
+        </div>
+        <div class="grid grid-2">
+          <div class="field">
+            <label class="label" for="routine-rubric-selection">{{ $t('grading.rubricSelection.routine') }}</label>
+            <select id="routine-rubric-selection" v-model="routineRubricDraft" class="select"
+              :disabled="rubricSelectionLoading || rubricSaving">
+              <option value="">{{ $t('grading.rubricSelection.unselected') }}</option>
+              <option v-for="summary in rubricSummaries" :key="String(summary.id)" :value="summary.id">
+                {{ rubricSummaryLabel(summary) }}
+              </option>
+            </select>
+            <textarea v-if="routineRubricDraft !== rubricSelections?.routineRubricId && rubricSelections?.routineRubricId"
+              v-model="routineTransitionReason" class="textarea" maxlength="2000"
+              :aria-label="$t('grading.rubricSelection.routineReason')" />
+          </div>
+          <div class="field">
+            <label class="label" for="final-rubric-selection">{{ $t('grading.rubricSelection.final') }}</label>
+            <select id="final-rubric-selection" v-model="finalRubricDraft" class="select"
+              :disabled="rubricSelectionLoading || rubricSaving">
+              <option value="">{{ $t('grading.rubricSelection.unselected') }}</option>
+              <option v-for="summary in rubricSummaries" :key="String(summary.id)" :value="summary.id">
+                {{ rubricSummaryLabel(summary) }}
+              </option>
+            </select>
+            <textarea v-if="finalRubricDraft !== rubricSelections?.finalRubricId && rubricSelections?.finalRubricId"
+              v-model="finalTransitionReason" class="textarea" maxlength="2000"
+              :aria-label="$t('grading.rubricSelection.finalReason')" />
+          </div>
+        </div>
+        <p v-if="!rubricSummaries.length && !rubricSelectionLoading" class="notice">
+          {{ $t('grading.rubricSelection.noVersions') }}
+        </p>
+        <div class="toolbar">
+          <button class="button" type="button" :disabled="rubricSaving || rubricSelectionLoading"
+            @click="saveRubricSelection">
+            {{ rubricSaving ? $t('grading.rubricSelection.saving') : $t('grading.rubricSelection.save') }}
+          </button>
+        </div>
+        <p v-if="rubricSaveMessage" class="notice" role="status">{{ rubricSaveMessage }}</p>
+      </section>
+      <CriterionAssessmentEditor v-if="projectLoaded && isStaff" :project-id="projectId"
+        :routine-rubric="routineRubric" :final-rubric="finalRubric" :members="gradingMembers"
+        :members-loading="membersLoading" :members-error="membersError"
+        :disabled="!isTeacher" @dirty-change="assessmentDirty = $event"
+        @saving-change="assessmentSaving = $event"
+        @retry-members="loadRubricSelection(projectId)" />
       <div v-if="projectLoaded && isTeacher" class="grid grid-2">
-        <form class="panel" @submit.prevent="recordGrade(false)">
-          <h3 class="form-section-title">{{ $t('grading.individualAssessment') }}</h3>
-          <div class="field"><label class="label" for="student-id">{{ $t('grading.groupMemberId') }}</label><input id="student-id" v-model.trim="gradeForm.studentId" class="input" required /></div>
-          <GradeFields :model-value="gradeForm" :rubric="activeRubric" @update:model-value="Object.assign(gradeForm, $event)" />
-          <div class="field"><label class="label" for="grade-transition">{{ $t('grading.transitionReason') }}</label><textarea id="grade-transition" v-model="gradeForm.transitionReason" class="textarea" maxlength="2000" /></div>
-          <button class="button stack" :disabled="task.loading.value || !selectedCriterion">{{ $t('grading.recordAssessment') }}</button>
-        </form>
         <form class="panel" @submit.prevent="recordGrade(true)">
           <h3 class="form-section-title">{{ $t('grading.groupAssessment') }}</h3>
-          <GradeFields :model-value="groupForm" :rubric="activeRubric" @update:model-value="Object.assign(groupForm, $event)" />
-          <div class="field"><label class="label" for="group-transition">{{ $t('grading.transitionReason') }}</label><textarea id="group-transition" v-model="groupForm.transitionReason" class="textarea" maxlength="2000" /></div>
-          <button class="button stack" :disabled="task.loading.value || !selectedGroupCriterion">{{ $t('grading.recordGroupAssessment') }}</button>
+          <GradeFields :model-value="groupForm" :rubric="routineRubric" @update:model-value="Object.assign(groupForm, $event)" />
+          <button class="button stack" :disabled="task.loading.value || !routineRubric || !selectedGroupCriterion">{{ $t('grading.recordGroupAssessment') }}</button>
         </form>
       </div>
       <form v-if="projectLoaded && isTeacher" class="panel stack" @submit.prevent="recordMetric">
         <h3 class="form-section-title">{{ $t('grading.metricHeading') }}</h3>
         <div class="grid grid-2"><div class="field"><label class="label" for="metric-id">{{ $t('grading.metricDefinition') }}</label><select id="metric-id" v-model="metricForm.metricId" class="select" required><option value="">{{ $t('grading.selectMetric') }}</option><option v-for="metric in metricsDefinitions" :key="String(metric.id)" :value="metric.id">{{ metric.name }} · {{ metric.unit || $t('grading.unitUnspecified') }}</option></select></div><div class="field"><label class="label" for="metric-value">{{ $t('grading.observedValue') }}</label><input id="metric-value" v-model.number="metricForm.value" class="input" type="number" step="any" required /></div></div>
         <div class="field"><label class="label" for="metric-note">{{ $t('grading.contextNote') }}</label><input id="metric-note" v-model="metricForm.note" class="input" maxlength="2000" /></div>
-        <div class="field"><label class="label" for="metric-transition">{{ $t('grading.transitionReason') }}</label><textarea id="metric-transition" v-model="metricForm.transitionReason" class="textarea" maxlength="2000" /></div>
-        <button class="button" :disabled="task.loading.value || projectLoading">{{ $t('grading.recordObservation') }}</button>
+        <button class="button" :disabled="task.loading.value || projectLoading || !routineRubric">{{ $t('grading.recordObservation') }}</button>
       </form>
       <div v-if="projectLoaded" class="tab-list" role="tablist" :aria-label="$t('grading.tablist')">
         <button v-for="tab in tabs" :key="tab.id" class="tab-button" role="tab" :aria-selected="activeTab === tab.id" @click="activeTab = tab.id">{{ tab.label }}</button>
@@ -138,17 +188,15 @@
           <h3 class="form-section-title">{{ $t('grading.recordProjectFinal') }}</h3>
           <div class="grid grid-2"><div class="field"><label class="label" for="rule">{{ $t('grading.projectRule') }}</label><select id="rule" v-model="finalForm.ruleId" class="select"><option value="">{{ $t('grading.manualDecision') }}</option><option v-for="rule in projectRules" :key="String(rule.id)" :value="rule.id">{{ rule.id }} · v{{ rule.version }}</option></select></div><div class="field"><label class="label" for="final-grade">{{ $t('grading.individualGrade') }} {{ finalForm.ruleId ? $t('grading.optionalConfirmation') : '' }}</label><input id="final-grade" v-model.number="finalForm.grade" class="input" type="number" :min="number(scaleField(activeRubric?.finalGradeScale, 'min'))" :max="number(scaleField(activeRubric?.finalGradeScale, 'max'))" :step="number(scaleField(activeRubric?.finalGradeScale, 'step'), 1)" :required="!finalForm.ruleId" /></div></div>
           <div class="field"><label class="label" for="rationale">{{ $t('grading.teacherRationale') }} {{ finalForm.ruleId ? $t('grading.optional') : $t('grading.requiredNoRule') }}</label><textarea id="rationale" v-model="finalForm.rationale" class="textarea" maxlength="4000" :required="!finalForm.ruleId" /></div>
-          <div class="field"><label class="label" for="final-transition">{{ $t('grading.transitionReason') }}</label><textarea id="final-transition" v-model="finalForm.transitionReason" class="textarea" maxlength="2000" /></div>
           <div class="notice">{{ $t('grading.projectGradeHelp') }}</div>
-          <button class="button" :disabled="task.loading.value || projectLoading">{{ $t('grading.saveProjectGrade') }}</button>
+          <button class="button" :disabled="task.loading.value || projectLoading || !finalRubric">{{ $t('grading.saveProjectGrade') }}</button>
         </form>
         <form v-if="isTeacher" class="panel stack" @submit.prevent="saveStudentFinalGrade">
           <h3 class="form-section-title">{{ $t('grading.recordStudentFinal') }}</h3>
           <div class="field"><label class="label" for="final-student-id">{{ $t('grading.allocatedStudentId') }}</label><input id="final-student-id" v-model.trim="studentFinalForm.studentId" class="input" required /></div>
           <div class="grid grid-2"><div class="field"><label class="label" for="student-rule">{{ $t('grading.studentRule') }}</label><select id="student-rule" v-model="studentFinalForm.ruleId" class="select"><option value="">{{ $t('grading.manualDecision') }}</option><option v-for="rule in studentRules" :key="String(rule.id)" :value="rule.id">{{ rule.id }} · v{{ rule.version }}</option></select></div><div class="field"><label class="label" for="student-final-grade">{{ $t('grading.individualGrade') }}</label><input id="student-final-grade" v-model.number="studentFinalForm.grade" class="input" type="number" :min="number(scaleField(activeRubric?.finalGradeScale, 'min'))" :max="number(scaleField(activeRubric?.finalGradeScale, 'max'))" :step="number(scaleField(activeRubric?.finalGradeScale, 'step'), 1)" :required="!studentFinalForm.ruleId" /></div></div>
           <div class="field"><label class="label" for="student-rationale">{{ $t('grading.rationale') }} {{ studentFinalForm.ruleId ? $t('grading.optional') : $t('grading.requiredNoRule') }}</label><textarea id="student-rationale" v-model="studentFinalForm.rationale" class="textarea" maxlength="4000" :required="!studentFinalForm.ruleId" /></div>
-          <div class="field"><label class="label" for="student-transition">{{ $t('grading.transitionReason') }}</label><textarea id="student-transition" v-model="studentFinalForm.transitionReason" class="textarea" maxlength="2000" /></div>
-          <button class="button" :disabled="task.loading.value || projectLoading">{{ $t('grading.saveStudentGrade') }}</button>
+          <button class="button" :disabled="task.loading.value || projectLoading || !finalRubric">{{ $t('grading.saveStudentGrade') }}</button>
         </form>
         <pre v-if="finalGrade" class="json-view">{{ localizedFinalGrade() }}</pre>
         <p v-else-if="projectLoaded" class="empty">{{ $t('grading.noFinalGrade') }}</p>
@@ -167,6 +215,7 @@ import { formalApi, gradingApi } from '../../api/services'
 import { ApiError } from '../../api/client'
 import { useAuthStore } from '../../stores/auth'
 import { useTask } from '../../composables/useTask'
+import CriterionAssessmentEditor from './CriterionAssessmentEditor.vue'
 
 defineOptions({ name: 'GradingPage' })
 import { formatDateOnly, formatNumber, formatTimestamp, i18n } from '../../i18n'
@@ -186,9 +235,13 @@ type MetricRequest = components['schemas']['MetricRequest']
 type FinalGradesRequest = components['schemas']['FinalGradesRequest']
 type TeacherProject = components['schemas']['FormalApplicationSummaryResponse']
 type StudentProject = components['schemas']['EligibleFormalProjectResponse']
+type RubricSummary = components['schemas']['RubricSummary']
+type AssessmentRubrics = components['schemas']['AssessmentRubricResponse']
+type GradingMember = components['schemas']['GradingMember']
 const auth = useAuthStore()
 const isTeacher = computed(() => auth.user?.roles.includes('TEACHER') ?? false)
 const isStudent = computed(() => auth.user?.roles.includes('STUDENT') ?? false)
+const isStaff = computed(() => auth.user?.roles.some((role) => role === 'TEACHER' || role === 'ADMIN') ?? false)
 const knownStatuses = ['ACTIVE', 'SUPERSEDED', 'PUBLISHED'] as const
 function statusLabel(value: unknown): string {
   if (typeof value === 'string' && (knownStatuses as readonly string[]).includes(value)) {
@@ -201,6 +254,23 @@ function studentProjectOptionValue(project: StudentProject): string {
 }
 const task = useTask()
 const activeRubric = ref<Rubric | null>(null)
+const routineRubric = ref<Rubric | null>(null)
+const finalRubric = ref<Rubric | null>(null)
+const rubricSelections = ref<AssessmentRubrics | null>(null)
+const routineRubricDraft = ref('')
+const finalRubricDraft = ref('')
+const routineTransitionReason = ref('')
+const finalTransitionReason = ref('')
+const rubricSummaries = ref<RubricSummary[]>([])
+const rubricSelectionLoading = ref(false)
+const rubricSelectionError = ref('')
+const rubricSaving = ref(false)
+const rubricSaveMessage = ref('')
+const gradingMembers = ref<GradingMember[]>([])
+const membersLoading = ref(false)
+const membersError = ref('')
+const assessmentDirty = ref(false)
+const assessmentSaving = ref(false)
 const projectId = ref('')
 const selectedContext = ref('')
 const projectLoaded = ref(false)
@@ -225,7 +295,6 @@ const teacherResultButtons = new Map<string, HTMLButtonElement>()
 let teacherListVersion = 0
 let studentListVersion = 0
 let projectLoadVersion = 0
-let activeRubricVersion = 0
 let mounted = false
 const activeTab = ref('individual')
 const tabs = computed(() => [
@@ -238,13 +307,13 @@ const gradeEntries = ref<Page<Grade>>(emptyPage())
 const groupEntries = ref<Page<Grade>>(emptyPage())
 const metricEntries = ref<Page<Metric>>(emptyPage())
 const finalGrade = ref<FinalGradeHistory | null>(null)
-const gradeForm = reactive({ studentId: '', criterionId: '', grade: '', assessedOn: new Date().toISOString().slice(0, 10), evidence: '', comments: '', transitionReason: '' })
-const groupForm = reactive({ criterionId: '', grade: '', assessedOn: new Date().toISOString().slice(0, 10), evidence: '', comments: '', transitionReason: '' })
-const metricForm = reactive({ metricId: '', value: 0, note: '', transitionReason: '' })
-const finalForm = reactive({ ruleId: '', grade: 0, rationale: '', transitionReason: '' })
-const studentFinalForm = reactive({ studentId: '', ruleId: '', grade: 0, rationale: '', transitionReason: '' })
-const categories = computed(() => list<RubricCategory>(activeRubric.value?.categories))
-const metricsDefinitions = computed(() => list<MetricDefinition>(activeRubric.value?.metricDefinitions))
+const gradeForm = reactive({ studentId: '', criterionId: '', grade: '', assessedOn: new Date().toISOString().slice(0, 10), evidence: '', comments: '' })
+const groupForm = reactive({ criterionId: '', grade: '', assessedOn: new Date().toISOString().slice(0, 10), evidence: '', comments: '' })
+const metricForm = reactive({ metricId: '', value: 0, note: '' })
+const finalForm = reactive({ ruleId: '', grade: 0, rationale: '' })
+const studentFinalForm = reactive({ studentId: '', ruleId: '', grade: 0, rationale: '' })
+const categories = computed(() => list<RubricCategory>(routineRubric.value?.categories))
+const metricsDefinitions = computed(() => list<MetricDefinition>(routineRubric.value?.metricDefinitions))
 const aggregationRules = computed(() => list<AggregationRule>(activeRubric.value?.aggregationRules))
 const studentRules = computed(() => aggregationRules.value.filter((rule) => rule.scope === 'STUDENT'))
 const projectRules = computed(() => aggregationRules.value.filter((rule) => rule.scope === 'PROJECT'))
@@ -256,6 +325,10 @@ function list<T>(value: unknown): T[] { return Array.isArray(value) ? value.filt
 function stringList(value: unknown): string[] { return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [] }
 function number(value: unknown, fallback = 0): number { return typeof value === 'number' ? value : Number(value ?? fallback) }
 function displayNumber(value: unknown): string { return typeof value === 'number' ? formatNumber(value) : String(value ?? '') }
+function rubricSummaryLabel(summary: RubricSummary): string {
+  const applicability = `${summary.schoolYear || ''} · ${date(summary.effectiveFrom)}–${summary.effectiveTo ? date(summary.effectiveTo) : '∞'}`
+  return `${summary.name} · v${summary.version} · ${applicability}`
+}
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
 }
@@ -303,6 +376,18 @@ function clearProjectData(preserveSuccess = false): void {
   groupEntries.value = emptyPage()
   metricEntries.value = emptyPage()
   finalGrade.value = null
+  routineRubric.value = null
+  finalRubric.value = null
+  activeRubric.value = null
+  rubricSelections.value = null
+  routineRubricDraft.value = ''
+  finalRubricDraft.value = ''
+  rubricSummaries.value = []
+  gradingMembers.value = []
+  rubricSelectionError.value = ''
+  membersError.value = ''
+  assessmentDirty.value = false
+  assessmentSaving.value = false
   projectError.value = ''
   if (!preserveSuccess) task.success.value = ''
   resetProjectDrafts()
@@ -310,22 +395,93 @@ function clearProjectData(preserveSuccess = false): void {
 function resetProjectDrafts(): void {
   Object.assign(gradeForm, {
     studentId: '', criterionId: '', grade: '',
-    assessedOn: new Date().toISOString().slice(0, 10), evidence: '', comments: '', transitionReason: '',
+    assessedOn: new Date().toISOString().slice(0, 10), evidence: '', comments: '',
   })
   Object.assign(groupForm, {
     criterionId: '', grade: '', assessedOn: new Date().toISOString().slice(0, 10),
-    evidence: '', comments: '', transitionReason: '',
+    evidence: '', comments: '',
   })
-  Object.assign(metricForm, { metricId: '', value: 0, note: '', transitionReason: '' })
-  Object.assign(finalForm, { ruleId: '', grade: 0, rationale: '', transitionReason: '' })
-  Object.assign(studentFinalForm, { studentId: '', ruleId: '', grade: 0, rationale: '', transitionReason: '' })
+  Object.assign(metricForm, { metricId: '', value: 0, note: '' })
+  Object.assign(finalForm, { ruleId: '', grade: 0, rationale: '' })
+  Object.assign(studentFinalForm, { studentId: '', ruleId: '', grade: 0, rationale: '' })
 }
-async function loadActiveRubric(): Promise<void> {
-  const version = ++activeRubricVersion
-  await task.run(async () => {
-    const current = await gradingApi.activeRubric()
-    if (version === activeRubricVersion && mounted) activeRubric.value = current
-  })
+async function loadRubricSelection(forProject = projectId.value): Promise<void> {
+  if (!forProject) return
+  rubricSelectionLoading.value = true
+  rubricSelectionError.value = ''
+  membersLoading.value = isStaff.value
+  membersError.value = ''
+  try {
+    const [selections, rubricPages, membersResult] = await Promise.all([
+      gradingApi.assessmentRubrics(forProject),
+      (async () => {
+        const all: RubricSummary[] = []
+        let page = 0
+        let totalPages = 1
+        while (page < totalPages) {
+          const result = await gradingApi.rubrics(page)
+          all.push(...result.content)
+          totalPages = result.totalPages
+          page += 1
+        }
+        return all
+      })(),
+      isStaff.value ? gradingApi.gradingMembers(forProject).catch((error: unknown) => {
+        membersError.value = error instanceof ApiError ? error.message : String(i18n.global.t('grading.membersFailed'))
+        return []
+      }) : Promise.resolve([] as GradingMember[]),
+    ])
+    if (forProject !== projectId.value || !mounted) return
+    const [routine, final] = await Promise.all([
+      selections.routineRubricId ? gradingApi.rubric(selections.routineRubricId) : Promise.resolve(null),
+      selections.finalRubricId ? gradingApi.rubric(selections.finalRubricId) : Promise.resolve(null),
+    ])
+    if (forProject !== projectId.value || !mounted) return
+    rubricSelections.value = selections
+    routineRubricDraft.value = selections.routineRubricId ?? ''
+    finalRubricDraft.value = selections.finalRubricId ?? ''
+    rubricSummaries.value = rubricPages
+    gradingMembers.value = membersResult
+    routineRubric.value = routine
+    finalRubric.value = final
+    activeRubric.value = activeTab.value === 'final' ? final : routine
+  } catch (error) {
+    if (forProject === projectId.value) {
+      rubricSelectionError.value = error instanceof Error
+        ? error.message : String(i18n.global.t('grading.rubricSelection.loadFailed'))
+      gradingMembers.value = []
+    }
+  } finally {
+    if (forProject === projectId.value) {
+      rubricSelectionLoading.value = false
+      membersLoading.value = false
+    }
+  }
+}
+async function saveRubricSelection(): Promise<void> {
+  if (!projectLoaded.value || !projectId.value || !isTeacher.value || rubricSaving.value) return
+  if (assessmentDirty.value && !window.confirm(String(i18n.global.t('grading.criteria.discardConfirm')))) return
+  rubricSaving.value = true
+  rubricSaveMessage.value = ''
+  try {
+    const result = await gradingApi.setAssessmentRubrics(projectId.value, {
+      routineRubricId: routineRubricDraft.value || null,
+      finalRubricId: finalRubricDraft.value || null,
+      ...(routineTransitionReason.value.trim() ? { routineReason: routineTransitionReason.value.trim() } : {}),
+      ...(finalTransitionReason.value.trim() ? { finalReason: finalTransitionReason.value.trim() } : {}),
+    })
+    rubricSelections.value = result
+    routineTransitionReason.value = ''
+    finalTransitionReason.value = ''
+    assessmentDirty.value = false
+    await loadRubricSelection(projectId.value)
+    rubricSaveMessage.value = String(i18n.global.t('grading.rubricSelection.saved'))
+  } catch (error) {
+    rubricSaveMessage.value = error instanceof ApiError
+      ? error.message : String(i18n.global.t('grading.rubricSelection.saveFailed'))
+  } finally {
+    rubricSaving.value = false
+  }
 }
 async function loadProject(): Promise<void> {
   const selectedProjectId = projectId.value
@@ -352,6 +508,7 @@ async function loadProject(): Promise<void> {
     metricEntries.value = metrics
     finalGrade.value = final
     projectLoaded.value = true
+    await loadRubricSelection(selectedProjectId)
     await nextTick()
     selectedProjectHeading.value?.focus()
   } catch {
@@ -363,7 +520,8 @@ async function loadProject(): Promise<void> {
   }
 }
 function selectProject(id: string, context: string): void {
-  if (projectLoading.value || task.loading.value) return
+  if (projectLoading.value || task.loading.value || rubricSaving.value || assessmentSaving.value) return
+  if (assessmentDirty.value && !window.confirm(String(i18n.global.t('grading.criteria.discardConfirm')))) return
   ++projectLoadVersion
   projectId.value = id
   selectedContext.value = context
@@ -413,6 +571,8 @@ function selectTeacherProject(project: TeacherProject): void {
   selectProject(project.projectId, teacherResultLabel(project))
 }
 async function returnToTeacherList(): Promise<void> {
+  if (assessmentSaving.value || rubricSaving.value) return
+  if (assessmentDirty.value && !window.confirm(String(i18n.global.t('grading.criteria.discardConfirm')))) return
   const selectedProjectId = projectId.value
   ++projectLoadVersion
   projectLoading.value = false
@@ -469,7 +629,8 @@ function selectStudentProject(event: Event): void {
   selectProject(project.projectId, studentProjectLabel(project))
 }
 async function clearSelection(): Promise<void> {
-  if (projectLoading.value || task.loading.value) return
+  if (projectLoading.value || task.loading.value || rubricSaving.value || assessmentSaving.value) return
+  if (assessmentDirty.value && !window.confirm(String(i18n.global.t('grading.criteria.discardConfirm')))) return
   ++projectLoadVersion
   projectLoading.value = false
   projectId.value = ''
@@ -480,12 +641,11 @@ async function clearSelection(): Promise<void> {
 }
 async function recordGrade(group: boolean): Promise<void> {
   const selected = group ? selectedGroupCriterion.value : selectedCriterion.value
-  if (!projectLoaded.value || !selected || !projectId.value || !activeRubric.value?.id) return
-  const rubricId = activeRubric.value.id
-  const transitionReason = group ? groupForm.transitionReason : gradeForm.transitionReason
+  const selectedRubric = group ? routineRubric.value : activeRubric.value
+  if (!projectLoaded.value || !selected || !projectId.value || !selectedRubric?.id) return
+  const rubricId = selectedRubric.id
   const common = {
     rubricId,
-    ...(transitionReason ? { versionTransition: { reason: transitionReason } } : {}),
     criterionId: selected.id,
     grade: Number(group ? groupForm.grade : gradeForm.grade),
     assessedOn: group ? groupForm.assessedOn : gradeForm.assessedOn,
@@ -497,16 +657,15 @@ async function recordGrade(group: boolean): Promise<void> {
       const body: GroupGradeRequest = common
       return gradingApi.recordGroupGrade(projectId.value, body)
     }
-    const body: StudentGradeRequest = { ...common, studentId: gradeForm.studentId }
+    const body: StudentGradeRequest = { ...common, assessmentType: 'ROUTINE', studentId: gradeForm.studentId }
     return gradingApi.recordGrade(projectId.value, body)
   }, String(i18n.global.t('grading.assessmentRecorded')))
   if (result) await loadProject()
 }
 async function recordMetric(): Promise<void> {
-  if (!projectLoaded.value || !projectId.value || !activeRubric.value?.id) return
+  if (!projectLoaded.value || !projectId.value || !routineRubric.value?.id) return
   const body: MetricRequest = {
-    rubricId: activeRubric.value.id,
-    ...(metricForm.transitionReason ? { versionTransition: { reason: metricForm.transitionReason } } : {}),
+    rubricId: routineRubric.value.id,
     metricId: metricForm.metricId,
     value: Number(metricForm.value),
     note: metricForm.note,
@@ -516,13 +675,12 @@ async function recordMetric(): Promise<void> {
   if (result) await loadProject()
 }
 async function saveFinalGrade(): Promise<void> {
-  if (!projectLoaded.value || !projectId.value || !activeRubric.value?.id) return
+  if (!projectLoaded.value || !projectId.value || !finalRubric.value?.id) return
   const project = finalForm.ruleId
     ? { ruleId: finalForm.ruleId, ...(finalForm.grade ? { grade: finalForm.grade } : {}) }
     : { grade: finalForm.grade, rationale: finalForm.rationale }
   const body: FinalGradesRequest = {
-    rubricId: activeRubric.value.id,
-    ...(finalForm.transitionReason ? { versionTransition: { reason: finalForm.transitionReason } } : {}),
+    rubricId: finalRubric.value.id,
     project,
   }
   const result = await task.run(() => gradingApi.setFinalGrade(projectId.value, body),
@@ -530,13 +688,12 @@ async function saveFinalGrade(): Promise<void> {
   if (result) await loadProject()
 }
 async function saveStudentFinalGrade(): Promise<void> {
-  if (!projectLoaded.value || !projectId.value || !activeRubric.value?.id) return
+  if (!projectLoaded.value || !projectId.value || !finalRubric.value?.id) return
   const decision = studentFinalForm.ruleId
     ? { ruleId: studentFinalForm.ruleId, ...(studentFinalForm.grade ? { grade: studentFinalForm.grade } : {}) }
     : { grade: studentFinalForm.grade, rationale: studentFinalForm.rationale }
   const body: FinalGradesRequest = {
-    rubricId: activeRubric.value.id,
-    ...(studentFinalForm.transitionReason ? { versionTransition: { reason: studentFinalForm.transitionReason } } : {}),
+    rubricId: finalRubric.value.id,
     students: [{ studentId: studentFinalForm.studentId, ...decision }],
   }
   const result = await task.run(() => gradingApi.setFinalGrade(projectId.value, body),
@@ -547,7 +704,6 @@ watch(() => `${auth.user?.id ?? ''}|${auth.user?.roles.join(',') ?? ''}`, () => 
   ++teacherListVersion
   ++studentListVersion
   ++projectLoadVersion
-  ++activeRubricVersion
   projectId.value = ''
   selectedContext.value = ''
   projectLoading.value = false
@@ -564,19 +720,16 @@ watch(() => `${auth.user?.id ?? ''}|${auth.user?.roles.join(',') ?? ''}`, () => 
   teacherPage.value = 0
   teacherTotalPages.value = 0
   teacherTotalElements.value = 0
-  activeRubric.value = null
   task.loading.value = false
   task.error.value = ''
   task.success.value = ''
   clearProjectData()
   if (!mounted || !auth.user) return
-  void loadActiveRubric()
   if (isTeacher.value) void loadTeacherProjects()
   else if (isStudent.value) void loadStudentProjects()
 })
 onMounted(() => {
   mounted = true
-  void loadActiveRubric()
   if (isTeacher.value) void loadTeacherProjects()
   else if (isStudent.value) void loadStudentProjects()
 })
@@ -585,6 +738,8 @@ onBeforeUnmount(() => {
   ++teacherListVersion
   ++studentListVersion
   ++projectLoadVersion
-  ++activeRubricVersion
+})
+watch(activeTab, (tab) => {
+  activeRubric.value = tab === 'final' ? finalRubric.value : routineRubric.value
 })
 </script>

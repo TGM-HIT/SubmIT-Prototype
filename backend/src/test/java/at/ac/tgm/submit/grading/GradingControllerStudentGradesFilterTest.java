@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -45,6 +46,7 @@ class GradingControllerStudentGradesFilterTest {
     private UUID projectId;
     private UUID firstMemberId;
     private UUID secondMemberId;
+    private UUID rubricId;
 
     @BeforeEach
     void setUp() throws Exception {
@@ -60,7 +62,8 @@ class GradingControllerStudentGradesFilterTest {
         store.create("formal_application", firstMemberId.toString(), projectId.toString(), "APPROVED",
                 objectMapper.createObjectNode());
 
-        UUID rubricId = publishRubric();
+        rubricId = publishRubric();
+        selectRubrics(rubricId);
         recordGrade(rubricId, firstMemberId);
         recordGrade(rubricId, secondMemberId);
     }
@@ -75,6 +78,30 @@ class GradingControllerStudentGradesFilterTest {
         JsonNode filtered = getGrades(projectId, teacherToken, firstMemberId.toString(), 200);
         assertPage(filtered, 1, 1);
         assertEquals(List.of(firstMemberId.toString()), studentIds(filtered));
+    }
+
+    @Test
+    void teacherCanFilterByAssessmentPhaseAndExactRubricAndInvalidFiltersAreRejected() throws Exception {
+        recordGrade(rubricId, firstMemberId, "FINAL", 3);
+
+        JsonNode routine = getGrades(projectId, teacherToken, null, "ROUTINE", rubricId.toString(), 200);
+        assertPage(routine, 2, 2);
+        JsonNode routineRows = array(routine, "content");
+        for (JsonNode row : routineRows) {
+            assertEquals("ROUTINE", text(row, "assessmentType"));
+            assertEquals(rubricId.toString(), text(row, "rubricId"));
+        }
+
+        JsonNode finalOnly = getGrades(projectId, teacherToken, firstMemberId.toString(), "FINAL",
+                rubricId.toString(), 200);
+        assertPage(finalOnly, 1, 1);
+        JsonNode finalRow = array(finalOnly, "content").get(0);
+        assertEquals("FINAL", text(finalRow, "assessmentType"));
+        assertEquals(rubricId.toString(), text(finalRow, "rubricId"));
+        assertEquals(firstMemberId.toString(), text(finalRow, "studentId"));
+
+        getGrades(projectId, teacherToken, null, "NOT_A_PHASE", null, 400);
+        getGrades(projectId, teacherToken, null, null, "not-a-uuid", 400);
     }
 
     @Test
@@ -93,15 +120,38 @@ class GradingControllerStudentGradesFilterTest {
 
     private JsonNode getGrades(UUID requestedProjectId, String token, String studentId, int expectedStatus)
             throws Exception {
+        return getGrades(requestedProjectId, token, studentId, null, null, expectedStatus);
+    }
+
+    private JsonNode getGrades(UUID requestedProjectId, String token, String studentId,
+            String assessmentType, String rubricId, int expectedStatus) throws Exception {
         var request = get("/api/projects/{projectId}/student-grades", requestedProjectId)
                 .header("Authorization", "Bearer " + token);
         if (studentId != null) {
             request.param("studentId", studentId);
         }
+        if (assessmentType != null) {
+            request.param("assessmentType", assessmentType);
+        }
+        if (rubricId != null) {
+            request.param("rubricId", rubricId);
+        }
         MvcResult result = mockMvc.perform(request).andExpect(status().is(expectedStatus)).andReturn();
         return expectedStatus == 200
                 ? objectMapper.readTree(result.getResponse().getContentAsByteArray())
                 : objectMapper.createObjectNode();
+    }
+
+    private JsonNode array(JsonNode parent, String field) {
+        JsonNode value = parent.get(field);
+        assertTrue(value != null && value.isArray(), field + " must be present and an array");
+        return value;
+    }
+
+    private String text(JsonNode parent, String field) {
+        JsonNode value = parent.get(field);
+        assertTrue(value != null && value.isTextual(), field + " must be present and textual");
+        return value.textValue();
     }
 
     private void assertPage(JsonNode response, int expectedCount, int expectedTotal) {
@@ -182,12 +232,25 @@ class GradingControllerStudentGradesFilterTest {
     }
 
     private void recordGrade(UUID rubricId, UUID studentId) throws Exception {
-        Map<String, Object> request = Map.of("rubricId", rubricId, "studentId", studentId,
-                "criterionId", "implementation", "grade", BigDecimal.valueOf(4));
+        recordGrade(rubricId, studentId, "ROUTINE", 4);
+    }
+
+    private void recordGrade(UUID rubricId, UUID studentId, String assessmentType, int grade) throws Exception {
+        Map<String, Object> request = Map.of("rubricId", rubricId, "assessmentType", assessmentType,
+                "studentId", studentId, "criterionId", "implementation", "grade", BigDecimal.valueOf(grade));
         mockMvc.perform(post("/api/projects/{projectId}/student-grades", projectId)
                         .header("Authorization", "Bearer " + teacherToken)
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(request)))
                 .andExpect(status().isCreated());
+    }
+
+    private void selectRubrics(UUID rubricId) throws Exception {
+        mockMvc.perform(put("/api/projects/{projectId}/assessment-rubrics", projectId)
+                        .header("Authorization", "Bearer " + teacherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsBytes(Map.of("routineRubricId", rubricId,
+                                "finalRubricId", rubricId))))
+                .andExpect(status().isOk());
     }
 }

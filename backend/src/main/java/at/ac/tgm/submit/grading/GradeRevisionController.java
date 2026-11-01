@@ -24,10 +24,10 @@ import org.springframework.web.bind.annotation.RestController;
 public class GradeRevisionController {
     private static final String PROJECT_DESCRIPTION = "Project identifier.";
 
-    private final GradeService gradeService;
+    private final StudentGradeService studentGrades;
 
-    public GradeRevisionController(GradeService gradeService) {
-        this.gradeService = gradeService;
+    public GradeRevisionController(StudentGradeService studentGrades) {
+        this.studentGrades = studentGrades;
     }
 
     @PostMapping
@@ -42,6 +42,6 @@ public class GradeRevisionController {
             @Parameter(description = PROJECT_DESCRIPTION) @PathVariable UUID projectId,
             @Parameter(description = "Grade entry to revise.") @PathVariable UUID gradeId,
             @Valid @RequestBody GradeRevisionRequest request) {
-        return gradeService.reviseStudentGrade(caller, projectId, gradeId, request);
+        return studentGrades.reviseStudentGrade(caller, projectId, gradeId, request);
     }
 }

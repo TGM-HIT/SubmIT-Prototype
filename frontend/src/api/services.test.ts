@@ -34,6 +34,59 @@ describe('grading rubric API service', () => {
       expect.anything(),
     )
   })
+
+  it('uses the phase-aware assessment and allocated-member contracts', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        routineRubricId: null,
+        finalRubricId: 'final-rubric',
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        routineRubricId: 'routine-rubric',
+        finalRubricId: 'final-rubric',
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify([{
+        studentId: 'student-1', displayName: 'Alex Example', className: '10A',
+        electiveSubjectNames: ['Physics'],
+      }]), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        content: [], page: 0, size: 100, totalElements: 0, totalPages: 0,
+      }), { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ id: 'grade-1' }), {
+        status: 201, headers: { 'Content-Type': 'application/json' },
+      }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(gradingApi.assessmentRubrics('project/1')).resolves.toEqual({
+      routineRubricId: null, finalRubricId: 'final-rubric',
+    })
+    await gradingApi.setAssessmentRubrics('project/1', {
+      routineRubricId: 'routine-rubric', finalRubricId: 'final-rubric',
+    })
+    await expect(gradingApi.gradingMembers('project/1')).resolves.toHaveLength(1)
+    await gradingApi.grades('project/1', 0, 100, {
+      studentId: 'student-1', assessmentType: 'FINAL', rubricId: 'final-rubric',
+    })
+    await gradingApi.recordGrade('project/1', {
+      studentId: 'student-1', rubricId: 'routine-rubric', criterionId: 'criterion-1',
+      grade: 0, assessedOn: '2026-10-10', evidence: 'Observed evidence',
+      assessmentType: 'ROUTINE',
+    })
+
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      '/api/projects/project%2F1/assessment-rubrics',
+      '/api/projects/project%2F1/assessment-rubrics',
+      '/api/projects/project%2F1/grading-members',
+      '/api/projects/project%2F1/student-grades?page=0&size=100&studentId=student-1&assessmentType=FINAL&rubricId=final-rubric',
+      '/api/projects/project%2F1/student-grades',
+    ])
+    expect(JSON.parse(fetchMock.mock.calls[1][1].body)).toEqual({
+      routineRubricId: 'routine-rubric', finalRubricId: 'final-rubric',
+    })
+    expect(JSON.parse(fetchMock.mock.calls[4][1].body)).toMatchObject({
+      grade: 0, assessmentType: 'ROUTINE', rubricId: 'routine-rubric',
+    })
+  })
 })
 
 describe('ideas API service', () => {

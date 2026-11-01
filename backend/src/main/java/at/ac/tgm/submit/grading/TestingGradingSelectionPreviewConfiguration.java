@@ -1,6 +1,7 @@
 package at.ac.tgm.submit.grading;
 
 import static at.ac.tgm.submit.grading.GradingKeys.ACTIVE;
+import static at.ac.tgm.submit.grading.GradingKeys.ASSESSMENT_TYPE;
 import static at.ac.tgm.submit.grading.GradingKeys.ASSESSED_ON;
 import static at.ac.tgm.submit.grading.GradingKeys.BINDING;
 import static at.ac.tgm.submit.grading.GradingKeys.CATEGORY_ID;
@@ -36,7 +37,6 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import at.ac.tgm.submit.data.RecordStore;
 import at.ac.tgm.submit.data.StoredRecord;
-import at.ac.tgm.submit.data.StoredRecordRepository;
 import at.ac.tgm.submit.user.UserAccount;
 import at.ac.tgm.submit.user.UserAccountRepository;
 import java.time.Instant;
@@ -59,6 +59,8 @@ public class TestingGradingSelectionPreviewConfiguration {
     public static final String PROPERTY = "DADB_TESTING_GRADING_SELECTION_PREVIEW";
     public static final UUID TEACHER_PROJECT_ID = UUID.fromString("27a00000-0000-4000-8000-000000000001");
     public static final UUID OTHER_TEACHER_PROJECT_ID = UUID.fromString("27a00000-0000-4000-8000-000000000002");
+    public static final UUID FINAL_PREVIEW_RUBRIC_ID = UUID.fromString("27f00000-0000-4000-8000-000000000003");
+    public static final String FINAL_PREVIEW_RUBRIC_NAME = "Grading Selection Preview — Final Rubric";
     public static final UUID TEACHER_PERIOD_ID = UUID.fromString("27b00000-0000-4000-8000-000000000001");
     public static final UUID OTHER_TEACHER_PERIOD_ID = UUID.fromString("27b00000-0000-4000-8000-000000000002");
     public static final String TEACHER_PROJECT_TITLE = "Grading Selection Preview — River Lab";
@@ -75,10 +77,16 @@ public class TestingGradingSelectionPreviewConfiguration {
     private static final UUID OTHER_TEACHER_SUPERVISOR_ID = UUID.fromString("27f00000-0000-4000-8000-000000000002");
     private static final UUID TEACHER_BINDING_ID = UUID.fromString("27f10000-0000-4000-8000-000000000001");
     private static final UUID OTHER_TEACHER_BINDING_ID = UUID.fromString("27f10000-0000-4000-8000-000000000002");
+    private static final UUID TEACHER_FINAL_BINDING_ID = UUID.fromString("27f10000-0000-4000-8000-000000000003");
+    private static final UUID OTHER_TEACHER_FINAL_BINDING_ID = UUID.fromString("27f10000-0000-4000-8000-000000000004");
     private static final UUID TEACHER_INDIVIDUAL_GRADE_ID = UUID.fromString("27f20000-0000-4000-8000-000000000001");
     private static final UUID TEACHER_SENTINEL_GRADE_ID = UUID.fromString("27f20000-0000-4000-8000-000000000002");
     private static final UUID OTHER_TEACHER_INDIVIDUAL_GRADE_ID =
             UUID.fromString("27f20000-0000-4000-8000-000000000003");
+    private static final UUID TEACHER_FINAL_CRITERION_GRADE_ID =
+            UUID.fromString("27f20000-0000-4000-8000-000000000004");
+    private static final UUID OTHER_TEACHER_FINAL_CRITERION_GRADE_ID =
+            UUID.fromString("27f20000-0000-4000-8000-000000000005");
     private static final UUID TEACHER_GROUP_GRADE_ID = UUID.fromString("27f30000-0000-4000-8000-000000000001");
     private static final UUID OTHER_TEACHER_GROUP_GRADE_ID =
             UUID.fromString("27f30000-0000-4000-8000-000000000002");
@@ -91,6 +99,7 @@ public class TestingGradingSelectionPreviewConfiguration {
     private static final UUID OTHER_TEACHER_STUDENT_FINAL_ID =
             UUID.fromString("27f50000-0000-4000-8000-000000000004");
     private static final String TESTING_RUBRIC_VERSION = "dev55-draft-testing-v1";
+    private static final String FINAL_PREVIEW_RUBRIC_VERSION = "grading-selection-preview-final-v1";
     private static final String TEST_CRITERION_ID = "a1-01";
     private static final String TEST_METRIC_ID = "testing-supplemental-observation";
     private static final String FIXTURE_TIMESTAMP = "2026-10-27T12:00:00Z";
@@ -98,6 +107,8 @@ public class TestingGradingSelectionPreviewConfiguration {
     private static final int RIVER_INDIVIDUAL_GRADE = 4;
     private static final int RIVER_SENTINEL_GRADE = 2;
     private static final int WIND_INDIVIDUAL_GRADE = 5;
+    private static final int RIVER_FINAL_CRITERION_GRADE = 2;
+    private static final int WIND_FINAL_CRITERION_GRADE = 5;
     private static final int RIVER_GROUP_GRADE = 4;
     private static final int WIND_GROUP_GRADE = 3;
     private static final int RIVER_METRIC_VALUE = 12;
@@ -111,21 +122,17 @@ public class TestingGradingSelectionPreviewConfiguration {
 
     @Bean
     @Order(5)
-    ApplicationRunner seedGradingSelectionPreview(UserAccountRepository users, RecordStore store,
-            StoredRecordRepository records) {
-        return new GradingSelectionPreviewSeeder(users, store, records);
+    ApplicationRunner seedGradingSelectionPreview(UserAccountRepository users, RecordStore store) {
+        return new GradingSelectionPreviewSeeder(users, store);
     }
 
     static final class GradingSelectionPreviewSeeder implements ApplicationRunner {
         private final UserAccountRepository users;
         private final RecordStore store;
-        private final StoredRecordRepository records;
 
-        GradingSelectionPreviewSeeder(UserAccountRepository users, RecordStore store,
-                StoredRecordRepository records) {
+        GradingSelectionPreviewSeeder(UserAccountRepository users, RecordStore store) {
             this.users = users;
             this.store = store;
-            this.records = records;
         }
 
         @Override
@@ -144,6 +151,9 @@ public class TestingGradingSelectionPreviewConfiguration {
             if (!TESTING_RUBRIC_VERSION.equals(rubricVersion)) {
                 throw new IllegalStateException("Grading selection preview requires the versioned testing rubric.");
             }
+            StoredRecord finalRubric = finalPreviewRubric(rubric);
+            String finalRubricId = finalRubric.getId().toString();
+            String finalRubricVersion = store.parse(finalRubric).path(VERSION).asText();
 
             seedProject(TEACHER_PROJECT_ID, TEACHER_PROJECT_TITLE, "2026/2027", studentTwo);
             seedProject(OTHER_TEACHER_PROJECT_ID, OTHER_TEACHER_PROJECT_TITLE, "2027/2028", studentOne);
@@ -165,38 +175,53 @@ public class TestingGradingSelectionPreviewConfiguration {
                     List.of(studentTwo, studentOne, studentThree));
             seedProposal(OTHER_TEACHER_PROPOSAL_ID, OTHER_TEACHER_PROJECT_ID,
                     List.of(studentOne, studentFour, studentFive));
-            seedBinding(TEACHER_BINDING_ID, TEACHER_PROJECT_ID, rubricId, teacherOne);
-            seedBinding(OTHER_TEACHER_BINDING_ID, OTHER_TEACHER_PROJECT_ID, rubricId, teacherTwo);
+            seedBinding(TEACHER_BINDING_ID, TEACHER_PROJECT_ID, rubricId, teacherOne, AssessmentType.ROUTINE);
+            seedBinding(OTHER_TEACHER_BINDING_ID, OTHER_TEACHER_PROJECT_ID, rubricId, teacherTwo,
+                    AssessmentType.ROUTINE);
+            seedBinding(TEACHER_FINAL_BINDING_ID, TEACHER_PROJECT_ID, finalRubricId, teacherOne,
+                    AssessmentType.FINAL);
+            seedBinding(OTHER_TEACHER_FINAL_BINDING_ID, OTHER_TEACHER_PROJECT_ID, finalRubricId, teacherTwo,
+                    AssessmentType.FINAL);
 
             seedAssessment(new AssessmentSeed(TEACHER_INDIVIDUAL_GRADE_ID, STUDENT_GRADE, TEACHER_PROJECT_ID,
                     studentOne, rubricId, rubricVersion, teacherOne, "Individual analysis",
-                    RIVER_INDIVIDUAL_GRADE, "student01's River Lab assessment."));
+                    RIVER_INDIVIDUAL_GRADE, "student01's River Lab routine assessment.", AssessmentType.ROUTINE));
             seedAssessment(new AssessmentSeed(TEACHER_SENTINEL_GRADE_ID, STUDENT_GRADE, TEACHER_PROJECT_ID,
                     studentTwo, rubricId, rubricVersion, teacherOne, "Private sentinel", RIVER_SENTINEL_GRADE,
-                    "OTHER_STUDENT_GRADING_SENTINEL"));
+                    "OTHER_STUDENT_GRADING_SENTINEL", AssessmentType.ROUTINE));
             seedAssessment(new AssessmentSeed(OTHER_TEACHER_INDIVIDUAL_GRADE_ID, STUDENT_GRADE,
                     OTHER_TEACHER_PROJECT_ID, studentOne, rubricId, rubricVersion, teacherTwo,
-                    "Individual comparison", WIND_INDIVIDUAL_GRADE, "student01's Wind Garden assessment."));
+                    "Individual comparison", WIND_INDIVIDUAL_GRADE, "student01's Wind Garden routine assessment.",
+                    AssessmentType.ROUTINE));
+            seedAssessment(new AssessmentSeed(TEACHER_FINAL_CRITERION_GRADE_ID, STUDENT_GRADE, TEACHER_PROJECT_ID,
+                    studentOne, finalRubricId, finalRubricVersion, teacherOne, "Saved River Lab final criterion evidence",
+                    RIVER_FINAL_CRITERION_GRADE, "Saved River Lab final criterion assessment.", AssessmentType.FINAL));
+            seedAssessment(new AssessmentSeed(OTHER_TEACHER_FINAL_CRITERION_GRADE_ID, STUDENT_GRADE,
+                    OTHER_TEACHER_PROJECT_ID, studentOne, finalRubricId, finalRubricVersion, teacherTwo,
+                    "Saved Wind Garden final criterion evidence", WIND_FINAL_CRITERION_GRADE,
+                    "Saved Wind Garden final criterion assessment.",
+                    AssessmentType.FINAL));
             seedAssessment(new AssessmentSeed(TEACHER_GROUP_GRADE_ID, GROUP_GRADE, TEACHER_PROJECT_ID,
                     null, rubricId, rubricVersion, teacherOne, "Group collaboration", RIVER_GROUP_GRADE,
-                    "River Lab group history."));
+                    "River Lab group history.", AssessmentType.ROUTINE));
             seedAssessment(new AssessmentSeed(OTHER_TEACHER_GROUP_GRADE_ID, GROUP_GRADE, OTHER_TEACHER_PROJECT_ID,
                     null, rubricId, rubricVersion, teacherTwo, "Group delivery", WIND_GROUP_GRADE,
-                    "Wind Garden group history."));
+                    "Wind Garden group history.", AssessmentType.ROUTINE));
             seedMetric(new MetricSeed(TEACHER_METRIC_ID, TEACHER_PROJECT_ID, rubricId, rubricVersion, teacherOne,
                     "River Lab metric observation", RIVER_METRIC_VALUE));
             seedMetric(new MetricSeed(OTHER_TEACHER_METRIC_ID, OTHER_TEACHER_PROJECT_ID, rubricId, rubricVersion,
                     teacherTwo, "Wind Garden metric observation", WIND_METRIC_VALUE));
             seedFinalGrade(new FinalGradeSeed(TEACHER_PROJECT_FINAL_ID, TEACHER_PROJECT_ID, PROJECT_OWNER, null,
-                    rubricId, rubricVersion, teacherOne, RIVER_PROJECT_FINAL_GRADE, "River Lab project final grade."));
+                    finalRubricId, finalRubricVersion, teacherOne, RIVER_PROJECT_FINAL_GRADE,
+                    "River Lab project final grade."));
             seedFinalGrade(new FinalGradeSeed(TEACHER_STUDENT_FINAL_ID, TEACHER_PROJECT_ID,
-                    studentOne.getId().toString(), studentOne.getId().toString(), rubricId, rubricVersion, teacherOne,
+                    studentOne.getId().toString(), studentOne.getId().toString(), finalRubricId, finalRubricVersion, teacherOne,
                     RIVER_STUDENT_FINAL_GRADE, "River Lab student final grade."));
             seedFinalGrade(new FinalGradeSeed(OTHER_TEACHER_PROJECT_FINAL_ID, OTHER_TEACHER_PROJECT_ID, PROJECT_OWNER,
-                    null, rubricId, rubricVersion, teacherTwo, WIND_PROJECT_FINAL_GRADE,
+                    null, finalRubricId, finalRubricVersion, teacherTwo, WIND_PROJECT_FINAL_GRADE,
                     "Wind Garden project final grade."));
             seedFinalGrade(new FinalGradeSeed(OTHER_TEACHER_STUDENT_FINAL_ID, OTHER_TEACHER_PROJECT_ID,
-                    studentOne.getId().toString(), studentOne.getId().toString(), rubricId, rubricVersion, teacherTwo,
+                    studentOne.getId().toString(), studentOne.getId().toString(), finalRubricId, finalRubricVersion, teacherTwo,
                     WIND_STUDENT_FINAL_GRADE, "Wind Garden student final grade."));
         }
 
@@ -257,14 +282,40 @@ public class TestingGradingSelectionPreviewConfiguration {
                     projectId.toString(), "APPROVED", payload));
         }
 
-        private void seedBinding(UUID id, UUID projectId, String rubricId, UserAccount teacher) {
+        private StoredRecord finalPreviewRubric(StoredRecord base) {
+            ObjectNode payload = (ObjectNode) store.parse(base).deepCopy();
+            payload.put(VERSION, FINAL_PREVIEW_RUBRIC_VERSION);
+            payload.put("name", FINAL_PREVIEW_RUBRIC_NAME);
+            payload.put("effectiveFrom", "2026-01-01");
+            payload.putNull("effectiveTo");
+            boolean changed = false;
+            for (JsonNode category : payload.path("categories")) {
+                for (JsonNode criterion : category.path("criteria")) {
+                    if (TEST_CRITERION_ID.equals(criterion.path("id").asText())) {
+                        ((ObjectNode) criterion).put("name", "Final review");
+                        ((ObjectNode) criterion.path("scale")).put("min", 0);
+                        changed = true;
+                    }
+                }
+            }
+            if (!changed) {
+                throw new IllegalStateException("Testing rubric is missing the preview overlap criterion.");
+            }
+            ensure(new PreviewRecord(FINAL_PREVIEW_RUBRIC_ID, RUBRIC, null, null, "PUBLISHED", payload));
+            return store.get(RUBRIC, FINAL_PREVIEW_RUBRIC_ID);
+        }
+
+        private void seedBinding(UUID id, UUID projectId, String rubricId, UserAccount teacher,
+                AssessmentType phase) {
             ObjectNode payload = store.object().put(RUBRIC_ID, rubricId).put("reason", "Initial binding")
+                    .put("phase", phase.name())
                     .put("recordedBy", teacher.getId().toString()).put("recordedAt", FIXTURE_TIMESTAMP);
             ensure(new PreviewRecord(id, BINDING, teacher.getId().toString(), projectId.toString(), "BOUND", payload));
         }
 
         private void seedAssessment(AssessmentSeed seed) {
             ObjectNode payload = store.object().put(RUBRIC_ID, seed.rubricId()).put(RUBRIC_VERSION, seed.rubricVersion())
+                    .put(ASSESSMENT_TYPE, seed.phase().name())
                     .put(CRITERION_ID, TEST_CRITERION_ID).put(CATEGORY_ID, categoryId(rubric(), TEST_CRITERION_ID))
                     .put(GRADE, seed.grade()).put(ASSESSED_ON, FIXTURE_DATE)
                     .put(EVIDENCE, seed.criterion()).put(COMMENTS, seed.note())
@@ -327,9 +378,9 @@ public class TestingGradingSelectionPreviewConfiguration {
         }
 
         private void ensure(PreviewRecord record) {
-            StoredRecord existing = records.findById(record.id()).orElse(null);
+            StoredRecord existing = store.repository().findById(record.id()).orElse(null);
             if (existing == null) {
-                records.save(new StoredRecord(record.id(), new StoredRecord.Details(record.type(), record.ownerId(),
+                store.repository().save(new StoredRecord(record.id(), new StoredRecord.Details(record.type(), record.ownerId(),
                         record.parentId(), record.status(), null, store.encode(record.payload()), Instant.now())));
                 return;
             }
@@ -347,7 +398,8 @@ public class TestingGradingSelectionPreviewConfiguration {
                 String adminId) { }
 
         private record AssessmentSeed(UUID id, String type, UUID projectId, UserAccount student, String rubricId,
-                String rubricVersion, UserAccount teacher, String criterion, int grade, String note) { }
+                String rubricVersion, UserAccount teacher, String criterion, int grade, String note,
+                AssessmentType phase) { }
 
         private record MetricSeed(UUID id, UUID projectId, String rubricId, String rubricVersion,
                 UserAccount teacher, String note, int value) { }

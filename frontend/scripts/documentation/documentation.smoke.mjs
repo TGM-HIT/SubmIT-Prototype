@@ -9,7 +9,9 @@ import { execFileSync } from 'node:child_process'
 import { generate, repo } from './run.mjs'
 import { loadLocale, renderGuides, validateGuides, validateLocale, validatePng, checkpoints, roles } from './guides.mjs'
 import { collectBrowserErrors } from '../preview.mjs'
-import { assertMatchingRubricIds, assertTestingAccountRole, Lifecycle } from './scenario.mjs'
+import {
+  assertMatchingRubricIds, assertTestingAccountRole, gradingMemberOptionState, Lifecycle,
+} from './scenario.mjs'
 import { assertPublicBoundary } from './privacy.mjs'
 import { createServer } from 'node:http'
 import { runInNewContext } from 'node:vm'
@@ -218,7 +220,7 @@ test('D2 invalid/missing/incomplete locale and missing password/browser fail bef
   await assert.rejects(access(path.join(root, 'docs/user-guide/fr')))
 })
 
-test('T8 grading walkthrough selects teacher summaries and student eligible choices without an ID input', async () => {
+test('T8 grading walkthrough binds phases and uses the allocated-member all-criteria editor', async () => {
   const lifecycle = new Lifecycle({
     locale: { example: {} }, password: 'unit-test-only-secret', backendUrl: 'http://localhost:8080',
     frontendUrl: 'http://localhost:5173', output: '/ignored', work: '/ignored', report: {}, options: {},
@@ -246,11 +248,34 @@ test('T8 grading walkthrough selects teacher summaries and student eligible choi
   const gradingScenario = scenario.slice(gradingStart, archiveStart)
   assert.ok(gradingScenario.includes('selectTeacherGradingProject(this.text.title)'))
   assert.ok(gradingScenario.includes('selectStudentGradingProject(this.text.title)'))
-  assert.ok(gradingScenario.includes("selectOption('#grade-criterion', 'individual')"))
-  assert.ok(gradingScenario.includes("mutateUI('Record assessment'"))
+  assert.ok(gradingScenario.includes("mutateUI('Save project rubric selections'"))
+  assert.ok(gradingScenario.includes("selectGradingMember('student01')"))
+  assert.ok(gradingScenario.includes("selectOption('#criterion-assessment-mode', 'FINAL')"))
+  assert.ok(gradingScenario.includes("'#criterion-individual-grade'"))
+  assert.ok(gradingScenario.includes("'#criterion-reflection-grade'"))
+  assert.ok(gradingScenario.includes('Nothing is selected to save'))
+  assert.ok(gradingScenario.includes("assessmentType=FINAL&rubricId="))
+  assert.ok(gradingScenario.includes("assessmentType=ROUTINE&rubricId="))
+  assert.ok(!gradingScenario.includes("this.fill('#student-id'"))
+  assert.ok(!gradingScenario.includes("this.selectOption('#grade-criterion'"))
   assert.ok(scenario.includes("document.querySelectorAll('.group-member-list li').length === ${this.members.length}"))
   assert.ok(!gradingScenario.includes("this.fill('#project-id'"))
   assert.ok(!gradingScenario.includes("'Load authorized project record'"))
+})
+
+test('grading-member browser selection distinguishes not-ready, missing, ambiguous, and unique options', () => {
+  assert.deepEqual(gradingMemberOptionState(null, 'Alex Example — 10A'), { state: 'not-ready' })
+  assert.deepEqual(gradingMemberOptionState({ disabled: true, options: [] }, 'Alex Example — 10A'),
+    { state: 'not-ready' })
+  assert.deepEqual(gradingMemberOptionState({ disabled: false, options: [] }, 'Alex Example — 10A'),
+    { state: 'missing' })
+  const duplicate = { textContent: 'Alex Example — 10A' }
+  assert.deepEqual(gradingMemberOptionState({
+    disabled: false, options: [duplicate, { textContent: 'Other — 10B' }, duplicate],
+  }, 'Alex Example — 10A'), { state: 'ambiguous' })
+  assert.deepEqual(gradingMemberOptionState({
+    disabled: false, options: [{ textContent: 'Alex Example — 10A' }],
+  }, 'Alex Example — 10A'), { state: 'ready', index: 0, label: 'Alex Example — 10A' })
 })
 
 test('documentation testing-account role checks match the authenticated roles array', () => {

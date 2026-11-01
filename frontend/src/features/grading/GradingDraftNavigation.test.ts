@@ -9,6 +9,9 @@ import { setLanguage } from '../../i18n'
 
 const api = vi.hoisted(() => ({
   activeRubric: vi.fn(),
+  assessmentRubrics: vi.fn(),
+  setAssessmentRubrics: vi.fn(),
+  gradingMembers: vi.fn(),
   rubrics: vi.fn(),
   rubric: vi.fn(),
   grades: vi.fn(),
@@ -32,6 +35,9 @@ vi.mock('../../api/services', () => ({
   },
   gradingApi: {
     activeRubric: api.activeRubric,
+    assessmentRubrics: api.assessmentRubrics,
+    setAssessmentRubrics: api.setAssessmentRubrics,
+    gradingMembers: api.gradingMembers,
     rubrics: api.rubrics,
     rubric: api.rubric,
     grades: api.grades,
@@ -70,8 +76,11 @@ const rubric = {
       evidenceRequired: true,
     }],
   }],
-  metricDefinitions: [],
-  aggregationRules: [],
+  metricDefinitions: [{ id: 'metric-1', name: 'Observed hours', unit: 'hours', version: 1 }],
+  aggregationRules: [
+    { id: 'project-rule', version: 1, scope: 'PROJECT' },
+    { id: 'student-rule', version: 1, scope: 'STUDENT' },
+  ],
 }
 const project = {
   formalApplicationId: 'proposal-1',
@@ -127,42 +136,32 @@ const cachedTransitions = [
 ]
 
 const assessmentDraft = {
-  'student-id': 'private-student',
+  'criterion-assessment-mode': 'ROUTINE',
+  'criterion-assessment-student': 'student-1',
+  'criterion-criterion-1-grade': '4',
+  'criterion-criterion-1-date': '2026-10-15',
+  'criterion-criterion-1-evidence': 'Private individual evidence',
+  'criterion-criterion-1-comments': 'Private individual comments',
   'grade-criterion': 'criterion-1',
-  'grade-grade': '4',
-  'grade-date': '2026-10-15',
-  'grade-evidence': 'Private individual evidence',
-  'grade-comments': 'Private individual comments',
-  'grade-transition': 'Private individual transition',
-  'group-criterion': 'criterion-1',
-  'group-grade': '3',
-  'group-date': '2026-10-16',
-  'group-evidence': 'Private group evidence',
-  'group-comments': 'Private group comments',
-  'group-transition': 'Private group transition',
+  'grade-grade': '3',
+  'grade-date': '2026-10-16',
+  'grade-evidence': 'Private group evidence',
+  'grade-comments': 'Private group comments',
   'metric-id': 'metric-1',
   'metric-value': '17',
   'metric-note': 'Private metric note',
-  'metric-transition': 'Private metric transition',
 }
 const finalDraft = {
   rule: 'project-rule',
   'final-grade': '4',
   rationale: 'Private project rationale',
-  'final-transition': 'Private project transition',
   'final-student-id': 'private-final-student',
   'student-rule': 'student-rule',
   'student-final-grade': '3',
   'student-rationale': 'Private student rationale',
-  'student-transition': 'Private student transition',
 }
 
 function draftField(wrapper: Awaited<ReturnType<typeof mountApplication>>, id: string) {
-  // Both existing GradeFields instances use the default grade-* IDs; scope group fields to their form.
-  if (id.startsWith('group-') && id !== 'group-transition') {
-    return wrapper.findAll('form').find((form) => form.find('#group-transition').exists())!
-      .get(`#${id.replace('group-', 'grade-')}`)
-  }
   return wrapper.get(`#${id}`)
 }
 
@@ -184,12 +183,31 @@ async function selectCurrentProject(wrapper: Awaited<ReturnType<typeof mountAppl
   await flushPromises()
 }
 
+async function selectCriterionMember(wrapper: Awaited<ReturnType<typeof mountApplication>>) {
+  await wrapper.get('#criterion-assessment-student').setValue('student-1')
+  await vi.waitFor(() => expect(wrapper.find('#criterion-criterion-1-grade').exists()).toBe(true))
+}
+
 describe('grading draft across rubric navigation', () => {
   beforeEach(() => {
     vi.resetAllMocks()
     auth = reactive({ user: { id: 'teacher-1', roles: ['TEACHER'] } })
     setLanguage('en')
     api.activeRubric.mockResolvedValue(rubric)
+    api.assessmentRubrics.mockResolvedValue({
+      routineRubricId: 'rubric-record',
+      finalRubricId: 'rubric-record',
+    })
+    api.setAssessmentRubrics.mockResolvedValue({
+      routineRubricId: 'rubric-record',
+      finalRubricId: 'rubric-record',
+    })
+    api.gradingMembers.mockResolvedValue([{
+      studentId: 'student-1',
+      displayName: 'Avery Student',
+      className: 'Class 10A',
+      electiveSubjectNames: [],
+    }])
     api.rubrics.mockResolvedValue({ ...emptyPage, content: [{
       id: 'rubric-record', version: 'v1', name: 'Assessment rubric',
       schoolYear: null, effectiveFrom: '2026-09-01', effectiveTo: null,
@@ -208,12 +226,11 @@ describe('grading draft across rubric navigation', () => {
     await wrapper.get('button.proposal-result').trigger('click')
     await flushPromises()
 
-    await wrapper.get('#student-id').setValue('student-record')
-    await wrapper.get('#grade-criterion').setValue('criterion-1')
-    await wrapper.get('#grade-grade').setValue('4')
-    await wrapper.get('#grade-date').setValue('2026-10-15')
-    await wrapper.get('#grade-evidence').setValue('Synthetic evidence retained across navigation')
-    await wrapper.get('#grade-comments').setValue('Unsaved teacher note')
+    await selectCriterionMember(wrapper)
+    await wrapper.get('#criterion-criterion-1-grade').setValue('4')
+    await wrapper.get('#criterion-criterion-1-date').setValue('2026-10-15')
+    await wrapper.get('#criterion-criterion-1-evidence').setValue('Synthetic evidence retained across navigation')
+    await wrapper.get('#criterion-criterion-1-comments').setValue('Unsaved teacher note')
 
     await wrapper.get('nav a[href="/rubrics"]').trigger('click')
     await flushPromises()
@@ -227,13 +244,12 @@ describe('grading draft across rubric navigation', () => {
     await flushPromises()
     expect(wrapper.get('h1').text()).toBe('Rubrics & progress')
     expect(wrapper.get('.page-heading').text()).toContain('River Lab')
-    expect((wrapper.get('#student-id').element as HTMLInputElement).value).toBe('student-record')
-    expect((wrapper.get('#grade-criterion').element as HTMLSelectElement).value).toBe('criterion-1')
-    expect((wrapper.get('#grade-grade').element as HTMLSelectElement).value).toBe('4')
-    expect((wrapper.get('#grade-date').element as HTMLInputElement).value).toBe('2026-10-15')
-    expect((wrapper.get('#grade-evidence').element as HTMLTextAreaElement).value)
+    expect((wrapper.get('#criterion-assessment-student').element as HTMLSelectElement).value).toBe('student-1')
+    expect((wrapper.get('#criterion-criterion-1-grade').element as HTMLSelectElement).value).toBe('4')
+    expect((wrapper.get('#criterion-criterion-1-date').element as HTMLInputElement).value).toBe('2026-10-15')
+    expect((wrapper.get('#criterion-criterion-1-evidence').element as HTMLTextAreaElement).value)
       .toBe('Synthetic evidence retained across navigation')
-    expect((wrapper.get('#grade-comments').element as HTMLTextAreaElement).value).toBe('Unsaved teacher note')
+    expect((wrapper.get('#criterion-criterion-1-comments').element as HTMLTextAreaElement).value).toBe('Unsaved teacher note')
     expect(wrapper.find('button.proposal-result').exists()).toBe(false)
     assertNoWrites()
     wrapper.unmount()
@@ -244,15 +260,15 @@ describe('grading draft across rubric navigation', () => {
     await flushPromises()
     await wrapper.get('button.proposal-result').trigger('click')
     await flushPromises()
-    await wrapper.get('#student-id').setValue('old-account-student')
-    await wrapper.get('#grade-evidence').setValue('Old account private draft')
+    await selectCriterionMember(wrapper)
+    await wrapper.get('#criterion-criterion-1-evidence').setValue('Old account private draft')
 
     auth.user = { id: 'teacher-2', roles: ['TEACHER'] }
     await flushPromises()
 
     expect(wrapper.get('h1').text()).toBe('Rubrics & progress')
     expect(wrapper.find('.page-heading').exists()).toBe(false)
-    expect(wrapper.find('#student-id').exists()).toBe(false)
+    expect(wrapper.find('#criterion-assessment-student').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('Old account private draft')
     expect(wrapper.find('button.proposal-result').exists()).toBe(true)
     assertNoWrites()
@@ -284,6 +300,7 @@ describe('grading draft across rubric navigation', () => {
     await selectCurrentProject(wrapper)
     expect(wrapper.get('.page-heading').text()).toContain('River Lab')
     expect(wrapper.text()).toContain('Saved private individual history')
+    await selectCriterionMember(wrapper)
 
     const defaults = Object.fromEntries(Object.keys(assessmentDraft).map((id) => [id, fieldValue(wrapper, id)]))
     for (const [id, value] of Object.entries(assessmentDraft)) {
@@ -316,7 +333,7 @@ describe('grading draft across rubric navigation', () => {
     expect(wrapper.find('.page-heading').exists()).toBe(false)
     expect(wrapper.find('[role="tab"]').exists()).toBe(false)
     for (const id of [...Object.keys(assessmentDraft), ...Object.keys(finalDraft)]) {
-      expect(wrapper.find(`#${id}`).exists()).toBe(false)
+      expect(wrapper.find(`#${id}`).exists(), `unexpected field for ${id}`).toBe(false)
     }
     expect(wrapper.text()).not.toContain('Saved private')
     expect(wrapper.text()).not.toContain('Private')
@@ -328,6 +345,7 @@ describe('grading draft across rubric navigation', () => {
     }
 
     await selectCurrentProject(wrapper)
+    if (user.roles.includes('TEACHER')) await selectCriterionMember(wrapper)
     for (const index of [0, 1, 2, 3]) {
       await selectTab(wrapper, index)
       expect(wrapper.text()).not.toContain('Saved private')
@@ -337,9 +355,10 @@ describe('grading draft across rubric navigation', () => {
         expect(fieldValue(wrapper, id)).toBe(value)
       }
     } else {
-      for (const id of [...Object.keys(assessmentDraft), ...Object.keys(finalDraft)]) {
-        expect(wrapper.find(`#${id}`).exists()).toBe(false)
-      }
+      expect(wrapper.text()).not.toContain('Private individual evidence')
+      expect(wrapper.text()).not.toContain('Private group evidence')
+      expect(wrapper.text()).not.toContain('Private metric note')
+      expect(wrapper.text()).not.toContain('Private project rationale')
     }
     assertNoWrites()
     wrapper.unmount()
@@ -385,7 +404,7 @@ describe('grading draft across rubric navigation', () => {
     expect(wrapper.getComponent(GradingPage).element).toBe(gradingElement)
     expect(wrapper.find('.page-heading').exists()).toBe(false)
     expect(wrapper.find('[role="tab"]').exists()).toBe(false)
-    expect(wrapper.find('#student-id').exists()).toBe(false)
+    expect(wrapper.find('#criterion-assessment-student').exists()).toBe(false)
     expect(wrapper.text()).not.toContain('Stale private')
     if (user.roles.includes('ADMIN')) expect(fieldValue(wrapper, 'project-id')).toBe('')
     else expect(wrapper.find('button.proposal-result').exists()).toBe(true)

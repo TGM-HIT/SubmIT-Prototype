@@ -10,6 +10,9 @@ const api = vi.hoisted(() => ({
   role: "ADMIN",
   extraRoles: [] as string[],
   activeRubric: vi.fn(),
+  assessmentRubrics: vi.fn(),
+  setAssessmentRubrics: vi.fn(),
+  gradingMembers: vi.fn(),
   rubrics: vi.fn(),
   rubric: vi.fn(),
   grades: vi.fn(),
@@ -22,6 +25,7 @@ const api = vi.hoisted(() => ({
   formalGet: vi.fn(),
   roster: vi.fn(),
   recordGrade: vi.fn(),
+  reviseGrade: vi.fn(),
   recordGroupGrade: vi.fn(),
   recordMetric: vi.fn(),
   setFinalGrade: vi.fn(),
@@ -37,6 +41,9 @@ vi.mock("../../api/services", () => ({
   },
   gradingApi: {
     activeRubric: api.activeRubric,
+    assessmentRubrics: api.assessmentRubrics,
+    setAssessmentRubrics: api.setAssessmentRubrics,
+    gradingMembers: api.gradingMembers,
     rubrics: api.rubrics,
     rubric: api.rubric,
     grades: api.grades,
@@ -45,6 +52,7 @@ vi.mock("../../api/services", () => ({
     finalGrade: api.finalGrade,
     finalStudentGrade: api.finalStudentGrade,
     recordGrade: api.recordGrade,
+    reviseGrade: api.reviseGrade,
     recordGroupGrade: api.recordGroupGrade,
     recordMetric: api.recordMetric,
     setFinalGrade: api.setFinalGrade,
@@ -98,7 +106,8 @@ function rubricSummary(id: string, version: string, name = `Rubric ${version}`) 
 }
 
 function expectNoGradingWrites() {
-  for (const writer of [api.recordGrade, api.recordGroupGrade, api.recordMetric, api.setFinalGrade, api.publishRubric]) {
+  for (const writer of [api.recordGrade, api.reviseGrade, api.setAssessmentRubrics,
+    api.recordGroupGrade, api.recordMetric, api.setFinalGrade, api.publishRubric]) {
     expect(writer).not.toHaveBeenCalled()
   }
 }
@@ -127,9 +136,7 @@ describe("grading student identities", () => {
     api.role = "ADMIN"
     api.extraRoles = []
     setLanguage("en")
-    api.activeRubric.mockResolvedValue({ name: "Current rubric", categories: [] })
-    api.rubrics.mockResolvedValue(pageResult())
-    api.rubric.mockResolvedValue({
+    const defaultRubric = {
       id: "rubric-record-id",
       status: "PUBLISHED",
       createdAt: "2026-10-10T00:00:00Z",
@@ -144,7 +151,28 @@ describe("grading student identities", () => {
       categories: [],
       metricDefinitions: [],
       aggregationRules: [],
+    }
+    api.activeRubric.mockResolvedValue(defaultRubric)
+    api.assessmentRubrics.mockResolvedValue({
+      routineRubricId: "rubric-record-id",
+      finalRubricId: "rubric-record-id",
     })
+    api.setAssessmentRubrics.mockResolvedValue({
+      routineRubricId: "rubric-record-id",
+      finalRubricId: "rubric-record-id",
+    })
+    api.gradingMembers.mockResolvedValue([{
+      studentId: "11111111-1111-4111-8111-111111111111",
+      displayName: "Jordan Student",
+      className: "Class 10A",
+      electiveSubjectNames: ["Biology", "Art"],
+    }])
+    api.rubrics.mockResolvedValue(pageResult())
+    api.rubric.mockImplementation(async (id: string) => ({
+      ...defaultRubric,
+      ...await api.activeRubric(),
+      id,
+    }))
     api.grades.mockResolvedValue(pageResult([{
       id: "grade-1",
       studentId: "11111111-1111-4111-8111-111111111111",
@@ -167,6 +195,7 @@ describe("grading student identities", () => {
     api.formalGet.mockResolvedValue({})
     api.roster.mockResolvedValue({ members: [] })
     api.recordGrade.mockResolvedValue({})
+    api.reviseGrade.mockResolvedValue({})
     api.recordGroupGrade.mockResolvedValue({})
     api.recordMetric.mockResolvedValue({})
     api.setFinalGrade.mockResolvedValue({})
@@ -252,14 +281,16 @@ describe("grading student identities", () => {
 
     if (role === "TEACHER") {
       await loadTeacherProject(page)
-      expect(page.text()).toContain("Record individual assessment")
+      expect(page.text()).toContain("Individual criterion assessment")
+      expect(page.find("#criterion-assessment-student").exists()).toBe(true)
+      expect(page.find("#student-id").exists()).toBe(false)
       expect(page.text()).toContain("Record group assessment")
       expect(page.text()).toContain("Record a configured project metric")
-      expect(page.findAll("form")).toHaveLength(3)
+      expect(page.findAll("form")).toHaveLength(2)
       await page.findAll('[role="tab"]').find((tab) => tab.text() === "Final grades")!.trigger("click")
       expect(page.text()).toContain("Record / confirm final project grade")
       expect(page.text()).toContain("Record an individual final grade")
-      expect(page.findAll("form")).toHaveLength(5)
+      expect(page.findAll("form")).toHaveLength(4)
     } else {
       expect(page.find("#project-id").exists()).toBe(false)
       expect(page.findAll("form")).toHaveLength(0)
@@ -280,10 +311,10 @@ describe("grading student identities", () => {
     expect(page.text()).toContain("Browse rubric definitions")
 
     await loadTeacherProject(page)
-    expect(page.text()).toContain("Record individual assessment")
+    expect(page.text()).toContain("Individual criterion assessment")
     expect(page.text()).toContain("Record group assessment")
     expect(page.text()).toContain("Record a configured project metric")
-    expect(page.findAll("form")).toHaveLength(3)
+    expect(page.findAll("form")).toHaveLength(2)
     page.unmount()
   })
 
@@ -386,7 +417,7 @@ describe("grading student identities", () => {
       expect(page.text()).toContain("Criterion with malformed scale")
       expect(page.text()).toContain("Valid metric")
       expect(page.text()).not.toContain("PROJECT")
-      expect(page.findAll("optgroup")).toHaveLength(2)
+      expect(page.findAll("optgroup")).toHaveLength(1)
       await page.get("#grade-criterion").setValue("criterion-malformed-scale")
       expect(page.get("#grade-grade").findAll("option")).toHaveLength(1)
     } else {
@@ -564,7 +595,7 @@ describe("grading student identities", () => {
     await loadTeacherProject(page)
 
     const dateInputs = page.findAll('input[type="date"]')
-    expect(dateInputs).toHaveLength(2)
+    expect(dateInputs).toHaveLength(1)
     const originalFormValues = dateInputs.map((input) => (input.element as HTMLInputElement).value)
     const assertDateOnlyDisplays = () => {
       expect(page.text()).toContain(formatDateOnly(effectiveFrom))
@@ -581,7 +612,7 @@ describe("grading student identities", () => {
     assertDateOnlyDisplays()
     const missingIndividualDate = page.findAll(".data-row").find((row) => row.text().includes("legacy"))
     expect(missingIndividualDate?.text()).toContain("assessed  · category")
-    expect(page.text()).not.toContain("Legacy rubric")
+    expect(page.text()).toContain("Legacy rubric")
 
     setLanguage("de")
     await flushPromises()
@@ -1139,8 +1170,41 @@ describe("grading project selection", () => {
     api.role = "ADMIN"
     api.extraRoles = []
     setLanguage("en")
+    api.assessmentRubrics.mockResolvedValue({
+      routineRubricId: "rubric-current",
+      finalRubricId: "rubric-current",
+    })
+    api.setAssessmentRubrics.mockResolvedValue({
+      routineRubricId: "rubric-current",
+      finalRubricId: "rubric-current",
+    })
+    api.gradingMembers.mockResolvedValue([{
+      studentId: "student-target",
+      displayName: "Target Student",
+      className: "Class 10A",
+      electiveSubjectNames: [],
+    }])
     api.activeRubric.mockResolvedValue({ id: "rubric-current", name: "Current rubric", categories: [] })
-    api.rubrics.mockResolvedValue(pageResult())
+    api.rubrics.mockResolvedValue(pageResult([
+      rubricSummary("rubric-current", "v-current", "Current rubric"),
+    ]))
+    api.rubric.mockImplementation(async (id: string) => ({
+      id,
+      name: id === "rubric-locale" ? "Listed rubric" : "Current rubric",
+      version: id === "rubric-locale" ? "v-listed" : "v-current",
+      status: "PUBLISHED",
+      categories: [{
+        id: "general",
+        name: "General",
+        criteria: [
+          { id: "team", name: "Teamwork", subject: "General", scale: { min: 1, max: 5, step: 1 }, evidenceRequired: false },
+          { id: "analysis", name: "Analysis", subject: "General", scale: { min: 1, max: 5, step: 1 }, evidenceRequired: false },
+        ],
+      }],
+      finalGradeScale: { min: 1, max: 5, step: 1 },
+      aggregationRules: [{ id: "summary", version: 1 }],
+      metricDefinitions: [{ id: "hours", name: "Lab hours", unit: "hours", version: 1 }],
+    }))
     api.grades.mockResolvedValue(pageResult([{
       id: "grade-1", studentId: "student-other", studentDisplayName: "Other Student",
       criterionId: "analysis", grade: 4, status: "ACTIVE", rubricVersion: "v1",
@@ -1157,6 +1221,85 @@ describe("grading project selection", () => {
     api.recordGroupGrade.mockResolvedValue({})
     api.recordMetric.mockResolvedValue({})
     api.setFinalGrade.mockResolvedValue({})
+  })
+
+  it("loads every rubric option page without preselection and persists each phase independently", async () => {
+    api.role = "TEACHER"
+    const firstPage = Array.from({ length: 20 }, (_, index) =>
+      rubricSummary(`rubric-${index}`, `version-${index}`))
+    const laterRubric = rubricSummary("rubric-later", "version-later", "Later published rubric")
+    let selections = { routineRubricId: null as string | null, finalRubricId: null as string | null }
+    api.rubrics.mockImplementation(async (pageIndex: number) => ({
+      content: pageIndex === 0 ? firstPage : [laterRubric],
+      page: pageIndex,
+      size: 20,
+      totalElements: 21,
+      totalPages: 2,
+    }))
+    api.assessmentRubrics.mockImplementation(async () => selections)
+    api.setAssessmentRubrics.mockImplementation(async (_projectId, update) => {
+      selections = update
+      return update
+    })
+
+    const page = mount(GradingPage)
+    await loadTeacherProject(page)
+
+    expect(api.rubrics).toHaveBeenNthCalledWith(1, 0)
+    expect(api.rubrics).toHaveBeenNthCalledWith(2, 1)
+    const routine = page.get("#routine-rubric-selection")
+    const final = page.get("#final-rubric-selection")
+    expect((routine.element as HTMLSelectElement).value).toBe("")
+    expect((final.element as HTMLSelectElement).value).toBe("")
+    expect(routine.text()).toContain("Later published rubric · vversion-later")
+
+    await routine.setValue("rubric-later")
+    expect((final.element as HTMLSelectElement).value).toBe("")
+    await page.findAll("button").find((button) => button.text() === "Save project rubric selections")!.trigger("click")
+    await flushPromises()
+    expect(api.setAssessmentRubrics).toHaveBeenNthCalledWith(1, "project-1", {
+      routineRubricId: "rubric-later",
+      finalRubricId: null,
+    })
+    expect((page.get("#routine-rubric-selection").element as HTMLSelectElement).value).toBe("rubric-later")
+    expect((page.get("#final-rubric-selection").element as HTMLSelectElement).value).toBe("")
+
+    await page.get("#final-rubric-selection").setValue("rubric-later")
+    await page.findAll("button").find((button) => button.text() === "Save project rubric selections")!.trigger("click")
+    await flushPromises()
+    expect(api.setAssessmentRubrics).toHaveBeenNthCalledWith(2, "project-1", {
+      routineRubricId: "rubric-later",
+      finalRubricId: "rubric-later",
+    })
+    expect((page.get("#routine-rubric-selection").element as HTMLSelectElement).value).toBe("rubric-later")
+    expect((page.get("#final-rubric-selection").element as HTMLSelectElement).value).toBe("rubric-later")
+    page.unmount()
+  })
+
+  it("reports grading-member lookup failure and retries without exposing an empty-success state", async () => {
+    api.role = "TEACHER"
+    api.gradingMembers.mockRejectedValueOnce(new ApiError("Member directory unavailable", 503))
+      .mockResolvedValueOnce([{
+        studentId: "student-target",
+        displayName: "Target Student",
+        className: "Class 10A",
+        electiveSubjectNames: [],
+      }])
+    const page = mount(GradingPage)
+    await loadTeacherProject(page)
+
+    expect(api.gradingMembers).toHaveBeenCalledTimes(1)
+    expect(page.text()).toContain("Member directory unavailable")
+    expect(page.text()).not.toContain("No allocated project members are available.")
+    expect(page.get("#criterion-assessment-student").attributes("disabled")).toBeDefined()
+
+    await page.findAll("button").find((button) => button.text() === "Retry")!.trigger("click")
+    await flushPromises()
+    expect(api.gradingMembers).toHaveBeenCalledTimes(2)
+    expect(page.text()).not.toContain("Member directory unavailable")
+    expect(page.get("#criterion-assessment-student").text()).toContain("Target Student — Class 10A")
+    expect(page.get("#criterion-assessment-student").attributes("disabled")).toBeUndefined()
+    page.unmount()
   })
 
   it("uses the same teacher summary context, default supervision, member/period/year search, retained query and all-project scope", async () => {
@@ -1685,7 +1828,7 @@ describe("grading project selection", () => {
     page.unmount()
   })
 
-  it.each(["individual", "group", "project-final", "student-final"] as const)(
+  it.each(["group", "project-final", "student-final"] as const)(
     "refreshes only the current selection after a %s write and retains failed input and browsing state",
     async (kind) => {
       api.role = "TEACHER"
@@ -1720,17 +1863,16 @@ describe("grading project selection", () => {
       await loadTeacherProject(page, "Lab 21")
       const readMocks = [api.grades, api.groupGrades, api.metrics, api.finalGrade]
       readMocks.forEach((read) => read.mockClear())
-      const isAssessment = kind === "individual" || kind === "group"
+      const isAssessment = kind === "group"
       if (!isAssessment) {
         await page.findAll('[role="tab"]').find((tab) => tab.text() === "Final grades")!.trigger("click")
       }
       const form = isAssessment
-        ? page.findAll("form.panel")[kind === "individual" ? 0 : 1]
+        ? page.findAll("form.panel")[0]
         : page.findAll("form.panel").find((form) => form.find(kind === "project-final" ? "#rationale" : "#student-rationale").exists())!
       const draftSelector = isAssessment ? "textarea[id$='-evidence']" : kind === "project-final" ? "#rationale" : "#student-rationale"
       if (isAssessment) {
-        if (kind === "individual") await form.get("#student-id").setValue("student-target")
-        await form.get("select[id$='-criterion']").setValue(kind === "individual" ? "analysis" : "team")
+        await form.get("select[id$='-criterion']").setValue("team")
         await form.get("select[id$='-grade']").setValue("4")
         await form.get("input[type='date']").setValue("2026-10-10")
       } else {
@@ -1738,7 +1880,7 @@ describe("grading project selection", () => {
         await form.get(kind === "project-final" ? "#final-grade" : "#student-final-grade").setValue("4")
       }
       await form.get(draftSelector).setValue("Correctable evidence")
-      const write = kind === "individual" ? api.recordGrade : kind === "group" ? api.recordGroupGrade : api.setFinalGrade
+      const write = kind === "group" ? api.recordGroupGrade : api.setFinalGrade
       write.mockRejectedValueOnce(new ApiError("write rejected", 400))
       await form.trigger("submit")
       await flushPromises()
@@ -1752,11 +1894,9 @@ describe("grading project selection", () => {
       api.finalGrade.mockResolvedValue({ current: { id: "fresh-final", grade: 5, rationale: "Fresh persisted decision" }, history: [] })
       await form.trigger("submit")
       await flushPromises()
-      const payload = kind === "individual"
-        ? { studentId: "student-target", criterionId: "analysis", grade: 4, evidence: "Correctable evidence" }
-        : kind === "group" ? { criterionId: "team", grade: 4, evidence: "Correctable evidence" }
-          : kind === "project-final" ? { project: { grade: 4, rationale: "Correctable evidence" } }
-            : { students: [{ studentId: "student-target", grade: 4, rationale: "Correctable evidence" }] }
+      const payload = kind === "group" ? { criterionId: "team", grade: 4, evidence: "Correctable evidence" }
+        : kind === "project-final" ? { project: { grade: 4, rationale: "Correctable evidence" } }
+          : { students: [{ studentId: "student-target", grade: 4, rationale: "Correctable evidence" }] }
       expect(write).toHaveBeenLastCalledWith("project-21", expect.objectContaining(payload))
       for (const read of readMocks) {
         expect(read).toHaveBeenCalledTimes(1)
@@ -1765,8 +1905,8 @@ describe("grading project selection", () => {
       expect(api.finalStudentGrade).not.toHaveBeenCalled()
       expect(page.get("h3[tabindex='-1']").text()).toContain("Lab 21")
       await page.findAll('[role="tab"]').find((tab) =>
-        tab.text() === (kind === "individual" ? "Individual assessments" : kind === "group" ? "Group assessments" : "Final grades"))!.trigger("click")
-      expect(page.text()).toContain(kind === "individual" ? "fresh-analysis" : kind === "group" ? "fresh-team" : "Fresh persisted decision")
+        tab.text() === (kind === "group" ? "Group assessments" : "Final grades"))!.trigger("click")
+      expect(page.text()).toContain(kind === "group" ? "fresh-team" : "Fresh persisted decision")
       await page.findAll("button").find((button) => button.text() === "Return to project list")!.trigger("click")
       await flushPromises()
       expect((page.get("#grading-project-search").element as HTMLInputElement).value).toBe("Lab")

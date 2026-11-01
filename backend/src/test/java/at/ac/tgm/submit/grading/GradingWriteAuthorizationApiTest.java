@@ -1,6 +1,7 @@
 package at.ac.tgm.submit.grading;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -12,6 +13,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import at.ac.tgm.submit.data.RecordStore;
+import at.ac.tgm.submit.data.StoredRecord;
 import at.ac.tgm.submit.security.Role;
 import at.ac.tgm.submit.user.UserAccountRepository;
 import at.ac.tgm.submit.grading.RubricDtos.AggregationRuleDto;
@@ -25,6 +27,11 @@ import java.time.LocalDate;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -73,6 +80,7 @@ class GradingWriteAuthorizationApiTest {
         store.create("project_group", null, projectId.toString(), "COMPLETED", group);
         store.create("formal_application", studentId, projectId.toString(), "APPROVED", store.object());
         rubricId = publishRubric("authorization-rubric-" + UUID.randomUUID());
+        selectRubrics(rubricId, teacherToken);
     }
 
     @AfterEach
@@ -91,6 +99,9 @@ class GradingWriteAuthorizationApiTest {
         String dualToken = login("teacher01").token();
         mockMvc.perform(bearer(get("/api/users"), dualToken)).andExpect(status().isOk());
         assertNotNull(publishRubric("dual-role-publication-" + UUID.randomUUID(), dualToken));
+        request(put("/api/projects/{projectId}/assessment-rubrics", projectId), dualToken,
+                Map.of("routineRubricId", rubricId, "finalRubricId", rubricId))
+                .andExpect(status().isOk());
         Map<String, Object> studentGrade = studentGrade();
         request(post("/api/projects/{projectId}/student-grades", projectId), adminToken, studentGrade)
                 .andExpect(status().isForbidden());
@@ -199,6 +210,7 @@ class GradingWriteAuthorizationApiTest {
                     projectId, studentId), token)).andExpect(status().isOk()).andReturn()),
                     studentFinalWrite, 3, "Individual assessments considered.");
         }
+
         for (String path : List.of(
                 "/api/projects/" + projectId + "/student-grades",
                 "/api/projects/" + projectId + "/group-grades",
@@ -207,6 +219,7 @@ class GradingWriteAuthorizationApiTest {
                 "/api/projects/" + projectId + "/students/" + studentId + "/final-grade")) {
             mockMvc.perform(bearer(get(path), nonmemberToken)).andExpect(status().isForbidden());
         }
+
         mockMvc.perform(bearer(get("/api/projects/{projectId}/students/{studentId}/final-grade",
                         projectId, users.findByUsername("student02").orElseThrow().getId()),
                         studentToken)).andExpect(status().isForbidden());
@@ -221,6 +234,360 @@ class GradingWriteAuthorizationApiTest {
         mockMvc.perform(bearer(get("/api/grading-rubrics/{rubricId}", rubricId), adminToken))
                 .andExpect(status().isOk());
         assertTrue(publishRubric("admin-publication-" + UUID.randomUUID()) != null);
+    }
+
+    @Test
+    void gradingSelectionAndMemberReadsUseSeparateAuthorizedSurfaces() throws Exception {
+        JsonNode teacherSelections = body(mockMvc.perform(bearer(
+                        get("/api/projects/{projectId}/assessment-rubrics", projectId), teacherToken))
+                .andExpect(status().isOk()).andReturn());
+        assertEquals(rubricId.toString(), text(teacherSelections, "routineRubricId"));
+        assertEquals(rubricId.toString(), text(teacherSelections, "finalRubricId"));
+        JsonNode studentSelections = body(mockMvc.perform(bearer(
+                        get("/api/projects/{projectId}/assessment-rubrics", projectId), studentToken))
+                .andExpect(status().isOk()).andReturn());
+        assertEquals(teacherSelections, studentSelections);
+
+        JsonNode teacherMembers = body(mockMvc.perform(bearer(
+                        get("/api/projects/{projectId}/grading-members", projectId), teacherToken))
+                .andExpect(status().isOk()).andReturn());
+        assertEquals(1, teacherMembers.size());
+        assertEquals(studentId, text(teacherMembers.get(0), "studentId"));
+        assertFalse(text(teacherMembers.get(0), "displayName").isBlank());
+        body(mockMvc.perform(bearer(get("/api/projects/{projectId}/grading-members", projectId), adminToken))
+                .andExpect(status().isOk()).andReturn());
+        mockMvc.perform(bearer(get("/api/projects/{projectId}/grading-members", projectId), studentToken))
+                .andExpect(status().isForbidden());
+
+        int bindingsBefore = store.repository().findByTypeAndParentId(GradingKeys.BINDING, projectId.toString())
+                .size();
+        request(put("/api/projects/{projectId}/assessment-rubrics", projectId), adminToken,
+                Map.of("routineRubricId", rubricId, "finalRubricId", rubricId))
+                .andExpect(status().isForbidden());
+        request(put("/api/projects/{projectId}/assessment-rubrics", projectId), studentToken,
+                Map.of("routineRubricId", rubricId, "finalRubricId", rubricId))
+                .andExpect(status().isForbidden());
+        request(put("/api/projects/{projectId}/assessment-rubrics", projectId), teacherToken,
+                Map.of("routineRubricId", rubricId, "finalRubricId", rubricId))
+                .andExpect(status().isOk());
+        assertEquals(bindingsBefore,
+                store.repository().findByTypeAndParentId(GradingKeys.BINDING, projectId.toString()).size(),
+                "A same-selection save and denied mutations must not append binding transitions.");
+    }
+
+    @Test
+    void newProjectStartsUnselectedAndPhaseSelectionsPersistIndependently() throws Exception {
+        UUID emptyProjectId = UUID.randomUUID();
+        var emptyProject = store.object();
+        emptyProject.putArray("studentIds").add(studentId);
+        store.create(GradingKeys.PROJECT_GROUP, null, emptyProjectId.toString(), "COMPLETED", emptyProject);
+        JsonNode initial = body(mockMvc.perform(bearer(
+                        get("/api/projects/{projectId}/assessment-rubrics", emptyProjectId), teacherToken))
+                .andExpect(status().isOk()).andReturn());
+        assertTrue(initial.get("routineRubricId").isNull());
+        assertTrue(initial.get("finalRubricId").isNull());
+
+        var missingPhaseSelection = objectMapper.createObjectNode()
+                .put("routineRubricId", rubricId.toString());
+        request(put("/api/projects/{projectId}/assessment-rubrics", emptyProjectId), teacherToken,
+                missingPhaseSelection)
+                .andExpect(status().isBadRequest());
+        var missingRubricSelection = objectMapper.createObjectNode()
+                .put("routineRubricId", UUID.randomUUID().toString()).putNull("finalRubricId");
+        request(put("/api/projects/{projectId}/assessment-rubrics", emptyProjectId), teacherToken,
+                missingRubricSelection)
+                .andExpect(status().isNotFound());
+        com.fasterxml.jackson.databind.node.ObjectNode sameSelection = objectMapper.createObjectNode()
+                .put("routineRubricId", rubricId.toString()).put("finalRubricId", rubricId.toString());
+        body(request(put("/api/projects/{projectId}/assessment-rubrics", emptyProjectId), teacherToken, sameSelection)
+                .andExpect(status().isOk()).andReturn());
+        JsonNode persisted = body(mockMvc.perform(bearer(
+                        get("/api/projects/{projectId}/assessment-rubrics", emptyProjectId), teacherToken))
+                .andExpect(status().isOk()).andReturn());
+        assertEquals(rubricId.toString(), text(persisted, "routineRubricId"));
+        assertEquals(rubricId.toString(), text(persisted, "finalRubricId"));
+
+        PublishRubricRequest futureDefinition = rubricRequest("future-effective-" + UUID.randomUUID());
+        UUID futureRubricId = publishRubric(new PublishRubricRequest(futureDefinition.version(),
+                futureDefinition.name(), futureDefinition.schoolYear(), LocalDate.now().plusDays(1).toString(),
+                futureDefinition.effectiveTo(), futureDefinition.finalGradeScale(), futureDefinition.categories(),
+                futureDefinition.metricDefinitions(), futureDefinition.aggregationRules()));
+        request(put("/api/projects/{projectId}/assessment-rubrics", emptyProjectId), teacherToken,
+                Map.of("routineRubricId", futureRubricId, "finalRubricId", rubricId))
+                .andExpect(status().isConflict());
+        JsonNode afterIneffectiveAttempt = body(mockMvc.perform(bearer(
+                        get("/api/projects/{projectId}/assessment-rubrics", emptyProjectId), teacherToken))
+                .andExpect(status().isOk()).andReturn());
+        assertEquals(rubricId.toString(), text(afterIneffectiveAttempt, "routineRubricId"));
+        assertEquals(rubricId.toString(), text(afterIneffectiveAttempt, "finalRubricId"));
+
+        UUID distinctFinal = publishRubric("independent-final-" + UUID.randomUUID());
+        com.fasterxml.jackson.databind.node.ObjectNode transition = objectMapper.createObjectNode()
+                .put("routineRubricId", rubricId.toString()).put("finalRubricId", distinctFinal.toString());
+        body(request(put("/api/projects/{projectId}/assessment-rubrics", emptyProjectId), teacherToken, transition)
+                .andExpect(status().isOk()).andReturn());
+        JsonNode separated = body(mockMvc.perform(bearer(
+                        get("/api/projects/{projectId}/assessment-rubrics", emptyProjectId), teacherToken))
+                .andExpect(status().isOk()).andReturn());
+        assertEquals(rubricId.toString(), text(separated, "routineRubricId"));
+        assertEquals(distinctFinal.toString(), text(separated, "finalRubricId"));
+        List<com.fasterxml.jackson.databind.node.ObjectNode> bindings = store.repository()
+                .findByTypeAndParentId(GradingKeys.BINDING, emptyProjectId.toString()).stream()
+                .map(store::parse).toList();
+        assertEquals(3, bindings.size());
+        assertEquals(1, bindings.stream().filter(record -> "ROUTINE".equals(record.path("phase").asText())).count());
+        assertEquals(2, bindings.stream().filter(record -> "FINAL".equals(record.path("phase").asText())).count());
+    }
+
+    @Test
+    void sameSelectedRubricKeepsRoutineAndFinalStudentHistoriesSeparate() throws Exception {
+        selectRubrics(rubricId, teacherToken);
+        JsonNode routine = body(request(post("/api/projects/{projectId}/student-grades", projectId),
+                teacherToken, studentGrade()).andExpect(status().isCreated()).andReturn());
+        JsonNode repeatedRoutine = body(request(post("/api/projects/{projectId}/student-grades", projectId),
+                teacherToken, Map.of("rubricId", rubricId, "assessmentType", "ROUTINE",
+                        "studentId", studentId, "criterionId", "individual", "grade", 3))
+                .andExpect(status().isCreated()).andReturn());
+        JsonNode finalGrade = body(request(post("/api/projects/{projectId}/student-grades", projectId),
+                teacherToken, Map.of("rubricId", rubricId, "assessmentType", "FINAL",
+                        "studentId", studentId, "criterionId", "individual", "grade", 2))
+                .andExpect(status().isCreated()).andReturn());
+
+        JsonNode routineHistory = body(mockMvc.perform(bearer(
+                get("/api/projects/{projectId}/student-grades", projectId), teacherToken)
+                .param("studentId", studentId).param("assessmentType", "ROUTINE")
+                .param("rubricId", rubricId.toString()))
+                .andExpect(status().isOk()).andReturn());
+        JsonNode finalHistory = body(mockMvc.perform(bearer(
+                get("/api/projects/{projectId}/student-grades", projectId), teacherToken)
+                .param("studentId", studentId).param("assessmentType", "FINAL")
+                .param("rubricId", rubricId.toString()))
+                .andExpect(status().isOk()).andReturn());
+        JsonNode routineRows = array(routineHistory, "content");
+        JsonNode finalRows = array(finalHistory, "content");
+        assertEquals(2, routineRows.size());
+        assertEquals(1, finalRows.size());
+        assertNotNull(findById(routineRows, text(routine, "id")));
+        assertNotNull(findById(routineRows, text(repeatedRoutine, "id")));
+        assertEquals(text(finalGrade, "id"), text(finalRows.get(0), "id"));
+        assertEquals("ROUTINE", text(findById(routineRows, text(routine, "id")), "assessmentType"));
+        assertEquals("ROUTINE", text(findById(routineRows, text(repeatedRoutine, "id")), "assessmentType"));
+        assertEquals("FINAL", text(finalRows.get(0), "assessmentType"));
+        assertNumber(findById(routineRows, text(routine, "id")), "grade", 4);
+        assertNumber(findById(routineRows, text(repeatedRoutine, "id")), "grade", 3);
+        assertNumber(finalRows.get(0), "grade", 2);
+    }
+
+    @Test
+    void usedPhaseTransitionIsReasonedAuditedAndKeepsPriorAssessmentOnItsVersion() throws Exception {
+        JsonNode prior = body(request(post("/api/projects/{projectId}/student-grades", projectId),
+                teacherToken, studentGrade()).andExpect(status().isCreated()).andReturn());
+        UUID replacement = publishRubric("routine-transition-" + UUID.randomUUID());
+        request(put("/api/projects/{projectId}/assessment-rubrics", projectId), teacherToken,
+                Map.of("routineRubricId", replacement, "finalRubricId", rubricId))
+                .andExpect(status().isBadRequest());
+        request(put("/api/projects/{projectId}/assessment-rubrics", projectId), teacherToken,
+                Map.of("routineRubricId", replacement, "finalRubricId", rubricId,
+                        "routineReason", "r".repeat(2001)))
+                .andExpect(status().isBadRequest());
+        Map<String, Object> selection = Map.of(
+                "routineRubricId", replacement,
+                "finalRubricId", rubricId,
+                "routineReason", "Routine criteria updated after observed work");
+        JsonNode updated = body(request(put("/api/projects/{projectId}/assessment-rubrics", projectId),
+                teacherToken, selection).andExpect(status().isOk()).andReturn());
+        assertEquals(replacement.toString(), text(updated, "routineRubricId"));
+        assertEquals(rubricId.toString(), text(updated, "finalRubricId"));
+        mockMvc.perform(bearer(put("/api/projects/{projectId}/assessment-rubrics", projectId), teacherToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"routineRubricId\":null,\"finalRubricId\":\"" + rubricId + "\"}"))
+                .andExpect(status().isConflict());
+
+        JsonNode retained = body(mockMvc.perform(bearer(get("/api/projects/{projectId}/student-grades", projectId),
+                        teacherToken).param("studentId", studentId).param("assessmentType", "ROUTINE")
+                        .param("rubricId", rubricId.toString()))
+                .andExpect(status().isOk()).andReturn());
+        assertTrue(array(retained, "content").findValuesAsText("id").contains(text(prior, "id")));
+        JsonNode newGrade = body(request(post("/api/projects/{projectId}/student-grades", projectId),
+                teacherToken, Map.of("rubricId", replacement, "assessmentType", "ROUTINE",
+                        "studentId", studentId, "criterionId", "individual", "grade", 3))
+                .andExpect(status().isCreated()).andReturn());
+        assertEquals(replacement.toString(), text(newGrade, "rubricId"));
+
+        StoredRecord transition = store.repository().findByTypeAndParentId(GradingKeys.BINDING, projectId.toString())
+                .stream().filter(record -> replacement.toString()
+                        .equals(store.parse(record).path(GradingKeys.RUBRIC_ID).asText()))
+                .findFirst().orElseThrow();
+        assertEquals("ROUTINE", store.parse(transition).path("phase").asText());
+        assertAudit(GradingKeys.BINDING, transition.getId().toString(), "ASSESSMENT_RUBRIC_TRANSITION");
+        assertEquals(0, body(mockMvc.perform(bearer(get("/api/projects/{projectId}/student-grades", projectId),
+                        teacherToken).param("studentId", studentId).param("assessmentType", "FINAL")
+                        .param("rubricId", rubricId.toString()))
+                .andExpect(status().isOk()).andReturn()).path("totalElements").asInt());
+    }
+
+    @Test
+    void finalSnapshotsUseFinalStudentRowsAndRoutineGroupMetricRowsForDistinctRubrics() throws Exception {
+        UUID finalRubricId = publishRubricWithDifferentStudentScale(
+                "phase-separated-final-" + UUID.randomUUID());
+        request(put("/api/projects/{projectId}/assessment-rubrics", projectId), teacherToken,
+                Map.of("routineRubricId", rubricId, "finalRubricId", finalRubricId))
+                .andExpect(status().isOk());
+
+        JsonNode routineStudent = body(request(post("/api/projects/{projectId}/student-grades", projectId),
+                teacherToken, studentGrade()).andExpect(status().isCreated()).andReturn());
+        JsonNode routineGroup = body(request(post("/api/projects/{projectId}/group-grades", projectId),
+                teacherToken, Map.of("rubricId", rubricId, "criterionId", "team", "grade", 4,
+                        "evidence", "Routine group evidence"))
+                .andExpect(status().isCreated()).andReturn());
+        JsonNode routineMetric = body(request(post("/api/projects/{projectId}/metrics", projectId),
+                teacherToken, Map.of("rubricId", rubricId, "metricId", "hours", "value", 12))
+                .andExpect(status().isCreated()).andReturn());
+        JsonNode finalStudent = body(request(post("/api/projects/{projectId}/student-grades", projectId),
+                teacherToken, Map.of("rubricId", finalRubricId, "assessmentType", "FINAL",
+                        "studentId", studentId, "criterionId", "individual", "grade", 2))
+                .andExpect(status().isCreated()).andReturn());
+
+        Map<String, Object> decisions = Map.of("rubricId", finalRubricId,
+                "project", Map.of("grade", 4, "rationale", "Project decision under the final rubric."),
+                "students", List.of(Map.of("studentId", studentId, "grade", 3,
+                        "rationale", "Student decision under the final rubric.")));
+        JsonNode written = body(request(put("/api/projects/{projectId}/final-grade", projectId),
+                teacherToken, decisions).andExpect(status().isOk()).andReturn());
+        JsonNode projectInputs = object(object(written, "project"), "inputs");
+        JsonNode studentInputs = object(array(written, "students").get(0), "inputs");
+
+        assertTrue(array(projectInputs, "studentGrades").isEmpty());
+        assertEquals(1, array(projectInputs, "groupGrades").size());
+        assertEquals(text(routineGroup, "id"), text(array(projectInputs, "groupGrades").get(0), "id"));
+        assertEquals(rubricId.toString(), text(array(projectInputs, "groupGrades").get(0), "rubricId"));
+        assertEquals("ROUTINE", text(array(projectInputs, "groupGrades").get(0), "assessmentType"));
+        assertEquals(1, array(projectInputs, "metrics").size());
+        assertEquals(text(routineMetric, "id"), text(array(projectInputs, "metrics").get(0), "id"));
+        assertEquals(rubricId.toString(), text(array(projectInputs, "metrics").get(0), "rubricId"));
+
+        JsonNode consideredStudentGrades = array(studentInputs, "studentGrades");
+        assertEquals(1, consideredStudentGrades.size());
+        assertEquals(text(finalStudent, "id"), text(consideredStudentGrades.get(0), "id"));
+        assertEquals(finalRubricId.toString(), text(consideredStudentGrades.get(0), "rubricId"));
+        assertEquals("FINAL", text(consideredStudentGrades.get(0), "assessmentType"));
+        assertNumber(consideredStudentGrades.get(0), "grade", 2);
+        assertEquals(1, array(studentInputs, "groupGrades").size());
+        assertEquals(text(routineGroup, "id"), text(array(studentInputs, "groupGrades").get(0), "id"));
+        assertEquals(1, array(studentInputs, "metrics").size());
+        assertEquals(text(routineMetric, "id"), text(array(studentInputs, "metrics").get(0), "id"));
+
+        JsonNode routineHistory = body(mockMvc.perform(bearer(
+                get("/api/projects/{projectId}/student-grades", projectId), teacherToken)
+                .param("studentId", studentId).param("assessmentType", "ROUTINE")
+                .param("rubricId", rubricId.toString()))
+                .andExpect(status().isOk()).andReturn());
+        JsonNode finalHistory = body(mockMvc.perform(bearer(
+                get("/api/projects/{projectId}/student-grades", projectId), teacherToken)
+                .param("studentId", studentId).param("assessmentType", "FINAL")
+                .param("rubricId", finalRubricId.toString()))
+                .andExpect(status().isOk()).andReturn());
+        assertEquals(text(routineStudent, "id"), text(array(routineHistory, "content").get(0), "id"));
+        assertEquals(text(finalStudent, "id"), text(array(finalHistory, "content").get(0), "id"));
+        JsonNode selectionsAfterWrites = body(mockMvc.perform(bearer(
+                        get("/api/projects/{projectId}/assessment-rubrics", projectId), teacherToken))
+                .andExpect(status().isOk()).andReturn());
+        assertEquals(rubricId.toString(), text(selectionsAfterWrites, "routineRubricId"));
+        assertEquals(finalRubricId.toString(), text(selectionsAfterWrites, "finalRubricId"));
+    }
+
+    @Test
+    void configuredRuleRejectsOverlappingFinalStudentAndRoutineGroupCriterionIds() throws Exception {
+        UUID finalRubricId = publishRubricWithDifferentStudentScale(
+                "overlapping-rule-final-" + UUID.randomUUID());
+        request(put("/api/projects/{projectId}/assessment-rubrics", projectId), teacherToken,
+                Map.of("routineRubricId", rubricId, "finalRubricId", finalRubricId))
+                .andExpect(status().isOk());
+        request(post("/api/projects/{projectId}/group-grades", projectId), teacherToken,
+                Map.of("rubricId", rubricId, "criterionId", "team", "grade", 4,
+                        "evidence", "Routine group evidence"))
+                .andExpect(status().isCreated());
+        request(post("/api/projects/{projectId}/student-grades", projectId), teacherToken,
+                Map.of("rubricId", finalRubricId, "assessmentType", "FINAL",
+                        "studentId", studentId, "criterionId", "team", "grade", 2))
+                .andExpect(status().isCreated());
+
+        JsonNode rejected = body(request(put("/api/projects/{projectId}/final-grade", projectId), teacherToken,
+                Map.of("rubricId", finalRubricId, "students", List.of(
+                        Map.of("studentId", studentId, "ruleId", "student-rule"))))
+                .andExpect(status().isConflict()).andReturn());
+        assertTrue(text(rejected, "message").contains("overlapping criterion IDs: [team]"));
+    }
+
+    @Test
+    void concurrentFinalCriterionCreationLeavesExactlyOneCurrentRow() throws Exception {
+        Map<String, Object> input = Map.of("rubricId", rubricId, "assessmentType", "FINAL",
+                "studentId", studentId, "criterionId", "individual", "grade", 3);
+        CyclicBarrier start = new CyclicBarrier(3);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            Future<Integer> first = executor.submit(() -> createAtBarrier(start, input));
+            Future<Integer> second = executor.submit(() -> createAtBarrier(start, input));
+            start.await(10, TimeUnit.SECONDS);
+            List<Integer> statuses = List.of(first.get(20, TimeUnit.SECONDS), second.get(20, TimeUnit.SECONDS));
+            assertEquals(1, statuses.stream().filter(statusCode -> statusCode == 201).count());
+            assertEquals(1, statuses.stream().filter(statusCode -> statusCode == 409).count());
+
+            List<StoredRecord> finalRows = store.repository()
+                    .findByTypeAndParentId(GradingKeys.STUDENT_GRADE, projectId.toString()).stream()
+                    .filter(record -> studentId.equals(record.getOwnerId()))
+                    .filter(record -> "FINAL".equals(store.parse(record).path(GradingKeys.ASSESSMENT_TYPE).asText()))
+                    .filter(record -> rubricId.toString()
+                            .equals(store.parse(record).path(GradingKeys.RUBRIC_ID).asText()))
+                    .filter(record -> "individual"
+                            .equals(store.parse(record).path(GradingKeys.CRITERION_ID).asText()))
+                    .toList();
+            assertEquals(1, finalRows.size());
+            assertEquals(GradingKeys.ACTIVE, finalRows.get(0).getStatus());
+            assertAudit(GradingKeys.STUDENT_GRADE, finalRows.get(0).getId().toString(), "STUDENT_GRADE_RECORDED");
+
+            String originalId = finalRows.get(0).getId().toString();
+            Map<String, Object> revision = Map.of("reason", "Concurrent final reassessment", "grade", 4);
+            CyclicBarrier revisionStart = new CyclicBarrier(3);
+            Future<Integer> firstRevision = executor.submit(() -> reviseAtBarrier(revisionStart, originalId, revision));
+            Future<Integer> secondRevision = executor.submit(() -> reviseAtBarrier(revisionStart, originalId, revision));
+            revisionStart.await(10, TimeUnit.SECONDS);
+            List<Integer> revisionStatuses = List.of(firstRevision.get(20, TimeUnit.SECONDS),
+                    secondRevision.get(20, TimeUnit.SECONDS));
+            assertEquals(1, revisionStatuses.stream().filter(statusCode -> statusCode == 201).count());
+            assertEquals(1, revisionStatuses.stream().filter(statusCode -> statusCode == 409).count());
+            List<StoredRecord> revisedRows = store.repository()
+                    .findByTypeAndParentId(GradingKeys.STUDENT_GRADE, projectId.toString()).stream()
+                    .filter(record -> studentId.equals(record.getOwnerId()))
+                    .filter(record -> "FINAL".equals(store.parse(record).path(GradingKeys.ASSESSMENT_TYPE).asText()))
+                    .filter(record -> rubricId.toString()
+                            .equals(store.parse(record).path(GradingKeys.RUBRIC_ID).asText()))
+                    .filter(record -> "individual"
+                            .equals(store.parse(record).path(GradingKeys.CRITERION_ID).asText()))
+                    .toList();
+            assertEquals(2, revisedRows.size());
+            List<StoredRecord> currentRows = revisedRows.stream()
+                    .filter(record -> GradingKeys.ACTIVE.equals(record.getStatus())).toList();
+            assertEquals(1, currentRows.size());
+            StoredRecord activeRevision = currentRows.get(0);
+            assertEquals(originalId, store.parse(activeRevision).path(GradingKeys.SUPERSEDES_ID).asText());
+            assertAudit(GradingKeys.STUDENT_GRADE, activeRevision.getId().toString(), "STUDENT_GRADE_REVISED");
+        } finally {
+            executor.shutdownNow();
+            assertTrue(executor.awaitTermination(10, TimeUnit.SECONDS));
+        }
+    }
+
+    private int createAtBarrier(CyclicBarrier start, Map<String, Object> input) throws Exception {
+        start.await(10, TimeUnit.SECONDS);
+        return request(post("/api/projects/{projectId}/student-grades", projectId), teacherToken, input)
+                .andReturn().getResponse().getStatus();
+    }
+
+    private int reviseAtBarrier(CyclicBarrier start, String gradeId, Map<String, Object> input) throws Exception {
+        start.await(10, TimeUnit.SECONDS);
+        return request(post("/api/projects/{projectId}/student-grades/{gradeId}/revisions", projectId, gradeId),
+                teacherToken, input).andReturn().getResponse().getStatus();
     }
 
     @Test
@@ -424,7 +791,16 @@ class GradingWriteAuthorizationApiTest {
     }
 
     private Map<String, Object> studentGrade() {
-        return Map.of("rubricId", rubricId, "studentId", studentId, "criterionId", "individual", "grade", 4);
+        return Map.of("rubricId", rubricId, "assessmentType", "ROUTINE", "studentId", studentId,
+                "criterionId", "individual", "grade", 4);
+    }
+
+    private void selectRubrics(UUID selectedRubricId, String token) throws Exception {
+        mockMvc.perform(bearer(put("/api/projects/{projectId}/assessment-rubrics", projectId), token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsBytes(Map.of("routineRubricId", selectedRubricId,
+                                "finalRubricId", selectedRubricId))))
+                .andExpect(status().isOk());
     }
 
     private org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder bearer(
@@ -456,9 +832,35 @@ class GradingWriteAuthorizationApiTest {
     }
 
     private UUID publishRubric(String version, String token) throws Exception {
-        PublishRubricRequest rubric = rubricRequest(version);
+        return publishRubric(rubricRequest(version), token);
+    }
+
+    private UUID publishRubric(PublishRubricRequest rubric) throws Exception {
+        return publishRubric(rubric, adminToken);
+    }
+
+    private UUID publishRubric(PublishRubricRequest rubric, String token) throws Exception {
         MvcResult result = mockMvc.perform(post("/api/grading-rubrics")
                         .header("Authorization", bearerValue(token))
+                        .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsBytes(rubric)))
+                .andExpect(status().isCreated()).andReturn();
+        return UUID.fromString(text(body(result), "id"));
+    }
+
+    private UUID publishRubricWithDifferentStudentScale(String version) throws Exception {
+        ScaleDto finalScale = new ScaleDto(BigDecimal.ZERO, BigDecimal.TEN, BigDecimal.valueOf(2), null);
+        ScaleDto decisionScale = new ScaleDto(BigDecimal.ONE, BigDecimal.valueOf(5), null, null);
+        List<CriterionDto> criteria = List.of(
+                new CriterionDto("individual", "Final individual", null, "STUDENT", null, false, finalScale),
+                new CriterionDto("team", "Final student team criterion", null, "STUDENT", null, false, finalScale));
+        PublishRubricRequest rubric = new PublishRubricRequest(version, "Distinct final rubric", null,
+                LocalDate.now().minusDays(1).toString(), null, decisionScale,
+                List.of(new CategoryDto("project", "Final project", null, criteria)),
+                List.of(new MetricDefinitionDto("hours", "Final hours", 1, null, "hours", BigDecimal.ZERO, null)),
+                List.of(new AggregationRuleDto("student-rule", 1, "STUDENT", "WEIGHTED_AVERAGE", 0,
+                        Map.of("team", BigDecimal.ONE), Map.of())));
+        MvcResult result = mockMvc.perform(post("/api/grading-rubrics")
+                        .header("Authorization", bearerValue(adminToken))
                         .contentType(MediaType.APPLICATION_JSON).content(objectMapper.writeValueAsBytes(rubric)))
                 .andExpect(status().isCreated()).andReturn();
         return UUID.fromString(text(body(result), "id"));

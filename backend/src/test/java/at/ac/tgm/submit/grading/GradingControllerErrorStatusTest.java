@@ -2,6 +2,7 @@ package at.ac.tgm.submit.grading;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -69,6 +70,7 @@ class GradingControllerErrorStatusTest {
         assertApiError(malformedBody, 400);
 
         UUID rubricId = publishRubric("student-grade-status-1");
+        selectRubrics(rubricId);
         MvcResult nonmember = postGrade(projectId.toString(),
                         studentGrade(rubricId, outsiderId), teacherToken)
                 .andExpect(status().isBadRequest()).andReturn();
@@ -152,8 +154,18 @@ class GradingControllerErrorStatusTest {
     }
 
     private Map<String, Object> studentGrade(UUID rubricId, UUID studentId) {
-        return Map.of("rubricId", rubricId, "studentId", studentId, "criterionId", "implementation",
+        return Map.of("rubricId", rubricId, "assessmentType", "ROUTINE", "studentId", studentId,
+                "criterionId", "implementation",
                 "grade", BigDecimal.valueOf(4));
+    }
+
+    private void selectRubrics(UUID rubricId) throws Exception {
+        mockMvc.perform(put("/api/projects/{projectId}/assessment-rubrics", projectId)
+                .header("Authorization", "Bearer " + teacherToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsBytes(Map.of("routineRubricId", rubricId,
+                        "finalRubricId", rubricId))))
+                .andExpect(status().isOk());
     }
 
     private void assertApiError(MvcResult result, int statusCode) throws Exception {

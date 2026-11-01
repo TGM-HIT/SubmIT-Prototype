@@ -104,11 +104,28 @@ class TestingGradingSelectionPreviewFixtureTest {
         assertEquals(TestingGradingSelectionPreviewConfiguration.OTHER_TEACHER_PERIOD_LABEL,
                 secondChoice.path("periodLabel").asText());
 
+        JsonNode firstSelections = json(mockMvc.perform(get("/api/projects/{projectId}/assessment-rubrics", firstId)
+                        .header("Authorization", bearer(teacherOneToken)))
+                .andExpect(status().isOk()).andReturn());
+        assertEquals(TestingGradingSelectionPreviewConfiguration.FINAL_PREVIEW_RUBRIC_ID.toString(),
+                firstSelections.path("finalRubricId").asText());
+        JsonNode firstMembers = json(mockMvc.perform(get("/api/projects/{projectId}/grading-members", firstId)
+                        .header("Authorization", bearer(teacherOneToken)))
+                .andExpect(status().isOk()).andReturn());
+        assertEquals(List.of("student02", "student01", "student03").stream()
+                        .map(username -> users.findByUsername(username).orElseThrow().getId().toString()).toList(),
+                firstMembers.findValuesAsText("studentId"));
+        JsonNode noHistoryMember = json(mockMvc.perform(get("/api/projects/{projectId}/student-grades", firstId)
+                        .header("Authorization", bearer(teacherOneToken))
+                        .param("studentId", firstMembers.get(2).path("studentId").asText()))
+                .andExpect(status().isOk()).andReturn());
+        assertEquals(0, noHistoryMember.path("totalElements").asInt());
+
         JsonNode firstGrades = json(mockMvc.perform(get("/api/projects/{projectId}/student-grades", firstId)
-                        .header("Authorization", bearer(studentToken)))
+                        .header("Authorization", bearer(studentToken)).param("assessmentType", "ROUTINE"))
                 .andExpect(status().isOk()).andReturn());
         JsonNode secondGrades = json(mockMvc.perform(get("/api/projects/{projectId}/student-grades", secondId)
-                        .header("Authorization", bearer(studentToken)))
+                        .header("Authorization", bearer(studentToken)).param("assessmentType", "ROUTINE"))
                 .andExpect(status().isOk()).andReturn());
         assertEquals(1, firstGrades.path("content").size());
         assertEquals("Individual analysis", firstGrades.path("content").get(0).path("evidence").asText());
@@ -117,6 +134,18 @@ class TestingGradingSelectionPreviewFixtureTest {
         assertNotEquals(firstGrades.path("content").get(0).path("id").asText(),
                 secondGrades.path("content").get(0).path("id").asText());
         assertFalse(firstGrades.toString().contains("OTHER_STUDENT_GRADING_SENTINEL"));
+        JsonNode finalGrades = json(mockMvc.perform(get("/api/projects/{projectId}/student-grades", firstId)
+                        .header("Authorization", bearer(studentToken))
+                        .param("assessmentType", "FINAL")
+                        .param("rubricId", TestingGradingSelectionPreviewConfiguration.FINAL_PREVIEW_RUBRIC_ID.toString()))
+                .andExpect(status().isOk()).andReturn());
+        assertEquals(1, finalGrades.path("content").size());
+        assertEquals("FINAL", finalGrades.path("content").get(0).path("assessmentType").asText());
+        assertEquals(TestingGradingSelectionPreviewConfiguration.FINAL_PREVIEW_RUBRIC_NAME,
+                store.parse(records.findById(TestingGradingSelectionPreviewConfiguration.FINAL_PREVIEW_RUBRIC_ID)
+                        .orElseThrow()).path("name").asText());
+        assertEquals("Saved River Lab final criterion evidence",
+                finalGrades.path("content").get(0).path("evidence").asText());
 
         assertEquals("Group collaboration", firstHistory(teacherOneToken, firstId,
                 "/api/projects/{projectId}/group-grades").path("content").get(0).path("evidence").asText());
@@ -151,7 +180,8 @@ class TestingGradingSelectionPreviewFixtureTest {
     @Test
     void draftSeederReusePreservesExistingAssessmentRubricBindingsAndPayloads() {
         List<String> types = List.of(
-                GradingKeys.STUDENT_GRADE, GradingKeys.GROUP_GRADE, GradingKeys.METRIC, GradingKeys.FINAL_GRADE);
+                GradingKeys.BINDING, GradingKeys.STUDENT_GRADE, GradingKeys.GROUP_GRADE, GradingKeys.METRIC,
+                GradingKeys.FINAL_GRADE);
         Map<String, String> before = gradingPayloadSnapshot(types);
         assertFalse(before.isEmpty());
 
@@ -161,11 +191,31 @@ class TestingGradingSelectionPreviewFixtureTest {
                 .map(UUID::toString)
                 .findFirst()
                 .orElseThrow();
-        for (String type : types) {
-            for (StoredRecord record : store.page(type, null, null, Pageable.unpaged()).getContent()) {
-                JsonNode payload = store.parse(record);
-                assertEquals(rubricId, payload.path(GradingKeys.RUBRIC_ID).asText());
-                assertEquals("dev55-draft-testing-v1", payload.path(GradingKeys.RUBRIC_VERSION).asText());
+        String finalRubricId = TestingGradingSelectionPreviewConfiguration.FINAL_PREVIEW_RUBRIC_ID.toString();
+        for (UUID project : List.of(TestingGradingSelectionPreviewConfiguration.TEACHER_PROJECT_ID,
+                TestingGradingSelectionPreviewConfiguration.OTHER_TEACHER_PROJECT_ID)) {
+            for (String type : types) {
+                for (StoredRecord record : records.findByTypeAndParentId(type, project.toString())) {
+                    JsonNode payload = store.parse(record);
+                    if (type.equals(GradingKeys.BINDING)) {
+                        assertEquals("FINAL".equals(payload.path("phase").asText())
+                                        ? finalRubricId : rubricId,
+                                payload.path(GradingKeys.RUBRIC_ID).asText());
+                    } else if (type.equals(GradingKeys.STUDENT_GRADE)) {
+                        boolean isFinal = "FINAL".equals(payload.path(GradingKeys.ASSESSMENT_TYPE).asText());
+                        assertEquals(isFinal ? finalRubricId : rubricId,
+                                payload.path(GradingKeys.RUBRIC_ID).asText());
+                        assertEquals(isFinal ? "grading-selection-preview-final-v1" : "dev55-draft-testing-v1",
+                                payload.path(GradingKeys.RUBRIC_VERSION).asText());
+                    } else if (type.equals(GradingKeys.FINAL_GRADE)) {
+                        assertEquals(finalRubricId, payload.path(GradingKeys.RUBRIC_ID).asText());
+                        assertEquals("grading-selection-preview-final-v1",
+                                payload.path(GradingKeys.RUBRIC_VERSION).asText());
+                    } else {
+                        assertEquals(rubricId, payload.path(GradingKeys.RUBRIC_ID).asText());
+                        assertEquals("dev55-draft-testing-v1", payload.path(GradingKeys.RUBRIC_VERSION).asText());
+                    }
+                }
             }
         }
 
@@ -186,7 +236,7 @@ class TestingGradingSelectionPreviewFixtureTest {
 
     private void assertRepeatInitializationDoesNotDuplicateRecords() {
         long before = records.count();
-        new TestingGradingSelectionPreviewConfiguration.GradingSelectionPreviewSeeder(users, store, records)
+        new TestingGradingSelectionPreviewConfiguration.GradingSelectionPreviewSeeder(users, store)
                 .run(new DefaultApplicationArguments(new String[0]));
         assertEquals(before, records.count());
         for (UUID id : allFixtureIds()) {
@@ -208,11 +258,16 @@ class TestingGradingSelectionPreviewFixtureTest {
                 UUID.fromString("27e00000-0000-4000-8000-000000000002"),
                 UUID.fromString("27f00000-0000-4000-8000-000000000001"),
                 UUID.fromString("27f00000-0000-4000-8000-000000000002"),
+                TestingGradingSelectionPreviewConfiguration.FINAL_PREVIEW_RUBRIC_ID,
                 UUID.fromString("27f10000-0000-4000-8000-000000000001"),
                 UUID.fromString("27f10000-0000-4000-8000-000000000002"),
+                UUID.fromString("27f10000-0000-4000-8000-000000000003"),
+                UUID.fromString("27f10000-0000-4000-8000-000000000004"),
                 UUID.fromString("27f20000-0000-4000-8000-000000000001"),
                 UUID.fromString("27f20000-0000-4000-8000-000000000002"),
                 UUID.fromString("27f20000-0000-4000-8000-000000000003"),
+                UUID.fromString("27f20000-0000-4000-8000-000000000004"),
+                UUID.fromString("27f20000-0000-4000-8000-000000000005"),
                 UUID.fromString("27f30000-0000-4000-8000-000000000001"),
                 UUID.fromString("27f30000-0000-4000-8000-000000000002"),
                 UUID.fromString("27f40000-0000-4000-8000-000000000001"),

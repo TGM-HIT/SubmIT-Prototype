@@ -173,12 +173,13 @@ final class GradingSupport {
 
     static List<StoredRecord> allNewestFirst(RecordStore store, String type, String owner, String parent) {
         return all(store, type, owner, parent).stream()
-                .sorted((left, right) -> right.getCreatedAt().compareTo(left.getCreatedAt())).toList();
+                .sorted(java.util.Comparator.comparing(StoredRecord::getCreatedAt)
+                        .thenComparing(StoredRecord::getId).reversed()).toList();
     }
 
     static Pageable newestFirst(int page, int size) {
         return PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), MAX_PAGE_SIZE),
-                Sort.by(Sort.Direction.DESC, "createdAt"));
+                Sort.by(Sort.Direction.DESC, "createdAt").and(Sort.by(Sort.Direction.DESC, "id")));
     }
 
     static void requireDistinctMembers(JsonNode entries, List<String> members) {

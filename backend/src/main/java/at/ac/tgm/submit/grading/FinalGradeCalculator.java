@@ -29,7 +29,14 @@ final class FinalGradeCalculator {
 
     static BigDecimal compute(JsonNode rule, JsonNode inputs) {
         Map<String, BigDecimal> grades = values(inputs.path(STUDENT_GRADES), CRITERION_ID, GRADE);
-        grades.putAll(values(inputs.path(GROUP_GRADES), CRITERION_ID, GRADE));
+        Map<String, BigDecimal> groupGrades = values(inputs.path(GROUP_GRADES), CRITERION_ID, GRADE);
+        List<String> ambiguousCriteria = grades.keySet().stream().filter(groupGrades::containsKey)
+                .filter(id -> rule.path(CRITERION_WEIGHTS).has(id)).sorted().toList();
+        if (!ambiguousCriteria.isEmpty()) {
+            throw GradingSupport.conflict("The configured rule cannot distinguish FINAL student and ROUTINE group "
+                    + "inputs with overlapping criterion IDs: " + ambiguousCriteria + ".");
+        }
+        grades.putAll(groupGrades);
         Map<String, BigDecimal> metrics = values(inputs.path(METRICS), METRIC_ID, VALUE);
         List<String> missing = new ArrayList<>();
         BigDecimal[] totals = {BigDecimal.ZERO, BigDecimal.ZERO};

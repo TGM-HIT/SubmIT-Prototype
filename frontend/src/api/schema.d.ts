@@ -40,6 +40,24 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{projectId}/assessment-rubrics": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Read the independent routine and final rubric selections for an authorized project grader. */
+        get: operations["getProjectAssessmentRubrics"];
+        /** Select independent routine and final rubric versions for a project. */
+        put: operations["setProjectAssessmentRubrics"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/ideas/{id}": {
         parameters: {
             query?: never;
@@ -960,6 +978,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/projects/{projectId}/grading-members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List the actual allocated project members for authorized grading staff. */
+        get: operations["listProjectGradingMembers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/projects/{projectId}/formal-application-roster": {
         parameters: {
             query?: never;
@@ -1544,6 +1579,11 @@ export interface components {
             supersededById: string | null;
             /** @description Reason for revising the prior grade, if any. */
             reason: string | null;
+            /**
+             * @description Assessment phase; group observations are always ROUTINE.
+             * @enum {string}
+             */
+            assessmentType: "ROUTINE" | "FINAL";
         };
         /** @description Grades and observations that were considered when the final grade was decided. */
         Inputs: {
@@ -1608,6 +1648,36 @@ export interface components {
             error: string;
             /** @description Human-readable error detail. */
             message: string;
+        };
+        /** @description Independent phase rubric selections; both keys are required and nullable. */
+        AssessmentRubricSelection: {
+            /**
+             * Format: uuid
+             * @description Selected routine rubric version, or null until selected.
+             */
+            routineRubricId: string | null;
+            /**
+             * Format: uuid
+             * @description Selected final criterion rubric version, or null until selected.
+             */
+            finalRubricId: string | null;
+            /** @description Required, non-blank only when transitioning a used routine phase to another version; maximum 2,000 characters. */
+            routineReason?: string | null;
+            /** @description Required, non-blank only when transitioning a used final phase to another version; maximum 2,000 characters. */
+            finalReason?: string | null;
+        };
+        /** @description Current independent rubric selections for one project. */
+        AssessmentRubricResponse: {
+            /**
+             * Format: uuid
+             * @description Routine rubric version ID; null when unselected.
+             */
+            routineRubricId: string | null;
+            /**
+             * Format: uuid
+             * @description Final criterion rubric version ID; null when unselected.
+             */
+            finalRubricId: string | null;
         };
         /** @description JSON form fields for an idea narrative or values populated by the browser's Markdown parser. This JSON narrative shape is mutually exclusive with multipart PDF upload; PDF uploads use the dedicated multipart endpoints and preserve title, school year, and collaborators as manual metadata. */
         IdeaRequest: {
@@ -2204,6 +2274,11 @@ export interface components {
              * @description ID of the immutable rubric version used for this assessment.
              */
             rubricId: string;
+            /**
+             * @description Explicit assessment phase; routine observations and final criterion values are stored and queried separately.
+             * @enum {string}
+             */
+            assessmentType: "ROUTINE" | "FINAL";
             versionTransition?: components["schemas"]["VersionTransition"];
             /**
              * Format: uuid
@@ -3197,6 +3272,20 @@ export interface components {
              */
             totalPages: number;
         };
+        /** @description An actual allocated member of the selected project. */
+        GradingMember: {
+            /**
+             * Format: uuid
+             * @description Allocated student account ID.
+             */
+            studentId: string;
+            /** @description Current non-blank account display name. */
+            displayName: string;
+            /** @description Current class context, null if unassigned. */
+            className?: string | null;
+            /** @description Current elective-subject context. */
+            electiveSubjectNames: string[];
+        };
         FormalApplicationRosterMember: {
             /**
              * Format: uuid
@@ -3900,13 +3989,142 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description The formal application is not approved. A configured rule lacks required inputs, the selected rubric is ineffective, or a rubric-binding transition lacks a reason. */
+            /** @description The formal application is not approved. A configured rule lacks required inputs or has criterion identifiers ambiguous between final student and routine group inputs, the selected rubric is ineffective, or a rubric-binding transition lacks a reason. */
             409: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
                     "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    getProjectAssessmentRubrics: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Independent project rubric selections. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AssessmentRubricResponse"];
+                };
+            };
+            /** @description Invalid project UUID. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Missing or invalid bearer authentication credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Caller lacks project access or is not a project member. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Project does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    setProjectAssessmentRubrics: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssessmentRubricSelection"];
+            };
+        };
+        responses: {
+            /** @description Independent project rubric selections saved. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AssessmentRubricResponse"];
+                };
+            };
+            /** @description Invalid project UUID, malformed selection, or invalid reason. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Missing or invalid bearer authentication credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Caller lacks project access or is not a teacher. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Project or selected rubric version does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Selected rubric is ineffective, a used phase cannot be cleared, or a required transition reason is missing. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiErrorResponse"];
                 };
             };
         };
@@ -5265,6 +5483,10 @@ export interface operations {
             query?: {
                 /** @description Optional teacher filter for a project member's grades; students may omit this or request only their own ID. */
                 studentId?: string;
+                /** @description Optional exact assessment phase filter; omitted means all phases. */
+                assessmentType?: "ROUTINE" | "FINAL";
+                /** @description Optional exact rubric version UUID filter; omitted means all versions. */
+                rubricId?: string;
                 /** @description Zero-based page index. */
                 page?: number;
                 /** @description Page size; values are normalized to the inclusive range 1–100. */
@@ -8419,6 +8641,64 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+        };
+    };
+    listProjectGradingMembers: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                projectId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Allocated project members with current display context. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["GradingMember"][];
+                };
+            };
+            /** @description Invalid project UUID. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Missing or invalid bearer authentication credentials. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Caller is not grading staff or lacks project access. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiErrorResponse"];
+                };
+            };
+            /** @description Project or allocated member account does not exist. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiErrorResponse"];
                 };
             };
         };

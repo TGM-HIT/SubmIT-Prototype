@@ -8,6 +8,7 @@ import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import java.math.BigDecimal;
 import java.util.UUID;
+import org.springdoc.core.annotations.ParameterObject;
 
 /** Typed request and response contracts of the grade and metric endpoints. */
 public final class GradeDtos {
@@ -25,6 +26,9 @@ public final class GradeDtos {
     public record StudentGradeRequest(
             @NotNull @Schema(description = "ID of the immutable rubric version used for this assessment.", format = "uuid")
             UUID rubricId,
+            @NotNull @Schema(description = "Explicit assessment phase; routine observations and final criterion values "
+                    + "are stored and queried separately.", requiredMode = Schema.RequiredMode.REQUIRED)
+            AssessmentType assessmentType,
             @Valid VersionTransition versionTransition,
             @NotNull @Schema(description = "ID of the student being assessed; must identify a member of the project's group.",
                     format = "uuid") UUID studentId,
@@ -43,6 +47,70 @@ public final class GradeDtos {
             String evidence,
             @Size(max = 4000) @Schema(description = "Optional comments; at most 4,000 characters.")
             String comments) {
+    }
+
+    /** Optional exact filters and pagination for the student-grade history endpoint. */
+    @ParameterObject
+    public static class StudentGradeQuery {
+        private static final int DEFAULT_PAGE_SIZE = 20;
+
+        private String studentId;
+
+        private AssessmentType assessmentType;
+
+        private UUID rubricId;
+
+        private int page;
+
+        private int size = DEFAULT_PAGE_SIZE;
+
+        @Schema(description = "Optional teacher filter for a project member's grades; students may omit this or "
+                + "request only their own ID.")
+        public String getStudentId() {
+            return studentId;
+        }
+
+        public void setStudentId(String studentId) {
+            this.studentId = studentId;
+        }
+
+        @Schema(description = "Optional exact assessment phase filter; omitted means all phases.")
+        public AssessmentType getAssessmentType() {
+            return assessmentType;
+        }
+
+        public void setAssessmentType(AssessmentType assessmentType) {
+            this.assessmentType = assessmentType;
+        }
+
+        @Schema(description = "Optional exact rubric version UUID filter; omitted means all versions.",
+                format = "uuid")
+        public UUID getRubricId() {
+            return rubricId;
+        }
+
+        public void setRubricId(UUID rubricId) {
+            this.rubricId = rubricId;
+        }
+
+        @Schema(description = "Zero-based page index.", defaultValue = "0")
+        public int getPage() {
+            return page;
+        }
+
+        public void setPage(int page) {
+            this.page = page;
+        }
+
+        @Schema(description = "Page size; values are normalized to the inclusive range 1–100.",
+                defaultValue = "20")
+        public int getSize() {
+            return size;
+        }
+
+        public void setSize(int size) {
+            this.size = size;
+        }
     }
 
     @Schema(description = "Teacher assessment of the whole group against one criterion of a rubric version.")
@@ -90,7 +158,8 @@ public final class GradeDtos {
     @Schema(description = "Stored grade entry bound to an immutable rubric version and criterion.",
             requiredProperties = {"id", "status", "createdAt", "projectId", "studentId", "rubricId",
                     "rubricVersion", "criterionId", "categoryId", "grade", "assessedOn", "evidence",
-                    "comments", "teacherId", "recordedAt", "supersedesId", "supersededById", "reason"})
+                    "comments", "teacherId", "recordedAt", "supersedesId", "supersededById", "reason",
+                    "assessmentType"})
     public record GradeResponse(
             @Schema(description = "Grade record ID.") UUID id,
             @Schema(description = "Grade record status.") String status,
@@ -122,7 +191,9 @@ public final class GradeDtos {
             @Schema(description = "Newer grade record ID that supersedes this record, if any.",
                     types = {"string", "null"}, format = "uuid") UUID supersededById,
             @Schema(description = "Reason for revising the prior grade, if any.",
-                    types = {"string", "null"}) String reason) {
+                    types = {"string", "null"}) String reason,
+            @Schema(description = "Assessment phase; group observations are always ROUTINE.",
+                    requiredMode = Schema.RequiredMode.REQUIRED) AssessmentType assessmentType) {
     }
 
     @Schema(description = "Records one observation of a metric defined in the rubric version.")

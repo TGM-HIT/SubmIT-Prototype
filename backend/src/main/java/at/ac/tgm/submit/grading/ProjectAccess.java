@@ -7,6 +7,9 @@ import at.ac.tgm.submit.data.RecordStore;
 import at.ac.tgm.submit.data.StoredRecord;
 import at.ac.tgm.submit.security.AuthenticatedUser;
 import at.ac.tgm.submit.security.Role;
+import at.ac.tgm.submit.user.StudentDetailsService;
+import at.ac.tgm.submit.user.UserAccount;
+import at.ac.tgm.submit.user.UserAccountRepository;
 import jakarta.persistence.EntityNotFoundException;
 import java.util.List;
 import java.util.UUID;
@@ -20,9 +23,13 @@ import org.springframework.stereotype.Component;
 @Component
 class ProjectAccess {
     private final RecordStore store;
+    private final UserAccountRepository users;
+    private final StudentDetailsService studentDetails;
 
-    ProjectAccess(RecordStore store) {
+    ProjectAccess(RecordStore store, UserAccountRepository users, StudentDetailsService studentDetails) {
         this.store = store;
+        this.users = users;
+        this.studentDetails = studentDetails;
     }
 
     List<String> members(UUID projectId) {
@@ -31,6 +38,28 @@ class ProjectAccess {
             throw new EntityNotFoundException("Project was not found.");
         }
         return store.parse(groups.get(0)).withArray("studentIds").valueStream().map(JsonNode::asText).toList();
+    }
+
+    StoredRecord lockProject(UUID projectId) {
+        List<StoredRecord> groups = store.repository().findByTypeAndParentId(PROJECT_GROUP, projectId.toString());
+        if (groups.isEmpty()) {
+            throw new EntityNotFoundException("Project was not found.");
+        }
+        return store.lock(PROJECT_GROUP, groups.get(0).getId());
+    }
+
+    List<AssessmentRubricDtos.GradingMember> gradingMembers(UUID projectId) {
+        return members(projectId).stream().map(UUID::fromString)
+                .map(id -> users.findById(id).filter(user -> user.hasRole(Role.STUDENT))
+                        .map(this::gradingMember)
+                        .orElseThrow(() -> new EntityNotFoundException("A project member account was not found.")))
+                .toList();
+    }
+
+    private AssessmentRubricDtos.GradingMember gradingMember(UserAccount user) {
+        var details = studentDetails.response(user);
+        return new AssessmentRubricDtos.GradingMember(user.getId(), user.getDisplayName(),
+                details.className(), details.electiveSubjectNames());
     }
 
     AccessDeniedException forbidden(String message) {

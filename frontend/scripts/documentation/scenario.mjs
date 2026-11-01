@@ -29,6 +29,15 @@ export function assertTestingAccountRole(session, actor) {
     `${actor} login response must include ${expectedRole} in user.roles`)
 }
 
+export function gradingMemberOptionState(select, label) {
+  if (!select || select.disabled) return { state: 'not-ready' }
+  const matches = [...select.options].map((option, index) => ({ option, index }))
+    .filter(({ option }) => option.textContent.trim() === label)
+  if (!matches.length) return { state: 'missing' }
+  if (matches.length > 1) return { state: 'ambiguous' }
+  return { state: 'ready', index: matches[0].index, label: matches[0].option.textContent.trim() }
+}
+
 // This is shared across documentation languages. Text and example files come from the locale.
 // Supporting records use only existing, authorized HTTP operations in this command-owned testing JVM.
 export class Lifecycle {
@@ -96,6 +105,8 @@ export class Lifecycle {
         id: 'implementation', name: this.text.categoryName,
         criteria: [
           { id: 'individual', name: this.text.criterionName, subject: 'STUDENT', scale, evidenceRequired: true },
+          { id: 'reflection', name: 'Reflection', subject: 'BOTH',
+            scale: { min: 0, max: 4, step: 0.5 }, evidenceRequired: false },
           { id: 'team', name: this.text.groupCriterionName, subject: 'GROUP', scale, evidenceRequired: true },
         ],
       }],
@@ -231,6 +242,27 @@ export class Lifecycle {
     })()`)
     if (typeof value !== 'string' || !value) throw new Error(`No eligible grading project option matches ${title}.`)
     await this.fill('#grading-student-project', value)
+  }
+
+  async selectGradingMember(actor) {
+    const members = await this.api('teacher01', `/api/projects/${this.primary}/grading-members`)
+    const member = members.find((candidate) => candidate.studentId === this.sessions[actor].user.id)
+    assert.ok(member?.displayName, `${actor} must be a current allocated grading member`)
+    const label = member.className || member.electiveSubjectNames?.length
+      ? `${member.displayName} — ${[member.className, ...(member.electiveSubjectNames ?? [])].filter(Boolean).join(' · ')}`
+      : member.displayName
+    const resolve = gradingMemberOptionState.toString()
+    await this.wait(`(${resolve})(document.querySelector('#criterion-assessment-student'), ${JSON.stringify(label)}).state === 'ready'`,
+      `enabled grading-member selector with exactly one option matching ${label}`)
+    const option = await this.evaluate(
+      `(${resolve})(document.querySelector('#criterion-assessment-student'), ${JSON.stringify(label)})`)
+    if (option.state !== 'ready') {
+      throw new Error(`Expected exactly one enabled grading member matching ${label}; got ${option.state}.`)
+    }
+    this.report.steps.push({ stage: this.stage, actor: this.actor, route: this.route,
+      action: 'select-grading-member', label: option.label })
+    await applyPageSteps(this.client, [{ action: 'select-index', selector: '#criterion-assessment-student',
+      index: option.index }], { log: () => {} })
   }
 
   async selectStudentFormalProject(title, periodLabel = this.text.period) {
@@ -646,48 +678,118 @@ export class Lifecycle {
     await this.shot('rubric', `document.body.textContent.includes('doc-v2')`)
     this.activeRubric = await this.api('teacher01', '/api/grading-rubrics/active')
     assert.equal(this.activeRubric.version, 'doc-v2')
-    // The UI reads final grades concurrently when first loading the project. Prepare this prerequisite honestly.
+    const preparedSelection = await this.api('teacher01',
+      `/api/projects/${this.primary}/assessment-rubrics`, 'PUT', {
+        routineRubricId: this.activeRubric.id, finalRubricId: this.activeRubric.id,
+      })
+    assert.equal(preparedSelection.routineRubricId, this.activeRubric.id)
+    assert.equal(preparedSelection.finalRubricId, this.activeRubric.id)
+    this.report.prepared.push({ kind: 'phase-rubric-selections', projectId: this.primary,
+      routineRubricId: preparedSelection.routineRubricId, finalRubricId: preparedSelection.finalRubricId,
+      reason: 'Authorized teacher API setup before the page load; the page controls read back and save the same explicit selections' })
     await this.api('teacher01', `/api/projects/${this.primary}/final-grade`, 'PUT', {
       rubricId: this.activeRubric.id,
       project: { grade: 2, rationale: this.text.draftRationale },
       students: this.members.map((studentId) => ({ studentId, grade: 2, rationale: this.text.draftRationale })),
     })
     this.report.prepared.push({ kind: 'initial-final-grade', projectId: this.primary,
-      reason: 'Avoid missing final-grade GET on first grading page load; confirmed with rationale through UI below' })
+      reason: 'Create a prior overall decision after explicit final rubric binding; teacher confirms it through UI below' })
     await this.as('teacher01', '/grading')
     await this.selectTeacherGradingProject(this.text.title)
     await this.wait(`!!document.querySelector('[role=tablist][aria-label="Project grading record"]')`, 'project grading record')
-    await this.fill('#student-id', this.sessions.student01.user.id)
-    await this.wait(`!!document.querySelector('#grade-criterion option[value="individual"]')`, 'active rubric individual criterion')
-    await this.selectOption('#grade-criterion', 'individual')
-    await this.wait(`document.querySelector('#grade-criterion')?.value === 'individual'`,
-      'individual grading criterion selected')
-    await this.wait(`!!document.querySelector('#grade-grade option[value="2"]')`, 'individual grade value')
-    await this.selectOption('#grade-grade', '2')
-    await this.wait(`document.querySelector('#grade-grade')?.value === '2'`, 'individual grade value selected')
-    await this.fill('#grade-evidence', this.text.evidence)
-    this.report.gradingFormState = await this.evaluate(`(() => {
-      const form = [...document.querySelectorAll('form.panel')]
-        .find(candidate => candidate.querySelector('h3')?.textContent.trim() === 'Record individual assessment');
-      return {
-        criterion: form?.querySelector('#grade-criterion')?.value,
-        selectedCriterionNotice: form?.querySelector('.notice')?.textContent.trim() ?? null,
-        grade: form?.querySelector('#grade-grade')?.value,
-        submitDisabled: form?.querySelector('button')?.disabled,
-        submitText: form?.querySelector('button')?.textContent.trim(),
-      };
-    })()`)
-    const individualForm = `([...document.querySelectorAll('form.panel')].find(candidate => candidate.querySelector('h3')?.textContent.trim() === 'Record individual assessment'))`
-    await this.mutateUI('Record assessment', `/api/projects/${this.primary}/student-grades`, 'POST', individualForm)
-    await this.wait(`document.querySelector('.data-list')?.textContent.includes(${JSON.stringify(this.text.evidence)}) || [...document.querySelectorAll('article.data-row')].some(r=>r.textContent.includes(${JSON.stringify(this.text.evidence)}))`, 'individual assessment persisted')
-    await this.fill('#student-id', this.sessions.student02.user.id)
-    await this.wait(`!!document.querySelector('#grade-criterion option[value="individual"]')`, 'active rubric individual criterion')
-    await this.selectOption('#grade-criterion', 'individual')
-    await this.wait(`!!document.querySelector('#grade-grade option[value="2"]')`, 'individual grade value')
-    await this.selectOption('#grade-grade', '2')
-    await this.fill('#grade-evidence', 'DOC_OTHER_GRADE_SENTINEL')
-    await this.mutateUI('Record assessment', `/api/projects/${this.primary}/student-grades`, 'POST', individualForm)
-    // GradeFields currently uses the same default IDs for both forms; scope each selector to the real form.
+    await this.wait(`!document.querySelector('#routine-rubric-selection')?.disabled
+      && [...document.querySelector('#routine-rubric-selection').options].some(o => o.value === ${JSON.stringify(this.activeRubric.id)})
+      && [...document.querySelector('#final-rubric-selection').options].some(o => o.value === ${JSON.stringify(this.activeRubric.id)})`,
+    'effective rubric available for explicit phase binding')
+    await this.selectOption('#routine-rubric-selection', this.activeRubric.id)
+    await this.selectOption('#final-rubric-selection', this.activeRubric.id)
+    const selection = await this.mutateUI('Save project rubric selections',
+      `/api/projects/${this.primary}/assessment-rubrics`, 'PUT')
+    assert.equal(selection.routineRubricId, this.activeRubric.id)
+    assert.equal(selection.finalRubricId, this.activeRubric.id)
+    assert.equal(selection.routineRubricId, preparedSelection.routineRubricId)
+    assert.equal(selection.finalRubricId, preparedSelection.finalRubricId)
+
+    await this.selectGradingMember('student01')
+    await this.wait(`!!document.querySelector('#criterion-individual-grade')
+      && !!document.querySelector('#criterion-reflection-grade')`, 'all individual rubric criteria')
+    const initialRoutine = await this.api('teacher01',
+      `/api/projects/${this.primary}/student-grades?studentId=${this.sessions.student01.user.id}&assessmentType=ROUTINE&rubricId=${this.activeRubric.id}`)
+    await this.fill('#criterion-individual-grade', '2')
+    await this.fill('#criterion-individual-evidence', this.text.evidence)
+    await this.fill('#criterion-reflection-grade', '3')
+    await this.button('Save selected criteria')
+    await this.wait(`Array.from(document.querySelectorAll('[role=status]'))
+      .some(node => node.textContent.includes('Saved 2 criterion assessment'))`, 'two routine criteria saved')
+    const afterRoutine = await this.api('teacher01',
+      `/api/projects/${this.primary}/student-grades?studentId=${this.sessions.student01.user.id}&assessmentType=ROUTINE&rubricId=${this.activeRubric.id}`)
+    assert.equal(afterRoutine.totalElements - initialRoutine.totalElements, 2)
+    assert.ok(afterRoutine.content.every((entry) => entry.assessmentType === 'ROUTINE'
+      && entry.rubricId === this.activeRubric.id))
+    assert.equal(await this.evaluate(`document.querySelector('#criterion-individual-grade').value === ''
+      && document.querySelector('#criterion-reflection-grade').value === ''`), true,
+    'Successful routine save must start a blank next observation')
+    const writesBeforeBlankSave = [...this.errors.requests.values()].filter((request) =>
+      request.method === 'POST' && new URL(request.url).pathname === `/api/projects/${this.primary}/student-grades`).length
+    await this.button('Save selected criteria')
+    await this.wait(`Array.from(document.querySelectorAll('[role=status]'))
+      .some(node => node.textContent.includes('Nothing is selected to save'))`, 'blank routine save explains no writes')
+    const writesAfterBlankSave = [...this.errors.requests.values()].filter((request) =>
+      request.method === 'POST' && new URL(request.url).pathname === `/api/projects/${this.primary}/student-grades`).length
+    assert.equal(writesAfterBlankSave, writesBeforeBlankSave, 'All-blank routine save must not issue a request')
+
+    await this.selectGradingMember('student03')
+    await this.wait(`!!document.querySelector('#criterion-individual-grade')
+      && !!document.querySelector('#criterion-reflection-grade')`, 'blank routine grid for member without history')
+    const noHistory = await this.api('teacher01',
+      `/api/projects/${this.primary}/student-grades?studentId=${this.sessions.student03.user.id}&assessmentType=ROUTINE&rubricId=${this.activeRubric.id}`)
+    assert.equal(noHistory.totalElements, 0)
+    assert.equal(await this.evaluate(`document.querySelector('#criterion-individual-grade').value === ''
+      && document.querySelector('#criterion-reflection-grade').value === ''`), true,
+    'Allocated member without history remains selectable with blank routine rows')
+
+    await this.selectOption('#criterion-assessment-mode', 'FINAL')
+    await this.selectGradingMember('student01')
+    await this.wait(`!!document.querySelector('#criterion-individual-grade')
+      && !!document.querySelector('#criterion-reflection-grade')`, 'blank final grid for selected student')
+    assert.equal(await this.evaluate(`document.querySelector('#criterion-individual-grade').value === ''
+      && document.querySelector('#criterion-reflection-grade').value === ''`), true,
+    'Final mode does not initialize from routine observations')
+    await this.fill('#criterion-individual-grade', '1')
+    await this.fill('#criterion-individual-evidence', this.text.evidence)
+    await this.button('Save selected criteria')
+    await this.wait(`Array.from(document.querySelectorAll('[role=status]'))
+      .some(node => node.textContent.includes('Saved 1 final criterion assessment'))`, 'initial final criterion saved')
+    await this.fill('#criterion-individual-grade', '2')
+    await this.fill('#criterion-individual-reason', this.text.rationale)
+    await this.fill('#criterion-reflection-grade', '2.5')
+    await this.button('Save selected criteria')
+    await this.wait(`Array.from(document.querySelectorAll('[role=status]'))
+      .some(node => node.textContent.includes('Saved 2 final criterion assessment'))`, 'final revision and new criterion saved')
+    const finalCriteria = await this.api('teacher01',
+      `/api/projects/${this.primary}/student-grades?studentId=${this.sessions.student01.user.id}&assessmentType=FINAL&rubricId=${this.activeRubric.id}&size=100`)
+    assert.equal(finalCriteria.totalElements, 3, 'One prior revision plus two current final criterion rows')
+    assert.ok(finalCriteria.content.some((entry) => entry.criterionId === 'individual'
+      && entry.status === 'SUPERSEDED' && entry.supersededById))
+    assert.ok(finalCriteria.content.some((entry) => entry.criterionId === 'individual'
+      && entry.status === 'ACTIVE' && entry.reason === this.text.rationale))
+    assert.ok(finalCriteria.content.some((entry) => entry.criterionId === 'reflection'
+      && entry.status === 'ACTIVE' && entry.grade === 2.5))
+    await this.selectOption('#criterion-assessment-mode', 'ROUTINE')
+    await this.selectGradingMember('student01')
+    await this.wait(`!!document.querySelector('#criterion-individual-grade')
+      && !!document.querySelector('#criterion-reflection-grade')`, 'fresh blank routine grid after final edits')
+    assert.equal(await this.evaluate(`document.querySelector('#criterion-individual-grade').value === ''
+      && document.querySelector('#criterion-reflection-grade').value === ''`), true,
+    'Switching back to routine still starts blank despite prior routine and final history')
+    await this.selectGradingMember('student02')
+    await this.wait(`!!document.querySelector('#criterion-individual-grade')
+      && !!document.querySelector('#criterion-reflection-grade')`, 'routine grid for second project member')
+    await this.fill('#criterion-individual-grade', '2')
+    await this.fill('#criterion-individual-evidence', 'DOC_OTHER_GRADE_SENTINEL')
+    await this.button('Save selected criteria')
+    await this.wait(`Array.from(document.querySelectorAll('[role=status]'))
+      .some(node => node.textContent.includes('Saved 1 criterion assessment'))`, 'second member routine assessment saved')
     await this.evaluate(`(() => {
       const form = [...document.querySelectorAll('form')].find(f => f.querySelector('h3')?.textContent === 'Record group assessment');
       if (!form) throw new Error('Missing group assessment form');
@@ -704,13 +806,16 @@ export class Lifecycle {
     await this.fill('#metric-value', '3')
     await this.fill('#metric-note', this.text.metricNote)
     await this.mutateUI('Record observation', `/api/projects/${this.primary}/metrics`)
-    const grades = await this.api('teacher01', `/api/projects/${this.primary}/student-grades`)
+    const routineGrades = await this.api('teacher01',
+      `/api/projects/${this.primary}/student-grades?assessmentType=ROUTINE&rubricId=${this.activeRubric.id}&size=100`)
     const metrics = await this.api('teacher01', `/api/projects/${this.primary}/metrics`)
-    assert.equal(grades.content.length, 2)
-    assert.ok(grades.content.every((entry) => entry.rubricVersion === 'doc-v2'))
+    assert.equal(routineGrades.totalElements, 3)
+    assert.ok(routineGrades.content.every((entry) => entry.assessmentType === 'ROUTINE'
+      && entry.rubricVersion === 'doc-v2'))
     const groupGrades = await this.api('teacher01', `/api/projects/${this.primary}/group-grades`)
     assert.equal(groupGrades.content.length, 1)
     assert.equal(groupGrades.content[0].rubricVersion, 'doc-v2')
+    assert.equal(groupGrades.content[0].assessmentType, 'ROUTINE')
     assert.equal(metrics.content[0].value, 3)
     await this.shot('assessment', `document.body.textContent.includes(${JSON.stringify(this.text.evidence)})`, '[role=tablist][aria-label="Project grading record"]')
     await this.button('Metric observations')

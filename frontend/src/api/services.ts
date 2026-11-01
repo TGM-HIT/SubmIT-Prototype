@@ -29,6 +29,9 @@ type PublishRubricRequest = components['schemas']['PublishRubricRequest']
 type StudentGradeRequest = components['schemas']['StudentGradeRequest']
 type GroupGradeRequest = components['schemas']['GroupGradeRequest']
 type GradeResponse = components['schemas']['GradeResponse']
+type AssessmentRubricSelection = components['schemas']['AssessmentRubricSelection']
+type AssessmentRubricResponse = components['schemas']['AssessmentRubricResponse']
+type GradingMember = components['schemas']['GradingMember']
 type MetricRequest = components['schemas']['MetricRequest']
 type MetricResponse = components['schemas']['MetricResponse']
 type FinalGradeHistory = components['schemas']['FinalGradeHistory']
@@ -291,11 +294,32 @@ export const gradingApi = {
   publishRubric(input: PublishRubricRequest): Promise<RubricResponse> {
     return json<RubricResponse>('/api/grading-rubrics', 'POST', input)
   },
-  grades(projectId: string, page = 0): Promise<Page<components['schemas']['PageResponseGradeResponse']>> {
-    return json(`/api/projects/${encodeURIComponent(projectId)}/student-grades?${pageQuery(page)}`)
+  assessmentRubrics(projectId: string): Promise<AssessmentRubricResponse> {
+    return json(`/api/projects/${encodeURIComponent(projectId)}/assessment-rubrics`)
+  },
+  setAssessmentRubrics(projectId: string, input: AssessmentRubricSelection): Promise<AssessmentRubricResponse> {
+    return json(`/api/projects/${encodeURIComponent(projectId)}/assessment-rubrics`, 'PUT', input)
+  },
+  gradingMembers(projectId: string): Promise<GradingMember[]> {
+    return json(`/api/projects/${encodeURIComponent(projectId)}/grading-members`)
+  },
+  grades(projectId: string, page = 0, size = 20, filters?: {
+    studentId?: string
+    assessmentType?: 'ROUTINE' | 'FINAL'
+    rubricId?: string
+  }): Promise<Page<components['schemas']['PageResponseGradeResponse']>> {
+    const query = new URLSearchParams(pageQuery(page, size))
+    if (filters?.studentId) query.set('studentId', filters.studentId)
+    if (filters?.assessmentType) query.set('assessmentType', filters.assessmentType)
+    if (filters?.rubricId) query.set('rubricId', filters.rubricId)
+    return json(`/api/projects/${encodeURIComponent(projectId)}/student-grades?${query}`)
   },
   recordGrade(projectId: string, input: StudentGradeRequest): Promise<GradeResponse> {
     return json<GradeResponse>(`/api/projects/${encodeURIComponent(projectId)}/student-grades`, 'POST', input)
+  },
+  reviseGrade(projectId: string, gradeId: string, input: components['schemas']['GradeRevisionRequest']): Promise<GradeResponse> {
+    return json<GradeResponse>(`/api/projects/${encodeURIComponent(projectId)}/student-grades/${encodeURIComponent(gradeId)}/revisions`,
+      'POST', input)
   },
   groupGrades(projectId: string, page = 0): Promise<Page<components['schemas']['PageResponseGradeResponse']>> {
     return json(`/api/projects/${encodeURIComponent(projectId)}/group-grades?${pageQuery(page)}`)

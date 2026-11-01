@@ -50,7 +50,8 @@ public class MetricService {
     public MetricResponse record(AuthenticatedUser caller, UUID projectId, MetricRequest body) {
         access.requireTeacher(caller, projectId);
         JsonNode request = GradingSupport.toNode(body);
-        RubricRef rubric = binding.validate(projectId, request);
+        access.lockProject(projectId);
+        RubricRef rubric = binding.requireSelected(projectId, AssessmentType.ROUTINE, request);
         String metricId = GradingSupport.text(request, METRIC_ID);
         JsonNode definition = RubricModel.metric(rubric.payload(), metricId)
                 .orElseThrow(() -> GradingSupport.bad("Metric '" + metricId + "' is not defined in this rubric version."));
@@ -70,7 +71,6 @@ public class MetricService {
             payload.put(NOTE, note);
         }
         FormalApprovalGate.requireApproved(store, projectId);
-        binding.bind(caller, projectId, request);
         StoredRecord record = store.create(METRIC, caller.id().toString(), projectId.toString(),
                 GradingKeys.ACTIVE, payload);
         audit.record(caller, "METRIC_RECORDED", METRIC, record.getId());

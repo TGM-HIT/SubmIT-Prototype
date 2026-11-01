@@ -64,10 +64,10 @@ public class FinalGradeService {
             throw GradingSupport.bad("Provide a 'project' entry and/or a 'students' array.");
         }
         GradingSupport.requireDistinctMembers(studentEntries, members);
-        RubricRef rubric = binding.validate(projectId, request);
+        access.lockProject(projectId);
+        RubricRef rubric = binding.requireSelected(projectId, AssessmentType.FINAL, request);
         DecisionPlan[] plans = plans(caller, projectId, rubric, request, studentEntries);
         GradingSupport.requireProjectWorkApproval(store, projectId);
-        binding.bind(caller, projectId, request);
         ObjectNode result = store.object();
         int planIndex = 0;
         if (request.has(PROJECT)) {
@@ -114,7 +114,8 @@ public class FinalGradeService {
     private DecisionPlan plan(AuthenticatedUser caller, UUID projectId, RubricRef rubric, JsonNode entry,
             String studentId) {
         GradingSupport.requireObject(entry);
-        ObjectNode considered = inputs.collect(projectId, studentId, rubric.id());
+        ObjectNode considered = inputs.collect(projectId, studentId, rubric.id(),
+                binding.selected(projectId, AssessmentType.ROUTINE));
         ObjectNode payload = store.object();
         payload.put(RUBRIC_ID, rubric.id().toString());
         payload.put(RUBRIC_VERSION, rubric.payload().path(VERSION).asText());

@@ -28,6 +28,7 @@ final class GradingKeys {
     static final String NAME = "name";
     static final String RUBRIC_ID = "rubricId";
     static final String RUBRIC_VERSION = "rubricVersion";
+    static final String ASSESSMENT_TYPE = "assessmentType";
     static final String CRITERION_ID = "criterionId";
     static final String CATEGORY_ID = "categoryId";
     static final String METRIC_ID = "metricId";

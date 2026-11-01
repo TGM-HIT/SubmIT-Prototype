@@ -124,6 +124,72 @@ class OpenApiContractTest {
     }
 
     @Test
+    void assessmentPhaseContractDocumentsSelectionsMembersAndHistoryFilters() throws Exception {
+        JsonNode document = apiDocument();
+        JsonNode paths = document.path("paths");
+        JsonNode getSelection = paths.path("/api/projects/{projectId}/assessment-rubrics").path("get");
+        JsonNode putSelection = paths.path("/api/projects/{projectId}/assessment-rubrics").path("put");
+        JsonNode getMembers = paths.path("/api/projects/{projectId}/grading-members").path("get");
+        assertOperationMetadata(paths, "get", "/api/projects/{projectId}/student-grades",
+                "listStudentGrades", "Student grades");
+        assertOperationMetadata(paths, "get", "/api/projects/{projectId}/assessment-rubrics",
+                "getProjectAssessmentRubrics", "Project grading configuration");
+        assertOperationMetadata(paths, "put", "/api/projects/{projectId}/assessment-rubrics",
+                "setProjectAssessmentRubrics", "Project grading configuration");
+        assertOperationMetadata(paths, "get", "/api/projects/{projectId}/grading-members",
+                "listProjectGradingMembers", "Project grading configuration");
+        assertTrue(getSelection.path("responses").has("200"));
+        assertTrue(getSelection.path("responses").has("401"));
+        assertTrue(getSelection.path("responses").has("403"));
+        assertTrue(getSelection.path("responses").has("404"));
+        assertTrue(putSelection.path("responses").has("400"));
+        assertTrue(putSelection.path("responses").has("401"));
+        assertTrue(putSelection.path("responses").has("403"));
+        assertTrue(putSelection.path("responses").has("404"));
+        assertTrue(putSelection.path("responses").has("409"));
+        assertTrue(getMembers.path("responses").has("200"));
+        assertTrue(getMembers.path("responses").has("401"));
+        assertTrue(getMembers.path("responses").has("403"));
+        assertTrue(getMembers.path("responses").has("404"));
+        assertEquals("#/components/schemas/AssessmentRubricResponse",
+                getSelection.path("responses").path("200").path("content").path("*/*")
+                        .path("schema").path("$ref").asText());
+        assertEquals("#/components/schemas/AssessmentRubricResponse",
+                putSelection.path("responses").path("200").path("content").path("*/*")
+                        .path("schema").path("$ref").asText());
+        JsonNode memberArray = getMembers.path("responses").path("200").path("content").path("*/*").path("schema");
+        assertEquals("array", memberArray.path("type").asText());
+        assertEquals("#/components/schemas/GradingMember",
+                memberArray.path("items").path("$ref").asText());
+
+        JsonNode schemas = document.path("components").path("schemas");
+        JsonNode selection = schemas.path("AssessmentRubricSelection");
+        assertEquals(Set.of("routineRubricId", "finalRubricId"), textualMembers(selection.path("required")));
+        assertEquals(Set.of("routineRubricId", "finalRubricId", "routineReason", "finalReason"),
+                fieldNames(selection.path("properties")));
+        JsonNode selectionResponse = schemas.path("AssessmentRubricResponse");
+        assertEquals(Set.of("routineRubricId", "finalRubricId"),
+                textualMembers(selectionResponse.path("required")));
+        JsonNode member = schemas.path("GradingMember");
+        assertEquals(Set.of("studentId", "displayName", "className", "electiveSubjectNames"),
+                fieldNames(member.path("properties")));
+        assertTrue(textualMembers(member.path("required")).containsAll(
+                Set.of("studentId", "displayName", "electiveSubjectNames")));
+
+        JsonNode studentGrade = schemas.path("StudentGradeRequest");
+        assertTrue(textualMembers(studentGrade.path("required")).contains("assessmentType"));
+        assertTrue(studentGrade.path("properties").has("assessmentType"));
+        assertTrue(schemas.path("GradeResponse").path("properties").has("assessmentType"));
+        Set<String> historyParameters = new HashSet<>();
+        paths.path("/api/projects/{projectId}/student-grades").path("get").path("parameters")
+                .forEach(parameter -> historyParameters.add(parameter.path("name").asText()));
+        assertTrue(historyParameters.containsAll(
+                Set.of("projectId", "studentId", "assessmentType", "rubricId", "page", "size")));
+        assertEquals(Set.of("ROUTINE", "FINAL"),
+                textualMembers(studentGrade.path("properties").path("assessmentType").path("enum")));
+    }
+
+    @Test
     void teacherFormalProposalListHasTheDocumentedAuthenticatedQueryAndExactSummaryContract() throws Exception {
         JsonNode document = apiDocument();
         JsonNode operation = document.path("paths").path("/api/formal-applications").path("get");
@@ -404,9 +470,10 @@ class OpenApiContractTest {
                                     "nonmember or duplicate students and undefined or wrong-scope rules are "
                                             + "input validation errors."),
                             "403", response("ApiErrorResponse", "Caller is not a teacher or administrator."),
-                            "409", response("ApiErrorResponse", "A configured rule lacks required inputs, the "
-                                    + "selected rubric is ineffective, or a rubric-binding transition lacks a "
-                                    + "reason."))),
+                            "409", response("ApiErrorResponse", "A configured rule lacks required inputs or has "
+                                    + "criterion identifiers ambiguous between final student and routine group "
+                                    + "inputs, the selected rubric is ineffective, or a rubric-binding transition "
+                                    + "lacks a reason."))),
             operation("get", "/api/projects/{projectId}/student-grades", "PageResponseGradeResponse",
                     "Paginated individual grade history.",
                     Map.of("403", response("ApiErrorResponse", "Caller lacks the required role or project access."))),
@@ -525,7 +592,8 @@ class OpenApiContractTest {
                     "", "cooperationPartner")),
             Map.entry("GradeResponse", contract(
                     "id,status,createdAt,projectId,studentId,rubricId,rubricVersion,criterionId,categoryId,grade,"
-                            + "assessedOn,evidence,comments,teacherId,recordedAt,supersedesId,supersededById,reason",
+                            + "assessedOn,evidence,comments,teacherId,recordedAt,supersedesId,supersededById,reason,"
+                            + "assessmentType",
                     "studentDisplayName,className,electiveSubjectNames",
                     "studentId,evidence,comments,supersedesId,supersededById,reason")),
             Map.entry("MetricResponse", contract(
@@ -811,7 +879,7 @@ class OpenApiContractTest {
 
         List<String> failures = new ArrayList<>();
         int operations = checkOperations(document.path("paths"), failures);
-        assertEquals(95, operations, "The generated API operation count should be reviewed when endpoints change.");
+        assertEquals(98, operations, "The generated API operation count should be reviewed when endpoints change.");
         JsonNode schemas = document.path("components").path("schemas");
         checkComponentSchemas(schemas, failures);
         checkResponseRequiredness(schemas, failures);
@@ -1519,8 +1587,8 @@ class OpenApiContractTest {
                 }
             }
         }
-        assertEquals(95, operationCount);
-        assertEquals(91, protectedCount);
+        assertEquals(98, operationCount);
+        assertEquals(94, protectedCount);
         assertTrue(failures.isEmpty(), () -> String.join(System.lineSeparator(), failures));
     }
 
@@ -1528,7 +1596,7 @@ class OpenApiContractTest {
     void operationsDocumentApplicableStandardErrorResponses() throws Exception {
         JsonNode paths = apiDocument().path("paths");
         List<String> failures = new ArrayList<>();
-        assertEquals(89, TICKET_ERROR_CODES.size(), "The independent ticket oracle must list all operations.");
+        assertEquals(92, TICKET_ERROR_CODES.size(), "The independent ticket oracle must list all operations.");
         Set<String> actualOperations = new java.util.TreeSet<>();
         paths.properties().forEach(path -> path.getValue().properties().forEach(method -> {
             if (HTTP_METHODS.contains(method.getKey())) {
@@ -1809,6 +1877,11 @@ class OpenApiContractTest {
             }
             baselineCodes.computeIfAbsent(location, unused -> new TreeSet<>()).add(expected.status());
         }
+        Map<String, Set<String>> featureSuccessCodes = Map.of(
+                "GET /api/projects/{projectId}/assessment-rubrics", Set.of("200"),
+                "PUT /api/projects/{projectId}/assessment-rubrics", Set.of("200"),
+                "GET /api/projects/{projectId}/grading-members", Set.of("200"));
+        featureSuccessCodes.forEach((location, statuses) -> baselineCodes.put(location, statuses));
         assertEquals(90, BASELINE_SUCCESS_RESPONSES.size(), "The checked-in baseline must cover all operations.");
 
         for (Map.Entry<String, Set<String>> route : TICKET_ERROR_CODES.entrySet()) {
@@ -1913,6 +1986,9 @@ class OpenApiContractTest {
                 get|/api/projects/{projectId}/final-grade|400,403,404
                 put|/api/projects/{projectId}/final-grade|400,403,404,409
                 get|/api/projects/{projectId}/student-grades|400,403,404
+                get|/api/projects/{projectId}/assessment-rubrics|400,403,404
+                put|/api/projects/{projectId}/assessment-rubrics|400,403,404,409
+                get|/api/projects/{projectId}/grading-members|400,403,404
                 post|/api/projects/{projectId}/student-grades|400,403,404,409
                 post|/api/projects/{projectId}/student-grades/{gradeId}/revisions|400,403,404,409
                 get|/api/projects/{projectId}/metrics|400,403,404
@@ -2023,6 +2099,16 @@ class OpenApiContractTest {
                 get|/api/projects/{projectId}/student-grades|400|project UUID;pagination
                 get|/api/projects/{projectId}/student-grades|403|required role or project access
                 get|/api/projects/{projectId}/student-grades|404|project does not exist
+                get|/api/projects/{projectId}/assessment-rubrics|400|invalid project UUID
+                get|/api/projects/{projectId}/assessment-rubrics|403|lacks project access;not a project member
+                get|/api/projects/{projectId}/assessment-rubrics|404|project does not exist
+                put|/api/projects/{projectId}/assessment-rubrics|400|invalid project UUID;malformed selection;invalid reason
+                put|/api/projects/{projectId}/assessment-rubrics|403|lacks project access;not a teacher
+                put|/api/projects/{projectId}/assessment-rubrics|404|project or selected rubric version does not exist
+                put|/api/projects/{projectId}/assessment-rubrics|409|selected rubric is ineffective;used phase cannot be cleared;transition reason is missing
+                get|/api/projects/{projectId}/grading-members|400|invalid project UUID
+                get|/api/projects/{projectId}/grading-members|403|not grading staff;lacks project access
+                get|/api/projects/{projectId}/grading-members|404|project or allocated member account does not exist
                 post|/api/projects/{projectId}/student-grades|400|project UUID;student ID outside the project group;criterion scale
                 post|/api/projects/{projectId}/student-grades|403|role or project access
                 post|/api/projects/{projectId}/student-grades|404|project or requested rubric resource
@@ -2309,8 +2395,9 @@ class OpenApiContractTest {
                 baselineError("put", "/api/projects/{projectId}/final-grade", "403",
                         "Caller is not a teacher or administrator."),
                 baselineError("put", "/api/projects/{projectId}/final-grade", "409",
-                        "The formal application is not approved. A configured rule lacks required inputs, the "
-                                + "selected rubric is ineffective, or a rubric-binding transition lacks a reason."),
+                        "The formal application is not approved. A configured rule lacks required inputs or has "
+                                + "criterion identifiers ambiguous between final student and routine group inputs, "
+                                + "the selected rubric is ineffective, or a rubric-binding transition lacks a reason."),
                 baselineError("put", "/api/ideas/{id}/supervisor", "409",
                         "The selected teacher has a recorded preference of NOT_WILLING_TO_SUPERVISE or "
                                 + "NOT_AVAILABLE and acknowledgeRefusal is omitted or false."),

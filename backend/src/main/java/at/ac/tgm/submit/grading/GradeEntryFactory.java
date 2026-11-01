@@ -1,6 +1,7 @@
 package at.ac.tgm.submit.grading;
 
 import static at.ac.tgm.submit.grading.GradingKeys.ASSESSED_ON;
+import static at.ac.tgm.submit.grading.GradingKeys.ASSESSMENT_TYPE;
 import static at.ac.tgm.submit.grading.GradingKeys.CATEGORY_ID;
 import static at.ac.tgm.submit.grading.GradingKeys.COMMENTS;
 import static at.ac.tgm.submit.grading.GradingKeys.CRITERION_ID;
@@ -43,7 +44,8 @@ class GradeEntryFactory {
         this.studentDetails = studentDetails;
     }
 
-    ObjectNode build(AuthenticatedUser caller, JsonNode request, String subject, RubricRef rubric) {
+    ObjectNode build(AuthenticatedUser caller, JsonNode request, String subject, RubricRef rubric,
+            AssessmentType assessmentType) {
         String criterionId = GradingSupport.text(request, CRITERION_ID);
         ObjectNode criterion = RubricModel.criterion(rubric.payload(), criterionId)
                 .orElseThrow(() -> GradingSupport.bad("Criterion '" + criterionId + "' is not part of this rubric version."));
@@ -63,6 +65,8 @@ class GradeEntryFactory {
         }
         ObjectNode payload = store.object();
         payload.put(RUBRIC_ID, rubric.id().toString());
+        payload.put(ASSESSMENT_TYPE, assessmentType.name());
+        payload.put(ASSESSMENT_TYPE, assessmentType.name());
         payload.put(RUBRIC_VERSION, rubric.payload().path(VERSION).asText());
         payload.put(CRITERION_ID, criterionId);
         payload.put(CATEGORY_ID, criterion.path(CATEGORY_ID).asText());
@@ -87,7 +91,7 @@ class GradeEntryFactory {
                             details.electiveSubjectNames(), grade.rubricId(), grade.rubricVersion(),
                             grade.criterionId(), grade.categoryId(), grade.grade(), grade.assessedOn(),
                             grade.evidence(), grade.comments(), grade.teacherId(), grade.recordedAt(),
-                            grade.supersedesId(), grade.supersededById(), grade.reason());
+                            grade.supersedesId(), grade.supersededById(), grade.reason(), grade.assessmentType());
                 }).orElse(grade);
     }
 

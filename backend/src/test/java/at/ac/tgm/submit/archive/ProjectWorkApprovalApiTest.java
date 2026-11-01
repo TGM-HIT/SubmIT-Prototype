@@ -497,7 +497,11 @@ class ProjectWorkApprovalApiTest {
         String artifactId = mapper.readTree(artifactUpload(project, teacher).andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsByteArray()).path("id").asText();
         String gradeId = createdId(request(post("/api/projects/{id}/student-grades", project), teacher,
-                Map.of("rubricId", rubricId, "studentId", studentId, "criterionId", "individual", "grade", 4)));
+                Map.of("rubricId", rubricId, "assessmentType", "ROUTINE", "studentId", studentId,
+                        "criterionId", "individual", "grade", 4)));
+        String finalCriterionId = createdId(request(post("/api/projects/{id}/student-grades", project), teacher,
+                Map.of("rubricId", rubricId, "assessmentType", "FINAL", "studentId", studentId,
+                        "criterionId", "individual", "grade", 3)));
         String groupGradeId = createdId(request(post("/api/projects/{id}/group-grades", project), teacher,
                 Map.of("rubricId", rubricId, "criterionId", "team", "grade", 4,
                         "evidence", "Project evidence", "comments", "Teacher assessment")));
@@ -523,6 +527,9 @@ class ProjectWorkApprovalApiTest {
         JsonNode gradeRecord = findById(grades.path("content"), gradeId);
         assertText(gradeRecord, "criterionId", "individual");
         assertNumber(gradeRecord, "grade", 4);
+        JsonNode finalCriterionRecord = findById(grades.path("content"), finalCriterionId);
+        assertText(finalCriterionRecord, "assessmentType", "FINAL");
+        assertNumber(finalCriterionRecord, "grade", 3);
         JsonNode groupGrades = read(get("/api/projects/{id}/group-grades", project), teacher);
         JsonNode groupRecord = findById(groupGrades.path("content"), groupGradeId);
         assertText(groupRecord, "criterionId", "team");
@@ -627,7 +634,8 @@ class ProjectWorkApprovalApiTest {
             StoredRecord preparationApplication = store.create(
                     "formal_application", studentId.toString(), project.toString(), "APPROVED", store.object());
             MvcResult grade = request(post("/api/projects/{id}/student-grades", project), teacher,
-                    Map.of("rubricId", rubricId, "studentId", studentId, "criterionId", "individual", "grade", 4))
+                    Map.of("rubricId", rubricId, "assessmentType", "ROUTINE", "studentId", studentId,
+                            "criterionId", "individual", "grade", 4))
                     .andExpect(status().isCreated()).andReturn();
             String gradeId = mapper.readTree(grade.getResponse().getContentAsByteArray()).path("id").asText();
             store.repository().delete(preparationApplication);
@@ -676,7 +684,8 @@ class ProjectWorkApprovalApiTest {
                             Map.of("decision", operation.substring("review-".length())));
             case "complete" -> mvc.perform(bearer(post("/api/projects/{id}/complete", project), token));
             case "grade" -> request(post("/api/projects/{id}/student-grades", project), token,
-                    Map.of("rubricId", rubricId, "studentId", studentId, "criterionId", "individual", "grade", 4));
+                    Map.of("rubricId", rubricId, "assessmentType", "ROUTINE", "studentId", studentId,
+                            "criterionId", "individual", "grade", 4));
             case "revision" -> request(post("/api/projects/{id}/student-grades/{gradeId}/revisions",
                     project, prepared.id()), token, Map.of("reason", "Correction", "grade", 3));
             case "group-grade" -> request(post("/api/projects/{id}/group-grades", project), token,
@@ -731,13 +740,19 @@ class ProjectWorkApprovalApiTest {
         return false;
     }
 
-    private UUID project(String status) {
+    private UUID project(String status) throws Exception {
         StoredRecord created = store.create("project", null, null, status,
                 store.object().put("title", "Test project"));
         UUID id = created.getId();
         var group = store.object();
         group.putArray("studentIds").add(studentId.toString());
         store.create("project_group", null, id.toString(), "ALLOCATED", group);
+        mvc.perform(put("/api/projects/{id}/assessment-rubrics", id)
+                        .header("Authorization", "Bearer " + teacher)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsBytes(Map.of("routineRubricId", rubricId,
+                                "finalRubricId", rubricId))))
+                .andExpect(status().isOk());
         return id;
     }
 

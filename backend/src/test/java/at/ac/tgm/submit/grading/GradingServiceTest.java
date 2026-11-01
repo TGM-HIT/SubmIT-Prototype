@@ -17,6 +17,7 @@ import at.ac.tgm.submit.grading.GradeDtos.GroupGradeRequest;
 import at.ac.tgm.submit.grading.GradeDtos.MetricRequest;
 import at.ac.tgm.submit.grading.GradeDtos.MetricResponse;
 import at.ac.tgm.submit.grading.GradeDtos.StudentGradeRequest;
+import at.ac.tgm.submit.grading.GradeDtos.StudentGradeQuery;
 import at.ac.tgm.submit.grading.GradeDtos.VersionTransition;
 import at.ac.tgm.submit.grading.RubricDtos.AggregationRuleDto;
 import at.ac.tgm.submit.grading.RubricDtos.CategoryDto;
@@ -34,6 +35,7 @@ import at.ac.tgm.submit.user.StudentClassRepository;
 import at.ac.tgm.submit.user.ElectiveSubjectEntity;
 import at.ac.tgm.submit.user.ElectiveSubjectRepository;
 import at.ac.tgm.submit.web.ApiException;
+import at.ac.tgm.submit.web.ApiDtos.PageResponse;
 import jakarta.validation.Validation;
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -58,9 +60,14 @@ class GradingServiceTest {
     @Autowired
     private GradeService grades;
     @Autowired
+    private StudentGradeService studentGrades;
+    @Autowired
+    private GradeHistoryReader historyReader;
+    @Autowired
     private MetricService metrics;
     @Autowired
     private FinalGradeService finalGrades;
+    @Autowired private AssessmentRubricService assessmentRubrics;
     @Autowired private UserAccountRepository users;
     @Autowired private StudentClassRepository classes;
     @Autowired private ElectiveSubjectRepository subjects;
@@ -98,6 +105,9 @@ class GradingServiceTest {
         store.create("formal_application", alice.id().toString(), projectId.toString(), "APPROVED", store.object());
         login(admin);
         rubricId = rubrics.publish(admin, rubricRequest(UUID.randomUUID().toString())).id();
+        login(teacher);
+        assessmentRubrics.put(teacher, projectId,
+                new AssessmentRubricDtos.AssessmentRubricSelection(rubricId, rubricId, null, null));
     }
 
     @AfterEach
@@ -124,9 +134,15 @@ class GradingServiceTest {
         return studentGrade(student, rubricId, grade, null);
     }
 
+    private StudentGradeRequest finalStudentGrade(AuthenticatedUser student, int grade) {
+        return new StudentGradeRequest(rubricId, AssessmentType.FINAL, null, student.id(), "impl",
+                n(grade), null, null, null);
+    }
+
     private static StudentGradeRequest studentGrade(AuthenticatedUser student, UUID rubric, int grade,
             VersionTransition transition) {
-        return new StudentGradeRequest(rubric, transition, student.id(), "impl", n(grade), null, null, null);
+        return new StudentGradeRequest(rubric, AssessmentType.ROUTINE, transition, student.id(), "impl",
+                n(grade), null, null, null);
     }
 
     private GroupGradeRequest teamGrade(int grade, String evidence) {
@@ -137,12 +153,22 @@ class GradingServiceTest {
         return new StudentDecision(student.id(), "avg", grade == null ? null : n(grade), null);
     }
 
+    private PageResponse<GradeResponse> listStudentGrades(AuthenticatedUser caller, UUID project, String studentId,
+            int page, int size) {
+        StudentGradeQuery query = new StudentGradeQuery();
+        query.setStudentId(studentId);
+        query.setPage(page);
+        query.setSize(size);
+        return historyReader.read(caller, project, query);
+    }
+
     @Test
     void requestContractsRejectInvalidInputBeforeReachingTheService() {
         var validator = Validation.buildDefaultValidatorFactory().getValidator();
         assertTrue(validator.validate(new PublishRubricRequest("", "n", null, "bad-date", null, null, List.of(), null, null))
                 .size() >= 4);
-        assertTrue(validator.validate(new StudentGradeRequest(null, null, null, " ", null, null, null, null)).size() >= 4);
+        assertTrue(validator.validate(new StudentGradeRequest(null, null, null, null, " ", null, null, null, null))
+                .size() >= 4);
         assertTrue(validator.validate(rubricRequest("v")).isEmpty());
     }
 
@@ -160,26 +186,30 @@ class GradingServiceTest {
     void gradesAreValidatedAgainstConfiguredScaleAndRevisionsRetainHistory() {
         login(teacher);
         ApiException invalid = assertThrows(ApiException.class,
-                () -> grades.recordStudentGrade(teacher, projectId, studentGrade(alice, 6)));
+                () -> studentGrades.recordStudentGrade(teacher, projectId, studentGrade(alice, 6)));
         assertEquals(400, invalid.getStatus().value());
-        GradeResponse first = grades.recordStudentGrade(teacher, projectId, studentGrade(alice, 4));
-        GradeResponse revision = grades.reviseStudentGrade(teacher, projectId, first.id(),
+        StudentGradeRequest offStep = new StudentGradeRequest(rubricId, AssessmentType.ROUTINE, null, alice.id(),
+                "impl", new BigDecimal("3.5"), null, null, null);
+        assertEquals(400, assertThrows(ApiException.class,
+                () -> studentGrades.recordStudentGrade(teacher, projectId, offStep)).getStatus().value());
+        GradeResponse first = studentGrades.recordStudentGrade(teacher, projectId, studentGrade(alice, 4));
+        GradeResponse revision = studentGrades.reviseStudentGrade(teacher, projectId, first.id(),
                 new GradeRevisionRequest("Reassessed after defense", n(2), null, null, null));
         assertEquals(first.id(), revision.supersedesId());
-        assertEquals(2, grades.listStudentGrades(teacher, projectId, null, 0, 20).totalElements());
-        assertThrows(ApiException.class, () -> grades.reviseStudentGrade(teacher, projectId, first.id(),
+        assertEquals(2, listStudentGrades(teacher, projectId, null, 0, 20).totalElements());
+        assertThrows(ApiException.class, () -> studentGrades.reviseStudentGrade(teacher, projectId, first.id(),
                 new GradeRevisionRequest("again", n(3), null, null, null)));
     }
 
     @Test
     void staffGradeResponsesResolveCurrentStudentIdentityButStudentResponsesDoNot() {
         login(teacher);
-        GradeResponse recorded = grades.recordStudentGrade(teacher, projectId, studentGrade(alice, 3));
+        GradeResponse recorded = studentGrades.recordStudentGrade(teacher, projectId, studentGrade(alice, 3));
         assertEquals("Alice Student", recorded.studentDisplayName());
         assertTrue(recorded.className().startsWith("Class "));
         assertEquals(1, recorded.electiveSubjectNames().size());
         login(alice);
-        GradeResponse own = grades.listStudentGrades(alice, projectId, alice.id().toString(), 0, 20).content().get(0);
+        GradeResponse own = listStudentGrades(alice, projectId, alice.id().toString(), 0, 20).content().get(0);
         assertEquals(null, own.studentDisplayName());
         assertEquals(null, own.className());
         assertEquals(null, own.electiveSubjectNames());
@@ -188,18 +218,20 @@ class GradingServiceTest {
     @Test
     void studentsReadOnlyOwnGradesAndOutsidersAreDenied() {
         login(teacher);
-        grades.recordStudentGrade(teacher, projectId, studentGrade(alice, 1));
-        grades.recordStudentGrade(teacher, projectId, studentGrade(bob, 2));
+        studentGrades.recordStudentGrade(teacher, projectId, studentGrade(alice, 1));
+        studentGrades.recordStudentGrade(teacher, projectId, studentGrade(bob, 2));
         login(alice);
-        assertEquals(1, grades.listStudentGrades(alice, projectId, null, 0, 20).totalElements());
+        assertEquals(1, listStudentGrades(alice, projectId, null, 0, 20).totalElements());
         assertThrows(AccessDeniedException.class,
-                () -> grades.listStudentGrades(alice, projectId, bob.id().toString(), 0, 20));
-        assertThrows(AccessDeniedException.class, () -> grades.recordStudentGrade(alice, projectId, studentGrade(alice, 1)));
+                () -> listStudentGrades(alice, projectId, bob.id().toString(), 0, 20));
+        assertThrows(AccessDeniedException.class,
+                () -> studentGrades.recordStudentGrade(alice, projectId, studentGrade(alice, 1)));
         login(outsider);
-        assertThrows(AccessDeniedException.class, () -> grades.listStudentGrades(outsider, projectId, null, 0, 20));
-        assertThrows(AccessDeniedException.class, () -> grades.listGroupGrades(outsider, projectId, 0, 20));
+        assertThrows(AccessDeniedException.class, () -> listStudentGrades(outsider, projectId, null, 0, 20));
+        assertThrows(AccessDeniedException.class, () -> historyReader.readGroup(outsider, projectId, 0, 20));
         login(teacher);
-        assertThrows(ApiException.class, () -> grades.recordStudentGrade(teacher, projectId, studentGrade(outsider, 1)));
+        assertThrows(ApiException.class,
+                () -> studentGrades.recordStudentGrade(teacher, projectId, studentGrade(outsider, 1)));
     }
 
     @Test
@@ -213,29 +245,32 @@ class GradingServiceTest {
                 new MetricRequest(rubricId, null, "hours", new BigDecimal("12.5"), null, null));
         assertEquals(1, metric.metricVersion());
         login(alice);
-        assertEquals(1, grades.listGroupGrades(alice, projectId, 0, 20).totalElements());
+        assertEquals(1, historyReader.readGroup(alice, projectId, 0, 20).totalElements());
         assertEquals(1, metrics.list(alice, projectId, 0, 20).totalElements());
     }
 
     @Test
     void otherRubricVersionRequiresExplicitTransition() {
         login(teacher);
-        grades.recordStudentGrade(teacher, projectId, studentGrade(alice, 3));
+        studentGrades.recordStudentGrade(teacher, projectId, studentGrade(alice, 3));
         login(admin);
         UUID other = rubrics.publish(admin, rubricRequest(UUID.randomUUID().toString())).id();
         login(teacher);
         assertEquals(409, assertThrows(ApiException.class,
-                () -> grades.recordStudentGrade(teacher, projectId, studentGrade(alice, other, 2, null))).getStatus().value());
-        GradeResponse moved = grades.recordStudentGrade(teacher, projectId,
-                studentGrade(alice, other, 2, new VersionTransition("Approved switch")));
+                () -> studentGrades.recordStudentGrade(teacher, projectId, studentGrade(alice, other, 2, null)))
+                .getStatus().value());
+        assessmentRubrics.put(teacher, projectId,
+                new AssessmentRubricDtos.AssessmentRubricSelection(other, rubricId, "Routine phase transition", null));
+        GradeResponse moved = studentGrades.recordStudentGrade(teacher, projectId,
+                studentGrade(alice, other, 2, null));
         assertEquals(other, moved.rubricId());
-        assertEquals(1, grades.listStudentGrades(teacher, projectId, null, 0, 1).content().size());
+        assertEquals(1, listStudentGrades(teacher, projectId, null, 0, 1).content().size());
     }
 
     @Test
     void finalGradesUseConfiguredRuleOrRequireRationaleAndKeepHistory() {
         login(teacher);
-        grades.recordStudentGrade(teacher, projectId, studentGrade(alice, 2));
+        studentGrades.recordStudentGrade(teacher, projectId, finalStudentGrade(alice, 2));
         grades.recordGroupGrade(teacher, projectId, teamGrade(4, "x"));
         FinalGradesRequest noRationale = new FinalGradesRequest(rubricId, null, new Decision(null, n(2), null), null);
         assertThrows(ApiException.class, () -> finalGrades.record(teacher, projectId, noRationale));
