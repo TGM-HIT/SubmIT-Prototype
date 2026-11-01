@@ -105,6 +105,39 @@ function rubricSummary(id: string, version: string, name = `Rubric ${version}`) 
   }
 }
 
+function editorRubric(id = "rubric-record-id") {
+  const criterion = (criterionId: string, name: string) => ({
+    id: criterionId,
+    name,
+    description: `${name} description`,
+    subject: "STUDENT",
+    stage: null,
+    evidenceRequired: false,
+    scale: { min: 1, max: 5, step: 1, labels: null },
+  })
+  return {
+    id,
+    status: "PUBLISHED",
+    createdAt: "2026-10-10T00:00:00Z",
+    publishedAt: "2026-10-10T00:00:00Z",
+    publishedBy: "ADMIN",
+    version: "v1",
+    name: `Rubric ${id}`,
+    schoolYear: null,
+    effectiveFrom: "2026-09-01",
+    effectiveTo: null,
+    finalGradeScale: { min: 1, max: 5, step: 1, labels: null },
+    categories: [{
+      id: "grading-category",
+      name: "Configured grading category",
+      description: null,
+      criteria: [criterion("knowledge", "Knowledge"), criterion("practice", "Practice")],
+    }],
+    metricDefinitions: [],
+    aggregationRules: [],
+  }
+}
+
 function expectNoGradingWrites() {
   for (const writer of [api.recordGrade, api.reviseGrade, api.setAssessmentRubrics,
     api.recordGroupGrade, api.recordMetric, api.setFinalGrade, api.publishRubric]) {
@@ -1273,6 +1306,184 @@ describe("grading project selection", () => {
     })
     expect((page.get("#routine-rubric-selection").element as HTMLSelectElement).value).toBe("rubric-later")
     expect((page.get("#final-rubric-selection").element as HTMLSelectElement).value).toBe("rubric-later")
+    page.unmount()
+  })
+
+  it("blocks rubric selection changes and writes while criterion writes are pending", async () => {
+    api.role = "TEACHER"
+    api.rubrics.mockResolvedValue(pageResult([
+      rubricSummary("rubric-current", "v1"),
+      rubricSummary("replacement-rubric", "v2"),
+    ]))
+    api.rubric.mockImplementation(async (id: string) => editorRubric(id))
+    let resolveWrite!: (value: Record<string, never>) => void
+    api.recordGrade.mockReturnValueOnce(new Promise((resolve) => { resolveWrite = resolve }))
+    const page = mount(GradingPage)
+    await loadTeacherProject(page)
+    await page.get("#criterion-assessment-student").setValue("student-target")
+    await page.get("#criterion-knowledge-grade").setValue("4")
+    await page.findAll("button").find((button) => button.text() === "Save selected criteria")!.trigger("click")
+    await flushPromises()
+
+    expect(api.recordGrade).toHaveBeenCalledTimes(1)
+    expect(page.get("#routine-rubric-selection").attributes("disabled")).toBeDefined()
+    expect(page.findAll("button").find((button) => button.text() === "Save project rubric selections")!
+      .attributes("disabled")).toBeDefined()
+    await page.get("#routine-rubric-selection").setValue("replacement-rubric")
+    await page.findAll("button").find((button) => button.text() === "Save project rubric selections")!
+      .trigger("click")
+    expect(api.setAssessmentRubrics).not.toHaveBeenCalled()
+
+    resolveWrite({})
+    await flushPromises()
+    expect(api.recordGrade).toHaveBeenCalledTimes(1)
+    expect((page.get("#routine-rubric-selection").element as HTMLSelectElement).value).toBe("rubric-current")
+    page.unmount()
+  })
+
+  it("blocks criterion mutations and reads while rubric selection persistence is pending", async () => {
+    api.role = "TEACHER"
+    api.rubrics.mockResolvedValue(pageResult([
+      rubricSummary("rubric-current", "v1"),
+      rubricSummary("replacement-rubric", "v2"),
+    ]))
+    api.rubric.mockImplementation(async (id: string) => editorRubric(id))
+    let resolveBinding!: (value: { routineRubricId: string; finalRubricId: string }) => void
+    api.setAssessmentRubrics.mockReturnValueOnce(new Promise((resolve) => { resolveBinding = resolve }))
+    const page = mount(GradingPage)
+    await loadTeacherProject(page)
+    await page.get("#routine-rubric-selection").setValue("replacement-rubric")
+    await page.findAll("button").find((button) => button.text() === "Save project rubric selections")!
+      .trigger("click")
+    await flushPromises()
+
+    expect(api.setAssessmentRubrics).toHaveBeenCalledTimes(1)
+    expect(page.get("#criterion-assessment-mode").attributes("disabled")).toBeDefined()
+    expect(page.get("#criterion-assessment-student").attributes("disabled")).toBeDefined()
+    await page.get("#criterion-assessment-student").setValue("student-target")
+    expect(api.recordGrade).not.toHaveBeenCalled()
+
+    resolveBinding({ routineRubricId: "replacement-rubric", finalRubricId: "rubric-record-id" })
+    await flushPromises()
+    expect(api.recordGrade).not.toHaveBeenCalled()
+    expect(page.get("#routine-rubric-selection").attributes("disabled")).toBeUndefined()
+    page.unmount()
+  })
+
+  it("stops queued criterion requests and suppresses old-context effects after teacher role loss", async () => {
+    api.role = "TEACHER"
+    api.rubric.mockImplementation(async (id: string) => editorRubric(id))
+    let resolveWrite!: (value: Record<string, never>) => void
+    api.recordGrade.mockReturnValueOnce(new Promise((resolve) => { resolveWrite = resolve }))
+    const page = mount(GradingPage)
+    await loadTeacherProject(page)
+    await page.get("#criterion-assessment-student").setValue("student-target")
+    await page.get("#criterion-knowledge-grade").setValue("4")
+    await page.get("#criterion-practice-grade").setValue("3")
+    await page.findAll("button").find((button) => button.text() === "Save selected criteria")!.trigger("click")
+    await flushPromises()
+    expect(api.recordGrade).toHaveBeenCalledTimes(1)
+    const historyReadsBeforeLoss = api.grades.mock.calls.length
+
+    auth.user = null
+    await flushPromises()
+    expect(page.find("#criterion-assessment-mode").exists()).toBe(false)
+    resolveWrite({})
+    await flushPromises()
+
+    expect(api.recordGrade).toHaveBeenCalledTimes(1)
+    expect(api.grades).toHaveBeenCalledTimes(historyReadsBeforeLoss)
+    expect(page.text()).not.toContain("Saved 2 criterion assessment")
+    page.unmount()
+  })
+
+  it("refreshes visible history after successful criterion writes without replacing the editor", async () => {
+    api.role = "TEACHER"
+    api.rubric.mockImplementation(async (id: string) => editorRubric(id))
+    const observation = {
+      id: "routine-observation-1",
+      studentId: "student-target",
+      studentDisplayName: "Jordan Student",
+      criterionId: "knowledge",
+      grade: 4,
+      status: "ACTIVE",
+      assessedOn: "2026-10-10",
+      rubricVersion: "v1",
+      categoryId: "grading-category",
+      assessmentType: "ROUTINE",
+      evidence: "Recorded through criterion editor",
+    }
+    api.grades.mockResolvedValueOnce(pageResult([]))
+      .mockResolvedValueOnce(pageResult([]))
+      .mockResolvedValueOnce(pageResult([observation]))
+      .mockResolvedValueOnce(pageResult([observation]))
+    const page = mount(GradingPage)
+    await loadTeacherProject(page)
+    await page.get("#criterion-assessment-student").setValue(observation.studentId)
+    const stableEditor = page.get("#criterion-assessment-mode").element
+    await page.get("#criterion-knowledge-grade").setValue("4")
+    await page.findAll("button").find((button) => button.text() === "Save selected criteria")!.trigger("click")
+    await flushPromises()
+
+    expect(api.recordGrade).toHaveBeenCalledTimes(1)
+    expect(page.get("#criterion-assessment-mode").element).toBe(stableEditor)
+    expect((page.get("#criterion-knowledge-grade").element as HTMLSelectElement).value).toBe("")
+    expect(page.text()).toContain("knowledge · 4")
+    expect(page.text()).toContain("Recorded through criterion editor")
+    page.unmount()
+  })
+
+  it("refreshes confirmed final history after partial success and retains the unresolved row", async () => {
+    api.role = "TEACHER"
+    api.rubric.mockImplementation(async (id: string) => editorRubric(id))
+    const studentId = "student-target"
+    const prior = {
+      id: "prior-final",
+      studentId,
+      studentDisplayName: "Jordan Student",
+      criterionId: "knowledge",
+      grade: 4,
+      status: "SUPERSEDED",
+      assessedOn: "2026-10-10",
+      rubricVersion: "v1",
+      categoryId: "grading-category",
+      assessmentType: "FINAL",
+      evidence: "Previous final evidence",
+    }
+    const revised = { ...prior, id: "revised-final", grade: 2, status: "ACTIVE",
+      reason: "Rechecked final evidence", supersedesId: "prior-final" }
+    const saved = {
+      ...prior,
+      status: "ACTIVE",
+      rubricId: "rubric-record-id",
+      createdAt: "2026-10-10T00:00:00Z",
+      evidence: null,
+      comments: null,
+    }
+    api.grades.mockImplementation(async (_projectId, _page, _size, filters) => {
+      if (!filters) return pageResult(api.reviseGrade.mock.calls.length ? [prior, revised] : [])
+      return filters.assessmentType === "FINAL" ? pageResult([saved]) : pageResult([])
+    })
+    api.reviseGrade.mockResolvedValue({})
+    api.recordGrade.mockRejectedValueOnce(new ApiError("Second row rejected", 400))
+    const page = mount(GradingPage)
+    await loadTeacherProject(page)
+    await page.get("#criterion-assessment-student").setValue(studentId)
+    await page.get("#criterion-assessment-mode").setValue("FINAL")
+    await flushPromises()
+    await page.get("#criterion-knowledge-grade").setValue("2")
+    await page.get("#criterion-knowledge-reason").setValue("Rechecked final evidence")
+    await page.get("#criterion-practice-grade").setValue("3")
+    await page.findAll("button").find((button) => button.text() === "Save selected criteria")!.trigger("click")
+    await flushPromises()
+
+    expect(api.reviseGrade).toHaveBeenCalledTimes(1)
+    expect(api.recordGrade).toHaveBeenCalledTimes(1)
+    expect(page.text()).toContain("Partial save: 1 of 2 rows succeeded")
+    expect(page.text()).toContain("knowledge · 4")
+    expect(page.text()).toContain("knowledge · 2")
+    expect((page.get("#criterion-practice-grade").element as HTMLSelectElement).value).toBe("3")
+    expect(page.text()).toContain("Second row rejected")
     page.unmount()
   })
 

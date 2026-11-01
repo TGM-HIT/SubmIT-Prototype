@@ -66,8 +66,7 @@ public class AssessmentRubricController {
             @ApiResponse(responseCode = "404", description = "Project or selected rubric version does not exist.",
                     content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))),
             @ApiResponse(responseCode = "409",
-                    description = "Selected rubric is ineffective, a used phase cannot be cleared, or a required "
-                            + "transition reason is missing.",
+                    description = "Selected rubric is ineffective, or a used phase cannot be cleared.",
                     content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
     })
     public AssessmentRubricResponse put(@AuthenticationPrincipal AuthenticatedUser caller,

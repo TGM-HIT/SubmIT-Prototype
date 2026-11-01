@@ -497,6 +497,47 @@ class GradingWriteAuthorizationApiTest {
     }
 
     @Test
+    void serializedFinalRevisionInheritsPhaseVersionStudentAndCriterionFromItsSource() throws Exception {
+        UUID finalRubricId = publishRubricWithDifferentStudentScale(
+                "inherited-final-revision-" + UUID.randomUUID());
+        request(put("/api/projects/{projectId}/assessment-rubrics", projectId), teacherToken,
+                Map.of("routineRubricId", rubricId, "finalRubricId", finalRubricId))
+                .andExpect(status().isOk());
+        JsonNode original = body(request(post("/api/projects/{projectId}/student-grades", projectId),
+                teacherToken, Map.of("rubricId", finalRubricId, "assessmentType", "FINAL",
+                        "studentId", studentId, "criterionId", "individual", "grade", 8))
+                .andExpect(status().isCreated()).andReturn());
+
+        JsonNode revision = body(request(
+                post("/api/projects/{projectId}/student-grades/{gradeId}/revisions",
+                        projectId, text(original, "id")),
+                teacherToken, Map.of("reason", "Rechecked final evidence", "grade", 6))
+                .andExpect(status().isCreated()).andReturn());
+        assertEquals("FINAL", text(revision, "assessmentType"));
+        assertEquals(finalRubricId.toString(), text(revision, "rubricId"));
+        assertEquals(text(original, "rubricVersion"), text(revision, "rubricVersion"));
+        assertEquals(text(original, "studentId"), text(revision, "studentId"));
+        assertEquals(text(original, "criterionId"), text(revision, "criterionId"));
+        assertEquals(text(original, "categoryId"), text(revision, "categoryId"));
+        assertEquals(text(original, "id"), text(revision, "supersedesId"));
+        assertEquals("Rechecked final evidence", text(revision, "reason"));
+        assertNumber(revision, "grade", 6);
+
+        JsonNode persisted = body(mockMvc.perform(bearer(
+                        get("/api/projects/{projectId}/student-grades", projectId), teacherToken)
+                        .param("studentId", studentId).param("assessmentType", "FINAL")
+                        .param("rubricId", finalRubricId.toString()))
+                .andExpect(status().isOk()).andReturn());
+        JsonNode storedRevision = findById(array(persisted, "content"), text(revision, "id"));
+        assertEquals("FINAL", text(storedRevision, "assessmentType"));
+        assertEquals(finalRubricId.toString(), text(storedRevision, "rubricId"));
+        assertEquals(studentId, text(storedRevision, "studentId"));
+        assertEquals("individual", text(storedRevision, "criterionId"));
+        assertEquals(text(original, "id"), text(storedRevision, "supersedesId"));
+        assertEquals("SUPERSEDED", text(findById(array(persisted, "content"), text(original, "id")), "status"));
+    }
+
+    @Test
     void configuredRuleRejectsOverlappingFinalStudentAndRoutineGroupCriterionIds() throws Exception {
         UUID finalRubricId = publishRubricWithDifferentStudentScale(
                 "overlapping-rule-final-" + UUID.randomUUID());

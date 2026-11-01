@@ -5,7 +5,8 @@
     <div class="grid grid-2">
       <div class="field">
         <label class="label" for="criterion-assessment-mode">{{ $t('grading.criteria.mode') }}</label>
-        <select id="criterion-assessment-mode" ref="phaseSelect" class="select" :value="phase" :disabled="saving"
+        <select id="criterion-assessment-mode" ref="phaseSelect" class="select" :value="phase"
+          :disabled="saving || disabled"
           @change="changePhase(($event.target as HTMLSelectElement).value as AssessmentPhase)">
           <option value="ROUTINE">{{ $t('grading.criteria.routine') }}</option>
           <option value="FINAL">{{ $t('grading.criteria.final') }}</option>
@@ -14,7 +15,7 @@
       <div class="field">
         <label class="label" for="criterion-assessment-student">{{ $t('grading.criteria.student') }}</label>
         <select id="criterion-assessment-student" ref="studentSelect" class="select" :value="studentId"
-          :disabled="saving || membersLoading || !members.length"
+          :disabled="saving || disabled || membersLoading || !members.length"
           @change="changeStudent(($event.target as HTMLSelectElement).value)">
           <option value="">{{ $t('grading.criteria.chooseStudent') }}</option>
           <option v-for="member in members" :key="member.studentId" :value="member.studentId">
@@ -27,7 +28,7 @@
     <p v-if="membersLoading" class="notice" role="status">{{ $t('grading.criteria.loadingMembers') }}</p>
     <div v-if="memberError" class="error-box" role="alert">
       <p>{{ memberError }}</p>
-      <button class="button button-secondary" type="button" :disabled="membersLoading || saving"
+      <button class="button button-secondary" type="button" :disabled="membersLoading || saving || disabled"
         @click="emit('retryMembers')">{{ $t('grading.criteria.retry') }}</button>
     </div>
     <p v-if="!membersLoading && !memberError && !members.length" class="notice" role="status">
@@ -36,7 +37,7 @@
     <p v-if="loading" class="notice" role="status">{{ $t('grading.criteria.loading') }}</p>
     <div v-if="loadError" class="error-box" role="alert">
       <p>{{ loadError }}</p>
-      <button class="button button-secondary" type="button" :disabled="loading || saving" @click="loadRows">
+      <button class="button button-secondary" type="button" :disabled="loading || saving || disabled" @click="loadRows">
         {{ $t('grading.criteria.retry') }}
       </button>
     </div>
@@ -73,13 +74,27 @@
                   <label class="label" :for="`criterion-${row.criterion.id}-grade`">
                     {{ $t('gradingFields.grade') }}
                   </label>
-                  <select :id="`criterion-${row.criterion.id}-grade`" v-model="row.grade" class="select"
-                      :disabled="saving || ambiguous || disabled" :aria-invalid="Boolean(rowErrors[row.criterion.id])">
+                  <select v-if="!usesNumericScale(row.criterion)" :id="`criterion-${row.criterion.id}-grade`"
+                    v-model="row.grade" class="select" :disabled="saving || ambiguous || disabled"
+                    :aria-invalid="Boolean(rowErrors[row.criterion.id])">
                     <option value="">{{ $t('gradingFields.selectValue') }}</option>
                     <option v-for="option in gradeOptions(row.criterion)" :key="option.value" :value="option.value">
                       {{ option.label }}
                     </option>
                   </select>
+                  <template v-else>
+                    <input :id="`criterion-${row.criterion.id}-grade`" v-model="row.grade" class="input"
+                      type="number" :min="scaleValue(row.criterion, 'min') ?? undefined"
+                      :max="scaleValue(row.criterion, 'max') ?? undefined"
+                      :step="scaleValue(row.criterion, 'step') ?? 1"
+                      :list="`criterion-${row.criterion.id}-grade-labels`"
+                      :disabled="saving || ambiguous || disabled"
+                      :aria-invalid="Boolean(rowErrors[row.criterion.id])" />
+                    <datalist :id="`criterion-${row.criterion.id}-grade-labels`">
+                      <option v-for="option in scaleLabelOptions(row.criterion)" :key="option.value"
+                        :value="option.value" :label="option.label" />
+                    </datalist>
+                  </template>
                 </div>
                 <div class="field">
                   <label class="label" :for="`criterion-${row.criterion.id}-date`">
@@ -120,7 +135,7 @@
         </template>
       </div>
       <div v-if="!disabled" class="toolbar">
-        <button class="button button-secondary" type="button" :disabled="saving" @click="cancelDraft">
+        <button class="button button-secondary" type="button" :disabled="saving || disabled" @click="cancelDraft">
           {{ $t('grading.criteria.cancel') }}
         </button>
         <button class="button" type="button" :disabled="saving || ambiguous || !criteria.length" @click="save">
@@ -178,6 +193,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   dirtyChange: [value: boolean]
   savingChange: [value: boolean]
+  confirmedWrite: [context: { projectId: string; studentId: string; phase: AssessmentPhase; rubricId: string }]
   retryMembers: []
 }>()
 const phase = ref<AssessmentPhase>('ROUTINE')
@@ -196,6 +212,7 @@ const studentSelect = ref<HTMLSelectElement | null>(null)
 const phaseSelect = ref<HTMLSelectElement | null>(null)
 const resultSummary = ref<HTMLElement | null>(null)
 let loadVersion = 0
+let writeGeneration = 0
 let alive = true
 const rubric = computed(() => phase.value === 'ROUTINE' ? props.routineRubric : props.finalRubric)
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -221,6 +238,7 @@ const dirty = computed(() => rows.value.some((row) => row.confirmed
 watch(dirty, (value) => emit('dirtyChange', value), { immediate: true })
 watch(saving, (value) => emit('savingChange', value), { immediate: true })
 watch(() => [props.projectId, props.routineRubric?.id, props.finalRubric?.id], () => {
+  ++writeGeneration
   ++loadVersion
   loading.value = false
   studentId.value = ''
@@ -230,15 +248,19 @@ watch(() => [props.projectId, props.routineRubric?.id, props.finalRubric?.id], (
   ambiguous.value = false
   conflictPending.value = false
   resultMessage.value = ''
-})
+}, { flush: 'sync' })
 watch(() => [props.projectId, studentId.value, phase.value, rubric.value?.id], () => {
+  ++writeGeneration
   ++loadVersion
   if (studentId.value && rubric.value) void loadRows()
   else {
     rows.value = []
     history.value = []
   }
-})
+}, { flush: 'sync' })
+watch(() => props.disabled, (disabled) => {
+  if (disabled) ++writeGeneration
+}, { flush: 'sync' })
 
 function isChanged(row: GradeRow): boolean {
   if (!row.saved) return Boolean(row.grade || row.assessedOn || row.evidence || row.comments)
@@ -275,6 +297,28 @@ function gradeOptions(criterion: Criterion): Array<{ value: string; label: strin
     const valueText = String(value)
     const label = labels[valueText]
     return { value: valueText, label: label ? `${formatNumber(value)} · ${label}` : formatNumber(value) }
+  })
+}
+function usesNumericScale(criterion: Criterion): boolean {
+  const min = scaleValue(criterion, 'min')
+  const max = scaleValue(criterion, 'max')
+  const step = scaleValue(criterion, 'step') ?? 1
+  return min !== null && max !== null && step > 0 && max >= min && (max - min) / step > 500
+}
+function scaleLabelOptions(criterion: Criterion): Array<{ value: string; label: string }> {
+  const raw = (criterion.scale as unknown as { labels?: unknown } | null)?.labels
+  if (!isRecord(raw)) return []
+  const min = scaleValue(criterion, 'min')
+  const max = scaleValue(criterion, 'max')
+  const step = scaleValue(criterion, 'step') ?? 1
+  if (min === null || max === null || step <= 0) return []
+  return Object.entries(raw).flatMap(([value, label]) => {
+    const numeric = Number(value)
+    if (typeof label !== 'string' || !label || !Number.isFinite(numeric)
+      || numeric < min || numeric > max || Math.abs((numeric - min) / step - Math.round((numeric - min) / step)) > 1e-8) {
+      return []
+    }
+    return [{ value: String(numeric), label }]
   })
 }
 function resetRows(): void {
@@ -326,7 +370,7 @@ async function loadRows(): Promise<void> {
   const selectedStudent = studentId.value
   const selectedPhase = phase.value
   const selectedRubric = rubric.value
-  if (!selectedProject || !selectedStudent || !selectedRubric || saving.value) return
+  if (!selectedProject || !selectedStudent || !selectedRubric || saving.value || props.disabled) return
   const version = ++loadVersion
   loading.value = true
   loadError.value = ''
@@ -335,11 +379,14 @@ async function loadRows(): Promise<void> {
   try {
     const result = await loadHistory(selectedProject, selectedStudent, selectedPhase, selectedRubric.id)
     if (!alive || version !== loadVersion || selectedProject !== props.projectId
-      || selectedStudent !== studentId.value || selectedPhase !== phase.value) return
+      || selectedStudent !== studentId.value || selectedPhase !== phase.value
+      || selectedRubric.id !== rubric.value?.id) return
     history.value = result
     resetRows()
   } catch {
-    if (alive && version === loadVersion) {
+    if (alive && version === loadVersion && selectedProject === props.projectId
+      && selectedStudent === studentId.value && selectedPhase === phase.value
+      && selectedRubric.id === rubric.value?.id) {
       rows.value = []
       history.value = []
       loadError.value = String(i18n.global.t('grading.criteria.loadFailed'))
@@ -352,7 +399,7 @@ function confirmDiscard(): boolean {
   return !dirty.value || window.confirm(String(i18n.global.t('grading.criteria.discardConfirm')))
 }
 async function changePhase(value: AssessmentPhase): Promise<void> {
-  if (value === phase.value || saving.value) return
+  if (value === phase.value || saving.value || props.disabled) return
   if (!confirmDiscard()) {
     await nextTick()
     if (phaseSelect.value) phaseSelect.value.value = phase.value
@@ -365,7 +412,7 @@ async function changePhase(value: AssessmentPhase): Promise<void> {
   await nextTick()
 }
 async function changeStudent(value: string): Promise<void> {
-  if (value === studentId.value || saving.value) return
+  if (value === studentId.value || saving.value || props.disabled) return
   if (!confirmDiscard()) {
     await nextTick()
     if (studentSelect.value) studentSelect.value.value = studentId.value
@@ -383,10 +430,7 @@ function validate(rowsToSave: GradeRow[]): boolean {
   for (const row of rows.value) {
     if (row.confirmed) continue
     const gradeProvided = row.grade !== ''
-    const auxiliaryProvided = Boolean(row.assessedOn || row.evidence || row.comments)
-    const changed = phase.value === 'ROUTINE'
-      ? gradeProvided || auxiliaryProvided
-      : isChanged(row) || auxiliaryProvided
+    const changed = rowsToSave.includes(row)
     if (!changed) continue
     if (!gradeProvided) {
       errors[row.criterion.id] = String(i18n.global.t('grading.criteria.gradeRequired'))
@@ -450,7 +494,7 @@ async function focusSummary(): Promise<void> {
   resultSummary.value?.focus()
 }
 async function save(): Promise<void> {
-  if (saving.value || ambiguous.value || !rubric.value) return
+  if (saving.value || ambiguous.value || !rubric.value || props.disabled) return
   const candidates = changedRows()
   if (!candidates.length) {
     resultIsError.value = false
@@ -465,16 +509,31 @@ async function save(): Promise<void> {
     return
   }
   saving.value = true
+  const context = {
+    projectId: props.projectId,
+    studentId: studentId.value,
+    phase: phase.value,
+    rubricId: rubric.value.id,
+  }
+  const generation = ++writeGeneration
+  const contextIsCurrent = () => alive && generation === writeGeneration && !props.disabled
+    && context.projectId === props.projectId && context.studentId === studentId.value
+    && context.phase === phase.value && context.rubricId === rubric.value?.id
   resultMessage.value = ''
   rowErrors.value = {}
   let confirmed = 0
   let failed = false
+  let invalidated = false
   let failureReason = ''
   try {
     for (const row of candidates) {
+      if (!contextIsCurrent()) {
+        invalidated = true
+        break
+      }
       try {
         if (phase.value === 'FINAL' && row.savedGradeId) {
-          await gradingApi.reviseGrade(props.projectId, row.savedGradeId, {
+          await gradingApi.reviseGrade(context.projectId, row.savedGradeId, {
             reason: row.reason.trim(),
             grade: Number(row.grade),
             assessedOn: row.assessedOn || undefined,
@@ -482,7 +541,11 @@ async function save(): Promise<void> {
             comments: row.comments || undefined,
           })
         } else {
-          await gradingApi.recordGrade(props.projectId, body(row))
+          await gradingApi.recordGrade(context.projectId, body(row))
+        }
+        if (!contextIsCurrent()) {
+          invalidated = true
+          break
         }
         row.confirmed = true
         confirmed += 1
@@ -497,11 +560,13 @@ async function save(): Promise<void> {
         break
       }
     }
-    const refreshed = await loadHistory(props.projectId, studentId.value, phase.value, rubric.value.id)
+    if (invalidated || !contextIsCurrent()) return
+    if (confirmed > 0) emit('confirmedWrite', context)
+    const refreshed = await loadHistory(context.projectId, context.studentId, context.phase, context.rubricId)
+    if (!contextIsCurrent()) return
     history.value = refreshed
     if (!failed) {
-      if (phase.value === 'ROUTINE') resetRows()
-      else resetRows()
+      resetRows()
       resultIsError.value = false
       const message = phase.value === 'ROUTINE' ? 'routineSavedCount' : 'finalSavedCount'
       resultMessage.value = String(i18n.global.t(`grading.criteria.${message}`, { count: confirmed }))
@@ -533,12 +598,14 @@ async function save(): Promise<void> {
     resultIsError.value = true
     resultMessage.value = String(i18n.global.t('grading.criteria.ambiguous', { count: confirmed }))
   } finally {
-    saving.value = false
-    await focusSummary()
+    if (alive) {
+      saving.value = false
+      if (!invalidated && contextIsCurrent()) await focusSummary()
+    }
   }
 }
 async function reconcile(): Promise<void> {
-  if (saving.value || !rubric.value) return
+  if (saving.value || !rubric.value || props.disabled) return
   saving.value = true
   try {
     const latest = await loadHistory(props.projectId, studentId.value, phase.value, rubric.value.id)
@@ -602,7 +669,7 @@ async function reconcile(): Promise<void> {
   }
 }
 async function cancelDraft(): Promise<void> {
-  if (saving.value) return
+  if (saving.value || props.disabled) return
   if (dirty.value && !window.confirm(String(i18n.global.t('grading.criteria.discardConfirm')))) return
   if (phase.value === 'ROUTINE') {
     resetRows()
@@ -616,6 +683,7 @@ async function cancelDraft(): Promise<void> {
 }
 onBeforeUnmount(() => {
   alive = false
+  ++writeGeneration
   ++loadVersion
   rows.value = []
   history.value = []

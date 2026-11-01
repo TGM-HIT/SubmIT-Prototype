@@ -765,6 +765,7 @@ const de = {
         requiredFields: 'Erforderliche Felder: version, name, effectiveFrom, finalGradeScale, categories mit Kriterienskalen und Fächern sowie konfigurierte metricDefinitions oder aggregationRules.',
         publish: 'Unveränderliche Version veröffentlichen',
         projectHistory: 'Projektfortschritt und Bewertungsverlauf',
+        historyRefreshFailed: 'Die Kriteriumsbewertungen wurden gespeichert, aber der sichtbare Verlauf konnte nicht aktualisiert werden.',
         projectList: 'Projekt auswählen',
         searchProjects: 'Projekte, Mitglieder, Zeitraum oder Schuljahr durchsuchen',
         search: 'Suchen',

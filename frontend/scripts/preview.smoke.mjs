@@ -13,6 +13,7 @@ import {
   collectBrowserErrors,
   networkReport,
   expectedOfflineRequestErrors,
+  expectedAbsentFinalGradeErrors,
   formatNativeInputFailure,
   parseArgs,
   readSession,
@@ -100,6 +101,37 @@ test('action visibility checks fail clipped or unfocused controls, not just docu
   await applyPageSteps(client, [{ action: 'assert-action-visible', value: 'button' }], { log: () => {} })
 })
 
+test('ordered select-by-key verifies a keyboard-selected enabled option after prior UI setup steps', async () => {
+  const parsed = parseArgs(['--step', 'select-by-key:#criterion-grade=4'])
+  assert.deepEqual(parsed.steps, [{ action: 'select-by-key', selector: '#criterion-grade', value: '4' }])
+
+  let selected = '1'
+  let nativeKeys
+  const client = {
+    async send(method, { expression }) {
+      assert.equal(method, 'Runtime.evaluate')
+      if (expression.includes('const options = Array.from(select.options)')) {
+        return { result: { value: { target: 4, current: 0, bounds: { x: 100, y: 200 } } } }
+      }
+      if (expression === 'document.querySelector("#criterion-grade")?.value') {
+        return { result: { value: selected } }
+      }
+      throw new Error(`Unexpected browser expression: ${expression}`)
+    },
+  }
+  const log = []
+  await applyPageSteps(client, parsed.steps, {
+    headed: true,
+    nativeInput: async (...args) => {
+      nativeKeys = args
+      selected = '4'
+    },
+    log: (message) => log.push(message),
+  })
+  assert.deepEqual(nativeKeys, [{ x: 100, y: 200 }, 40, 4])
+  assert.match(log.join(' '), /Selected "4" in #criterion-grade with the browser keyboard/)
+})
+
 test('G8 optional network evidence includes completion and initiator without authentication or payload data', () => {
   assert.equal(parseArgs(['--network-report']).networkReport, true)
   const errors = []
@@ -126,6 +158,24 @@ test('only reports intentional offline failures for API requests as expected', (
   }]])
   assert.deepEqual(expectedOfflineRequestErrors(errors, [{ action: 'offline' }]), [failure, resourceError])
   assert.deepEqual(expectedOfflineRequestErrors(errors, []), [])
+})
+
+test('only treats an explicit 404 for a project final-grade read as an empty supported result', () => {
+  const url = 'http://localhost/api/projects/27a00000-0000-4000-8000-000000000003/final-grade'
+  const handled = [
+    `request returned HTTP 404: ${url}`,
+    `browser log: Failed to load resource: the server responded with a status of 404 (Not Found) at ${url}:0`,
+    `request returned HTTP 404: http://localhost/api/projects/27a00000-0000-4000-8000-000000000004/student-grades`,
+  ]
+  handled.requests = new Map([
+    ['expected-empty-final', { method: 'GET', url, responseStatus: 404 }],
+    ['unrelated-missing-resource', {
+      method: 'GET',
+      url: 'http://localhost/api/projects/27a00000-0000-4000-8000-000000000004/student-grades',
+      responseStatus: 404,
+    }],
+  ])
+  assert.deepEqual(expectedAbsentFinalGradeErrors(handled), handled.slice(0, 2))
 })
 
 test('measure-overflow reports viewport widths and fails on horizontal document overflow', async () => {

@@ -306,7 +306,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Record a correction or reassessment; the prior entry is retained as superseded. */
+        /** Record a correction or reassessment; phase, rubric, student and criterion remain inherited from the source grade, which is retained as superseded. */
         post: operations["reviseStudentGrade"];
         delete?: never;
         options?: never;
@@ -2299,7 +2299,7 @@ export interface components {
             /** @description Optional comments; at most 4,000 characters. */
             comments?: string;
         };
-        /** @description Reassessment; the original entry is retained as superseded on its original rubric version. */
+        /** @description Reassessment of the source grade; phase, rubric ID/version, student and criterion are inherited from that source and cannot be changed in the request. The source entry is retained as superseded on its original rubric version. */
         GradeRevisionRequest: {
             /** @description Required, non-blank reason for reassessment; at most 2,000 characters. */
             reason: string;
@@ -4118,7 +4118,7 @@ export interface operations {
                     "*/*": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description Selected rubric is ineffective, a used phase cannot be cleared, or a required transition reason is missing. */
+            /** @description Selected rubric is ineffective, or a used phase cannot be cleared. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -5481,7 +5481,7 @@ export interface operations {
     listStudentGrades: {
         parameters: {
             query?: {
-                /** @description Optional teacher filter for a project member's grades; students may omit this or request only their own ID. */
+                /** @description Optional UUID teacher filter for a project member's grades; students may omit this or request only their own ID. */
                 studentId?: string;
                 /** @description Optional exact assessment phase filter; omitted means all phases. */
                 assessmentType?: "ROUTINE" | "FINAL";

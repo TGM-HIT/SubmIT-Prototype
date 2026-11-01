@@ -113,8 +113,9 @@
         <div class="grid grid-2">
           <div class="field">
             <label class="label" for="routine-rubric-selection">{{ $t('grading.rubricSelection.routine') }}</label>
-            <select id="routine-rubric-selection" v-model="routineRubricDraft" class="select"
-              :disabled="rubricSelectionLoading || rubricSaving">
+            <select id="routine-rubric-selection" :value="routineRubricDraft" class="select"
+              :disabled="rubricSelectionLoading || rubricSaving || assessmentSaving"
+              @change="setRoutineRubricDraft($event)">
               <option value="">{{ $t('grading.rubricSelection.unselected') }}</option>
               <option v-for="summary in rubricSummaries" :key="String(summary.id)" :value="summary.id">
                 {{ rubricSummaryLabel(summary) }}
@@ -126,8 +127,9 @@
           </div>
           <div class="field">
             <label class="label" for="final-rubric-selection">{{ $t('grading.rubricSelection.final') }}</label>
-            <select id="final-rubric-selection" v-model="finalRubricDraft" class="select"
-              :disabled="rubricSelectionLoading || rubricSaving">
+            <select id="final-rubric-selection" :value="finalRubricDraft" class="select"
+              :disabled="rubricSelectionLoading || rubricSaving || assessmentSaving"
+              @change="setFinalRubricDraft($event)">
               <option value="">{{ $t('grading.rubricSelection.unselected') }}</option>
               <option v-for="summary in rubricSummaries" :key="String(summary.id)" :value="summary.id">
                 {{ rubricSummaryLabel(summary) }}
@@ -142,7 +144,8 @@
           {{ $t('grading.rubricSelection.noVersions') }}
         </p>
         <div class="toolbar">
-          <button class="button" type="button" :disabled="rubricSaving || rubricSelectionLoading"
+          <button class="button" type="button"
+            :disabled="rubricSaving || rubricSelectionLoading || assessmentSaving"
             @click="saveRubricSelection">
             {{ rubricSaving ? $t('grading.rubricSelection.saving') : $t('grading.rubricSelection.save') }}
           </button>
@@ -152,8 +155,9 @@
       <CriterionAssessmentEditor v-if="projectLoaded && isStaff" :project-id="projectId"
         :routine-rubric="routineRubric" :final-rubric="finalRubric" :members="gradingMembers"
         :members-loading="membersLoading" :members-error="membersError"
-        :disabled="!isTeacher" @dirty-change="assessmentDirty = $event"
+        :disabled="!isTeacher || rubricSelectionLoading || rubricSaving" @dirty-change="assessmentDirty = $event"
         @saving-change="assessmentSaving = $event"
+        @confirmed-write="refreshGradeHistory"
         @retry-members="loadRubricSelection(projectId)" />
       <div v-if="projectLoaded && isTeacher" class="grid grid-2">
         <form class="panel" @submit.prevent="recordGrade(true)">
@@ -172,6 +176,11 @@
         <button v-for="tab in tabs" :key="tab.id" class="tab-button" role="tab" :aria-selected="activeTab === tab.id" @click="activeTab = tab.id">{{ tab.label }}</button>
       </div>
       <div v-if="projectLoaded && activeTab === 'individual'" class="data-list">
+        <div v-if="historyRefreshError" class="error-box" role="alert">
+          <p>{{ historyRefreshError }}</p>
+          <button class="button button-secondary" type="button" :disabled="historyRefreshing"
+            @click="retryGradeHistory">{{ $t('grading.retry') }}</button>
+        </div>
         <article v-for="grade in gradeEntries.content" :key="String(grade.id)" class="data-row"><div class="row-main"><h3>{{ grade.criterionId }} · {{ displayNumber(grade.grade) }} <span class="status-badge">{{ statusLabel(grade.status) }}</span></h3><p>{{ $t('grading.rubric') }} {{ grade.rubricVersion }} · {{ $t('grading.assessed') }} {{ date(grade.assessedOn) }} · {{ $t('grading.category') }} {{ grade.categoryId }}</p><p>{{ grade.evidence || grade.comments || $t('grading.noEvidence') }}</p><p v-if="grade.reason" class="muted">{{ $t('grading.revision') }} {{ grade.reason }}</p></div>        <span v-if="!auth.user?.roles.includes('STUDENT')">{{ grade.studentDisplayName || $t('grading.unknownStudent') }} · {{ $t('grading.class') }} {{ grade.className || $t('grading.notAssigned') }} · {{ $t('grading.electiveSubjects') }} {{ stringList(grade.electiveSubjectNames).join(', ') || $t('grading.none') }}</span></article>
         <p v-if="!gradeEntries.content.length" class="empty">{{ $t('grading.noIndividual') }}</p>
       </div>
@@ -271,6 +280,14 @@ const membersLoading = ref(false)
 const membersError = ref('')
 const assessmentDirty = ref(false)
 const assessmentSaving = ref(false)
+const historyRefreshError = ref('')
+const historyRefreshing = ref(false)
+const historyContext = ref<{
+  projectId: string
+  studentId: string
+  phase: 'ROUTINE' | 'FINAL'
+  rubricId: string
+} | null>(null)
 const projectId = ref('')
 const selectedContext = ref('')
 const projectLoaded = ref(false)
@@ -295,6 +312,7 @@ const teacherResultButtons = new Map<string, HTMLButtonElement>()
 let teacherListVersion = 0
 let studentListVersion = 0
 let projectLoadVersion = 0
+let historyRefreshVersion = 0
 let mounted = false
 const activeTab = ref('individual')
 const tabs = computed(() => [
@@ -371,6 +389,9 @@ function teacherResultLabel(project: TeacherProject): string {
   return `${project.projectTitle} — ${period}`
 }
 function clearProjectData(preserveSuccess = false): void {
+  ++historyRefreshVersion
+  historyRefreshError.value = ''
+  historyContext.value = null
   projectLoaded.value = false
   gradeEntries.value = emptyPage()
   groupEntries.value = emptyPage()
@@ -406,7 +427,7 @@ function resetProjectDrafts(): void {
   Object.assign(studentFinalForm, { studentId: '', ruleId: '', grade: 0, rationale: '' })
 }
 async function loadRubricSelection(forProject = projectId.value): Promise<void> {
-  if (!forProject) return
+  if (!forProject || assessmentSaving.value) return
   rubricSelectionLoading.value = true
   rubricSelectionError.value = ''
   membersLoading.value = isStaff.value
@@ -459,7 +480,8 @@ async function loadRubricSelection(forProject = projectId.value): Promise<void> 
   }
 }
 async function saveRubricSelection(): Promise<void> {
-  if (!projectLoaded.value || !projectId.value || !isTeacher.value || rubricSaving.value) return
+  if (!projectLoaded.value || !projectId.value || !isTeacher.value || rubricSaving.value
+    || rubricSelectionLoading.value || assessmentSaving.value) return
   if (assessmentDirty.value && !window.confirm(String(i18n.global.t('grading.criteria.discardConfirm')))) return
   rubricSaving.value = true
   rubricSaveMessage.value = ''
@@ -482,6 +504,52 @@ async function saveRubricSelection(): Promise<void> {
   } finally {
     rubricSaving.value = false
   }
+}
+function setRoutineRubricDraft(event: Event): void {
+  const control = event.target as HTMLSelectElement
+  if (rubricSaving.value || rubricSelectionLoading.value || assessmentSaving.value) {
+    control.value = routineRubricDraft.value
+    return
+  }
+  routineRubricDraft.value = control.value
+}
+function setFinalRubricDraft(event: Event): void {
+  const control = event.target as HTMLSelectElement
+  if (rubricSaving.value || rubricSelectionLoading.value || assessmentSaving.value) {
+    control.value = finalRubricDraft.value
+    return
+  }
+  finalRubricDraft.value = control.value
+}
+async function refreshGradeHistory(context: {
+  projectId: string
+  studentId: string
+  phase: 'ROUTINE' | 'FINAL'
+  rubricId: string
+}): Promise<void> {
+  historyContext.value = context
+  const version = ++historyRefreshVersion
+  const accountId = auth.user?.id
+  const roles = auth.user?.roles.join(',') ?? ''
+  historyRefreshError.value = ''
+  historyRefreshing.value = true
+  try {
+    const refreshed = await gradingApi.grades(context.projectId)
+    if (version !== historyRefreshVersion || context.projectId !== projectId.value
+      || accountId !== auth.user?.id || roles !== (auth.user?.roles.join(',') ?? '')
+      || !projectLoaded.value) return
+    gradeEntries.value = refreshed
+  } catch {
+    if (version === historyRefreshVersion && context.projectId === projectId.value
+      && accountId === auth.user?.id && roles === (auth.user?.roles.join(',') ?? '')) {
+      historyRefreshError.value = String(i18n.global.t('grading.historyRefreshFailed'))
+    }
+  } finally {
+    if (version === historyRefreshVersion) historyRefreshing.value = false
+  }
+}
+async function retryGradeHistory(): Promise<void> {
+  if (historyContext.value) await refreshGradeHistory(historyContext.value)
 }
 async function loadProject(): Promise<void> {
   const selectedProjectId = projectId.value

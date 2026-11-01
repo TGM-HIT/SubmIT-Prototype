@@ -7,6 +7,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static at.ac.tgm.submit.grading.TestingGradingSelectionPreviewConfiguration.OTHER_TEACHER_FINAL_CRITERION_GRADE_ID;
+import static at.ac.tgm.submit.grading.TestingGradingSelectionPreviewConfiguration.TEACHER_FINAL_CRITERION_GRADE_ID;
+import static at.ac.tgm.submit.grading.TestingGradingSelectionPreviewConfiguration.TEACHER_GROUP_GRADE_ID;
+import static at.ac.tgm.submit.grading.TestingGradingSelectionPreviewConfiguration.TEACHER_METRIC_ID;
+import static at.ac.tgm.submit.grading.TestingGradingSelectionPreviewConfiguration.TEST_METRIC_ID;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -16,6 +21,8 @@ import at.ac.tgm.submit.data.StoredRecordRepository;
 import at.ac.tgm.submit.user.UserAccountRepository;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 import java.util.TreeMap;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
@@ -60,6 +67,7 @@ class TestingGradingSelectionPreviewFixtureTest {
 
     @Test
     void createsTwoTeacherAndStudentReachableFinalizedProjectsWithDistinctGradingHistories() throws Exception {
+        assertEquals(32, users.count(), "The opt-in grading preview preserves the testing account inventory.");
         UUID firstId = TestingGradingSelectionPreviewConfiguration.TEACHER_PROJECT_ID;
         UUID secondId = TestingGradingSelectionPreviewConfiguration.OTHER_TEACHER_PROJECT_ID;
         JsonNode defaultTeacherList = json(mockMvc.perform(get("/api/formal-applications")
@@ -75,6 +83,12 @@ class TestingGradingSelectionPreviewFixtureTest {
         assertEquals(List.of("Noah Bennett", "Emily Carter", "Sofia Ramirez"),
                 textList(firstSummary.path("studentNames")));
         assertFalse(hasSummary(defaultTeacherList, secondId));
+        JsonNode setupSummary = summaryFor(defaultTeacherList,
+                TestingGradingSelectionPreviewConfiguration.SETUP_PROJECT_ID);
+        assertEquals(TestingGradingSelectionPreviewConfiguration.SETUP_PROJECT_TITLE,
+                setupSummary.path("projectTitle").asText());
+        assertEquals(List.of(users.findByUsername("student06").orElseThrow().getDisplayName()),
+                textList(setupSummary.path("studentNames")));
 
         JsonNode allTeacherList = json(mockMvc.perform(get("/api/formal-applications")
                         .header("Authorization", bearer(teacherOneToken)).param("supervisedOnly", "false")
@@ -109,6 +123,22 @@ class TestingGradingSelectionPreviewFixtureTest {
                 .andExpect(status().isOk()).andReturn());
         assertEquals(TestingGradingSelectionPreviewConfiguration.FINAL_PREVIEW_RUBRIC_ID.toString(),
                 firstSelections.path("finalRubricId").asText());
+        JsonNode setupSelections = json(mockMvc.perform(get("/api/projects/{projectId}/assessment-rubrics",
+                        TestingGradingSelectionPreviewConfiguration.SETUP_PROJECT_ID)
+                        .header("Authorization", bearer(teacherOneToken)))
+                .andExpect(status().isOk()).andReturn());
+        assertEquals(store.page(GradingKeys.RUBRIC, null, null, Pageable.unpaged()).getContent().stream()
+                .filter(record -> "dev55-draft-testing-v1".equals(store.parse(record).path(GradingKeys.VERSION).asText()))
+                .findFirst().orElseThrow().getId().toString(), setupSelections.path("routineRubricId").asText());
+        assertTrue(setupSelections.path("finalRubricId").isNull(),
+                "The setup project intentionally has an unused, unselected final phase.");
+        JsonNode setupMembers = json(mockMvc.perform(get("/api/projects/{projectId}/grading-members",
+                        TestingGradingSelectionPreviewConfiguration.SETUP_PROJECT_ID)
+                        .header("Authorization", bearer(teacherOneToken)))
+                .andExpect(status().isOk()).andReturn());
+        assertEquals(1, setupMembers.size());
+        assertEquals("student06", users.findById(UUID.fromString(setupMembers.get(0).path("studentId").asText()))
+                .orElseThrow().getUsername());
         JsonNode firstMembers = json(mockMvc.perform(get("/api/projects/{projectId}/grading-members", firstId)
                         .header("Authorization", bearer(teacherOneToken)))
                 .andExpect(status().isOk()).andReturn());
@@ -163,6 +193,22 @@ class TestingGradingSelectionPreviewFixtureTest {
                 .andExpect(status().isOk()).andReturn());
         assertEquals(4, firstFinal.path("current").path("grade").asInt());
         assertEquals("River Lab project final grade.", firstFinal.path("current").path("rationale").asText());
+        JsonNode projectInputs = firstFinal.path("current").path("inputs");
+        assertEquals(Set.of("studentGrades", "groupGrades", "metrics"), fieldNames(projectInputs));
+        assertTrue(projectInputs.path("studentGrades").isArray());
+        assertTrue(projectInputs.path("groupGrades").isArray());
+        assertTrue(projectInputs.path("metrics").isArray());
+        assertEquals(TestingGradingSelectionPreviewConfiguration.FINAL_PREVIEW_RUBRIC_ID.toString(),
+                firstFinal.path("current").path("rubricId").asText());
+        assertEquals(0, projectInputs.path("studentGrades").size());
+        assertEquals(TEACHER_GROUP_GRADE_ID.toString(),
+                projectInputs.path("groupGrades").get(0).path("id").asText());
+        assertEquals("ROUTINE", projectInputs.path("groupGrades").get(0).path("assessmentType").asText());
+        assertEquals(teacherRoutineRubricId(), projectInputs.path("groupGrades").get(0).path("rubricId").asText());
+        assertEquals(TEACHER_METRIC_ID.toString(), projectInputs.path("metrics").get(0).path("id").asText());
+        assertEquals(teacherRoutineRubricId(), projectInputs.path("metrics").get(0).path("rubricId").asText());
+        assertEquals(1, projectInputs.path("groupGrades").size());
+        assertEquals(1, projectInputs.path("metrics").size());
         assertEquals(3, secondFinal.path("current").path("grade").asInt());
         assertEquals("Wind Garden project final grade.", secondFinal.path("current").path("rationale").asText());
 
@@ -173,8 +219,35 @@ class TestingGradingSelectionPreviewFixtureTest {
                             .header("Authorization", bearer(studentToken)))
                     .andExpect(status().isOk()).andReturn());
             assertTrue(studentFinal.path("current").has("grade"));
+            JsonNode inputs = studentFinal.path("current").path("inputs");
+            assertEquals(Set.of("studentGrades", "groupGrades", "metrics"), fieldNames(inputs));
+            assertTrue(inputs.path("studentGrades").isArray());
+            assertTrue(inputs.path("groupGrades").isArray());
+            assertTrue(inputs.path("metrics").isArray());
+            assertEquals(1, inputs.path("studentGrades").size());
+            assertEquals(1, inputs.path("groupGrades").size());
+            assertEquals(1, inputs.path("metrics").size());
+            assertEquals("FINAL", inputs.path("studentGrades").get(0).path("assessmentType").asText());
+            assertEquals(TestingGradingSelectionPreviewConfiguration.FINAL_PREVIEW_RUBRIC_ID.toString(),
+                    inputs.path("studentGrades").get(0).path("rubricId").asText());
+            assertTrue(Set.of(TestingGradingSelectionPreviewConfiguration.TEACHER_FINAL_CRITERION_GRADE_ID.toString(),
+                    TestingGradingSelectionPreviewConfiguration.OTHER_TEACHER_FINAL_CRITERION_GRADE_ID.toString())
+                    .contains(inputs.path("studentGrades").get(0).path("id").asText()));
+            assertEquals("ROUTINE", inputs.path("groupGrades").get(0).path("assessmentType").asText());
+            assertEquals("dev55-draft-testing-v1", inputs.path("groupGrades").get(0).path("rubricVersion").asText());
+            assertEquals(teacherRoutineRubricId(), inputs.path("groupGrades").get(0).path("rubricId").asText());
+            assertEquals(TestingGradingSelectionPreviewConfiguration.TEST_METRIC_ID,
+                    inputs.path("metrics").get(0).path("metricId").asText());
+            assertEquals(teacherRoutineRubricId(), inputs.path("metrics").get(0).path("rubricId").asText());
         }
+
         assertRepeatInitializationDoesNotDuplicateRecords();
+    }
+
+    private String teacherRoutineRubricId() {
+        return store.page(GradingKeys.RUBRIC, null, null, Pageable.unpaged()).getContent().stream()
+                .filter(record -> "dev55-draft-testing-v1".equals(store.parse(record).path(GradingKeys.VERSION).asText()))
+                .findFirst().orElseThrow().getId().toString();
     }
 
     @Test
@@ -300,6 +373,13 @@ class TestingGradingSelectionPreviewFixtureTest {
 
     private List<String> textList(JsonNode values) {
         return values.valueStream().map(JsonNode::asText).toList();
+    }
+
+    private static Set<String> fieldNames(JsonNode object) {
+        assertTrue(object.isObject());
+        Set<String> names = new TreeSet<>();
+        object.fieldNames().forEachRemaining(names::add);
+        return names;
     }
 
     private String login(String username) throws Exception {

@@ -59,39 +59,49 @@ public class TestingGradingSelectionPreviewConfiguration {
     public static final String PROPERTY = "DADB_TESTING_GRADING_SELECTION_PREVIEW";
     public static final UUID TEACHER_PROJECT_ID = UUID.fromString("27a00000-0000-4000-8000-000000000001");
     public static final UUID OTHER_TEACHER_PROJECT_ID = UUID.fromString("27a00000-0000-4000-8000-000000000002");
+    public static final UUID SETUP_PROJECT_ID = UUID.fromString("27a00000-0000-4000-8000-000000000003");
     public static final UUID FINAL_PREVIEW_RUBRIC_ID = UUID.fromString("27f00000-0000-4000-8000-000000000003");
     public static final String FINAL_PREVIEW_RUBRIC_NAME = "Grading Selection Preview — Final Rubric";
     public static final UUID TEACHER_PERIOD_ID = UUID.fromString("27b00000-0000-4000-8000-000000000001");
     public static final UUID OTHER_TEACHER_PERIOD_ID = UUID.fromString("27b00000-0000-4000-8000-000000000002");
+    public static final UUID SETUP_PERIOD_ID = UUID.fromString("27b00000-0000-4000-8000-000000000003");
     public static final String TEACHER_PROJECT_TITLE = "Grading Selection Preview — River Lab";
     public static final String OTHER_TEACHER_PROJECT_TITLE = "Grading Selection Preview — Wind Garden";
     public static final String TEACHER_PERIOD_LABEL = "River Lab Finalized Period";
     public static final String OTHER_TEACHER_PERIOD_LABEL = "Wind Garden Finalized Period";
+    public static final String SETUP_PROJECT_TITLE = "Grading Selection Preview — Setup State";
+    public static final String SETUP_PERIOD_LABEL = "Setup State Finalized Period";
+    static final UUID TEACHER_INDIVIDUAL_GRADE_ID = UUID.fromString("27f20000-0000-4000-8000-000000000001");
+    static final UUID OTHER_TEACHER_INDIVIDUAL_GRADE_ID =
+            UUID.fromString("27f20000-0000-4000-8000-000000000003");
+    static final UUID TEACHER_FINAL_CRITERION_GRADE_ID =
+            UUID.fromString("27f20000-0000-4000-8000-000000000004");
+    static final UUID OTHER_TEACHER_FINAL_CRITERION_GRADE_ID =
+            UUID.fromString("27f20000-0000-4000-8000-000000000005");
+    static final UUID TEACHER_GROUP_GRADE_ID = UUID.fromString("27f30000-0000-4000-8000-000000000001");
+    static final UUID OTHER_TEACHER_GROUP_GRADE_ID =
+            UUID.fromString("27f30000-0000-4000-8000-000000000002");
+    static final UUID TEACHER_METRIC_ID = UUID.fromString("27f40000-0000-4000-8000-000000000001");
+    static final UUID OTHER_TEACHER_METRIC_ID = UUID.fromString("27f40000-0000-4000-8000-000000000002");
+    static final String TEST_METRIC_ID = "testing-supplemental-observation";
     private static final UUID TEACHER_RUN_ID = UUID.fromString("27c00000-0000-4000-8000-000000000001");
     private static final UUID OTHER_TEACHER_RUN_ID = UUID.fromString("27c00000-0000-4000-8000-000000000002");
+    private static final UUID SETUP_RUN_ID = UUID.fromString("27c00000-0000-4000-8000-000000000003");
     private static final UUID TEACHER_PROPOSAL_ID = UUID.fromString("27d00000-0000-4000-8000-000000000001");
     private static final UUID OTHER_TEACHER_PROPOSAL_ID = UUID.fromString("27d00000-0000-4000-8000-000000000002");
+    private static final UUID SETUP_PROPOSAL_ID = UUID.fromString("27d00000-0000-4000-8000-000000000003");
     private static final UUID TEACHER_GROUP_ID = UUID.fromString("27e00000-0000-4000-8000-000000000001");
     private static final UUID OTHER_TEACHER_GROUP_ID = UUID.fromString("27e00000-0000-4000-8000-000000000002");
+    private static final UUID SETUP_GROUP_ID = UUID.fromString("27e00000-0000-4000-8000-000000000003");
     private static final UUID TEACHER_SUPERVISOR_ID = UUID.fromString("27f00000-0000-4000-8000-000000000001");
     private static final UUID OTHER_TEACHER_SUPERVISOR_ID = UUID.fromString("27f00000-0000-4000-8000-000000000002");
+    private static final UUID SETUP_SUPERVISOR_ID = UUID.fromString("27f00000-0000-4000-8000-000000000004");
     private static final UUID TEACHER_BINDING_ID = UUID.fromString("27f10000-0000-4000-8000-000000000001");
     private static final UUID OTHER_TEACHER_BINDING_ID = UUID.fromString("27f10000-0000-4000-8000-000000000002");
     private static final UUID TEACHER_FINAL_BINDING_ID = UUID.fromString("27f10000-0000-4000-8000-000000000003");
     private static final UUID OTHER_TEACHER_FINAL_BINDING_ID = UUID.fromString("27f10000-0000-4000-8000-000000000004");
-    private static final UUID TEACHER_INDIVIDUAL_GRADE_ID = UUID.fromString("27f20000-0000-4000-8000-000000000001");
+    private static final UUID SETUP_BINDING_ID = UUID.fromString("27f10000-0000-4000-8000-000000000005");
     private static final UUID TEACHER_SENTINEL_GRADE_ID = UUID.fromString("27f20000-0000-4000-8000-000000000002");
-    private static final UUID OTHER_TEACHER_INDIVIDUAL_GRADE_ID =
-            UUID.fromString("27f20000-0000-4000-8000-000000000003");
-    private static final UUID TEACHER_FINAL_CRITERION_GRADE_ID =
-            UUID.fromString("27f20000-0000-4000-8000-000000000004");
-    private static final UUID OTHER_TEACHER_FINAL_CRITERION_GRADE_ID =
-            UUID.fromString("27f20000-0000-4000-8000-000000000005");
-    private static final UUID TEACHER_GROUP_GRADE_ID = UUID.fromString("27f30000-0000-4000-8000-000000000001");
-    private static final UUID OTHER_TEACHER_GROUP_GRADE_ID =
-            UUID.fromString("27f30000-0000-4000-8000-000000000002");
-    private static final UUID TEACHER_METRIC_ID = UUID.fromString("27f40000-0000-4000-8000-000000000001");
-    private static final UUID OTHER_TEACHER_METRIC_ID = UUID.fromString("27f40000-0000-4000-8000-000000000002");
     private static final UUID TEACHER_PROJECT_FINAL_ID = UUID.fromString("27f50000-0000-4000-8000-000000000001");
     private static final UUID TEACHER_STUDENT_FINAL_ID = UUID.fromString("27f50000-0000-4000-8000-000000000002");
     private static final UUID OTHER_TEACHER_PROJECT_FINAL_ID =
@@ -101,7 +111,7 @@ public class TestingGradingSelectionPreviewConfiguration {
     private static final String TESTING_RUBRIC_VERSION = "dev55-draft-testing-v1";
     private static final String FINAL_PREVIEW_RUBRIC_VERSION = "grading-selection-preview-final-v1";
     private static final String TEST_CRITERION_ID = "a1-01";
-    private static final String TEST_METRIC_ID = "testing-supplemental-observation";
+    private static final String ACADEMIC_YEAR = "2026/2027";
     private static final String FIXTURE_TIMESTAMP = "2026-10-27T12:00:00Z";
     private static final String FIXTURE_DATE = "2026-10-26";
     private static final int RIVER_INDIVIDUAL_GRADE = 4;
@@ -145,6 +155,7 @@ public class TestingGradingSelectionPreviewConfiguration {
             UserAccount studentThree = account("student03");
             UserAccount studentFour = account("student04");
             UserAccount studentFive = account("student05");
+            UserAccount studentSix = account("student06");
             StoredRecord rubric = rubric();
             String rubricId = rubric.getId().toString();
             String rubricVersion = store.parse(rubric).path(VERSION).asText();
@@ -155,26 +166,33 @@ public class TestingGradingSelectionPreviewConfiguration {
             String finalRubricId = finalRubric.getId().toString();
             String finalRubricVersion = store.parse(finalRubric).path(VERSION).asText();
 
-            seedProject(TEACHER_PROJECT_ID, TEACHER_PROJECT_TITLE, "2026/2027", studentTwo);
+            seedProject(TEACHER_PROJECT_ID, TEACHER_PROJECT_TITLE, ACADEMIC_YEAR, studentTwo);
             seedProject(OTHER_TEACHER_PROJECT_ID, OTHER_TEACHER_PROJECT_TITLE, "2027/2028", studentOne);
-            seedPeriod(new PeriodSeed(TEACHER_PERIOD_ID, TEACHER_PERIOD_LABEL, "2026/2027",
+            seedProject(SETUP_PROJECT_ID, SETUP_PROJECT_TITLE, ACADEMIC_YEAR, studentSix);
+            seedPeriod(new PeriodSeed(TEACHER_PERIOD_ID, TEACHER_PERIOD_LABEL, ACADEMIC_YEAR,
                     TEACHER_PROJECT_ID, adminId));
             seedPeriod(new PeriodSeed(OTHER_TEACHER_PERIOD_ID, OTHER_TEACHER_PERIOD_LABEL, "2027/2028",
                     OTHER_TEACHER_PROJECT_ID, adminId));
+            seedPeriod(new PeriodSeed(SETUP_PERIOD_ID, SETUP_PERIOD_LABEL, ACADEMIC_YEAR, SETUP_PROJECT_ID, adminId));
             seedRun(TEACHER_RUN_ID, TEACHER_PERIOD_ID, TEACHER_PROJECT_ID,
                     List.of(studentTwo, studentOne, studentThree), adminId);
             seedRun(OTHER_TEACHER_RUN_ID, OTHER_TEACHER_PERIOD_ID, OTHER_TEACHER_PROJECT_ID,
                     List.of(studentOne, studentFour, studentFive), adminId);
+            seedRun(SETUP_RUN_ID, SETUP_PERIOD_ID, SETUP_PROJECT_ID, List.of(studentSix), adminId);
             seedGroup(new GroupSeed(TEACHER_GROUP_ID, TEACHER_PROJECT_ID, TEACHER_PERIOD_ID, TEACHER_RUN_ID,
                     List.of(studentTwo, studentOne, studentThree), adminId));
             seedGroup(new GroupSeed(OTHER_TEACHER_GROUP_ID, OTHER_TEACHER_PROJECT_ID, OTHER_TEACHER_PERIOD_ID,
                     OTHER_TEACHER_RUN_ID, List.of(studentOne, studentFour, studentFive), adminId));
+            seedGroup(new GroupSeed(SETUP_GROUP_ID, SETUP_PROJECT_ID, SETUP_PERIOD_ID, SETUP_RUN_ID,
+                    List.of(studentSix), adminId));
             seedSupervisor(TEACHER_SUPERVISOR_ID, TEACHER_PROJECT_ID, teacherOne, adminId);
             seedSupervisor(OTHER_TEACHER_SUPERVISOR_ID, OTHER_TEACHER_PROJECT_ID, teacherTwo, adminId);
+            seedSupervisor(SETUP_SUPERVISOR_ID, SETUP_PROJECT_ID, teacherOne, adminId);
             seedProposal(TEACHER_PROPOSAL_ID, TEACHER_PROJECT_ID,
                     List.of(studentTwo, studentOne, studentThree));
             seedProposal(OTHER_TEACHER_PROPOSAL_ID, OTHER_TEACHER_PROJECT_ID,
                     List.of(studentOne, studentFour, studentFive));
+            seedProposal(SETUP_PROPOSAL_ID, SETUP_PROJECT_ID, List.of(studentSix));
             seedBinding(TEACHER_BINDING_ID, TEACHER_PROJECT_ID, rubricId, teacherOne, AssessmentType.ROUTINE);
             seedBinding(OTHER_TEACHER_BINDING_ID, OTHER_TEACHER_PROJECT_ID, rubricId, teacherTwo,
                     AssessmentType.ROUTINE);
@@ -182,6 +200,7 @@ public class TestingGradingSelectionPreviewConfiguration {
                     AssessmentType.FINAL);
             seedBinding(OTHER_TEACHER_FINAL_BINDING_ID, OTHER_TEACHER_PROJECT_ID, finalRubricId, teacherTwo,
                     AssessmentType.FINAL);
+            seedBinding(SETUP_BINDING_ID, SETUP_PROJECT_ID, rubricId, teacherOne, AssessmentType.ROUTINE);
 
             seedAssessment(new AssessmentSeed(TEACHER_INDIVIDUAL_GRADE_ID, STUDENT_GRADE, TEACHER_PROJECT_ID,
                     studentOne, rubricId, rubricVersion, teacherOne, "Individual analysis",
@@ -213,16 +232,20 @@ public class TestingGradingSelectionPreviewConfiguration {
                     teacherTwo, "Wind Garden metric observation", WIND_METRIC_VALUE));
             seedFinalGrade(new FinalGradeSeed(TEACHER_PROJECT_FINAL_ID, TEACHER_PROJECT_ID, PROJECT_OWNER, null,
                     finalRubricId, finalRubricVersion, teacherOne, RIVER_PROJECT_FINAL_GRADE,
+                    null, TEACHER_GROUP_GRADE_ID, TEACHER_METRIC_ID,
                     "River Lab project final grade."));
             seedFinalGrade(new FinalGradeSeed(TEACHER_STUDENT_FINAL_ID, TEACHER_PROJECT_ID,
                     studentOne.getId().toString(), studentOne.getId().toString(), finalRubricId, finalRubricVersion, teacherOne,
-                    RIVER_STUDENT_FINAL_GRADE, "River Lab student final grade."));
+                    RIVER_STUDENT_FINAL_GRADE, TEACHER_FINAL_CRITERION_GRADE_ID,
+                    TEACHER_GROUP_GRADE_ID, TEACHER_METRIC_ID, "River Lab student final grade."));
             seedFinalGrade(new FinalGradeSeed(OTHER_TEACHER_PROJECT_FINAL_ID, OTHER_TEACHER_PROJECT_ID, PROJECT_OWNER,
                     null, finalRubricId, finalRubricVersion, teacherTwo, WIND_PROJECT_FINAL_GRADE,
+                    null, OTHER_TEACHER_GROUP_GRADE_ID, OTHER_TEACHER_METRIC_ID,
                     "Wind Garden project final grade."));
             seedFinalGrade(new FinalGradeSeed(OTHER_TEACHER_STUDENT_FINAL_ID, OTHER_TEACHER_PROJECT_ID,
                     studentOne.getId().toString(), studentOne.getId().toString(), finalRubricId, finalRubricVersion, teacherTwo,
-                    WIND_STUDENT_FINAL_GRADE, "Wind Garden student final grade."));
+                    WIND_STUDENT_FINAL_GRADE, OTHER_TEACHER_FINAL_CRITERION_GRADE_ID,
+                    OTHER_TEACHER_GROUP_GRADE_ID, OTHER_TEACHER_METRIC_ID, "Wind Garden student final grade."));
         }
 
         private void seedProject(UUID id, String title, String schoolYear, UserAccount owner) {
@@ -347,9 +370,19 @@ public class TestingGradingSelectionPreviewConfiguration {
             if (seed.studentId() != null) {
                 payload.put(STUDENT_ID, seed.studentId());
             }
-            payload.set(INPUTS, store.object().putArray("studentGrades").addObject()
-                    .put(CRITERION_ID, TEST_CRITERION_ID).put(GRADE, seed.grade())
-                    .put(RUBRIC_VERSION, seed.rubricVersion()));
+            ObjectNode inputs = store.object();
+            var studentGrades = inputs.putArray("studentGrades");
+            if (seed.studentGradeId() != null) {
+                studentGrades.add(GradingSupport.view(store, store.repository().findById(seed.studentGradeId())
+                        .orElseThrow(() -> new IllegalStateException("Preview final snapshot grade is missing."))));
+            }
+            inputs.putArray("groupGrades").add(GradingSupport.view(store,
+                    store.repository().findById(seed.groupGradeId())
+                            .orElseThrow(() -> new IllegalStateException("Preview group snapshot is missing."))));
+            inputs.putArray("metrics").add(GradingSupport.view(store,
+                    store.repository().findById(seed.metricId())
+                            .orElseThrow(() -> new IllegalStateException("Preview metric snapshot is missing."))));
+            payload.set(INPUTS, inputs);
             ensure(new PreviewRecord(seed.id(), FINAL_GRADE, seed.owner(), seed.projectId().toString(), CURRENT, payload));
         }
 
@@ -405,7 +438,8 @@ public class TestingGradingSelectionPreviewConfiguration {
                 UserAccount teacher, String note, int value) { }
 
         private record FinalGradeSeed(UUID id, UUID projectId, String owner, String studentId, String rubricId,
-                String rubricVersion, UserAccount teacher, int grade, String rationale) { }
+                String rubricVersion, UserAccount teacher, int grade, UUID studentGradeId, UUID groupGradeId,
+                UUID metricId, String rationale) { }
 
         private record PreviewRecord(UUID id, String type, String ownerId, String parentId, String status,
                 ObjectNode payload) { }

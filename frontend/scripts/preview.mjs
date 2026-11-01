@@ -262,6 +262,7 @@ export function parseArgs(args) {
             selector: argument.slice(separator + 1),
           })
         } else if (['click', 'download', 'assert-action-visible', 'wait', 'read', 'focus', 'scroll', 'screenshot', 'key', 'tab-to', 'select-index',
+          'select-by-key',
           'navigate', 'assert-url'].includes(action) && argument) {
           if (action === 'screenshot' && path.basename(argument) !== argument) {
             throw new Error('--step screenshot must use a filename, not a path.')
@@ -283,6 +284,16 @@ export function parseArgs(args) {
               selector: argument.slice(0, assignment),
               index: optionIndex,
             })
+          } else if (action === 'select-by-key') {
+            const assignment = argument.lastIndexOf('=')
+            if (assignment < 1 || assignment === argument.length - 1) {
+              throw new Error('--step select-by-key must use select-by-key:SELECTOR=VALUE.')
+            }
+            options.steps.push({
+              action,
+              selector: argument.slice(0, assignment),
+              value: argument.slice(assignment + 1),
+            })
           } else {
             options.steps.push({ action, value: argument })
           }
@@ -290,7 +301,7 @@ export function parseArgs(args) {
           'assert-dialog-contained', 'assert-dialog-closed'].includes(action) && !argument) {
           options.steps.push({ action })
         } else {
-          throw new Error('--step must be fill:SELECTOR=VALUE, set-json-field:SELECTOR=FIELD=VALUE, set-file:SELECTOR=REPOSITORY_RELATIVE_PATH, select-index:SELECTOR=INDEX, click-record-action:TITLE_OR_ID|SELECTOR, read-record:TITLE_OR_ID, click:SELECTOR, download:SELECTOR, tab-to:SELECTOR, wait:SELECTOR, read:SELECTOR, focus:SELECTOR, scroll:SELECTOR, navigate:/SAME_ORIGIN_PATH, assert-url:PATH_AND_QUERY, reload, screenshot:FILE, key:SUPPORTED_KEY, assert-dialog-contained, assert-dialog-closed, accept-confirms, reject-confirms, offline, online, or measure-overflow.')
+          throw new Error('--step must be fill:SELECTOR=VALUE, set-json-field:SELECTOR=FIELD=VALUE, set-file:SELECTOR=REPOSITORY_RELATIVE_PATH, select-index:SELECTOR=INDEX, select-by-key:SELECTOR=VALUE, click-record-action:TITLE_OR_ID|SELECTOR, read-record:TITLE_OR_ID, click:SELECTOR, download:SELECTOR, tab-to:SELECTOR, wait:SELECTOR, read:SELECTOR, focus:SELECTOR, scroll:SELECTOR, navigate:/SAME_ORIGIN_PATH, assert-url:PATH_AND_QUERY, reload, screenshot:FILE, key:SUPPORTED_KEY, assert-dialog-contained, assert-dialog-closed, accept-confirms, reject-confirms, offline, online, or measure-overflow.')
         }
       } else {
         options[name] = value
@@ -1152,6 +1163,17 @@ export function expectedOfflineRequestErrors(errors, steps) {
       || error.startsWith('browser log: Failed to load resource: net::ERR_INTERNET_DISCONNECTED'))))
 }
 
+export function expectedAbsentFinalGradeErrors(errors) {
+  const urls = new Set([...(errors.requests?.values() ?? [])]
+    .filter((request) => request.method === 'GET'
+      && request.responseStatus === 404
+      && /^\/api\/projects\/[^/]+\/final-grade$/.test(new URL(request.url).pathname))
+    .map((request) => request.url))
+  return errors.filter((error) => [...urls].some((url) =>
+    error === `request returned HTTP 404: ${url}`
+    || error.startsWith(`browser log: Failed to load resource: the server responded with a status of 404 (Not Found) at ${url}:`)))
+}
+
 export async function evaluatePage(client, expression, description) {
   const evaluation = await client.send('Runtime.evaluate', {
     expression,
@@ -1310,7 +1332,12 @@ export async function applyPageInteractions(client, options, {
     if (selected !== value) throw new Error(`Keyboard selection in ${selector} produced ${JSON.stringify(selected)}, expected ${JSON.stringify(value)}.`)
     log(`Selected ${JSON.stringify(value)} in ${selector} with ${useNativeMacKeys ? 'the macOS native popup keyboard' : 'the keyboard'}.`)
   }
-  await applyPageSteps(client, options.steps ?? [], { outputDir: options.outputDir, log, signal })
+  await applyPageSteps(client, options.steps ?? [], {
+    outputDir: options.outputDir,
+    log,
+    signal,
+    headed: options.headed,
+  })
 }
 
 export async function openNativeSelect(client, selector) {
@@ -1349,7 +1376,13 @@ export const RECORD_LOCATOR_EXPRESSION = `(key, selector, click, timeoutMs = 100
         check();
       })`
 
-export async function applyPageSteps(client, steps, { outputDir, log = console.log, signal } = {}) {
+export async function applyPageSteps(client, steps, {
+  outputDir,
+  log = console.log,
+  signal,
+  headed = false,
+  nativeInput = sendMacNativeSelectKeys,
+} = {}) {
   for (const step of steps) {
     if (step.action === 'navigate') {
       const currentUrl = await evaluatePage(client, 'location.href', 'read current page URL')
@@ -1440,6 +1473,48 @@ export async function applyPageSteps(client, steps, { outputDir, log = console.l
         `(${expression})(${JSON.stringify(step.selector)}, ${step.index})`,
         `select option ${step.index} in ${step.selector}`)
       log(`Selected option ${step.index} (${text}) in ${step.selector}.`)
+    } else if (step.action === 'select-by-key') {
+      const state = await evaluatePage(client, `((selector, value) => {
+        const select = document.querySelector(selector);
+        if (!(select instanceof HTMLSelectElement)) throw new Error('Element is not a select: ' + selector);
+        if (document.activeElement !== select) throw new Error('Select is not focused; use tab-to first: ' + selector);
+        const options = Array.from(select.options).filter((option) => !option.disabled);
+        const target = options.findIndex((option) => option.value === value);
+        const current = options.findIndex((option) => option.value === select.value);
+        if (target < 0) throw new Error('No enabled option with value ' + value + ' in ' + selector);
+        const rect = select.getBoundingClientRect();
+        return {
+          target,
+          current,
+          bounds: {
+            x: window.screenX + rect.left + rect.width / 2,
+            y: window.screenY + window.outerHeight - window.innerHeight + rect.top + rect.height / 2,
+          },
+        };
+      })(${JSON.stringify(step.selector)}, ${JSON.stringify(step.value)})`,
+      `find enabled keyboard option in ${step.selector}`)
+      if (state.target === state.current) {
+        throw new Error(`The enabled option ${JSON.stringify(step.value)} is already selected in ${step.selector}.`)
+      }
+      const direction = state.target > state.current ? 1 : -1
+      const arrow = direction > 0 ? ['ArrowDown', 'ArrowDown', 40] : ['ArrowUp', 'ArrowUp', 38]
+      const count = Math.abs(state.target - state.current)
+      if (headed && process.platform === 'darwin') {
+        await nativeInput(state.bounds, arrow[2], count)
+      } else {
+        await openNativeSelect(client, step.selector)
+        for (let index = 0; index < count; index += 1) {
+          await dispatchBrowserKey(client, arrow[0])
+        }
+        await dispatchBrowserKey(client, 'Enter')
+      }
+      const selected = await evaluatePage(client,
+        `document.querySelector(${JSON.stringify(step.selector)})?.value`,
+        `verify keyboard selection in ${step.selector}`)
+      if (selected !== step.value) {
+        throw new Error(`Keyboard selection in ${step.selector} produced ${JSON.stringify(selected)}, expected ${JSON.stringify(step.value)}.`)
+      }
+      log(`Selected ${JSON.stringify(step.value)} in ${step.selector} with the browser keyboard.`)
     } else if (step.action === 'assert-action-visible') {
       const state = await evaluatePage(client, `(() => {
         const element = document.querySelector(${JSON.stringify(step.value)});
@@ -1935,7 +2010,8 @@ Options:
   --select-by-key SELECTOR=VALUE  Select an enabled native option using keyboard input; may be repeated
   --native-select-by-key SELECTOR=VALUE  Use macOS keyboard input on a headed collapsed popup
   --expand-select SELECTOR        Show all native select options inline for screenshot inspection
-  --step ACTION:VALUE             Run ordered interactions; supports click-row-action:USERNAME|SELECTOR and, on the
+  --step ACTION:VALUE             Run ordered interactions; supports select-by-key:SELECTOR=VALUE,
+                                  click-row-action:USERNAME|SELECTOR and, on the
                                   Ideas list, click-record-action:TITLE_OR_ID|SELECTOR (or |text:BUTTON_TEXT, e.g. text:Edit)
                                   and read-record:TITLE_OR_ID
                                   (exact title or idea ID; fails if no or several rows match), and
@@ -1958,7 +2034,7 @@ wait:SELECTOR, read:SELECTOR, focus:SELECTOR, scroll:SELECTOR, download:SELECTOR
 navigate:/SAME_ORIGIN_PATH, assert-url:PATH_AND_QUERY, reload,
 key:Tab|Shift+Tab|Escape|Enter|Space|ArrowLeft|ArrowRight|ArrowUp|ArrowDown|Home|End,
 tab-to:SELECTOR uses actual Tab key input to reach and report focus on a selector within 80 presses,
-select-index:SELECTOR=INDEX, screenshot:FILE, assert-dialog-contained, assert-dialog-closed,
+select-index:SELECTOR=INDEX, select-by-key:SELECTOR=VALUE, screenshot:FILE, assert-dialog-contained, assert-dialog-closed,
 accept-confirms, reject-confirms, offline, or online. Generic key steps dispatch real browser keyboard events
 without assuming a dialog; use the explicit dialog assertions only in dialog scenarios.
 offline/online change the browser's network state only after the page is loaded, for reusable local failure/offline scenarios; intentional API disconnect errors remain in the network report but do not fail the preview. measure-overflow reports document/body/viewport widths and fails on horizontal document overflow.
@@ -2127,7 +2203,10 @@ export async function run(options, {
     }
     const expectedOffline = expectedOfflineRequestErrors(launched.errors, options.steps)
     for (const error of expectedOffline) console.log(`Expected offline API failure: ${error}`)
-    const unexpectedErrors = launched.errors.filter((error) => !expectedOffline.includes(error))
+    const expectedAbsentFinalGrade = expectedAbsentFinalGradeErrors(launched.errors)
+    for (const error of expectedAbsentFinalGrade) console.log(`Expected empty final-grade response: ${error}`)
+    const expectedErrors = [...expectedOffline, ...expectedAbsentFinalGrade]
+    const unexpectedErrors = launched.errors.filter((error) => !expectedErrors.includes(error))
     if (unexpectedErrors.length) {
       for (const error of unexpectedErrors) console.error(`Browser error: ${error}`)
       throw new Error(`${unexpectedErrors.length} browser console or request error(s) detected; see details above.`)

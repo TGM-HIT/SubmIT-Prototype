@@ -765,6 +765,7 @@ const en = {
         requiredFields: 'Required fields include version, name, effectiveFrom, finalGradeScale, categories with criterion scales and subjects, and any configured metricDefinitions or aggregationRules.',
         publish: 'Publish immutable version',
         projectHistory: 'Project progress and grade history',
+        historyRefreshFailed: 'Saved criterion assessments are confirmed, but visible history could not be refreshed.',
         projectList: 'Choose a project',
         searchProjects: 'Search projects, members, period or school year',
         search: 'Search',

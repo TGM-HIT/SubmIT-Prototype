@@ -170,23 +170,92 @@ class OpenApiContractTest {
         JsonNode selectionResponse = schemas.path("AssessmentRubricResponse");
         assertEquals(Set.of("routineRubricId", "finalRubricId"),
                 textualMembers(selectionResponse.path("required")));
+        assertEquals(Set.of("routineRubricId", "finalRubricId"),
+                fieldNames(selectionResponse.path("properties")));
+        for (String schemaName : List.of("AssessmentRubricSelection", "AssessmentRubricResponse")) {
+            JsonNode properties = schemas.path(schemaName).path("properties");
+            for (String field : List.of("routineRubricId", "finalRubricId")) {
+                JsonNode fieldSchema = properties.path(field);
+                assertEquals(Set.of("string", "null"), textualMembers(fieldSchema.path("type")),
+                        schemaName + "." + field + " is a required nullable string.");
+                assertEquals("uuid", fieldSchema.path("format").asText());
+            }
+        }
+        assertTrue(selection.path("properties").path("routineReason").path("description").asText()
+                .contains("2,000"));
+        assertTrue(selection.path("properties").path("finalReason").path("description").asText()
+                .contains("2,000"));
         JsonNode member = schemas.path("GradingMember");
         assertEquals(Set.of("studentId", "displayName", "className", "electiveSubjectNames"),
                 fieldNames(member.path("properties")));
-        assertTrue(textualMembers(member.path("required")).containsAll(
-                Set.of("studentId", "displayName", "electiveSubjectNames")));
+        assertEquals(Set.of("studentId", "displayName", "electiveSubjectNames"),
+                textualMembers(member.path("required")));
+        assertTrue(allowsNull(member.path("properties").path("className")));
+        assertEquals("uuid", member.path("properties").path("studentId").path("format").asText());
 
         JsonNode studentGrade = schemas.path("StudentGradeRequest");
-        assertTrue(textualMembers(studentGrade.path("required")).contains("assessmentType"));
-        assertTrue(studentGrade.path("properties").has("assessmentType"));
-        assertTrue(schemas.path("GradeResponse").path("properties").has("assessmentType"));
-        Set<String> historyParameters = new HashSet<>();
-        paths.path("/api/projects/{projectId}/student-grades").path("get").path("parameters")
-                .forEach(parameter -> historyParameters.add(parameter.path("name").asText()));
-        assertTrue(historyParameters.containsAll(
-                Set.of("projectId", "studentId", "assessmentType", "rubricId", "page", "size")));
-        assertEquals(Set.of("ROUTINE", "FINAL"),
-                textualMembers(studentGrade.path("properties").path("assessmentType").path("enum")));
+        assertEquals(Set.of("rubricId", "assessmentType", "versionTransition", "studentId", "criterionId",
+                "grade", "assessedOn", "evidence", "comments"), fieldNames(studentGrade.path("properties")));
+        assertEquals(Set.of("rubricId", "assessmentType", "studentId", "criterionId", "grade"),
+                textualMembers(studentGrade.path("required")));
+        assertEquals(Set.of(), nullableProperties(studentGrade.path("properties")));
+        assertEquals("uuid", studentGrade.path("properties").path("rubricId").path("format").asText());
+        assertEquals("uuid", studentGrade.path("properties").path("studentId").path("format").asText());
+        JsonNode requestPhase = studentGrade.path("properties").path("assessmentType");
+        assertEquals("string", requestPhase.path("type").asText());
+        assertEquals(Set.of("ROUTINE", "FINAL"), textualMembers(requestPhase.path("enum")));
+        assertFalse(allowsNull(requestPhase));
+        assertEquals("date", studentGrade.path("properties").path("assessedOn").path("format").asText());
+        assertEquals(4000, studentGrade.path("properties").path("evidence").path("maxLength").asInt());
+        assertEquals(4000, studentGrade.path("properties").path("comments").path("maxLength").asInt());
+
+        JsonNode gradeResponse = schemas.path("GradeResponse");
+        JsonNode responsePhase = gradeResponse.path("properties").path("assessmentType");
+        assertEquals("string", responsePhase.path("type").asText());
+        assertEquals(Set.of("ROUTINE", "FINAL"), textualMembers(responsePhase.path("enum")));
+        assertTrue(textualMembers(gradeResponse.path("required")).contains("assessmentType"));
+        assertFalse(allowsNull(responsePhase));
+
+        JsonNode historyOperation = paths.path("/api/projects/{projectId}/student-grades").path("get");
+        JsonNode historyParametersNode = historyOperation.path("parameters");
+        assertEquals(Set.of("projectId", "studentId", "assessmentType", "rubricId", "page", "size"),
+                parameterNames(historyParametersNode));
+        JsonNode studentFilter = parameter(historyParametersNode, "studentId");
+        JsonNode rubricFilter = parameter(historyParametersNode, "rubricId");
+        JsonNode phaseFilter = parameter(historyParametersNode, "assessmentType");
+        for (JsonNode filter : List.of(studentFilter, rubricFilter)) {
+            assertEquals("query", filter.path("in").asText());
+            assertEquals("string", filter.path("schema").path("type").asText());
+            assertEquals("uuid", filter.path("schema").path("format").asText());
+            assertFalse(filter.path("required").asBoolean());
+        }
+        assertEquals("query", phaseFilter.path("in").asText());
+        assertEquals("string", phaseFilter.path("schema").path("type").asText());
+        assertEquals(Set.of("ROUTINE", "FINAL"), textualMembers(phaseFilter.path("schema").path("enum")));
+        assertFalse(phaseFilter.path("required").asBoolean());
+
+        JsonNode revisionOperation = paths.path("/api/projects/{projectId}/student-grades/{gradeId}/revisions")
+                .path("post");
+        JsonNode revisionRequest = schemas.path("GradeRevisionRequest");
+        assertEquals("#/components/schemas/GradeRevisionRequest",
+                revisionOperation.path("requestBody").path("content").path("application/json")
+                        .path("schema").path("$ref").asText());
+        assertEquals(Set.of("reason", "grade", "assessedOn", "evidence", "comments"),
+                fieldNames(revisionRequest.path("properties")));
+        assertEquals(Set.of("reason", "grade"), textualMembers(revisionRequest.path("required")));
+        assertEquals(Set.of(), nullableProperties(revisionRequest.path("properties")));
+        String revisionDescription = revisionRequest.path("description").asText().toLowerCase(Locale.ROOT);
+        assertTrue(revisionDescription.contains("phase") && revisionDescription.contains("rubric")
+                && revisionDescription.contains("student") && revisionDescription.contains("criterion")
+                && revisionDescription.contains("inherited"));
+        String revisionSummary = revisionOperation.path("summary").asText().toLowerCase(Locale.ROOT);
+        assertTrue(revisionSummary.contains("phase") && revisionSummary.contains("rubric")
+                && revisionSummary.contains("student") && revisionSummary.contains("criterion"));
+
+        JsonNode reason400 = putSelection.path("responses").path("400").path("description");
+        assertTrue(reason400.asText().toLowerCase(Locale.ROOT).contains("reason"));
+        assertFalse(putSelection.path("responses").path("409").path("description").asText()
+                .toLowerCase(Locale.ROOT).contains("reason"));
     }
 
     @Test
@@ -596,6 +665,18 @@ class OpenApiContractTest {
                             + "assessmentType",
                     "studentDisplayName,className,electiveSubjectNames",
                     "studentId,evidence,comments,supersedesId,supersededById,reason")),
+            Map.entry("AssessmentRubricSelection", contract(
+                    "routineRubricId,finalRubricId", "routineReason,finalReason",
+                    "routineRubricId,finalRubricId,routineReason,finalReason")),
+            Map.entry("AssessmentRubricResponse",
+                    contract("routineRubricId,finalRubricId", "", "routineRubricId,finalRubricId")),
+            Map.entry("GradingMember",
+                    contract("studentId,displayName,electiveSubjectNames", "className", "className")),
+            Map.entry("StudentGradeRequest", contract(
+                    "rubricId,assessmentType,studentId,criterionId,grade",
+                    "versionTransition,assessedOn,evidence,comments", "")),
+            Map.entry("GradeRevisionRequest",
+                    contract("reason,grade", "assessedOn,evidence,comments", "")),
             Map.entry("MetricResponse", contract(
                     "id,status,createdAt,projectId,rubricId,rubricVersion,metricId,metricVersion,value,measuredAt,"
                             + "note,recordedBy,recordedAt",
@@ -1026,6 +1107,15 @@ class OpenApiContractTest {
         assertTrue(node.isObject(), "Expected a JSON object node.");
         Set<String> result = new TreeSet<>();
         node.fieldNames().forEachRemaining(result::add);
+        return result;
+    }
+
+    private Set<String> nullableProperties(JsonNode properties) {
+        assertTrue(properties.isObject(), "Expected an OpenAPI properties object.");
+        Set<String> result = new TreeSet<>();
+        properties.properties().forEach(property -> {
+            if (allowsNull(property.getValue())) result.add(property.getKey());
+        });
         return result;
     }
 
@@ -2105,7 +2195,7 @@ class OpenApiContractTest {
                 put|/api/projects/{projectId}/assessment-rubrics|400|invalid project UUID;malformed selection;invalid reason
                 put|/api/projects/{projectId}/assessment-rubrics|403|lacks project access;not a teacher
                 put|/api/projects/{projectId}/assessment-rubrics|404|project or selected rubric version does not exist
-                put|/api/projects/{projectId}/assessment-rubrics|409|selected rubric is ineffective;used phase cannot be cleared;transition reason is missing
+                put|/api/projects/{projectId}/assessment-rubrics|409|selected rubric is ineffective;used phase cannot be cleared
                 get|/api/projects/{projectId}/grading-members|400|invalid project UUID
                 get|/api/projects/{projectId}/grading-members|403|not grading staff;lacks project access
                 get|/api/projects/{projectId}/grading-members|404|project or allocated member account does not exist

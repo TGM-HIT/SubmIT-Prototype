@@ -32,7 +32,8 @@ public class GradeRevisionController {
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
-    @Operation(summary = "Record a correction or reassessment; the prior entry is retained as superseded.")
+    @Operation(summary = "Record a correction or reassessment; phase, rubric, student and criterion remain inherited "
+            + "from the source grade, which is retained as superseded.")
     @ApiResponse(responseCode = "409", description = "The project formal application is not approved. The entry "
             + "has already been superseded.",
             content = @io.swagger.v3.oas.annotations.media.Content(

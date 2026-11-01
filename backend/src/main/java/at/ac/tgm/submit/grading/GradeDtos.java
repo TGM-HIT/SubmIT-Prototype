@@ -64,8 +64,8 @@ public final class GradeDtos {
 
         private int size = DEFAULT_PAGE_SIZE;
 
-        @Schema(description = "Optional teacher filter for a project member's grades; students may omit this or "
-                + "request only their own ID.")
+        @Schema(description = "Optional UUID teacher filter for a project member's grades; students may omit this "
+                + "or request only their own ID.", format = "uuid")
         public String getStudentId() {
             return studentId;
         }
@@ -135,7 +135,9 @@ public final class GradeDtos {
             String comments) {
     }
 
-    @Schema(description = "Reassessment; the original entry is retained as superseded on its original rubric version.")
+    @Schema(description = "Reassessment of the source grade; phase, rubric ID/version, student and criterion are "
+            + "inherited from that source and cannot be changed in the request. The source entry is retained as "
+            + "superseded on its original rubric version.")
     public record GradeRevisionRequest(
             @NotBlank @Size(max = 2000)
             @Schema(description = "Required, non-blank reason for reassessment; at most 2,000 characters.",
