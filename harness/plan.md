@@ -153,7 +153,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-78](tickets/done/Dev-78.md) | done | Pilot shared purpose classification and history reconciliation |
 | [Dev-79](tickets/done/Dev-79.md) | done | Classify shared roles and project lifecycle |
 | [Dev-80](tickets/done/Dev-80.md) | done | Classify shared ideas and formal applications |
-| [Dev-81](tickets/Dev-81.md) | to-do | Classify shared grading and rubric history |
+| [Dev-81](tickets/Dev-81.md) | failed | Classify shared grading and rubric history |
 | [Dev-82](tickets/Dev-82.md) | to-do | Classify shared archive and teacher review |
 | [Dev-83](tickets/Dev-83.md) | to-do | Classify shared allocation and application rules |
 | [Dev-84](tickets/Dev-84.md) | to-do | Classify shared invariants and close shared history |
