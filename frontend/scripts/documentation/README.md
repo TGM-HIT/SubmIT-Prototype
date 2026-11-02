@@ -3,12 +3,13 @@
 Run from the repository root:
 
 ```sh
-# Supply PREVIEW_PASSWORD from your local testing-account environment.
 make doc LANGUAGE=en
 make doc LANGUAGE=de
 ```
 
 Make, the existing Java/Gradle and Node setup, installed frontend dependencies, and Chrome/Chromium are required. Do not start either service first. The command owns a fresh testing backend, Vite and its Chrome profiles, and cleans them on success, failure or interruption. It refuses occupied ports and existing preview sessions. See [the development guide](../../DEV-GUIDELINES.md#full-lifecycle-local-documentation).
+
+No credential setup is required: the runner defaults to the existing public testing-profile fixture password for its isolated local backend. `PREVIEW_PASSWORD` remains an optional environment override; an empty value uses the default. Never supply production credentials or include passwords in generated guides or audit evidence.
 
 ## Sources and outputs
 
@@ -18,7 +19,7 @@ Make, the existing Java/Gradle and Node setup, installed frontend dependencies, 
 - `run.mjs` validates input before service startup, selects only this JVM's existing minimal testing fixtures, owns ignored staging, and promotes a fully validated output tree only after capture and cleanup succeed.
 - `documentation.smoke.mjs` joins `npm run preview:test`, using the existing Node runner without new libraries. Mocked pixels/process failures are confined to bounded unit tests; the public generation command never uses mock screenshots.
 
-`docs/user-guide/README.md`, `docs/user-guide/en/`, `docs/user-guide/de/`, the role guide Markdown files and their `images/*.png` are local, ignored outputs. Never add or force-add them. Temporary browser profiles, staging, reports and failure evidence remain in ignored `frontend/.preview/`, outside the generated tree. The command reads passwords only from the existing environment convention. Reports omit sessions and bearer tokens.
+`docs/user-guide/README.md`, `docs/user-guide/en/`, `docs/user-guide/de/`, the role guide Markdown files and their `images/*.png` are local, ignored outputs. Never add or force-add them. Temporary browser profiles, staging, reports and failure evidence remain in ignored `frontend/.preview/`, outside the generated tree. Reports omit passwords, sessions and bearer tokens.
 
 ## Story and preparation
 

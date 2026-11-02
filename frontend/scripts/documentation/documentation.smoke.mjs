@@ -200,7 +200,30 @@ test('D2 temporary second-language configuration reuses the shared registration 
   assert.ok(!(await readFile(path.join(root, 'docs/user-guide/de/schueler.md'), 'utf8')).includes(second.guides.schueler.title))
 })
 
-test('D2 invalid/missing/incomplete locale and missing password/browser fail before service startup', async (t) => {
+for (const env of [{}, { PREVIEW_PASSWORD: '' }, { PREVIEW_PASSWORD: 'unit-test-only-secret' }]) {
+  test(`D2 documentation authenticates with ${env.PREVIEW_PASSWORD ? 'explicit override' : 'default testing credential'}`, async (t) => {
+    const root = await temporary(t)
+    const expected = env.PREVIEW_PASSWORD || 'testing-password'
+    const fixtureSource = await readFile(path.join(repo,
+      'backend/src/main/java/at/ac/tgm/submit/user/TestingAccountsConfiguration.java'), 'utf8')
+    assert.ok(fixtureSource.includes('DEFAULT_PASSWORD = "testing-password"'),
+      'Documentation default must match the backend testing fixture credential')
+    class CredentialCapture extends TestCapture {
+      constructor(input) {
+        super(input)
+        assert.equal(input.password, expected)
+      }
+    }
+    const report = await generate('de', dependencies(root, { env, scenarioClass: CredentialCapture }))
+    assert.equal(report.status, 'passed')
+    assert.ok(!JSON.stringify(report).includes(expected))
+    for (const role of roles) {
+      assert.ok(!(await readFile(path.join(root, `docs/user-guide/de/${role}.md`), 'utf8')).includes(expected))
+    }
+  })
+}
+
+test('D2 invalid/missing/incomplete locale and missing browser fail before service startup', async (t) => {
   const root = await temporary(t)
   await generate('de', dependencies(root))
   const previous = await readFile(path.join(root, 'docs/user-guide/de/schueler.md'))
@@ -213,7 +236,6 @@ test('D2 invalid/missing/incomplete locale and missing password/browser fail bef
   const withoutRegistrationName = structuredClone(await loadLocale('de'))
   delete withoutRegistrationName.example.registrationDisplayName
   await assert.rejects(generate('de', { ...options, load: async () => validateLocale(withoutRegistrationName, 'de') }), /example.registrationDisplayName/)
-  await assert.rejects(generate('de', { ...options, env: {} }), /PREVIEW_PASSWORD/)
   await assert.rejects(generate('de', { ...options, preflight: async () => { throw new Error('Missing Chrome binary') } }), /Chrome/)
   assert.equal(starts, 0)
   assert.deepEqual(await readFile(path.join(root, 'docs/user-guide/de/schueler.md')), previous)

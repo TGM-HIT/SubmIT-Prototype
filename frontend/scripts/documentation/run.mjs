@@ -15,8 +15,8 @@ export async function generate(language, {
 } = {}) {
   // Validate all input before starting services, acquiring resources or touching previous outputs.
   const locale = await load(language)
-  const password = env.PREVIEW_PASSWORD
-  if (!password) throw new Error('Set PREVIEW_PASSWORD to the documented local testing password; then run make doc LANGUAGE=en or LANGUAGE=de.')
+  // Public testing-profile fixture credential, never a production account password.
+  const password = env.PREVIEW_PASSWORD || 'testing-password'
   const evidenceReport = env.DOCUMENTATION_REPORT ? path.resolve(root, env.DOCUMENTATION_REPORT) : undefined
   if (evidenceReport && (!evidenceReport.startsWith(path.join(root, 'harness/runs') + path.sep) ||
       !evidenceReport.includes(`${path.sep}evidence${path.sep}`) || !evidenceReport.endsWith('.json'))) {
