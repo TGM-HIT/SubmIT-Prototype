@@ -6,14 +6,16 @@ The harness works only if each role has one clear job, the hand-offs between rol
 
 ## Inspect
 
-- `harness/roles/*.md` (Orchestrator, Implementor, Evaluator, Learner, Ticket Author, Auditor).
+- `harness/roles/*.md` (for example Orchestrator, Implementor, Evaluator, Learner, Ticket Author, Auditor, and Archiver; names are illustrative, not a fixed allowlist).
 - `.github/agents/*.agent.md`, which must only identify an agent and point at its role file.
-- `harness/templates/` (ticket, check, and human-acceptance templates), `harness/gates/` (gate scripts the roles call), `harness/plan.md` (status vocabulary and ledger rules), and `harness/checks/` (the Auditor's work items).
+- `harness/templates/` (for example ticket, check, human-acceptance, and lesson templates), `harness/gates/` (gate scripts the roles call), `harness/plan.md` (status vocabulary and ledger rules), and `harness/checks/` (the Auditor's work items).
 - Source-of-truth order for this check: `harness/roles/*.md` define behavior; agent files only identify; templates and gates are referenced by roles and must match what the roles say. Where two role files disagree, the Orchestrator contract owns the workflow and hand-offs, and each role file owns its own limits.
 
 **Generated-guide boundary:** Before reading, searching, discovering, or traversing link targets, recursively exclude only the exact repository-root subtree `docs/user-guide/`, regardless of ignore or tracking state. Do not inspect its contents, age, links, images, chapters, orphan status, or presence or absence, and do not derive findings from them. For incoming links, inspect the authored source but skip generated-target existence, content, image, and anchor validation; do not open the target or follow its links. Keep this check's authored-input scope above, including Auditor instructions and check definitions, unchanged; similarly named paths such as `docs/user-guide-notes/` remain in scope. Do not run `make doc`. Compliance-07 alone may generate and inspect this output for its dedicated audit, but must not hand-edit, stage, or commit it. Under `## Scope inspected`, report this subtree as excluded, not inspected, and note incoming generated-target checks skipped.
 
 ## Topics to check
+
+Before inspection, resolve a bounded scope manifest of current role contracts, wrappers, and templates referenced by their hand-offs. Reconcile role/wrapper pairs in both directions and include the actual referenced template bodies in hand-off comparisons, not only their existence. The Orchestrator passes this resolved scope rather than a historical role/template enumeration. Preserve any explicitly narrower owner request and identify omitted role semantics, templates, and affected ownership/hand-off coverage as unverified; do not silently expand it or call it full-harness consistency.
 
 1. Role map: for each role, state its one-sentence job, its inputs, its outputs (files, handoff blocks, statuses), and what it must never do. Every role has all four.
 2. Overlaps: list every duty, file, or status that more than one role is allowed to create, edit, or decide (for example who writes tickets, who edits the plan ledger, who edits role contracts, who commits, who moves tickets to `done/`). Each must have exactly one owner, or an explicit, consistent hand-over rule.
@@ -26,6 +28,8 @@ The harness works only if each role has one clear job, the hand-offs between rol
 9. References: every path, template, gate, command, and role name in a role file exists and is spelled as on disk; no role references a removed ticket, check, or lesson.
 10. Terminology: the same concept uses the same term in all role files (for example run ID, run folder, evidence, handoff, closeout, scope gate, preflight).
 11. Link and format validation for the files listed under Inspect: relative links and anchors resolve; one level-1 heading per Markdown file unless the file type is an agent or role definition that has none (see the Compliance-04 definition and the status of `Dev-09` before reporting that rule); no skipped heading levels; balanced code fences; well-formed tables; consistent list markers; no trailing whitespace; a final newline.
+
+For Topic 9, retain a bounded reference inventory covering code spans and surrounding prose in the resolved role-body scope. For each distinct target or invocation record source locations, literal/dynamic/excluded/illustrative classification, and resolution evidence or the reason no probe applies; repeated occurrences may share a record while preserving their locations. Verify literal spelling and command/task/option forms against repository definitions or narrowly needed help. Lexical extraction aids source review but is not a completeness oracle: reconcile remaining categories before claiming no discrepancy; otherwise mark them unverified regardless of exit status or target count. Do not instantiate dynamic run paths, probe excluded examples, or execute builds, previews, gates, or other side-effecting commands solely to resolve a reference. No permanent parser, library, or prescribed numeric inventory is required.
 
 ## Finding and fix rules
 

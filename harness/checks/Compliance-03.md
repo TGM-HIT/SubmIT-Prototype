@@ -24,6 +24,8 @@
 7. Operation and schema names are unique and follow the project's existing naming.
 8. The frontend services call only paths that exist in the contract and use the generated types rather than hand-written copies of the same shapes.
 
+For Topic 2, resolve evidence by HTTP method plus normalized URI template; normalize path-variable names without conflating methods. Derive specification, implementation, and contract parameter sets independently; explicitly cite shared pagination rules rather than copying contract names into another source's evidence column. Accept locally unambiguous same-route or sibling-route shorthand only with the cited base template and contextual method/suffix text. A resource-range fallback or failed literal lookup is an unresolved mapping until bounded contextual review establishes the operation or supports an actual documentation gap. Before handoff, reconcile every path-gap label with the finding list and verify its method-specific evidence, preserving genuine omissions. This requires neither a parser framework nor specification edits during the audit.
+
 ## Finding and fix rules
 
 - A finding is any difference between the regenerated contract, the specification, the tracked types, or the frontend usage.
@@ -40,6 +42,8 @@
 - A table with columns `Topic`, `Documented rule`, `Contract evidence (path and schema)`, `Result`.
 - For Topic 2, enumerate each operation's query parameters across the approved specification, implementation, and generated contract; identify undocumented parameters and any resulting decision-needed finding.
 - For Topic 6, provide an operation-by-operation inventory of each applicable error status, its triggering condition and implementation evidence, and whether the generated contract declares it with an accurate description and schema. Include applicable `400`, `401`, `403`, `404`, and `409` responses; exclude inapplicable statuses, and distinguish authentication behavior on protected and public routes.
+- Distinguish extracted facts, heuristic screens, and manually reviewed semantic conclusions. For each semantic assessment, retain the actual generated description, applicable trigger and source, and why the description covers or contradicts that trigger; label manual review as manual. A helper may render reviewed records but must not derive accuracy from status categories, route identity, or a previous report label. Bind retained assessments to the exact operation/status description and relevant source evidence so changed inputs invalidate them instead of inheriting stale judgments.
+- For multipart errors, reconcile parser per-file and aggregate limits with reachable application validation in execution order; keep declared schemas separate from unobserved runtime bodies. State precisely which properties each generator or validator checks. A report-writing helper is not independent validation merely because its output matches the report.
 
 ## Cadence
 

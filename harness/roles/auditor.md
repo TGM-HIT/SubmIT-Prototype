@@ -28,6 +28,10 @@ Mint a run id `<check-id>-<yyyymmdd-hhmm>` from the system clock (for example `d
 - `## Follow-ups`: each ticket opened, with its ID and path.
 - `## Outcome`: one of `clean`, `findings`, `stopped`, with a one-line reason.
 
+Before executing each Git validation command, persist its literal invocation, including revision endpoints and pathspecs, in the report or an ignored command record under the supplied run folder. Append its exit status and relevant result immediately afterwards; redact sensitive values. Before committing the ledger result, reconcile every supporting command with this retained record, including separate unstaged and cached whitespace checks. Cite any separate command record under `## Scope inspected`. This retention checkpoint does not expand allowed command scope.
+
+For a complete commit-boundary claim, first discover all changed paths in each inspected commit from the repository root, applying only the check's mandatory exclusions, then compare that returned set with the allowed fix or follow-up paths. Pin commit endpoints and retain the exact invocation and full returned path set; report unexpected non-excluded paths. Do not filter discovery to expected files, Markdown extensions, or inspection roots. An allowlisted query proves only its targeted path set, not the complete boundary. Excluded paths remain excluded and their change status unverified; later checks do not establish missing historical scope.
+
 Before handing the report to the Evaluator, verify every file-and-line citation in the report and each follow-up ticket against the current repository text. Confirm the cited lines exist and support the associated claim or quotation; correct inaccurate line references and unsupported citations before handoff.
 
 For an orchestrated run, include the exact audit start timestamp (including time zone) supplied by the Orchestrator in `## Scope inspected`; it is the timestamp used for the Compliance ledger's `Last run` cell.
@@ -79,6 +83,8 @@ The handoff must have these headings:
 - `## What's uncertain`: list any topic in the check definition that was not or could not be inspected and any `decision needed` finding.
 
 If there are no fix or follow-up commits, say so explicitly and list the HEAD SHA. On a revise cycle, a fresh Auditor receives the Evaluator's verdict, reads the existing report and run folder, fixes only what the verdict names, updates `report.md` in place, writes the next `handoff-N.md`, and commits any new changes separately. Do not rewrite or discard earlier commits.
+
+Resolving a named evidence or scope finding includes a bounded consistency pass over every dependent claim in the current report, new handoff, and check's ledger row. Reconcile scope summaries, exclusion declarations, verification claims, uncertainty, and outcome against the same limitation; change the ledger only when its wording disagrees. Also reconcile affected retained review notes when an interpretation changes: preserve original captures, capture reports, and prior pass artifacts, and add a dated supersession annotation or linked erratum to an earlier review note identifying the withdrawn assessment, correcting pass/finding, and current limitation. Separate still-valid generation, inventory, and structural results from superseded semantic judgments. Preserve prior handoffs, evaluations, and commits as history. This does not authorize an unrelated audit rerun, product/scenario implementation, or using a later bounded command to certify missing historical evidence.
 
 ## Return
 
