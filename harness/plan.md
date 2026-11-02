@@ -64,7 +64,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Bug-33](tickets/done/Bug-33.md) | done | Load supervisor-free finalized groups in student Formal proposals |
 | [Bug-34](tickets/done/Bug-34.md) | done | Remove fixed allocation size ceilings without weakening optimization |
 | [Bug-35](tickets/Bug-35.md) | to-do | Verify archive content safety before publication |
-| [Bug-36](tickets/Bug-36.md) | to-do | Document malformed formal-list query errors |
+| [Bug-36](tickets/done/Bug-36.md) | done | Document malformed formal-list query errors |
 | [Bug-37](tickets/Bug-37.md) | to-do | Declare nonblank Idea PDF metadata strings in OpenAPI |
 | [Bug-38](tickets/Bug-38.md) | to-do | Document multipart upload size-limit responses accurately |
 | [Bug-39](tickets/Bug-39.md) | to-do | Keep student own-grade history free of peer grades |
