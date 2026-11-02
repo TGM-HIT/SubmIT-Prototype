@@ -66,7 +66,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Bug-35](tickets/Bug-35.md) | to-do | Verify archive content safety before publication |
 | [Bug-36](tickets/done/Bug-36.md) | done | Document malformed formal-list query errors |
 | [Bug-37](tickets/done/Bug-37.md) | done | Declare nonblank Idea PDF metadata strings in OpenAPI |
-| [Bug-38](tickets/Bug-38.md) | to-do | Document multipart upload size-limit responses accurately |
+| [Bug-38](tickets/Bug-38.md) | awaiting-human | Document multipart upload size-limit responses accurately |
 | [Bug-39](tickets/Bug-39.md) | to-do | Keep student own-grade history free of peer grades |
 
 ### Development
