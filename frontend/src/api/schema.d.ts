@@ -4565,7 +4565,7 @@ export interface operations {
                     "application/json": components["schemas"]["SpecificationResponse"];
                 };
             };
-            /** @description Empty/non-PDF/oversized file or conflicting narrative inputs. */
+            /** @description Empty/non-PDF file or conflicting narrative inputs. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -4610,14 +4610,12 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description Multipart request exceeds the configured request ceiling. */
+            /** @description HTTP 413 if either a file part exceeds 10 MiB (10,485,760 bytes) or the entire multipart request body exceeds 11 MiB (11,534,336 bytes), including metadata, other parts, and multipart framing. Equality to either limit is not rejected by that limit. */
             413: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
+                content?: never;
             };
         };
     };
@@ -4716,7 +4714,7 @@ export interface operations {
                     "application/json": components["schemas"]["IdeaResponse"];
                 };
             };
-            /** @description Invalid metadata, empty/non-PDF/oversized file, or conflicting narrative inputs. */
+            /** @description Invalid metadata, empty/non-PDF file, or conflicting narrative inputs. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -4761,14 +4759,12 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description Multipart request exceeds the configured request ceiling. */
+            /** @description HTTP 413 if either a file part exceeds 10 MiB (10,485,760 bytes) or the entire multipart request body exceeds 11 MiB (11,534,336 bytes), including metadata, other parts, and multipart framing. Equality to either limit is not rejected by that limit. */
             413: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
+                content?: never;
             };
         };
     };
@@ -6299,6 +6295,13 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
+            /** @description HTTP 413 if either a file part exceeds 10 MiB (10,485,760 bytes) or the entire multipart request body exceeds 11 MiB (11,534,336 bytes), including metadata, other parts, and multipart framing. Equality to either limit is not rejected by that limit. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     list_1: {
@@ -6844,7 +6847,7 @@ export interface operations {
                     "application/json": components["schemas"]["IdeaResponse"];
                 };
             };
-            /** @description Invalid metadata, empty/non-PDF/oversized file, or conflicting narrative inputs. */
+            /** @description Invalid metadata, empty/non-PDF file, or conflicting narrative inputs. */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -6871,14 +6874,12 @@ export interface operations {
                     "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
-            /** @description Multipart request exceeds the configured request ceiling. */
+            /** @description HTTP 413 if either a file part exceeds 10 MiB (10,485,760 bytes) or the entire multipart request body exceeds 11 MiB (11,534,336 bytes), including metadata, other parts, and multipart framing. Equality to either limit is not rejected by that limit. */
             413: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content: {
-                    "application/json": components["schemas"]["ApiErrorResponse"];
-                };
+                content?: never;
             };
         };
     };

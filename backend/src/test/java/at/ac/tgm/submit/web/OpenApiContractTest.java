@@ -1839,6 +1839,7 @@ class OpenApiContractTest {
         assertEquals(expectedConditionKeys, TICKET_ERROR_CONDITIONS.keySet(),
                 "The independent semantic oracle must cover every non-authentication route/status in the matrix.");
         assertPublicationReviewContractInventory();
+        assertMultipartSizeLimitContract(paths, failures);
 
         for (Map.Entry<String, Set<String>> route : TICKET_ERROR_CODES.entrySet()) {
             String[] operationParts = route.getKey().split(" ", 2);
@@ -1865,8 +1866,15 @@ class OpenApiContractTest {
                         }
                     }
                 }
-                assertResponseSchema(operation.path("responses"), status, "ApiErrorResponse",
-                        location, failures);
+                if (isMultipartLimit413(method, path, status)) {
+                    if (response.has("content")) {
+                        failures.add(location + " 413 must leave content/schema unspecified, found "
+                                + response.path("content"));
+                    }
+                } else {
+                    assertResponseSchema(operation.path("responses"), status, "ApiErrorResponse",
+                            location, failures);
+                }
             }
 
             Set<String> expectedErrors = new TreeSet<>(route.getValue());
@@ -1912,6 +1920,69 @@ class OpenApiContractTest {
                         "/api/artifacts/{artifactId}/publication-review", "200",
                         "#/components/schemas/ArtifactResponse")),
                 "The independent success baseline must retain the 200 ArtifactResponse.");
+    }
+
+    private static void assertMultipartSizeLimitContract(JsonNode paths, List<String> failures) {
+        List<String> operations = List.of(
+                "post /api/projects/{projectId}/artifacts",
+                "post /api/ideas/pdf",
+                "put /api/ideas/{id}/pdf",
+                "put /api/ideas/{id}/specification/pdf");
+        for (String operationKey : operations) {
+            String[] parts = operationKey.split(" ", 2);
+            JsonNode response = paths.path(parts[1]).path(parts[0]).path("responses").path("413");
+            String description = response.path("description").asText().toLowerCase(Locale.ROOT);
+            String location = parts[0].toUpperCase(Locale.ROOT) + " " + parts[1] + " 413";
+            for (String required : List.of(
+                    "either a file part exceeds",
+                    "10 mib",
+                    "10,485,760 bytes",
+                    "entire multipart request body exceeds",
+                    "11 mib",
+                    "11,534,336 bytes",
+                    "including metadata, other parts, and multipart framing",
+                    "equality to either limit is not rejected")) {
+                if (!description.contains(required)) {
+                    failures.add(location + " must identify multipart trigger '" + required + "': " + description);
+                }
+            }
+            if (response.has("content")) {
+                failures.add(location + " must not claim an unsupported content/schema, found "
+                        + response.path("content"));
+            }
+        }
+
+        assertPdf400Description(paths, "post", "/api/ideas/pdf",
+                List.of("invalid metadata", "empty/non-pdf file", "conflicting narrative inputs"), failures);
+        assertPdf400Description(paths, "put", "/api/ideas/{id}/pdf",
+                List.of("invalid metadata", "empty/non-pdf file", "conflicting narrative inputs"), failures);
+        assertPdf400Description(paths, "put", "/api/ideas/{id}/specification/pdf",
+                List.of("empty/non-pdf file", "conflicting narrative inputs"), failures);
+    }
+
+    private static void assertPdf400Description(JsonNode paths, String method, String path,
+            List<String> requiredCauses, List<String> failures) {
+        JsonNode response = paths.path(path).path(method).path("responses").path("400");
+        String description = response.path("description").asText().toLowerCase(Locale.ROOT);
+        String location = method.toUpperCase(Locale.ROOT) + " " + path + " 400";
+        for (String cause : requiredCauses) {
+            if (!description.contains(cause)) {
+                failures.add(location + " must retain application-validation cause '" + cause + "': " + description);
+            }
+        }
+        if (description.contains("oversiz") || description.contains("over-size")
+                || description.contains("too large") || description.contains("exceed")
+                || description.contains("maximum file size") || description.contains("maximum-file-size")) {
+            failures.add(location + " must not describe a parser size limit as HTTP 400: " + description);
+        }
+    }
+
+    private static boolean isMultipartLimit413(String method, String path, String status) {
+        return "413".equals(status) && Set.of(
+                "post /api/projects/{projectId}/artifacts",
+                "post /api/ideas/pdf",
+                "put /api/ideas/{id}/pdf",
+                "put /api/ideas/{id}/specification/pdf").contains(method + " " + path);
     }
 
     private void assertIndependentConditionCorrections(JsonNode paths, List<String> failures) {
@@ -2220,7 +2291,7 @@ class OpenApiContractTest {
                 post|/api/projects/{projectId}/formal-applications|400,403,409
                 post|/api/projects/{projectId}/complete|400,403,404,409
                 get|/api/projects/{projectId}/artifacts|400,403,404
-                post|/api/projects/{projectId}/artifacts|400,403,404,409
+                post|/api/projects/{projectId}/artifacts|400,403,404,409,413
                 get|/api/ideas/{id}|400,403,404
                 get|/api/ideas/{id}/pdf|400,403,404
                 get|/api/ideas/{id}/specification/pdf|400,403,404
@@ -2373,6 +2444,7 @@ class OpenApiContractTest {
                 post|/api/projects/{projectId}/artifacts|403|authorized to upload an artifact
                 post|/api/projects/{projectId}/artifacts|404|project does not exist
                 post|/api/projects/{projectId}/artifacts|409|formal application is not approved;lifecycle state;artifact upload
+                post|/api/projects/{projectId}/artifacts|413|either a file part exceeds;10 MiB;10,485,760 bytes;entire multipart request body exceeds;11 MiB;11,534,336 bytes;including metadata, other parts, and multipart framing;Equality to either limit is not rejected
                 get|/api/ideas/{id}|400|idea ID;UUID
                 get|/api/ideas/{id}|403|not permitted to view this idea
                 get|/api/ideas/{id}|404|idea does not exist
@@ -2386,11 +2458,11 @@ class OpenApiContractTest {
                 put|/api/ideas/{id}|403|role or ownership;update this idea
                 put|/api/ideas/{id}|404|idea does not exist
                 put|/api/ideas/{id}|409|current lifecycle state;does not permit this update
-                put|/api/ideas/{id}/pdf|400|invalid metadata;empty/non-PDF/oversized file;conflicting narrative inputs
+                put|/api/ideas/{id}/pdf|400|invalid metadata;empty/non-PDF file;conflicting narrative inputs
                 put|/api/ideas/{id}/pdf|403|caller is not authorized to update this idea
                 put|/api/ideas/{id}/pdf|404|idea does not exist
                 put|/api/ideas/{id}/pdf|409|idea lifecycle does not permit editing
-                put|/api/ideas/{id}/pdf|413|multipart request exceeds the configured request ceiling
+                put|/api/ideas/{id}/pdf|413|either a file part exceeds;10 MiB;10,485,760 bytes;entire multipart request body exceeds;11 MiB;11,534,336 bytes;including metadata, other parts, and multipart framing;Equality to either limit is not rejected
                 put|/api/ideas/{id}/supervisor|400|idea ID;supervisor-assignment request
                 put|/api/ideas/{id}/supervisor|403|role or authorization;assign a supervisor
                 put|/api/ideas/{id}/supervisor|404|idea does not exist
@@ -2403,11 +2475,11 @@ class OpenApiContractTest {
                 put|/api/ideas/{id}/specification|403|role or ownership;update this specification
                 put|/api/ideas/{id}/specification|404|idea does not exist
                 put|/api/ideas/{id}/specification|409|lifecycle state;specification status
-                put|/api/ideas/{id}/specification/pdf|400|empty/non-PDF/oversized file;conflicting narrative inputs
+                put|/api/ideas/{id}/specification/pdf|400|empty/non-PDF file;conflicting narrative inputs
                 put|/api/ideas/{id}/specification/pdf|403|caller is not authorized to update this specification
                 put|/api/ideas/{id}/specification/pdf|404|idea does not exist
                 put|/api/ideas/{id}/specification/pdf|409|idea or specification lifecycle does not permit editing
-                put|/api/ideas/{id}/specification/pdf|413|multipart request exceeds the configured request ceiling
+                put|/api/ideas/{id}/specification/pdf|413|either a file part exceeds;10 MiB;10,485,760 bytes;entire multipart request body exceeds;11 MiB;11,534,336 bytes;including metadata, other parts, and multipart framing;Equality to either limit is not rejected
                 put|/api/formal-applications/{id}|400|application ID;formal-application fields
                 put|/api/formal-applications/{id}|403|authorized to update this application
                 put|/api/formal-applications/{id}|404|formal application does not exist
@@ -2449,9 +2521,9 @@ class OpenApiContractTest {
                 get|/api/ideas|400|pagination;idea-filter
                 post|/api/ideas|400|idea request;collaborator input
                 post|/api/ideas|403|role;not permitted to create an idea
-                post|/api/ideas/pdf|400|invalid metadata;empty/non-PDF/oversized file;conflicting narrative inputs
+                post|/api/ideas/pdf|400|invalid metadata;empty/non-PDF file;conflicting narrative inputs
                 post|/api/ideas/pdf|403|caller is not authorized to create an idea
-                post|/api/ideas/pdf|413|multipart request exceeds the configured request ceiling
+                post|/api/ideas/pdf|413|either a file part exceeds;10 MiB;10,485,760 bytes;entire multipart request body exceeds;11 MiB;11,534,336 bytes;including metadata, other parts, and multipart framing;Equality to either limit is not rejected
                 post|/api/ideas/{id}/withdraw|400|idea ID;UUID
                 post|/api/ideas/{id}/withdraw|403|role or ownership;withdraw the idea
                 post|/api/ideas/{id}/withdraw|404|idea does not exist

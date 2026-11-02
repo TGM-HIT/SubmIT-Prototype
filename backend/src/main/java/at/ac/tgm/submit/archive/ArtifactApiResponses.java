@@ -23,7 +23,11 @@ public final class ArtifactApiResponses {
                     useReturnTypeSchema = true),
             @ApiResponse(responseCode = "409", description = "The formal application is not approved, or the "
                     + "project lifecycle state does not permit artifact upload.",
-                    content = @Content(schema = @Schema(implementation = ApiErrorResponse.class)))
+                    content = @Content(schema = @Schema(implementation = ApiErrorResponse.class))),
+            @ApiResponse(responseCode = "413", description = "HTTP 413 if either a file part exceeds 10 MiB "
+                    + "(10,485,760 bytes) or the entire multipart request body exceeds 11 MiB "
+                    + "(11,534,336 bytes), including metadata, other parts, and multipart framing. Equality to "
+                    + "either limit is not rejected by that limit.", content = @Content)
     })
     public @interface Upload {
     }

@@ -43,12 +43,13 @@ class IdeaPdfCreateController {
             content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
                     schema = @Schema(implementation = IdeaResponse.class)))
     @ApiResponse(responseCode = "400",
-            description = "Invalid metadata, empty/non-PDF/oversized file, or conflicting narrative inputs.",
+            description = "Invalid metadata, empty/non-PDF file, or conflicting narrative inputs.",
             content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
                     schema = @Schema(implementation = ApiErrorResponse.class)))
-    @ApiResponse(responseCode = "413", description = "Multipart request exceeds the configured request ceiling.",
-            content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
-                    schema = @Schema(implementation = ApiErrorResponse.class)))
+    @ApiResponse(responseCode = "413", description = "HTTP 413 if either a file part exceeds 10 MiB "
+            + "(10,485,760 bytes) or the entire multipart request body exceeds 11 MiB "
+            + "(11,534,336 bytes), including metadata, other parts, and multipart framing. Equality to "
+            + "either limit is not rejected by that limit.", content = @Content)
     @ApiResponse(responseCode = "403", description = "Caller is not authorized to create an idea.",
             content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
                     schema = @Schema(implementation = ApiErrorResponse.class)))
