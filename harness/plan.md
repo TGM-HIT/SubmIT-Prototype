@@ -3,10 +3,19 @@
 ## Ticket status
 
 - `to-do`: not started.
-- `in-progress`: implementation/evaluation is active.
+- `in-progress`: work has started. This status can remain after an ordinary stopped run closes, so an `in-progress` row does not by itself prove that implementation or evaluation is live.
 - `awaiting-human`: one or more acceptance checks need human verification or disposition after implementation is complete, or an unresolved product/policy decision pauses work (implementation need not be complete, including before the first dispatch). This is nonterminal: do not treat it as done or failed, and do not use it to defer an actionable code defect.
 - `done`: accepted by an Evaluator pass or by an explicit authorized human acceptance recorded in the run artifacts. A human acceptance may leave items unverified; the run log's closeout line lists them.
-- `failed`: explicitly stopped or terminally failed. If the only remaining gap is human-exercisable verification, use `awaiting-human` until the human path is completed or declined. A failed ticket can be continued (revised ticket, new run building on the earlier commits) rather than restarted; the row returns to `in-progress` for the continuation run. See "Continuing a failed ticket" in `roles/orchestrator.md`.
+- `failed`: terminally failed ticket closeout. If the only remaining gap is human-exercisable verification, use `awaiting-human` until the human path is completed or declined. A failed ticket can be continued (revised ticket, new run building on the earlier commits) rather than restarted; the row returns to `in-progress` for the continuation run. See "Continuing a failed ticket" in `roles/orchestrator.md`.
+
+Run outcomes and ticket status are separate. `stopped` is a run outcome, not a ticket status:
+
+- A preflight stop before a run folder is created leaves the ticket row unchanged.
+- A pre-dispatch scope-readiness stop after a run folder is created also leaves the row unchanged; retain the folder and completed stop record.
+- An ordinary stop after work starts closes that run with outcome `stopped` and leaves the ticket `in-progress`. The closed run does not mean the ticket was accepted or failed; an explicitly requested continuation uses a new run after correcting the stop cause and preserves the earlier run history.
+- A terminal failed-ticket closeout has outcome `failed` and ledger status `failed`; an authorized continuation follows the separate failed-ticket procedure.
+
+See the [Orchestrator contract](roles/orchestrator.md) for the owning workflow and continuation procedures.
 
 ## Tickets
 
