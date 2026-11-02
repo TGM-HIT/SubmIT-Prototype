@@ -437,6 +437,157 @@ class ProjectWorkApprovalApiTest {
         }
     }
 
+    @Test
+    void completionRequiresEachArtifactTypeWithFinalGradeAndApprovedApplicationPresent() throws Exception {
+        List<ArtifactType> required = List.of(
+                ArtifactType.WEBSITE_ARCHIVE, ArtifactType.POSTER, ArtifactType.SOURCE_DATA);
+        for (ArtifactType missing : required) {
+            UUID projectId = project("IN_PROGRESS");
+            approveFormalApplicationThroughTeacherReview(projectId);
+            recordProjectFinalGrade(projectId);
+            List<ArtifactType> present = required.stream().filter(type -> type != missing).toList();
+            for (ArtifactType type : present) {
+                uploadAndApproveArtifact(projectId, type);
+            }
+            assertCompletionPrerequisites(projectId, present);
+            Map<String, List<String>> before = projectSnapshot(projectId);
+
+            MvcResult rejected = mvc.perform(bearer(post("/api/projects/{id}/complete", projectId), teacher))
+                    .andExpect(status().isConflict()).andReturn();
+            assertError(rejected, 409);
+            assertEquals(before, projectSnapshot(projectId),
+                    "Missing " + missing + " must preserve persisted project state and audit history.");
+        }
+
+        UUID completeProject = project("IN_PROGRESS");
+        approveFormalApplicationThroughTeacherReview(completeProject);
+        recordProjectFinalGrade(completeProject);
+        for (ArtifactType type : required) {
+            uploadAndApproveArtifact(completeProject, type);
+        }
+        assertCompletionPrerequisites(completeProject, required);
+        MvcResult completed = mvc.perform(bearer(post("/api/projects/{id}/complete", completeProject), teacher))
+                .andExpect(status().isOk()).andReturn();
+        JsonNode response = mapper.readTree(completed.getResponse().getContentAsByteArray());
+        assertText(response, "projectId", completeProject.toString());
+        assertText(response, "status", "PROJECT_COMPLETED");
+        StoredRecord persisted = store.repository().findById(completeProject).orElseThrow();
+        assertEquals("PROJECT_COMPLETED", persisted.getStatus());
+        assertTrue(response.path("completedAt").isTextual());
+        assertText(store.parse(persisted), "completedAt", response.path("completedAt").textValue());
+        Instant.parse(response.path("completedAt").textValue());
+    }
+
+    @Test
+    void publishedRubricTransitionPreservesPriorAssessmentThroughPublicHistoryApi() throws Exception {
+        UUID projectId = project("IN_PROGRESS");
+        approveFormalApplicationThroughTeacherReview(projectId);
+        JsonNode original = mapper.readTree(request(post("/api/projects/{id}/student-grades", projectId), teacher,
+                Map.of("rubricId", rubricId, "assessmentType", "ROUTINE", "studentId", studentId,
+                        "criterionId", "individual", "grade", 4, "evidence", "Version A evidence",
+                        "comments", "Version A recorded comments"))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsByteArray());
+        assertTrue(original.path("id").isTextual());
+        String originalId = UUID.fromString(original.path("id").textValue()).toString();
+        assertText(original, "rubricId", rubricId.toString());
+        assertText(original, "studentId", studentId.toString());
+        assertText(original, "assessmentType", "ROUTINE");
+        assertText(original, "criterionId", "individual");
+        assertText(original, "evidence", "Version A evidence");
+        assertText(original, "comments", "Version A recorded comments");
+        assertExactGrade(original, 4);
+        assertEquals(original, findById(read(get("/api/projects/{id}/student-grades", projectId), teacher)
+                .path("content"), originalId));
+
+        UUID versionB = publishRubric();
+        assertFalse(rubricId.equals(versionB));
+        mvc.perform(bearer(put("/api/projects/{id}/assessment-rubrics", projectId), teacher)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(mapper.writeValueAsBytes(Map.of("routineRubricId", versionB,
+                                "finalRubricId", rubricId, "routineReason", "Apply version B to this project"))))
+                .andExpect(status().isOk());
+        JsonNode selections = read(get("/api/projects/{id}/assessment-rubrics", projectId), teacher);
+        assertText(selections, "routineRubricId", versionB.toString());
+        assertText(selections, "finalRubricId", rubricId.toString());
+
+        JsonNode history = read(get("/api/projects/{id}/student-grades", projectId), teacher);
+        assertEquals(original, findById(history.path("content"), originalId),
+                "Selecting B must preserve A's assessment identity, version, values, and recorded evidence.");
+
+        JsonNode newAssessment = mapper.readTree(request(
+                post("/api/projects/{id}/student-grades", projectId), teacher,
+                Map.of("rubricId", versionB, "assessmentType", "ROUTINE", "studentId", studentId,
+                        "criterionId", "individual", "grade", 3, "evidence", "Version B evidence"))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsByteArray());
+        assertTrue(newAssessment.path("id").isTextual());
+        String newId = UUID.fromString(newAssessment.path("id").textValue()).toString();
+        assertFalse(originalId.equals(newId));
+        assertText(newAssessment, "rubricId", versionB.toString());
+        assertText(newAssessment, "studentId", studentId.toString());
+        assertText(newAssessment, "assessmentType", "ROUTINE");
+        assertText(newAssessment, "criterionId", "individual");
+        assertText(newAssessment, "evidence", "Version B evidence");
+        assertExactGrade(newAssessment, 3);
+        JsonNode reloaded = read(get("/api/projects/{id}/student-grades", projectId), teacher);
+        assertEquals(original, findById(reloaded.path("content"), originalId),
+                "A new B write must not rewrite the prior A assessment.");
+        assertEquals(newAssessment, findById(reloaded.path("content"), newId));
+    }
+
+    private void recordProjectFinalGrade(UUID projectId) throws Exception {
+        request(put("/api/projects/{id}/final-grade", projectId), teacher,
+                Map.of("rubricId", rubricId, "project", Map.of("grade", 4, "rationale", "Completion prerequisite.")))
+                .andExpect(status().isOk());
+    }
+
+    private void assertCompletionPrerequisites(UUID projectId, List<ArtifactType> expectedTypes) throws Exception {
+        StoredRecord project = store.repository().findById(projectId).orElseThrow();
+        assertEquals("IN_PROGRESS", project.getStatus());
+        assertFalse(store.parse(project).hasNonNull("completedAt"));
+        assertEquals("APPROVED", application(projectId).getStatus());
+        JsonNode currentGrade = read(get("/api/projects/{id}/final-grade", projectId), teacher).path("current");
+        assertTrue(currentGrade.isObject());
+        assertExactGrade(currentGrade, 4);
+        assertTrue(currentGrade.path("id").isTextual());
+        StoredRecord grade = store.repository().findById(
+                UUID.fromString(currentGrade.path("id").textValue())).orElseThrow();
+        assertEquals("final_grade", grade.getType());
+        assertEquals(projectId.toString(), grade.getParentId());
+        assertExactGrade(store.parse(grade), 4);
+        List<StoredRecord> artifacts = store.repository().findByTypeAndParentId("artifact", projectId.toString());
+        assertEquals(expectedTypes.size(), artifacts.size());
+        java.util.Set<String> actualTypes = new java.util.HashSet<>();
+        for (StoredRecord artifact : artifacts) {
+            JsonNode payload = store.parse(artifact);
+            assertTrue(payload.path("type").isTextual());
+            actualTypes.add(payload.path("type").textValue());
+            assertEquals("APPROVED", artifact.getStatus());
+            assertText(payload, "publicationStatus", "APPROVED");
+        }
+        assertEquals(expectedTypes.stream().map(ArtifactType::name).collect(java.util.stream.Collectors.toSet()),
+                actualTypes);
+    }
+
+    private void assertExactGrade(JsonNode record, int expected) {
+        JsonNode grade = record.get("grade");
+        assertTrue(grade != null && grade.isNumber(), "grade must be present and numeric");
+        assertEquals(0, BigDecimal.valueOf(expected).compareTo(grade.decimalValue()),
+                "The full numeric grade must match without integer truncation.");
+    }
+
+    private void uploadAndApproveArtifact(UUID projectId, ArtifactType type) throws Exception {
+        JsonNode uploaded = mapper.readTree(mvc.perform(multipart("/api/projects/{id}/artifacts", projectId)
+                        .file(new MockMultipartFile("file", type.name() + ".bin",
+                                MediaType.APPLICATION_OCTET_STREAM_VALUE, FILE))
+                        .param("type", type.name()).param("title", type.name())
+                        .header("Authorization", "Bearer " + teacher))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsByteArray());
+        assertTrue(uploaded.path("id").isTextual());
+        UUID artifactId = UUID.fromString(uploaded.path("id").textValue());
+        reviewArtifact(artifactId, "SUBMIT", null).andExpect(status().isOk());
+        reviewArtifact(artifactId, "APPROVE", "Reviewed for completion.").andExpect(status().isOk());
+    }
+
     private UUID uploadArtifact(UUID project) throws Exception {
         JsonNode response = mapper.readTree(artifactUpload(project, teacher).andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsByteArray());
