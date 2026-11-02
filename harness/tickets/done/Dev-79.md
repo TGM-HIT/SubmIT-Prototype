@@ -6,11 +6,11 @@ Extend the accepted persistent pilot with a bounded source classification of ide
 
 ## Source
 
-Source: [Dev-72](Dev-72.md) recovery and [failed handoff](../runs/Dev-72-20261102-1755/handoff-1.md), accepted [Dev-71](done/Dev-71.md) schema in [the sole inventory](../../docs/spec-test-traceability.md), archived [report](../runs/archive/Compliance-02-20261101-1603/report.md), [atomic lead](../runs/archive/Compliance-02-20261101-1603/atomic-4.txt) and [Evaluation 4](../runs/archive/Compliance-02-20261101-1603/evaluation-4.md) E2a/E2b; repository revision: `3c6c0a4a5bcd7050d9876c463965b8b6f967ada7`; `docs/SPEC.md:9-44`.
+Source: [Dev-72](../Dev-72.md) recovery and [failed handoff](../../runs/Dev-72-20261102-1755/handoff-1.md), accepted [Dev-71](Dev-71.md) schema in [the sole inventory](../../../docs/spec-test-traceability.md), archived [report](../../runs/archive/Compliance-02-20261101-1603/report.md), [atomic lead](../../runs/archive/Compliance-02-20261101-1603/atomic-4.txt) and [Evaluation 4](../../runs/archive/Compliance-02-20261101-1603/evaluation-4.md) E2a/E2b; repository revision: `3c6c0a4a5bcd7050d9876c463965b8b6f967ada7`; `docs/SPEC.md:9-44`.
 
 ## Scope and contract
 
-- Prerequisites: accepted Dev-71 and [Dev-78](Dev-78.md), normal clean-tree preflight. Incorporate Dev-72's C1–C5 [common child contract](Dev-72.md#common-child-execution-and-partial-acceptance-contract) in full, including the current owner's child preservation authorization, early persistence, partial-validation policy and exclusions. No accepted Dev-72 prerequisite.
+- Prerequisites: accepted Dev-71 and [Dev-78](Dev-78.md), normal clean-tree preflight. Incorporate Dev-72's C1–C5 [common child contract](../Dev-72.md#common-child-execution-and-partial-acceptance-contract) in full, including the current owner's child preservation authorization, early persistence, partial-validation policy and exclusions. No accepted Dev-72 prerequisite.
 - Own only current `docs/SPEC.md` **2. People and Roles** through **3. Project Lifecycle**, ending immediately before **4. Project Ideas and Specifications**: 6,464 non-whitespace characters at the captured revision. Headings independently anchor current ownership. Persist a coherent opening role unit before broader in-slice reading, then extend the accepted pilot without editing it.
 - Historical ownership is old-source numeric indices **009–044**. Exact set: **173 IDs**. In the following manifest, `Snnn:m` means every ID `Snnn.01` through `Snnn.mm` inclusive, and no others:
 
@@ -29,7 +29,7 @@ Source: [Dev-72](Dev-72.md) recovery and [failed handoff](../runs/Dev-72-2026110
 - Own the saved shared IDs `S041.03-GRADE`, `S041.03-ARTIFACTS`, `S018.12-SCOPE`: retain valid identities or explicit unique aliases/correction reasons under C2. Preserve the split final-grade versus artefact meaning and non-normative exclusion; do not import the saved coverage claim.
 - Deliver only this slice's current/history records and derived totals/views in `docs/spec-test-traceability.md`. **Scope-gate allowance: `docs/spec-test-traceability.md`.** Keep schema-contract prose, config partitions and other owners' records unchanged; update only the derived progress banner under C2. Use exact source excerpts/order and config revision `4b24ad02a9b3151a9ec5228a4e2e04e17262f787` after verifying matching bytes; record execution-entry HEAD separately.
 - No test discovery, new tests, app builds, runtime/behavior/SPEC/schema/tooling/role/gate edits. Non-delegated normative evidence remains honestly queued under Dev-62 per C4 unless the exact existing evaluated lead meets every adoption prerequisite. Only exact approved delegations apply. All seven saved candidates remain read-only with exact paths and before/after hashes; preserve run evidence and signed human decisions. Exclude root `bugs-and-ideas.md` contents and `docs/user-guide/`, including traversal.
-- C3 governs cross-cutting history: no dangling IDs; hand off exact pending IDs to named later owners without counting them reconciled. [Dev-80](Dev-80.md) consumes this accepted handoff.
+- C3 governs cross-cutting history: no dangling IDs; hand off exact pending IDs to named later owners without counting them reconciled. [Dev-80](../Dev-80.md) consumes this accepted handoff.
 
 ## Mechanical checks (the Evaluator re-runs)
 

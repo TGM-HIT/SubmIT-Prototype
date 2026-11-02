@@ -30,8 +30,7 @@ class CommitScope {
         "harness/tickets/done/Feature-04.md",
         "harness/tickets/done/Feature-05.md",
         "harness/tickets/done/Feature-07.md",
-        "harness/tickets/done/Feature-08.md",
-        "docs/spec-test-traceability.md"
+        "harness/tickets/done/Feature-08.md"
     };
     static final String[] SPEC_FILES = { "docs/SPEC.md", "backend/SPEC.md", "frontend/SPEC.md" };
 

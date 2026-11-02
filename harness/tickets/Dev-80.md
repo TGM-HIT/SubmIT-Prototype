@@ -10,7 +10,7 @@ Source: [Dev-72](Dev-72.md) recovery and [failed handoff](../runs/Dev-72-2026110
 
 ## Scope and contract
 
-- Prerequisites: accepted Dev-71 and [Dev-79](Dev-79.md), normal clean-tree preflight. Incorporate Dev-72's C1–C5 [common child contract](Dev-72.md#common-child-execution-and-partial-acceptance-contract) in full, including the current owner's child preservation authorization; no new isolation blocker or accepted Dev-72 prerequisite.
+- Prerequisites: accepted Dev-71 and [Dev-79](done/Dev-79.md), normal clean-tree preflight. Incorporate Dev-72's C1–C5 [common child contract](Dev-72.md#common-child-execution-and-partial-acceptance-contract) in full, including the current owner's child preservation authorization; no new isolation blocker or accepted Dev-72 prerequisite.
 - Own current `docs/SPEC.md` **4. Project Ideas and Specifications** through **5. Formal Project Application**, ending immediately before **6. Project Progress, Grading, and Metrics**: 5,052 non-whitespace characters at the captured revision. Anchor by current headings, not historical line assumptions. Persist a coherent opening initial-idea field unit before broader in-slice history/context reads.
 - Historical ownership is old-source numeric indices **045–079**, exactly **137 IDs**. `Snnn:m` expands to every `Snnn.01` through `Snnn.mm` inclusive:
 
