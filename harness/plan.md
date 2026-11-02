@@ -144,7 +144,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-69](tickets/Dev-69.md) | to-do | Add actionable period and allocation instructions to the English admin guide |
 | [Dev-70](tickets/done/Dev-70.md) | done | Review and salvage the Dev-62 public HTTP regressions |
 | [Dev-71](tickets/done/Dev-71.md) | done | Review traceability tooling and staged inventory semantics |
-| [Dev-72](tickets/Dev-72.md) | in-progress | Classify shared SPEC clauses and reconcile shared history |
+| [Dev-72](tickets/Dev-72.md) | failed | Classify shared SPEC clauses and reconcile shared history |
 | [Dev-73](tickets/Dev-73.md) | to-do | Classify backend SPEC clauses and reconcile backend history |
 | [Dev-74](tickets/Dev-74.md) | to-do | Classify frontend SPEC clauses and reconcile frontend history |
 | [Dev-75](tickets/Dev-75.md) | to-do | Review the first shared identity evidence batch |
