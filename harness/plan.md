@@ -143,7 +143,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-68](tickets/Dev-68.md) | to-do | Document teacher supervision preferences in both guide locales |
 | [Dev-69](tickets/Dev-69.md) | to-do | Add actionable period and allocation instructions to the English admin guide |
 | [Dev-70](tickets/done/Dev-70.md) | done | Review and salvage the Dev-62 public HTTP regressions |
-| [Dev-71](tickets/Dev-71.md) | in-progress | Review traceability tooling and staged inventory semantics |
+| [Dev-71](tickets/done/Dev-71.md) | done | Review traceability tooling and staged inventory semantics |
 | [Dev-72](tickets/Dev-72.md) | to-do | Classify shared SPEC clauses and reconcile shared history |
 | [Dev-73](tickets/Dev-73.md) | to-do | Classify backend SPEC clauses and reconcile backend history |
 | [Dev-74](tickets/Dev-74.md) | to-do | Classify frontend SPEC clauses and reconcile frontend history |

@@ -6,7 +6,7 @@ Make the retained bounded validator and record format usable for staged recovery
 
 ## Source
 
-Source: [Dev-62](Dev-62.md) recovery, [handoff-2](../runs/Dev-62-20261102-1537/handoff-2.md), and archived [Evaluation 4](../runs/archive/Compliance-02-20261101-1603/evaluation-4.md). The required validator failed on the partial inventory; mechanical checks did not establish semantic completeness. Authoring HEAD: `bcbdc9ddae51c7d2fc842a3050397af4924848f5`.
+Source: [Dev-62](../Dev-62.md) recovery, [handoff-2](../../runs/Dev-62-20261102-1537/handoff-2.md), and archived [Evaluation 4](../../runs/archive/Compliance-02-20261101-1603/evaluation-4.md). The required validator failed on the partial inventory; mechanical checks did not establish semantic completeness. Authoring HEAD: `bcbdc9ddae51c7d2fc842a3050397af4924848f5`.
 
 ## Scope and contract
 

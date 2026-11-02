@@ -9,7 +9,6 @@ class CommitScope {
         "frontend/scripts/"
     };
     static final String[] ALLOWED_FILES = {
-        "docs/spec-test-traceability.md",
         ".gitignore",
         ".env.example",
         "Makefile",
