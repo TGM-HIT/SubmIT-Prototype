@@ -140,7 +140,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | --- | --- | --- |
 | [Agent-01](tickets/done/Agent-01.md) | done | Add a dedicated Agent ticket category |
 | [Agent-02](tickets/done/Agent-02.md) | done | Remove named ticket references from agent contracts |
-| [Agent-03](tickets/Agent-03.md) | to-do | Reconcile Compliance-06 follow-up taxonomy with the Auditor contract |
+| [Agent-03](tickets/done/Agent-03.md) | done | Reconcile Compliance-06 follow-up taxonomy with the Auditor contract |
 | [Agent-04](tickets/Agent-04.md) | to-do | Distinguish stopped outcomes from failed ledger status |
 
 ### Features

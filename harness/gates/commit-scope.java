@@ -19,7 +19,6 @@ class CommitScope {
         "frontend/public/favicon.ico",
         "harness/gates/commit-scope.java",
         "harness/checks/Compliance-04.md",
-        "harness/checks/Compliance-06.md",
         "harness/roles/auditor.md",
         "harness/roles/implementor.md",
         "harness/roles/learner.md",
