@@ -6,11 +6,11 @@ Recover the two known Evaluation-4 regression candidates without accepting the f
 
 ## Source
 
-Source: owner-authorized recovery of [Dev-62](Dev-62.md); [failed handoff-2](../runs/Dev-62-20261102-1537/handoff-2.md), [run log](../runs/Dev-62-20261102-1537/run.log), and archived [Evaluation 4](../runs/archive/Compliance-02-20261101-1603/evaluation-4.md), E2b/E2c. Authoring HEAD: `bcbdc9ddae51c7d2fc842a3050397af4924848f5`. Reported passing checks are evidence leads, not an independent acceptance.
+Source: owner-authorized recovery of [Dev-62](../Dev-62.md); [failed handoff-2](../../runs/Dev-62-20261102-1537/handoff-2.md), [run log](../../runs/Dev-62-20261102-1537/run.log), and archived [Evaluation 4](../../runs/archive/Compliance-02-20261101-1603/evaluation-4.md), E2b/E2c. Authoring HEAD: `bcbdc9ddae51c7d2fc842a3050397af4924848f5`. Reported passing checks are evidence leads, not an independent acceptance.
 
 ## Scope and contract
 
-- **Owner preservation update (2026-11-02):** the owner reports moving the seven partial files into [the failed run's evidence directory](../runs/Dev-62-20261102-1537/evidence), retaining their basenames. All seven saved paths exist at refinement time. For Dev-70, this supersedes the pending preservation/isolation authorization described in Dev-62; do not request the same preservation decision again or require a separate worktree solely for these candidates. This records the owner's custody transfer, not an independently verified pre-move byte comparison.
+- **Owner preservation update (2026-11-02):** the owner reports moving the seven partial files into [the failed run's evidence directory](../../runs/Dev-62-20261102-1537/evidence), retaining their basenames. All seven saved paths exist at refinement time. For Dev-70, this supersedes the pending preservation/isolation authorization described in Dev-62; do not request the same preservation decision again or require a separate worktree solely for these candidates. This records the owner's custody transfer, not an independently verified pre-move byte comparison.
 
   | Saved file under the evidence directory | Original repository path |
   | --- | --- |

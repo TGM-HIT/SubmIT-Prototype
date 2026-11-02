@@ -32,7 +32,7 @@ Source: Compliance-02-20261101-1603, report.md Finding 4 and its revision-cycle-
 
 | Phase | Owning tickets | Bounded deliverable / gate |
 | --- | --- | --- |
-| Salvage | [Dev-70](Dev-70.md) | Review only the two retained backend test files and the known completion/history scenarios; independently evaluate before adopting their evidence. |
+| Salvage | [Dev-70](done/Dev-70.md) | Review only the two retained backend test files and the known completion/history scenarios; independently evaluate before adopting their evidence. |
 | Record/tooling review | [Dev-71](Dev-71.md) | Review validator/fixtures/wiring and a single staged inventory contract; preserve strict final validation and honest unreviewed state. |
 | Source classification/history | [Dev-72](Dev-72.md), [Dev-73](Dev-73.md), [Dev-74](Dev-74.md) | Respectively all shared, backend and frontend SPEC prose and exact historical `S`/`B`/`F` row sets; no general test discovery or regression additions. Each requires independent full-partition semantic evaluation. |
 | First evidence wave | [Dev-75](Dev-75.md), [Dev-76](Dev-76.md), [Dev-77](Dev-77.md) | Respectively shared identity, backend API/architecture and frontend language; at most 25 frozen source-selected clauses each. Start only after all three classification/history tickets are independently accepted. |
