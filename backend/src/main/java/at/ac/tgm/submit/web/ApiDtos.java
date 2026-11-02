@@ -175,9 +175,11 @@ public final class ApiDtos {
             + "only by the PDF and cannot be combined with the JSON narrative request.",
             requiredProperties = {"title", "schoolYear"})
     public record IdeaPdfMetadataRequest(
-            @NotBlank @Size(max = 200) @Schema(description = "Manually entered idea title; at most 200 characters.")
+            @NotBlank @Size(min = 1, max = 200) @Schema(description = "Manually entered idea title; at most 200 characters.",
+                    minLength = 1)
             String title,
-            @NotBlank @Size(max = 20) @Schema(description = "Manually selected school year; at most 20 characters.")
+            @NotBlank @Size(min = 1, max = 20) @Schema(description = "Manually selected school year; at most 20 characters.",
+                    minLength = 1)
             String schoolYear,
             @Size(max = 4) @ArraySchema(arraySchema = @Schema(description =
                     "Optional student collaborator IDs; creator is not included; maximum four."),

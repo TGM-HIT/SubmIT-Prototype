@@ -1526,8 +1526,48 @@ class OpenApiContractTest {
         JsonNode schemas = document.path("components").path("schemas");
         JsonNode metadata = schemas.path("IdeaPdfMetadataRequest").path("properties");
         assertEquals(names("title,schoolYear,collaboratorIds"), propertyNames(metadata));
-        assertTrue(schemas.path("IdeaPdfMetadataRequest").path("description").asText()
-                .toLowerCase().contains("manual"));
+        JsonNode metadataSchema = schemas.path("IdeaPdfMetadataRequest");
+        assertEquals("Manual metadata for PDF-based idea creation or replacement. Narrative values are supplied only "
+                        + "by the PDF and cannot be combined with the JSON narrative request.",
+                metadataSchema.path("description").textValue());
+        assertEquals(names("title,schoolYear"), textualMembers(metadataSchema.path("required")));
+        assertEquals(objectMapper.readTree("""
+                {"type":"string","description":"Manually entered idea title; at most 200 characters.",
+                 "maxLength":200,"minLength":1}
+                """), metadata.path("title"));
+        assertEquals(objectMapper.readTree("""
+                {"type":"string","description":"Manually selected school year; at most 20 characters.",
+                 "maxLength":20,"minLength":1}
+                """), metadata.path("schoolYear"));
+        assertEquals(objectMapper.readTree("""
+                {"type":"array","description":"Optional student collaborator IDs; creator is not included; maximum four.",
+                 "items":{"type":"string","format":"uuid"},"maxItems":4,"minItems":0,"uniqueItems":true}
+                """), metadata.path("collaboratorIds"));
+        assertPdfMetadataOperation(paths.path("/api/ideas/pdf").path("post"));
+        assertPdfMetadataOperation(paths.path("/api/ideas/{id}/pdf").path("put"));
+
+        JsonNode ideaResponse = schemas.path("IdeaResponse");
+        assertEquals(names("id,ownerId,creatorId,owners,ownerDisplayName,status,title,description,intendedOutcome,"
+                + "scopePoints,learningTopics,schoolYear,pdfPresent,confirmedSupervisorDisplayName,teacherIdea,"
+                + "specification,reviews,supervisionPreferences"), propertyNames(ideaResponse.path("properties")));
+        assertEquals(names("creatorId,description,id,intendedOutcome,learningTopics,ownerDisplayName,ownerId,owners,"
+                + "reviews,schoolYear,scopePoints,specification,status,supervisionPreferences,title"),
+                textualMembers(ideaResponse.path("required")));
+        assertEquals("uuid", ideaResponse.path("properties").path("id").path("format").asText());
+        assertEquals("string", ideaResponse.path("properties").path("title").path("type").asText());
+        assertEquals("boolean", ideaResponse.path("properties").path("pdfPresent").path("type").asText());
+        JsonNode jsonIdeaTitle = schemas.path("IdeaRequest").path("properties").path("title");
+        assertEquals("Required, non-blank idea title; at most 200 characters.",
+                jsonIdeaTitle.path("description").asText());
+        assertEquals(200, jsonIdeaTitle.path("maxLength").asInt());
+        assertEquals(0, jsonIdeaTitle.path("minLength").asInt());
+        assertEquals(objectMapper.readTree("""
+                {"type":"object","properties":{
+                  "status":{"type":"integer","format":"int32","description":"HTTP response status code."},
+                  "error":{"type":"string","description":"Short error category."},
+                  "message":{"type":"string","description":"Human-readable error detail."}},
+                 "required":["error","message","status"]}
+                """), schemas.path("ApiErrorResponse"));
         assertFalse(propertyNames(schemas.path("IdeaPdfMetadataRequest").path("properties"))
                 .contains("description"));
         assertTrue(schemas.path("IdeaRequest").path("properties").has("description"));
@@ -1575,6 +1615,14 @@ class OpenApiContractTest {
         JsonNode body = operation.path("requestBody").path("content").path("multipart/form-data").path("schema");
         assertTrue(body.isObject(), method.toUpperCase() + " " + path + " must document multipart/form-data.");
         assertEquals(expected, propertyNames(body.path("properties")), method.toUpperCase() + " " + path);
+    }
+
+    private void assertPdfMetadataOperation(JsonNode operation) {
+        JsonNode multipart = operation.path("requestBody").path("content").path("multipart/form-data").path("schema");
+        assertEquals(Set.of("file", "metadata"), fieldNames(multipart.path("properties")));
+        assertEquals(Set.of("file", "metadata"), textualMembers(multipart.path("required")));
+        assertEquals("#/components/schemas/IdeaPdfMetadataRequest",
+                multipart.path("properties").path("metadata").path("$ref").asText());
     }
 
     private void assertOperationMetadata(JsonNode paths, String method, String path, String operationId, String tag) {

@@ -15,6 +15,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import at.ac.tgm.submit.data.RecordStore;
 import at.ac.tgm.submit.data.StoredRecord;
 import java.nio.charset.StandardCharsets;
@@ -26,6 +27,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
@@ -166,6 +168,73 @@ class IdeaPdfApiTest {
     }
 
     @Test
+    void invalidPdfMetadataIsRejectedWithoutAnySideEffectsOnBothWriteRoutes() throws Exception {
+        String ideaId = createPdfIdea("Metadata no-side-effect baseline").path("id").asText();
+        addCollaborator(ideaId);
+        JsonNode initialDetail = ideaDetail(ideaId);
+        List<String> initialRecords = pdfMetadataStateSnapshot();
+        assertArrayEquals(PDF, readIdeaPdf(ideaId));
+
+        for (String field : List.of("title", "schoolYear")) {
+            for (String invalidCase : List.of("omitted", "null", "empty", "whitespace", "overlong")) {
+                ObjectNode metadata = metadataForInvalidCase(field, invalidCase);
+
+                List<String> beforeCreate = pdfMetadataStateSnapshot();
+                assertInvalidMetadataResponse(mockMvc.perform(pdfCreateRequest(metadata, PDF, student)).andReturn());
+                assertEquals(beforeCreate, pdfMetadataStateSnapshot(),
+                        "Rejected create must not add idea or audit records: " + field + " " + invalidCase);
+
+                assertEquals(initialRecords, pdfMetadataStateSnapshot());
+                assertInvalidMetadataResponse(
+                        mockMvc.perform(pdfUpdateRequest(ideaId, student, metadata, PDF)).andReturn());
+                assertEquals(initialRecords, pdfMetadataStateSnapshot(),
+                        "Rejected replacement must preserve idea, PDF, owners and audit history: "
+                                + field + " " + invalidCase);
+                assertEquals(initialDetail, ideaDetail(ideaId),
+                        "Rejected replacement must preserve the authorized idea detail.");
+                assertArrayEquals(PDF, readIdeaPdf(ideaId),
+                        "Rejected replacement must preserve the existing PDF bytes.");
+            }
+        }
+    }
+
+    @Test
+    void pdfMetadataValidBoundariesAndTrimmingWorkOnBothWriteRoutes() throws Exception {
+        List<PdfMetadataBoundary> boundaries = List.of(
+                new PdfMetadataBoundary("title minimum", "x", "2026/2027", "x", "2026/2027"),
+                new PdfMetadataBoundary("title maximum", "T".repeat(200), "2026/2027",
+                        "T".repeat(200), "2026/2027"),
+                new PdfMetadataBoundary("title padded", "  title value  ", "2026/2027",
+                        "title value", "2026/2027"),
+                new PdfMetadataBoundary("school year minimum", "Fixed title", "x", "Fixed title", "x"),
+                new PdfMetadataBoundary("school year maximum", "Fixed title", "Y".repeat(20),
+                        "Fixed title", "Y".repeat(20)),
+                new PdfMetadataBoundary("school year padded", "Fixed title", "  2026/2027  ",
+                        "Fixed title", "2026/2027"));
+
+        for (PdfMetadataBoundary boundary : boundaries) {
+            JsonNode created = readResponse(mockMvc.perform(pdfCreateRequest(
+                    metadata(boundary.title(), boundary.schoolYear()), PDF, student))
+                    .andExpect(status().isCreated()).andReturn());
+            assertMetadataAndPdfReadback(created, boundary, PDF);
+            assertEquals(1, created.path("owners").size(),
+                    "Omitted collaboratorIds remains accepted and creation retains only its creator.");
+        }
+
+        String ideaId = createPdfIdea("Metadata replacement baseline").path("id").asText();
+        addCollaborator(ideaId);
+        JsonNode ownersBefore = ideaDetail(ideaId).path("owners").deepCopy();
+        for (PdfMetadataBoundary boundary : boundaries) {
+            JsonNode updated = readResponse(mockMvc.perform(pdfUpdateRequest(ideaId, student,
+                    metadata(boundary.title(), boundary.schoolYear()), PDF))
+                    .andExpect(status().isOk()).andReturn());
+            assertMetadataAndPdfReadback(updated, boundary, PDF);
+            assertEquals(ownersBefore, ideaDetail(ideaId).path("owners"),
+                    "Metadata replacement without collaboratorIds preserves the existing owner set.");
+        }
+    }
+
+    @Test
     void teacherAuthorsCanUsePdfAndOnlyAcceptedCatalogueReadersCanReadUnownedPdf() throws Exception {
         JsonNode teacherIdea = createPdfIdea("Teacher-authored PDF", PDF, teacher);
         String teacherIdeaId = teacherIdea.path("id").asText();
@@ -301,6 +370,73 @@ class IdeaPdfApiTest {
         return objectMapper.readTree(result.getResponse().getContentAsByteArray());
     }
 
+    private void addCollaborator(String ideaId) throws Exception {
+        String collaboratorId = users.findByUsername("student02").orElseThrow().getId().toString();
+        mockMvc.perform(post("/api/ideas/{id}/owners", ideaId).header(HttpHeaders.AUTHORIZATION, bearer(student))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsBytes(Map.of("studentId", collaboratorId))))
+                .andExpect(status().isOk());
+    }
+
+    private JsonNode ideaDetail(String ideaId) throws Exception {
+        MvcResult result = mockMvc.perform(get("/api/ideas/{id}", ideaId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(student)))
+                .andExpect(status().isOk()).andReturn();
+        return objectMapper.readTree(result.getResponse().getContentAsByteArray());
+    }
+
+    private byte[] readIdeaPdf(String ideaId) throws Exception {
+        return mockMvc.perform(get("/api/ideas/{id}/pdf", ideaId)
+                        .header(HttpHeaders.AUTHORIZATION, bearer(student)))
+                .andExpect(status().isOk()).andExpect(content().contentType(MediaType.APPLICATION_PDF))
+                .andReturn().getResponse().getContentAsByteArray();
+    }
+
+    private void assertMetadataAndPdfReadback(JsonNode response, PdfMetadataBoundary boundary, byte[] pdfBytes)
+            throws Exception {
+        assertEquals(boundary.expectedTitle(), response.path("title").asText());
+        assertEquals(boundary.expectedSchoolYear(), response.path("schoolYear").asText());
+        String ideaId = response.path("id").asText();
+        JsonNode detail = ideaDetail(ideaId);
+        assertEquals(boundary.expectedTitle(), detail.path("title").asText());
+        assertEquals(boundary.expectedSchoolYear(), detail.path("schoolYear").asText());
+        assertArrayEquals(pdfBytes, readIdeaPdf(ideaId), "PDF readback must retain the uploaded bytes.");
+    }
+
+    private void assertInvalidMetadataResponse(MvcResult result) throws Exception {
+        assertEquals(400, result.getResponse().getStatus());
+        assertTrue(result.getResponse().getContentType().startsWith(MediaType.APPLICATION_JSON_VALUE));
+        JsonNode error = objectMapper.readTree(result.getResponse().getContentAsByteArray());
+        assertTrue(error.path("status").isInt());
+        assertEquals(400, error.path("status").intValue());
+        assertEquals("Bad Request", error.path("error").asText());
+        assertEquals("PDF idea metadata is invalid.", error.path("message").asText());
+    }
+
+    private ObjectNode metadata(String title, String schoolYear) {
+        ObjectNode result = objectMapper.createObjectNode();
+        result.put("title", title);
+        result.put("schoolYear", schoolYear);
+        return result;
+    }
+
+    private ObjectNode metadataForInvalidCase(String field, String invalidCase) {
+        ObjectNode result = objectMapper.createObjectNode();
+        String otherField = "title".equals(field) ? "schoolYear" : "title";
+        result.put(otherField, "title".equals(otherField) ? "Valid title" : "2026/2027");
+        switch (invalidCase) {
+            case "omitted" -> {
+                // Keep the tested property absent.
+            }
+            case "null" -> result.putNull(field);
+            case "empty" -> result.put(field, "");
+            case "whitespace" -> result.put(field, "   ");
+            case "overlong" -> result.put(field, "x".repeat("title".equals(field) ? 201 : 21));
+            default -> throw new IllegalArgumentException("Unknown invalid metadata case: " + invalidCase);
+        }
+        return result;
+    }
+
     private JsonNode createIdea(String title) throws Exception {
         Map<String, Object> input = Map.of("title", title, "description", "A catalogue idea",
                 "intendedOutcome", "A useful result", "scopePoints", List.of("A scope point"),
@@ -369,6 +505,14 @@ class IdeaPdfApiTest {
                 .file(file).header(HttpHeaders.AUTHORIZATION, bearer(student));
     }
 
+    private MockMultipartHttpServletRequestBuilder pdfCreateRequest(JsonNode metadata, byte[] bytes, String token)
+            throws Exception {
+        return multipart("/api/ideas/pdf")
+                .file(new MockMultipartFile("metadata", "metadata.json", "application/json",
+                        objectMapper.writeValueAsBytes(metadata)))
+                .file(pdf(bytes)).header(HttpHeaders.AUTHORIZATION, bearer(token));
+    }
+
     private MockMultipartHttpServletRequestBuilder specificationPdfRequest(String id, MockMultipartFile file) {
         return specificationPdfRequest(id, file, student);
     }
@@ -397,6 +541,17 @@ class IdeaPdfApiTest {
                 });
     }
 
+    private MockMultipartHttpServletRequestBuilder pdfUpdateRequest(String id, String token, JsonNode metadata,
+            byte[] bytes) throws Exception {
+        return multipart("/api/ideas/{id}/pdf", id)
+                .file(new MockMultipartFile("metadata", "metadata.json", "application/json",
+                        objectMapper.writeValueAsBytes(metadata)))
+                .file(pdf(bytes)).header(HttpHeaders.AUTHORIZATION, bearer(token)).with(request -> {
+                    request.setMethod("PUT");
+                    return request;
+                });
+    }
+
     private MockMultipartFile pdf(byte[] bytes) {
         return new MockMultipartFile("file", "narrative.pdf", "application/pdf", bytes);
     }
@@ -410,6 +565,19 @@ class IdeaPdfApiTest {
                 .sorted().toList();
     }
 
+    private List<String> pdfMetadataStateSnapshot() {
+        List<String> snapshot = new java.util.ArrayList<>();
+        store.repository().findByType("idea", PageRequest.of(0, 10000)).forEach(record ->
+                snapshot.add(String.join("\u001f", record.getId().toString(), String.valueOf(record.getStatus()),
+                        String.valueOf(record.getOwnerId()), String.valueOf(record.getParentId()))));
+        store.repository().findByType("audit", PageRequest.of(0, 10000)).forEach(record ->
+                snapshot.add(String.join("\u001f", record.getId().toString(), String.valueOf(record.getOwnerId()),
+                        String.valueOf(record.getParentId()), String.valueOf(record.getReferenceType()),
+                        String.valueOf(record.getStatus()), String.valueOf(record.getPayload()),
+                        String.valueOf(record.getCreatedAt()))));
+        return snapshot.stream().sorted().toList();
+    }
+
     private String login(String username) throws Exception {
         MvcResult result = mockMvc.perform(post("/api/auth/login").contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsBytes(Map.of("username", username,
@@ -418,7 +586,15 @@ class IdeaPdfApiTest {
         return objectMapper.readTree(result.getResponse().getContentAsByteArray()).path("token").asText();
     }
 
+    private record PdfMetadataBoundary(String label, String title, String schoolYear,
+            String expectedTitle, String expectedSchoolYear) {
+    }
+
     private String bearer(String token) {
         return "Bearer " + token;
+    }
+
+    private JsonNode readResponse(MvcResult result) throws Exception {
+        return objectMapper.readTree(result.getResponse().getContentAsByteArray());
     }
 }
