@@ -150,7 +150,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-75](tickets/Dev-75.md) | to-do | Review the first shared identity evidence batch |
 | [Dev-76](tickets/Dev-76.md) | to-do | Review the first API and architecture evidence batch |
 | [Dev-77](tickets/Dev-77.md) | to-do | Review the first frontend language evidence batch |
-| [Dev-78](tickets/Dev-78.md) | to-do | Pilot shared purpose classification and history reconciliation |
+| [Dev-78](tickets/done/Dev-78.md) | done | Pilot shared purpose classification and history reconciliation |
 | [Dev-79](tickets/Dev-79.md) | to-do | Classify shared roles and project lifecycle |
 | [Dev-80](tickets/Dev-80.md) | to-do | Classify shared ideas and formal applications |
 | [Dev-81](tickets/Dev-81.md) | to-do | Classify shared grading and rubric history |
