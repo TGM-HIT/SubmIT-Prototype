@@ -19,6 +19,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
@@ -89,6 +90,9 @@ class FormalApplicationEligibleProjectsApiTest {
     void endpointIsAuthenticatedStudentOnlyAndHasNoCallerSuppliedStudentId() throws Exception {
         mockMvc.perform(get("/api/formal-applications/eligible-projects"))
                 .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/formal-applications/eligible-projects")
+                        .header("Authorization", "Bearer invalid-token"))
+                .andExpect(status().isUnauthorized());
         request("/api/formal-applications/eligible-projects", teacherToken, 0, 20)
                 .andExpect(status().isForbidden());
         request("/api/formal-applications/eligible-projects", adminToken, 0, 20)
@@ -145,6 +149,14 @@ class FormalApplicationEligibleProjectsApiTest {
         assertEquals(Set.copyOf(STATUSES), textSet(required(proposalStatusSchema, "enum")));
         assertTrue(allowsNull(required(properties, "formalProposalId")));
         assertTrue(allowsNull(proposalStatusSchema));
+    }
+
+    @Test
+    void malformedTypedQueryValuesReturnTheSharedBadRequestThroughPublicBinding() throws Exception {
+        for (String value : List.of("not-an-integer", "2147483648", "-2147483649")) {
+            assertMalformedParameter("page", value, Map.of("size", "20"));
+            assertMalformedParameter("size", value, Map.of("page", "0"));
+        }
     }
 
     @Test
@@ -314,6 +326,14 @@ class FormalApplicationEligibleProjectsApiTest {
         assertEquals(ELIGIBLE_COUNT, requiredLong(normalized, "totalElements"));
         assertEquals(ELIGIBLE_COUNT, requiredInt(normalized, "totalPages"));
         assertEquals(1, content(normalized).size());
+
+        JsonNode negativeSize = response(mockMvc.perform(get("/api/formal-applications/eligible-projects")
+                        .param("page", "0").param("size", "-3")
+                        .header("Authorization", "Bearer " + studentToken))
+                .andExpect(status().isOk()).andReturn());
+        assertEquals(0, requiredInt(negativeSize, "page"));
+        assertEquals(1, requiredInt(negativeSize, "size"));
+        assertEquals(1, content(negativeSize).size());
     }
 
     @Test
@@ -455,6 +475,23 @@ class FormalApplicationEligibleProjectsApiTest {
                 .andExpect(status().isOk()).andReturn();
         JsonNode response = objectMapper.readTree(result.getResponse().getContentAsByteArray());
         return requireText(response, "token");
+    }
+
+    private void assertMalformedParameter(String parameter, String value, Map<String, String> otherParameters)
+            throws Exception {
+        org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder request =
+                get("/api/formal-applications/eligible-projects")
+                        .header("Authorization", "Bearer " + studentToken);
+        otherParameters.forEach((name, parameterValue) -> request.param(name, parameterValue));
+        MvcResult result = mockMvc.perform(request.param(parameter, value))
+                .andExpect(status().isBadRequest()).andReturn();
+        assertNotNull(result.getResponse().getContentType());
+        assertTrue(result.getResponse().getContentType().startsWith(MediaType.APPLICATION_JSON_VALUE));
+        JsonNode error = objectMapper.readTree(result.getResponse().getContentAsString());
+        assertEquals(Set.of("status", "error", "message"), names(error));
+        assertEquals(400, requiredInt(error, "status"));
+        assertEquals("Bad Request", requireText(error, "error"));
+        assertEquals("Request parameter " + parameter + " has an invalid value.", requireText(error, "message"));
     }
 
     private org.springframework.test.web.servlet.ResultActions request(String path, String token, int page, int size)

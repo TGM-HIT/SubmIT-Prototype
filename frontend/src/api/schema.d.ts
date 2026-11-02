@@ -8867,6 +8867,15 @@ export interface operations {
                     "*/*": components["schemas"]["PageResponseFormalApplicationSummaryResponse"];
                 };
             };
+            /** @description A boolean conversion failure for supervisedOnly or an integer conversion failure for page or size, including a value outside the Java int range. Syntactically valid pagination values are normalized; negative values and sizes outside 1–100 are not conversion errors. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
+                };
+            };
             /** @description Missing or invalid bearer authentication credentials. */
             401: {
                 headers: {
@@ -8908,6 +8917,15 @@ export interface operations {
                 };
                 content: {
                     "*/*": components["schemas"]["PageResponseEligibleFormalProjectResponse"];
+                };
+            };
+            /** @description An integer conversion failure for page or size, including a value outside the Java int range. Syntactically valid pagination values are normalized; negative values and sizes outside 1–100 are not conversion errors. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiErrorResponse"];
                 };
             };
             /** @description Authentication is required. Missing or invalid bearer authentication credentials. */

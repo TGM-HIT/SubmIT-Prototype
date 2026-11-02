@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -20,6 +21,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
@@ -97,9 +99,34 @@ class FormalApplicationListApiTest {
     }
 
     @Test
+    void malformedTypedQueryValuesReturnTheSharedBadRequestThroughPublicBinding() throws Exception {
+        assertMalformedParameter("supervisedOnly", "not-a-boolean", Map.of("page", "0", "size", "20"));
+        for (String value : List.of("not-an-integer", "2147483648", "-2147483649")) {
+            assertMalformedParameter("page", value, Map.of("supervisedOnly", "true", "size", "20"));
+            assertMalformedParameter("size", value, Map.of("supervisedOnly", "true", "page", "0"));
+        }
+    }
+
+    @Test
+    void teacherOrTeacherAdministratorCanUseTheFormalApplicationList() throws Exception {
+        setTeacherRoles(List.of("TEACHER", "ADMIN"));
+        try {
+            String dualRoleToken = login("teacher01");
+            request(dualRoleToken, false, 0, 20).andExpect(status().isOk());
+        } finally {
+            setTeacherRoles(List.of("TEACHER"));
+        }
+    }
+
+    @Test
     void defaultFilterUsesOnlyCurrentConfirmedAssignmentsNotPreferencesAndUnfilteredIncludesEveryProposal()
             throws Exception {
         JsonNode defaultPage = response(request(teacherToken, true, 0, 100).andExpect(status().isOk()).andReturn());
+        JsonNode omittedFilterPage = response(mockMvc.perform(get("/api/formal-applications")
+                        .header("Authorization", bearer(teacherToken)).param("page", "0").param("size", "100"))
+                .andExpect(status().isOk()).andReturn());
+        assertEquals(ids(defaultPage), ids(omittedFilterPage),
+                "Omitted supervisedOnly and explicit true use the same filter.");
         Set<String> expectedSupervisedIds = new HashSet<>();
         proposals.stream().filter(SeededProposal::confirmedToTeacher01)
                 .forEach(proposal -> expectedSupervisedIds.add(proposal.applicationId().toString()));
@@ -204,6 +231,10 @@ class FormalApplicationListApiTest {
                 .andExpect(status().isOk()).andReturn());
         assertEquals(0, requiredInt(normalized, "page"));
         assertEquals(1, requiredInt(normalized, "size"));
+        JsonNode negativeSize = response(request(teacherToken, false, 0, -3)
+                .andExpect(status().isOk()).andReturn());
+        assertEquals(0, requiredInt(negativeSize, "page"));
+        assertEquals(1, requiredInt(negativeSize, "size"));
         JsonNode bounded = response(request(teacherToken, false, 0, 101)
                 .andExpect(status().isOk()).andReturn());
         assertEquals(100, requiredInt(bounded, "size"));
@@ -359,6 +390,30 @@ class FormalApplicationListApiTest {
                                 "username", username, "password", "testing-password"))))
                 .andExpect(status().isOk()).andReturn();
         return objectMapper.readTree(result.getResponse().getContentAsString()).path("token").asText();
+    }
+
+    private void setTeacherRoles(List<String> roles) throws Exception {
+        String teacherId = users.findByUsername("teacher01").orElseThrow().getId().toString();
+        mockMvc.perform(patch("/api/users/{id}/role", teacherId).header("Authorization", bearer(adminToken))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(Map.of("roles", roles))))
+                .andExpect(status().isOk());
+    }
+
+    private void assertMalformedParameter(String parameter, String value, Map<String, String> otherParameters)
+            throws Exception {
+        org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder request =
+                get("/api/formal-applications").header("Authorization", bearer(teacherToken));
+        otherParameters.forEach((name, parameterValue) -> request.param(name, parameterValue));
+        MvcResult result = mockMvc.perform(request.param(parameter, value))
+                .andExpect(status().isBadRequest()).andReturn();
+        assertNotNull(result.getResponse().getContentType());
+        assertTrue(result.getResponse().getContentType().startsWith(MediaType.APPLICATION_JSON_VALUE));
+        JsonNode error = response(result);
+        assertEquals(Set.of("status", "error", "message"), fieldNames(error));
+        assertEquals(400, requiredInt(error, "status"));
+        assertEquals("Bad Request", requiredText(error, "error"));
+        assertEquals("Request parameter " + parameter + " has an invalid value.", requiredText(error, "message"));
     }
 
     private ResultActions request(String token, boolean supervisedOnly,

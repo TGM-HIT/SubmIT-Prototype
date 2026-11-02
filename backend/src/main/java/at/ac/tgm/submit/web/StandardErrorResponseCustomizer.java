@@ -318,7 +318,15 @@ public class StandardErrorResponseCustomizer implements OpenApiCustomizer {
 
     private static void addIdeaAndApplicationErrors(Map<Route, Map<String, String>> result) {
         add(result, GET, "/api/formal-applications",
+                BAD_REQUEST, "A boolean conversion failure for supervisedOnly or an integer conversion failure for "
+                        + "page or size, including a value outside the Java int range. Syntactically valid "
+                        + "pagination values are normalized; negative values and sizes outside 1–100 are not "
+                        + "conversion errors.",
                 FORBIDDEN, "The caller lacks the TEACHER role required to list formal applications.");
+        add(result, GET, "/api/formal-applications/eligible-projects",
+                BAD_REQUEST, "An integer conversion failure for page or size, including a value outside the Java "
+                        + "int range. Syntactically valid pagination values are normalized; negative values and "
+                        + "sizes outside 1–100 are not conversion errors.");
         add(result, GET, "/api/ideas/{id}",
                 BAD_REQUEST, IDEA_ID_INVALID,
                 FORBIDDEN, "The caller is not permitted to view this idea.",

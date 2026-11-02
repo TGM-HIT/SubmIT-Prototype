@@ -276,8 +276,26 @@ class OpenApiContractTest {
         assertEquals(0, security.get(0).path("bearerAuth").size(),
                 "The operation must use bearer authentication without scopes or alternatives.");
         JsonNode responses = operation.path("responses");
-        assertEquals(Set.of("200", "401", "403"), fieldNames(responses),
-                "Documented statuses match success, missing/invalid authentication, and non-teacher authorization.");
+        assertEquals(Set.of("200", "400", "401", "403"), fieldNames(responses),
+                "Documented statuses match success, malformed typed query values, authentication, and authorization.");
+        String badRequestDescription = responses.path("400").path("description").asText().toLowerCase(Locale.ROOT);
+        assertTrue(badRequestDescription.contains("supervisedonly") && badRequestDescription.contains("boolean")
+                        && badRequestDescription.contains("page") && badRequestDescription.contains("size")
+                        && badRequestDescription.contains("integer") && badRequestDescription.contains("java int"),
+                "400 identifies the typed query parameters and conversion failures.");
+        assertTrue(badRequestDescription.contains("negative values") && badRequestDescription.contains("not "
+                        + "conversion errors"),
+                "400 does not describe normalized pagination values as invalid.");
+        assertEquals(Set.of("application/json"), fieldNames(responses.path("400").path("content")));
+        assertEquals("#/components/schemas/ApiErrorResponse",
+                responses.path("400").path("content").path("application/json").path("schema").path("$ref").asText());
+        assertBaselineResponse(responses, "200", "OK", "*/*",
+                "#/components/schemas/PageResponseFormalApplicationSummaryResponse");
+        assertBaselineResponse(responses, "401", "Missing or invalid bearer authentication credentials.",
+                "application/json", "#/components/schemas/ApiErrorResponse");
+        assertBaselineResponse(responses, "403",
+                "The caller lacks the TEACHER role required to list formal applications.",
+                "application/json", "#/components/schemas/ApiErrorResponse");
         assertEquals("#/components/schemas/PageResponseFormalApplicationSummaryResponse",
                 responses.path("200").path("content").path("*/*")
                         .path("schema").path("$ref").asText());
@@ -355,6 +373,63 @@ class OpenApiContractTest {
         assertEquals("string", status.path("type").asText());
         assertEquals(Set.of("DRAFT", "NEEDS_REVISION", "SUBMITTED", "APPROVED", "DECLINED"),
                 textualMembers(status.path("enum")));
+    }
+
+    @Test
+    void eligibleFormalProjectListDocumentsTypedConversionAndPreservesNeighboringResponseContracts()
+            throws Exception {
+        JsonNode document = apiDocument();
+        JsonNode eligible = document.path("paths").path("/api/formal-applications/eligible-projects").path("get");
+        JsonNode eligibleResponses = eligible.path("responses");
+        assertEquals(Set.of("200", "400", "401", "403"), fieldNames(eligibleResponses));
+        String badRequestDescription = eligibleResponses.path("400").path("description").asText().toLowerCase(
+                Locale.ROOT);
+        assertTrue(badRequestDescription.contains("page") && badRequestDescription.contains("size")
+                        && badRequestDescription.contains("integer") && badRequestDescription.contains("java int"));
+        assertFalse(badRequestDescription.contains("supervisedonly"),
+                "The student operation does not accept a supervisedOnly query parameter.");
+        assertTrue(badRequestDescription.contains("negative values") && badRequestDescription.contains("not "
+                        + "conversion errors"),
+                "400 does not describe normalized pagination values as invalid.");
+        assertEquals(Set.of("application/json"), fieldNames(eligibleResponses.path("400").path("content")));
+        assertEquals("#/components/schemas/ApiErrorResponse",
+                eligibleResponses.path("400").path("content").path("application/json")
+                        .path("schema").path("$ref").asText());
+        assertBaselineResponse(eligibleResponses, "200", "Eligible projects listed.", "*/*",
+                "#/components/schemas/PageResponseEligibleFormalProjectResponse");
+        assertBaselineResponse(eligibleResponses, "401",
+                "Authentication is required. Missing or invalid bearer authentication credentials.",
+                "application/json", "#/components/schemas/ApiErrorResponse");
+        assertBaselineResponse(eligibleResponses, "403", "Student role required.", "*/*",
+                "#/components/schemas/ApiErrorResponse");
+
+        JsonNode activeRubric = document.path("paths").path("/api/grading-rubrics/active").path("get");
+        JsonNode activeResponses = activeRubric.path("responses");
+        assertEquals(Set.of("200", "401", "404"), fieldNames(activeResponses),
+                "An unrelated operation without 400 retains its exact response set.");
+        assertBaselineResponse(activeResponses, "200", "Rubric version effective today.", "*/*",
+                "#/components/schemas/RubricResponse");
+        assertBaselineResponse(activeResponses, "401", "Missing or invalid bearer authentication credentials.",
+                "application/json", "#/components/schemas/ApiErrorResponse");
+        assertBaselineResponse(activeResponses, "404", "No rubric version is currently effective.",
+                "application/json", "#/components/schemas/ApiErrorResponse");
+
+        JsonNode formalApplication = document.path("paths")
+                .path("/api/projects/{projectId}/formal-applications").path("get").path("responses");
+        assertEquals(Set.of("200", "400", "401", "403", "404", "409"), fieldNames(formalApplication),
+                "Another formal operation retains its pre-existing complete response set.");
+        assertBaselineResponse(formalApplication, "200", "OK", "*/*",
+                "#/components/schemas/FormalApplicationResponse");
+        assertBaselineResponse(formalApplication, "400", "The project ID is not a valid UUID.",
+                "application/json", "#/components/schemas/ApiErrorResponse");
+    }
+
+    private void assertBaselineResponse(JsonNode responses, String code, String description, String mediaType,
+            String schemaReference) {
+        ObjectNode expected = objectMapper.createObjectNode();
+        expected.put("description", description);
+        expected.putObject("content").putObject(mediaType).putObject("schema").put("$ref", schemaReference);
+        assertEquals(expected, responses.path(code), code + " response changed from the pre-change baseline.");
     }
 
     private static Set<String> parameterNames(JsonNode parameters) {
@@ -2090,8 +2165,8 @@ class OpenApiContractTest {
                 post|/api/projects/{projectId}/metrics|400,403,404,409
                 get|/api/projects/{projectId}/group-grades|400,403,404
                 post|/api/projects/{projectId}/group-grades|400,403,404,409
-                get|/api/formal-applications|403
-                get|/api/formal-applications/eligible-projects|403
+                get|/api/formal-applications|400,403
+                get|/api/formal-applications/eligible-projects|400,403
                 get|/api/projects/{projectId}/formal-application-roster|400,403
                 get|/api/projects/{projectId}/formal-applications|400,403,404,409
                 post|/api/projects/{projectId}/formal-applications|400,403,409
@@ -2226,7 +2301,9 @@ class OpenApiContractTest {
                 post|/api/projects/{projectId}/group-grades|403|required role or project access
                 post|/api/projects/{projectId}/group-grades|404|project, group, or requested rubric
                 post|/api/projects/{projectId}/group-grades|409|formal application is not approved;rubric binding is ineffective;transition;required reason
+                get|/api/formal-applications|400|boolean conversion failure for supervisedOnly;integer conversion failure for page or size;outside the Java int range
                 get|/api/formal-applications|403|TEACHER role required
+                get|/api/formal-applications/eligible-projects|400|integer conversion failure for page or size;outside the Java int range
                 get|/api/formal-applications/eligible-projects|403|student role required
                 get|/api/projects/{projectId}/formal-applications|400|project ID;UUID
                 get|/api/projects/{projectId}/formal-application-roster|400|project ID;UUID
