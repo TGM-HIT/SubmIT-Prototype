@@ -134,7 +134,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-59](tickets/done/Dev-59.md) | done | Load TGM workbook preferences in a dedicated testing profile |
 | [Dev-60](tickets/done/Dev-60.md) | done | Allow Markdown and PDF idea and specification submissions |
 | [Dev-61](tickets/done/Dev-61.md) | done | Make rubric definitions self-contained JSON and downloadable |
-| [Dev-62](tickets/Dev-62.md) | to-do | Establish atomic SPEC-to-test traceability |
+| [Dev-62](tickets/Dev-62.md) | failed | Establish atomic SPEC-to-test traceability |
 | [Dev-63](tickets/Dev-63.md) | to-do | Derive remaining API service filters from generated types |
 | [Dev-64](tickets/Dev-64.md) | to-do | Document exact catalogue rename routes |
 | [Dev-65](tickets/Dev-65.md) | to-do | Make Compliance-03 evidence method-aware and auditable |
