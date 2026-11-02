@@ -8,7 +8,7 @@ SubmIT supports the school-year group-project lifecycle from student ideas and t
 
 ## Local user guides
 
-From the repository root, run `make doc LANGUAGE=de` with `PREVIEW_PASSWORD` supplied through your environment (see the documented testing accounts in [`backend/DEV-GUIDELINES.md`](backend/DEV-GUIDELINES.md)). This command owns both services and a real Chrome/Chromium capture; do not start the application first. Prerequisites are Make, the existing Java/Gradle setup, installed frontend Node dependencies, and Chrome/Chromium.
+From the repository root, run `make doc LANGUAGE=de`. No credential setup is required: the runner uses the existing public testing-profile fixture password by default. `PREVIEW_PASSWORD` is an optional environment override. Never supply production credentials. This command owns both services and a real Chrome/Chromium capture; do not start the application first. Prerequisites are Make, the existing Java/Gradle setup, installed frontend Node dependencies, and Chrome/Chromium.
 
 After successful generation, open the local [`docs/user-guide/README.md`](docs/user-guide/README.md). That entry point, the German role guides and their screenshots exist **only after generation** and are ignored, not committed. Authored sources and language-extension guidance are in [`frontend/scripts/documentation/`](frontend/scripts/documentation/README.md). See [`frontend/DEV-GUIDELINES.md`](frontend/DEV-GUIDELINES.md) for setup, capture checks, reports and recovery.
 
