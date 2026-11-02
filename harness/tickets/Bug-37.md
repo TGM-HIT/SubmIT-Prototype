@@ -10,6 +10,8 @@ Source: Compliance-03-20261101-1758, report finding 2, “`IdeaPdfMetadataReques
 
 ## Scope and contract
 
+- **Product-owner decision (2026-11-02):** Markus Schabel selected option A in `harness/runs/Bug-37-20261102-1231/human-acceptance.md`, rationale: "It should not be 0.", and confirmed continuation in chat. Permit adding `min = 1` to the two existing `@Size` declarations for metadata title/year while retaining `@NotBlank` and existing maxima. This narrowly overrides the schema-annotation-only and unchanged-Bean-Validation-declaration constraints below; runtime accepted/rejected inputs must remain equivalent, proven by M2/M3. No schema customizer or other runtime change is authorized.
+
 - Correct only the OpenAPI minimum-length declarations for `ApiDtos.IdeaPdfMetadataRequest.title` and `.schoolYear`, preferably using the existing field-level `@Schema(minLength = 1)` pattern on the adjacent `IdeaRequest`. Keep the existing Bean Validation annotations; do not alter global generator configuration when local annotations suffice.
 - The same metadata schema is used by multipart `POST /api/ideas/pdf` (creation, `201`) and `PUT /api/ideas/{id}/pdf` (replacement, `200`). Preserve both operations' `metadata` reference to `IdeaPdfMetadataRequest`, required `metadata` and `file` parts, and existing response/status/security declarations. This ticket does not change an API response matrix.
 
