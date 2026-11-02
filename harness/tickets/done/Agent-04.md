@@ -10,8 +10,8 @@ Source: Compliance-06-20261101-2115, report finding 2; repository revision: 6325
 
 ## Scope and contract
 
-- Edit only the `## Ticket status` introduction in [the plan](../plan.md), before `## Tickets`, to distinguish a run's outcome from a ticket's ledger status. Remove the implication that every stopped run is a `failed` ticket. Clarify that an `in-progress` row can belong to a closed stopped run and does not by itself prove a live implementation/evaluation.
-- Describe the following existing cases consistently with the [Orchestrator contract](../roles/orchestrator.md); the role owns workflow, and this ticket changes only the index's explanation. Link to that contract rather than restating the complete continuation procedure.
+- Edit only the `## Ticket status` introduction in [the plan](../../plan.md), before `## Tickets`, to distinguish a run's outcome from a ticket's ledger status. Remove the implication that every stopped run is a `failed` ticket. Clarify that an `in-progress` row can belong to a closed stopped run and does not by itself prove a live implementation/evaluation.
+- Describe the following existing cases consistently with the [Orchestrator contract](../../roles/orchestrator.md); the role owns workflow, and this ticket changes only the index's explanation. Link to that contract rather than restating the complete continuation procedure.
 
 | Existing owning case | Run outcome and record | Ticket ledger disposition to explain |
 | --- | --- | --- |
