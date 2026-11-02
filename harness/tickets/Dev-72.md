@@ -35,7 +35,7 @@ Each child requires accepted Dev-71 plus its immediately preceding accepted chil
 | --- | --- | --- | --- |
 | [Dev-78](Dev-78.md) | Title/preamble and 1. Product Purpose, ending before 2. People and Roles | old indices 001–008 | 14 |
 | [Dev-79](done/Dev-79.md) | 2. People and Roles through 3. Project Lifecycle, ending before 4 | old indices 009–044 | 173 |
-| [Dev-80](Dev-80.md) | 4. Project Ideas and Specifications through 5. Formal Project Application, ending before 6 | old indices 045–079 | 137 |
+| [Dev-80](done/Dev-80.md) | 4. Project Ideas and Specifications through 5. Formal Project Application, ending before 6 | old indices 045–079 | 137 |
 | [Dev-81](Dev-81.md) | 6. Project Progress, Grading, and Metrics, ending before 7 | old indices 080–108 | 247 |
 | [Dev-82](Dev-82.md) | 7. Completion and Project Archive through 8. Teacher Review, ending before 9 | old indices 109–140 | 116 |
 | [Dev-83](Dev-83.md) | 9. Student Applications and Group Allocation, ending before 10 | old indices 141–168 | 294 |
