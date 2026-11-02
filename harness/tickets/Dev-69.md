@@ -19,6 +19,11 @@ Source: Compliance-07-20261102-0858, finding 3; quoted evidence: “Configure an
 - No additional credentials or dependencies are required; use the existing local testing-fixture default and documented generator/preview tooling.
 - No scope-gate allowance is expected: changes are limited to `frontend/scripts/`.
 
+## Current-state triage
+
+- Before editing, freshly generate the English guide and compare its administrator period/allocation chapters with `/applications` and `/allocation` in the real capture, including **＋ Configure period**, period fields, **Create period**, **Inspect result**, and **Finalize result**. Record the current wording, control state and capture evidence under the implementor's run folder.
+- If the English chapter already satisfies every acceptance criterion, a documented no-op is acceptable only if all standard checks pass and fresh evidence confirms the exact route, controls, scheduler/finalization distinction, and actionable sequence. Do not infer completion from an older generated guide or a structural check alone.
+
 ## Mechanical checks (the Evaluator re-runs)
 
 Durable automated tests (join the build):

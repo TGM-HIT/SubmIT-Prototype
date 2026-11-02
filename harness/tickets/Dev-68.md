@@ -19,6 +19,11 @@ Source: Compliance-07-20261102-0858, finding 2; quoted evidence: “Your supervi
 - No additional credentials or dependencies are required; use the existing local testing-fixture default and the documented preview tooling.
 - No scope-gate allowance is expected: changes are limited to `frontend/scripts/`.
 
+## Current-state triage
+
+- Before editing, inspect both current authored locale chapters, the checkpoint inventory, and the teacher `/ideas` → **Details & history** preference form. Reproduce the present guide/capture state from fresh German and English generation; record the route, rendered controls, capture status and missing or present actions in the implementor's run evidence.
+- If a fresh run already satisfies every acceptance criterion, a documented no-op is acceptable only if all standard checks pass and evidence shows the action was already present in both locales and captured through the teacher UI. Do not use API-prepared preference state as proof.
+
 ## Mechanical checks (the Evaluator re-runs)
 
 Durable automated tests (join the build):
