@@ -142,6 +142,14 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-67](tickets/Dev-67.md) | to-do | Reconcile Feature-29 ledger path and status |
 | [Dev-68](tickets/Dev-68.md) | to-do | Document teacher supervision preferences in both guide locales |
 | [Dev-69](tickets/Dev-69.md) | to-do | Add actionable period and allocation instructions to the English admin guide |
+| [Dev-70](tickets/Dev-70.md) | to-do | Review and salvage the Dev-62 public HTTP regressions |
+| [Dev-71](tickets/Dev-71.md) | to-do | Review traceability tooling and staged inventory semantics |
+| [Dev-72](tickets/Dev-72.md) | to-do | Classify shared SPEC clauses and reconcile shared history |
+| [Dev-73](tickets/Dev-73.md) | to-do | Classify backend SPEC clauses and reconcile backend history |
+| [Dev-74](tickets/Dev-74.md) | to-do | Classify frontend SPEC clauses and reconcile frontend history |
+| [Dev-75](tickets/Dev-75.md) | to-do | Review the first shared identity evidence batch |
+| [Dev-76](tickets/Dev-76.md) | to-do | Review the first API and architecture evidence batch |
+| [Dev-77](tickets/Dev-77.md) | to-do | Review the first frontend language evidence batch |
 
 ### Agents
 
