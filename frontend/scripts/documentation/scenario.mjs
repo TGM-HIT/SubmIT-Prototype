@@ -29,6 +29,102 @@ export function assertTestingAccountRole(session, actor) {
     `${actor} login response must include ${expectedRole} in user.roles`)
 }
 
+export function assertOwnGradeCaptureState(state) {
+  assert.equal(state.actor, 'student01', 'Own-grade checkpoint must be captured as student01')
+  assert.equal(state.user?.id, state.studentId, 'Authenticated browser account must be student01')
+  assert.ok(Array.isArray(state.user?.roles) && state.user.roles.includes('STUDENT'),
+    'Authenticated browser account must have the STUDENT role')
+  assert.equal(state.route, '/grading', 'Own-grade checkpoint must remain on the grading page')
+  assert.equal(state.selectedProjectId, state.projectId, 'Selected project must match the expected primary project')
+  assert.ok(state.selectedProjectHeading.includes(state.projectTitle)
+    && state.selectedProjectHeading.includes(state.periodLabel),
+  'Rendered project heading must identify the expected project and period')
+  assert.equal(state.loading, false, 'The page must finish loading before own-grade capture')
+  assert.equal(state.individualTabSelected, true, 'The individual-grade list must be the selected view')
+
+  assert.equal(state.request?.method, 'GET', 'The page must complete its own GET request')
+  assert.equal(state.request?.route, `/api/projects/${state.projectId}/student-grades`,
+    'The page request must target the selected primary project')
+  assert.equal(state.request?.status, 200, 'The page own-grade request must succeed')
+  assert.equal(state.request?.completed, true, 'The page own-grade response must be fully received')
+
+  const grades = state.response?.content
+  assert.ok(Array.isArray(grades) && grades.length > 0, 'Completed page response must contain grade records')
+  assert.ok(typeof state.peerRecordId === 'string' && state.peerRecordId.length > 0
+    && typeof state.peerStudentId === 'string' && state.peerStudentId.length > 0,
+  'The synthetic peer sentinel record must be identified')
+  assert.notEqual(state.peerStudentId, state.studentId, 'The two synthetic student accounts must be distinct')
+  const recordIds = []
+  for (const grade of grades) {
+    assert.ok(grade && typeof grade === 'object' && !Array.isArray(grade), 'Each response grade must be an object')
+    assert.equal(typeof grade.id, 'string', 'Every response grade must have a record ID')
+    assert.ok(grade.id.length > 0, 'Every response grade must have a non-empty record ID')
+    assert.equal(typeof grade.studentId, 'string', 'Every response grade must have a student ID')
+    assert.equal(grade.studentId, state.studentId, 'Page response must contain only student01 grades')
+    assert.notEqual(grade.id, state.peerRecordId, 'Page response must not contain student02 sentinel record')
+    recordIds.push({ id: grade.id, studentId: grade.studentId })
+  }
+  assert.ok(!JSON.stringify(grades).includes('DOC_OTHER_GRADE_SENTINEL'),
+    'Page response must not contain the peer sentinel')
+
+  assert.ok(state.rendered && Array.isArray(state.rendered.rows), 'Rendered own-grade list must be available')
+  assert.equal(state.rendered.rows.length, grades.length,
+    'Rendered own-grade row count must match the completed page response')
+  assert.ok(!state.rendered.bodyText.includes('DOC_OTHER_GRADE_SENTINEL'),
+    'Rendered student page must not contain the peer sentinel')
+  assert.ok(!state.rendered.bodyText.includes(state.peerRecordId)
+    && !state.rendered.bodyText.includes(state.peerStudentId),
+  'Rendered student page must not contain the peer record or peer student ID')
+  const formattedNumbers = new Set(['en', 'de'].map((locale) => new Intl.NumberFormat(locale)))
+  for (const [index, grade] of grades.entries()) {
+    assert.equal(typeof grade.criterionId, 'string', 'Every response grade must have a criterion ID')
+    assert.equal(typeof grade.grade, 'number', 'Every response grade must have a numeric grade')
+    const expectedHeadings = [...formattedNumbers].map((number) =>
+      `${grade.criterionId} · ${number.format(grade.grade)}`)
+    const observed = state.rendered.rows[index]?.heading ?? ''
+    assert.ok(expectedHeadings.some((heading) => observed.startsWith(heading)),
+      `Rendered grade row ${index} must correspond to the same response record; expected one of `
+        + `${expectedHeadings.join(' / ')}, observed ${observed || 'missing'}`)
+  }
+
+  return {
+    actor: state.actor,
+    userId: state.user.id,
+    roles: ['STUDENT'],
+    projectId: state.projectId,
+    route: state.route,
+    selectedProjectHeading: state.selectedProjectHeading,
+    loading: false,
+    individualTabSelected: true,
+    request: {
+      method: state.request.method,
+      route: state.request.route,
+      status: state.request.status,
+      completed: state.request.completed,
+      initiatorType: state.request.initiatorType ?? 'unavailable',
+    },
+    responseRecords: recordIds,
+    peerRecordId: state.peerRecordId,
+    peerStudentId: state.peerStudentId,
+    responseContainsPeerRecord: false,
+    responseContainsPeerStudentId: false,
+    responseContainsPeerSentinel: false,
+    renderedRowCount: state.rendered.rows.length,
+    renderedContainsPeerRecord: false,
+    renderedContainsPeerStudentId: false,
+    renderedRowsMatchResponse: true,
+    renderedContainsPeerSentinel: false,
+    screenshotOrder: 'response-and-rendered-state-asserted-before-screenshot-and-checkpoint',
+  }
+}
+
+export async function captureOwnGradeCheckpoint({ validate, screenshot, checkpoint }) {
+  const evidence = await validate()
+  await screenshot()
+  checkpoint(evidence)
+  return evidence
+}
+
 export function assertSupervisionPreferenceEvidence(report) {
   const projectId = report.primaryProjectId
   assert.equal(typeof projectId, 'string', 'Primary project ID must be recorded')
@@ -218,6 +314,115 @@ export class Lifecycle {
     throw new Error(`Timeout waiting for ${description}; prerequisite/state expression: ${expression}`)
   }
 
+  async waitForPageStudentGradeResponse(projectId, previousRequestIds) {
+    const route = `/api/projects/${projectId}/student-grades`
+    const end = Date.now() + 15_000
+    while (Date.now() < end) {
+      if (this.signal?.aborted) throw new Error('Documentation capture interrupted')
+      this.checkErrors()
+      const match = [...this.errors.requests].find(([requestId, request]) => {
+        if (previousRequestIds.has(requestId) || request.method !== 'GET') return false
+        try {
+          const url = new URL(request.url)
+          return url.pathname === route
+        } catch {
+          return false
+        }
+      })
+      if (match?.[1].loadingFinished) {
+        const [requestId, request] = match
+        assert.equal(request.responseStatus, 200, 'The page own-grade request must complete successfully')
+        const body = await this.client.send('Network.getResponseBody', { requestId })
+        const responseText = body.base64Encoded ? Buffer.from(body.body, 'base64').toString('utf8') : body.body
+        return {
+          request: {
+            method: request.method,
+            route,
+            status: request.responseStatus,
+            completed: true,
+            initiatorType: request.initiatorType,
+          },
+          response: JSON.parse(responseText),
+        }
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50))
+    }
+    throw new Error(`Timeout waiting for completed browser GET ${route}`)
+  }
+
+  async collectOwnGradeCaptureState(pageGradeRequest) {
+    const pageState = await this.evaluate(`(() => {
+      const tabs = [...document.querySelectorAll('[role="tab"]')];
+      return {
+        route: location.pathname,
+        user: JSON.parse(localStorage.getItem('project-ideas-user')),
+        selectedProjectHeading: document.querySelector('.page-heading h3')?.textContent.trim() ?? '',
+        loading: !!document.querySelector('.notice[role="status"], .loading'),
+        individualTabSelected: tabs.length > 0 && tabs[0].getAttribute('aria-selected') === 'true',
+        rendered: {
+          rows: [...document.querySelectorAll('.data-list article.data-row')]
+            .map(row => ({ heading: row.querySelector('h3')?.textContent.trim() ?? '' })),
+          bodyText: document.body.textContent,
+        },
+      };
+    })()`)
+    const match = pageGradeRequest.request.route.match(/^\/api\/projects\/([^/]+)\/student-grades$/)
+    assert.ok(match, 'The captured browser response route must identify its project')
+    const state = {
+      actor: this.actor,
+      user: pageState.user,
+      studentId: this.sessions.student01.user.id,
+      peerStudentId: this.sessions.student02.user.id,
+      peerRecordId: this.peerSentinel.id,
+      projectId: this.primary,
+      selectedProjectId: decodeURIComponent(match[1]),
+      projectTitle: this.text.title,
+      periodLabel: this.text.period,
+      selectedProjectHeading: pageState.selectedProjectHeading,
+      route: pageState.route,
+      loading: pageState.loading,
+      individualTabSelected: pageState.individualTabSelected,
+      request: pageGradeRequest.request,
+      response: pageGradeRequest.response,
+      rendered: pageState.rendered,
+      locale: this.locale.language,
+    }
+    try {
+      return assertOwnGradeCaptureState(state)
+    } catch (error) {
+      const grades = Array.isArray(state.response?.content) ? state.response.content : []
+      this.report.ownGradeDiagnosis = {
+        actor: state.actor,
+        userId: state.user?.id ?? 'unavailable',
+        roles: Array.isArray(state.user?.roles) ? state.user.roles : [],
+        route: state.route,
+        projectId: state.projectId,
+        selectedProjectId: state.selectedProjectId,
+        selectedProjectHeading: state.selectedProjectHeading,
+        request: state.request,
+        responseRecords: grades.map((grade) => ({
+          id: grade?.id ?? 'unavailable',
+          studentId: grade?.studentId ?? 'unavailable',
+          criterionId: grade?.criterionId ?? 'unavailable',
+          grade: grade?.grade ?? 'unavailable',
+        })),
+        responseContainsPeerRecord: grades.some((grade) => grade?.id === state.peerRecordId),
+        responseContainsPeerStudentId: grades.some((grade) => grade?.studentId === state.peerStudentId),
+        responseContainsPeerSentinel: JSON.stringify(grades).includes('DOC_OTHER_GRADE_SENTINEL'),
+        peerRecordId: state.peerRecordId,
+        peerStudentId: state.peerStudentId,
+        renderedRows: state.rendered?.rows?.map((row) => row.heading) ?? [],
+        renderedContainsPeerRecord: state.rendered?.bodyText?.includes(state.peerRecordId) ?? false,
+        renderedContainsPeerStudentId: state.rendered?.bodyText?.includes(state.peerStudentId) ?? false,
+        renderedContainsPeerSentinel: state.rendered?.bodyText?.includes('DOC_OTHER_GRADE_SENTINEL') ?? false,
+        guardError: error instanceof Error ? error.message : String(error),
+        ownGradeScreenshotSuppressed: true,
+        ownGradeCheckpointSuppressed: true,
+      }
+      throw error
+    }
+  }
+
   checkErrors() {
     if (this.errors.length) throw new Error(`Browser errors: ${this.errors.join('; ')}`)
   }
@@ -400,19 +605,37 @@ export class Lifecycle {
     if (route !== '/') await this.go(route)
   }
 
-  async shot(key, expected, scroll) {
+  async shot(key, expected, scroll, validateBeforeCapture) {
     assert.ok(checkpoints.includes(key), `Unknown checkpoint ${key}`)
     assert.ok(!this.report.checkpoints.some((entry) => entry.key === key), `Duplicate checkpoint ${key}`)
+    if (key === 'own-grades') {
+      assert.equal(typeof validateBeforeCapture, 'function',
+        'The own-grade checkpoint requires its response-and-DOM guard')
+    }
     await this.wait(expected, key)
     if (scroll) await this.evaluate(`document.querySelector(${JSON.stringify(scroll)}).scrollIntoView({block:'start'})`)
     await new Promise((resolve) => setTimeout(resolve, 300))
     this.checkErrors()
     const alerts = await this.evaluate(`Array.from(document.querySelectorAll('[role=alert],.error-box')).map(e=>e.textContent.trim()).filter(Boolean)`)
     assert.deepEqual(alerts, [], 'No application errors at capture')
-    await saveScreenshot(this.client, path.join(this.output, this.locale.language, 'images'), `${key}.png`)
-    this.report.checkpoints.push({ key, stage: this.stage, actor: this.actor, route: this.route,
-      primaryProjectId: this.primary, expected, viewport: desktop,
-      ...(key === 'supervision-preference' ? { afterRequestIndex: this.report.requests.length - 1 } : {}) })
+    const recordCheckpoint = (ownGradeEvidence) => {
+      if (ownGradeEvidence) this.report.ownGradeCapture = ownGradeEvidence
+      this.report.checkpoints.push({ key, stage: this.stage, actor: this.actor, route: this.route,
+        primaryProjectId: this.primary, expected, viewport: desktop,
+        ...(key === 'supervision-preference' ? { afterRequestIndex: this.report.requests.length - 1 } : {}) })
+    }
+    const takeScreenshot = () => saveScreenshot(this.client,
+      path.join(this.output, this.locale.language, 'images'), `${key}.png`)
+    if (key === 'own-grades') {
+      await captureOwnGradeCheckpoint({
+        validate: validateBeforeCapture,
+        screenshot: takeScreenshot,
+        checkpoint: recordCheckpoint,
+      })
+    } else {
+      await takeScreenshot()
+      recordCheckpoint()
+    }
     console.log(`Captured ${key}: ${this.actor} ${this.route}`)
   }
 
@@ -891,6 +1114,12 @@ export class Lifecycle {
     assert.equal(routineGrades.totalElements, 3)
     assert.ok(routineGrades.content.every((entry) => entry.assessmentType === 'ROUTINE'
       && entry.rubricVersion === 'doc-v2'))
+    const peerSentinelGrades = routineGrades.content.filter((entry) =>
+      entry.evidence === 'DOC_OTHER_GRADE_SENTINEL')
+    assert.equal(peerSentinelGrades.length, 1, 'The teacher-created peer sentinel must identify one grade record')
+    assert.equal(peerSentinelGrades[0].studentId, this.sessions.student02.user.id,
+      'The peer sentinel record must belong to student02')
+    this.peerSentinel = { id: peerSentinelGrades[0].id, studentId: peerSentinelGrades[0].studentId }
     const groupGrades = await this.api('teacher01', `/api/projects/${this.primary}/group-grades`)
     assert.equal(groupGrades.content.length, 1)
     assert.equal(groupGrades.content[0].rubricVersion, 'doc-v2')
@@ -926,14 +1155,13 @@ export class Lifecycle {
     assert.ok(Array.isArray(final.history) && final.history.length >= 2, 'Prepared grade must remain in persisted history')
     await this.shot('final-grade', `document.body.textContent.includes(${JSON.stringify(this.text.rationale)})`, 'pre.json-view')
     await this.as('student01', '/grading')
+    const beforeProjectSelectionRequests = new Set(this.errors.requests.keys())
     await this.selectStudentGradingProject(this.text.title)
+    const pageGradeRequest = await this.waitForPageStudentGradeResponse(this.primary, beforeProjectSelectionRequests)
     await this.wait(`!!document.querySelector('[role=tablist][aria-label="Project grading record"]')`, 'own grading record')
-    const own = await this.api('student01', `/api/projects/${this.primary}/student-grades`)
-    assert.ok(own.content.length)
-    assert.ok(own.content.every((grade) => grade.studentId === this.sessions.student01.user.id))
-    await this.shot('own-grades', `document.body.textContent.includes(${JSON.stringify(this.text.evidence)})`, '[role=tablist][aria-label="Project grading record"]')
-    assert.ok(!(await this.evaluate('document.body.textContent')).includes('DOC_OTHER_GRADE_SENTINEL'),
-      'Other student individual grade must not appear in student DOM')
+    await this.shot('own-grades', `document.body.textContent.includes(${JSON.stringify(this.text.evidence)})`,
+      '[role=tablist][aria-label="Project grading record"]',
+      () => this.collectOwnGradeCaptureState(pageGradeRequest))
   }
 
   async archive() {

@@ -10,7 +10,8 @@ import { generate, repo } from './run.mjs'
 import { loadLocale, renderGuides, validateGuides, validateLocale, validatePng, checkpoints, roles } from './guides.mjs'
 import { collectBrowserErrors } from '../preview.mjs'
 import {
-  assertMatchingRubricIds, assertSupervisionPreferenceEvidence, assertTestingAccountRole, gradingMemberOptionState, Lifecycle,
+  assertMatchingRubricIds, assertSupervisionPreferenceEvidence, assertTestingAccountRole,
+  assertOwnGradeCaptureState, captureOwnGradeCheckpoint, gradingMemberOptionState, Lifecycle,
 } from './scenario.mjs'
 import { assertPublicBoundary } from './privacy.mjs'
 import { createServer } from 'node:http'
@@ -421,6 +422,89 @@ test('documentation testing-account role checks match the authenticated roles ar
   assert.doesNotThrow(() => assertTestingAccountRole({ user: { roles: ['ADMIN'] } }, 'admin01'))
   assert.throws(() => assertTestingAccountRole({ user: { role: 'STUDENT' } }, 'student01'),
     /user\.roles/)
+})
+
+function ownGradeCaptureState() {
+  const studentId = 'student01-id'
+  return {
+    actor: 'student01',
+    user: { id: studentId, roles: ['STUDENT'] },
+    studentId,
+    peerStudentId: 'student02-id',
+    peerRecordId: 'peer-sentinel-grade-id',
+    projectId: 'primary-project-id',
+    selectedProjectId: 'primary-project-id',
+    projectTitle: 'Synthetic project',
+    periodLabel: 'Documentation period',
+    selectedProjectHeading: 'Synthetic project — Documentation period',
+    route: '/grading',
+    loading: false,
+    individualTabSelected: true,
+    request: {
+      method: 'GET',
+      route: '/api/projects/primary-project-id/student-grades',
+      status: 200,
+      completed: true,
+      initiatorType: 'script',
+    },
+    response: {
+      content: [
+        { id: 'own-grade-1', studentId, criterionId: 'implementation', grade: 4, evidence: 'Own evidence' },
+        { id: 'own-grade-2', studentId, criterionId: 'reflection', grade: 3, evidence: 'Own reflection' },
+      ],
+    },
+    rendered: {
+      rows: [
+        { heading: 'implementation · 4 Active' },
+        { heading: 'reflection · 3 Active' },
+      ],
+      bodyText: 'Own evidence Own reflection',
+    },
+    locale: 'en',
+  }
+}
+
+test('D8 own-grade capture guard records a self-only response before one screenshot and checkpoint', async () => {
+  const state = ownGradeCaptureState()
+  let screenshots = 0
+  const checkpoints = []
+  const evidence = await captureOwnGradeCheckpoint({
+    validate: async () => assertOwnGradeCaptureState(state),
+    screenshot: async () => { screenshots++ },
+    checkpoint: (result) => checkpoints.push(result),
+  })
+  assert.equal(screenshots, 1)
+  assert.equal(checkpoints.length, 1)
+  assert.equal(checkpoints[0], evidence)
+  assert.deepEqual(evidence.responseRecords, [
+    { id: 'own-grade-1', studentId: 'student01-id' },
+    { id: 'own-grade-2', studentId: 'student01-id' },
+  ])
+  assert.equal(evidence.screenshotOrder,
+    'response-and-rendered-state-asserted-before-screenshot-and-checkpoint')
+})
+
+test('D8 peer records and response/DOM sentinels fail before own-grade screenshot or checkpoint', async () => {
+  const badStates = [
+    ['peer record', (state) => state.response.content.push({
+      id: state.peerRecordId, studentId: state.peerStudentId, criterionId: 'peer', grade: 2,
+    })],
+    ['response sentinel', (state) => { state.response.content[0].evidence = 'DOC_OTHER_GRADE_SENTINEL' }],
+    ['DOM sentinel', (state) => { state.rendered.bodyText += ' DOC_OTHER_GRADE_SENTINEL' }],
+  ]
+  for (const [label, change] of badStates) {
+    const state = ownGradeCaptureState()
+    change(state)
+    let screenshots = 0
+    const checkpoints = []
+    await assert.rejects(captureOwnGradeCheckpoint({
+      validate: async () => assertOwnGradeCaptureState(state),
+      screenshot: async () => { screenshots++ },
+      checkpoint: (result) => checkpoints.push(result),
+    }), (error) => error instanceof Error, label)
+    assert.equal(screenshots, 0, `${label} must fail before screenshot`)
+    assert.equal(checkpoints.length, 0, `${label} must fail before checkpoint`)
+  }
 })
 
 test('D6 strict collector catches unexpected HTTP failures and console exceptions', () => {
