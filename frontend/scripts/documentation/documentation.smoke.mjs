@@ -157,6 +157,65 @@ for (const language of ['en', 'de']) {
   })
 }
 
+test('D1 English administrator period and allocation chapters give ordered actionable instructions', async (t) => {
+  const root = await temporary(t)
+  const locale = await loadLocale('en')
+  await renderGuides(root, locale)
+  await images(root, 'en')
+  const administration = await readFile(path.join(root, 'en', 'administration.md'), 'utf8')
+  const periodStart = administration.indexOf('<a id="period"></a>')
+  const allocationStart = administration.indexOf('<a id="allocation"></a>')
+  const rubricStart = administration.indexOf('<a id="rubric"></a>')
+  assert.ok(periodStart >= 0 && allocationStart > periodStart && rubricStart > allocationStart,
+    'Rendered English administrator guide must contain distinct period and allocation chapters')
+  const period = administration.slice(periodStart, allocationStart)
+  const allocation = administration.slice(allocationStart, rubricStart)
+  const assertInOrder = (chapter, required, name) => {
+    let offset = 0
+    for (const item of required) {
+      const position = chapter.indexOf(item, offset)
+      assert.ok(position >= 0, `${name} must include ${item} after the preceding instruction`)
+      offset = position + item.length
+    }
+  }
+
+  assertInOrder(period, [
+    'For this walkthrough, confirm a supervisor for its primary project',
+    '`/ideas`',
+    '**Details & history**',
+    'select a teacher under **Confirm supervisor**',
+    'and choose **Confirm supervisor**',
+    'a confirmed supervisor is not required for a project to be included in an application period',
+    '`/applications`',
+    '**＋ Configure period**',
+    '**Label**',
+    '**School year**',
+    '**Opens at**',
+    '**Closes at**',
+    'The closing time must be after the opening time',
+    'should reflect the intended application schedule for the school year',
+    '**Who may apply**',
+    '**All students**',
+    'The walkthrough needs at least three [accepted projects]',
+    'Select at least three accepted projects from the period\'s school year, including the project to be offered',
+    '**Create period**',
+  ], 'English administrator period chapter')
+
+  assertInOrder(allocation, [
+    '`/allocation`',
+    '**Application period**',
+    'Wait for the deadline-triggered scheduler',
+    'completed, non-early initial run',
+    'Do not start an early or replacement run as a substitute',
+    '**Inspect result**',
+    'review the outcome before choosing **Finalize result**',
+    'Confirm the browser confirmation',
+    'A completed preliminary result is not finalized membership',
+    'only after finalization should you rely on the resulting group membership',
+    'or have students start their official proposal',
+  ], 'English administrator allocation chapter')
+})
+
 test('D1 teacher supervision preference evidence requires one UI write, later readback and matching checkpoint', () => {
   const projectId = 'primary-project'
   const report = {

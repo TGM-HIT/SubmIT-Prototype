@@ -183,7 +183,7 @@
         {
           "id": "period",
           "title": "Configure the application period and supervision",
-          "text": "At least three [accepted projects](lehrkraefte.md#acceptance) are needed. Configure an application period with a short future deadline, attach the eligible projects, and assign a confirmed supervisor. Students then submit actual individual or group rankings before the deadline. The run uses the ordinary scheduler and finalization workflow; it does not override allocation behavior.",
+          "text": "1. For this walkthrough, confirm a supervisor for its primary project: open `/ideas`, choose **Details & history** for that project, select a teacher under **Confirm supervisor**, and choose **Confirm supervisor**. This confirmation is part of the walkthrough; a confirmed supervisor is not required for a project to be included in an application period.\n2. Open `/applications` and choose **＋ Configure period**. Enter **Label**, **School year**, **Opens at**, and **Closes at**. The closing time must be after the opening time and should reflect the intended application schedule for the school year; no production deadline duration is prescribed.\n3. Choose the intended eligibility under **Who may apply**; this walkthrough uses **All students**. The walkthrough needs at least three [accepted projects](lehrkraefte.md#acceptance) for that school year. Select at least three accepted projects from the period's school year, including the project to be offered.\n4. Choose **Create period**. Students then submit actual individual or group rankings before the deadline.",
           "images": [
             {"key": "period", "alt": "Administrator configures the synthetic project application period", "caption": "The application period has a bounded opening and deadline."}
           ]
@@ -191,7 +191,7 @@
         {
           "id": "allocation",
           "title": "Review and finalize allocation",
-          "text": "After the deadline, inspect the completed allocation through `/allocation`. A preliminary result is not a final membership. Review the eligible result and explicitly finalize the valid group before students start their official proposal. The [student guide](schueler.md#allocation) follows the resulting group workflow.",
+          "text": "1. Open `/allocation` and select the configured period under **Application period**.\n2. Wait for the deadline-triggered scheduler to produce its completed, non-early initial run. Do not start an early or replacement run as a substitute for this ordinary deadline workflow.\n3. Choose **Inspect result** for that run and review the outcome before choosing **Finalize result**. Confirm the browser confirmation.\n4. A completed preliminary result is not finalized membership; only after finalization should you rely on the resulting group membership or have students start their official proposal. The run uses the ordinary scheduler and finalization workflow; it does not override allocation behavior. The [student guide](schueler.md#allocation) follows that finalized group workflow.",
           "images": [
             {"key": "allocation", "alt": "Administrator reviews a completed allocation before finalization", "caption": "The group proposal uses finalized memberships, not a preliminary run."}
           ]
