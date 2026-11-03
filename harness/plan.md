@@ -134,7 +134,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-59](tickets/done/Dev-59.md) | done | Load TGM workbook preferences in a dedicated testing profile |
 | [Dev-60](tickets/done/Dev-60.md) | done | Allow Markdown and PDF idea and specification submissions |
 | [Dev-61](tickets/done/Dev-61.md) | done | Make rubric definitions self-contained JSON and downloadable |
-| [Dev-62](tickets/Dev-62.md) | failed | Establish atomic SPEC-to-test traceability |
+| [Dev-62](tickets/Dev-62.md) | to-do | Establish atomic SPEC-to-test traceability |
 | [Dev-63](tickets/Dev-63.md) | to-do | Derive remaining API service filters from generated types |
 | [Dev-64](tickets/Dev-64.md) | to-do | Document exact catalogue rename routes |
 | [Dev-65](tickets/Dev-65.md) | to-do | Make Compliance-03 evidence method-aware and auditable |
@@ -142,25 +142,6 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-67](tickets/Dev-67.md) | to-do | Reconcile Feature-29 ledger path and status |
 | [Dev-68](tickets/Dev-68.md) | to-do | Document teacher supervision preferences in both guide locales |
 | [Dev-69](tickets/Dev-69.md) | to-do | Add actionable period and allocation instructions to the English admin guide |
-| [Dev-70](tickets/done/Dev-70.md) | done | Review and salvage the Dev-62 public HTTP regressions |
-| [Dev-71](tickets/done/Dev-71.md) | done | Review traceability tooling and staged inventory semantics |
-| [Dev-72](tickets/Dev-72.md) | failed | Classify shared SPEC clauses and reconcile shared history |
-| [Dev-73](tickets/Dev-73.md) | to-do | Classify backend SPEC clauses and reconcile backend history |
-| [Dev-74](tickets/Dev-74.md) | to-do | Classify frontend SPEC clauses and reconcile frontend history |
-| [Dev-75](tickets/Dev-75.md) | to-do | Review the first shared identity evidence batch |
-| [Dev-76](tickets/Dev-76.md) | to-do | Review the first API and architecture evidence batch |
-| [Dev-77](tickets/Dev-77.md) | to-do | Review the first frontend language evidence batch |
-| [Dev-78](tickets/done/Dev-78.md) | done | Pilot shared purpose classification and history reconciliation |
-| [Dev-79](tickets/done/Dev-79.md) | done | Classify shared roles and project lifecycle |
-| [Dev-80](tickets/done/Dev-80.md) | done | Classify shared ideas and formal applications |
-| [Dev-81](tickets/Dev-81.md) | failed | Classify shared grading and rubric history |
-| [Dev-82](tickets/Dev-82.md) | to-do | Classify shared archive and teacher review |
-| [Dev-83](tickets/Dev-83.md) | to-do | Classify shared allocation and application rules |
-| [Dev-84](tickets/Dev-84.md) | to-do | Classify shared invariants and close shared history |
-| [Dev-85](tickets/done/Dev-85.md) | done | Repair rubric foundation and version history |
-| [Dev-86](tickets/Dev-86.md) | awaiting-human | Classify rubric browsing, downloads, and publication |
-| [Dev-87](tickets/Dev-87.md) | to-do | Classify routine and final grading and metrics |
-| [Dev-88](tickets/Dev-88.md) | to-do | Classify final-grade calculations and completion inputs |
 
 ### Agents
 
