@@ -136,7 +136,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-61](tickets/done/Dev-61.md) | done | Make rubric definitions self-contained JSON and downloadable |
 | [Dev-62](tickets/Dev-62.md) | to-do | Establish atomic SPEC-to-test traceability |
 | [Dev-63](tickets/done/Dev-63.md) | done | Derive remaining API service filters from generated types |
-| [Dev-64](tickets/Dev-64.md) | in-progress | Document exact catalogue rename routes |
+| [Dev-64](tickets/done/Dev-64.md) | done | Document exact catalogue rename routes |
 | [Dev-65](tickets/Dev-65.md) | to-do | Make Compliance-03 evidence method-aware and auditable |
 | [Dev-66](tickets/Dev-66.md) | to-do | Resolve missing historical run-record links |
 | [Dev-67](tickets/Dev-67.md) | to-do | Reconcile Feature-29 ledger path and status |
