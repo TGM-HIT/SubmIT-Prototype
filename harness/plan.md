@@ -151,7 +151,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Agent-02](tickets/done/Agent-02.md) | done | Remove named ticket references from agent contracts |
 | [Agent-03](tickets/done/Agent-03.md) | done | Reconcile Compliance-06 follow-up taxonomy with the Auditor contract |
 | [Agent-04](tickets/done/Agent-04.md) | done | Distinguish stopped outcomes from failed ledger status |
-| [Agent-05](tickets/Agent-05.md) | to-do | Authorize exact ticket-assigned plan-row content edits |
+| [Agent-05](tickets/done/Agent-05.md) | done | Authorize exact ticket-assigned plan-row content edits |
 
 ### Features
 
