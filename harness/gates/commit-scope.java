@@ -17,6 +17,7 @@ class CommitScope {
         "frontend/DEV-GUIDELINES.md",
         "backend/DEV-GUIDELINES.md",
         "frontend/public/favicon.ico",
+        "docs/spec-test-traceability.md",
         "harness/gates/commit-scope.java",
         "harness/checks/Compliance-04.md",
         "harness/roles/auditor.md",
