@@ -26,6 +26,42 @@
 
 For Topic 2, resolve evidence by HTTP method plus normalized URI template; normalize path-variable names without conflating methods. Derive specification, implementation, and contract parameter sets independently; explicitly cite shared pagination rules rather than copying contract names into another source's evidence column. Accept locally unambiguous same-route or sibling-route shorthand only with the cited base template and contextual method/suffix text. A resource-range fallback or failed literal lookup is an unresolved mapping until bounded contextual review establishes the operation or supports an actual documentation gap. Before handoff, reconcile every path-gap label with the finding list and verify its method-specific evidence, preserving genuine omissions. This requires neither a parser framework nor specification edits during the audit.
 
+## Evidence tool
+
+Use the standard-library evidence collector to retain independently sourced Topic 2 facts and Topic 6 contract facts alongside Auditor review records. Generate the OpenAPI contract first as required below, then invoke the tool from the repository root with explicit input paths and the run's ignored output directory:
+
+```sh
+ruby harness/checks/Compliance-03-evidence.rb \
+  --spec backend/SPEC.md \
+  --openapi contracts/openapi.yaml \
+  --topic2 harness/runs/<run-id>/evidence/topic2.json \
+  --topic6 harness/runs/<run-id>/evidence/topic6.json \
+  --controller idea-pdf-create=backend/src/main/java/at/ac/tgm/submit/idea/IdeaPdfCreateController.java \
+  --controller idea-pdf-update=backend/src/main/java/at/ac/tgm/submit/idea/IdeaPdfUpdateController.java \
+  --controller specification-pdf-upload=backend/src/main/java/at/ac/tgm/submit/idea/SpecificationPdfUploadController.java \
+  --controller project-artifact-upload=backend/src/main/java/at/ac/tgm/submit/archive/ProjectWorkController.java \
+  --source multipart-settings=backend/src/main/resources/application.properties \
+  --source multipart-test=backend/src/test/java/at/ac/tgm/submit/archive/ArtifactMultipartLimitsApiTest.java \
+  --output-dir harness/runs/<run-id>/evidence
+```
+
+Add one `--controller ID=PATH` for each explicitly cited controller and one `--source ID=PATH` for each other explicitly cited source. The tool reads only these named files and the four required evidence inputs; it does not search for controllers, walk directories, or create output outside `--output-dir`. The output is `compliance-03-evidence.json`. The two evidence-plan JSON files are Auditor-prepared, run-specific inputs and should be retained with the other evidence. From the repository root, test the collector with `ruby harness/checks/test-compliance-03-evidence.rb`. In the sample audit report's `## Scope inspected`, retain the exact tool invocation and result/output path, plus the exact Ruby test command and result.
+
+The Topic 2 input has an `operations` array. Each entry supplies `method`, exact OpenAPI `path`, and an `implementation` object naming a supplied controller ID and verb-matched Java method. Its `specification` object records `basis`, exact `citations` copied from `backend/SPEC.md`, `query_parameters`, and a `query_parameter_citations` map keyed by each parameter name:
+
+- `explicit` cites the method and path directly.
+- `same_route` additionally cites `base_method` and `base_path`, and the approved text must expressly establish the same route and target method.
+- `sibling` additionally cites `base_method`, `base_path`, and a literal `suffix` establishing the sibling path.
+- `gap` includes a bounded `scope` statement, exact citation text for the reviewed endpoint inventory, and its parameter set. The exact method/path must be absent from the cited inventory and the supplied specification. A missing citation is `unverified`, not a path gap.
+
+Each query-parameter citation is exact approved text that names the parameter and either establishes it on the operation or explicitly states the shared pagination rule. The collector extracts implementation query names from `@RequestParam` in the selected controller method and contract query names from the matching OpenAPI operation and path item. The three output columns remain separate; only the specification names and citations come from the Topic 2 evidence input. Review every mismatch and route-gap disposition against its cited specification context before reporting findings.
+
+The Topic 6 input has an `operations` array containing each of the four multipart upload operations (`POST /api/ideas/pdf`, `PUT /api/ideas/{id}/pdf`, `PUT /api/ideas/{id}/specification/pdf`, and `POST /api/projects/{projectId}/artifacts`). Each operation records `protected`, an exact `access_citation`, and `statuses` with applicable `400` and `413` rows. The project-artifact upload has no declared OpenAPI `413`; retain that explicit absence while citing its parser-level trigger evidence separately. Every status row includes `applicable`, a `trigger`, trigger records with `kind`, `description`, and exact source `citations`, and `runtime_body` explicitly set to `observed` with citations or `not_observed`. Distinguish the `per_file_limit` trigger (10 MB per file) from the `aggregate_limit` trigger (11 MB for the whole multipart request); both are required for each multipart `413` review. Keep a runtime body observation separate from the generated schema.
+
+The collector copies each matching generated response's exact `description` and per-media-type `schema` into the report, or records their absence. It does not derive runtime response bodies from OpenAPI. Each status may also include a `review` with `disposition` (`accurate`, `inaccurate`, or `unresolved`), a substantive `rationale`, and `binding_sha256`. First run with a missing review to obtain the output binding hash; provide that hash with the Auditor's review and rerun. The binding includes the exact operation/status, trigger and access citations (including source-file digests), runtime-body evidence, generated description, and generated schemas, so changed evidence invalidates a prior disposition. An absent review is reported as `not_reviewed`; incomplete trigger evidence or a stale/missing hash cannot be presented as reviewed.
+
+The report distinguishes machine-validated facts (verbatim citations, controller parameter extraction, OpenAPI fields, and review-binding equality) from the Auditor's semantic disposition. A matching hash proves which evidence the Auditor reviewed; it does not prove that the Auditor's conclusion is correct. The tool never derives `accurate` from description presence, status wording, operation identity, or a previous report.
+
 ## Finding and fix rules
 
 - A finding is any difference between the regenerated contract, the specification, the tracked types, or the frontend usage.
