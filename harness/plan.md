@@ -140,7 +140,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-65](tickets/done/Dev-65.md) | done | Make Compliance-03 evidence method-aware and auditable |
 | [Dev-66](tickets/done/Dev-66.md) | done | Resolve missing historical run-record links |
 | [Dev-67](tickets/done/Dev-67.md) | done | Reconcile Feature-29 ledger path and status |
-| [Dev-68](tickets/Dev-68.md) | to-do | Document teacher supervision preferences in both guide locales |
+| [Dev-68](tickets/done/Dev-68.md) | done | Document teacher supervision preferences in both guide locales |
 | [Dev-69](tickets/Dev-69.md) | to-do | Add actionable period and allocation instructions to the English admin guide |
 
 ### Agents
