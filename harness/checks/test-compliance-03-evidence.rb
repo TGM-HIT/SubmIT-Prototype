@@ -152,8 +152,54 @@ class Compliance03EvidenceTest < Minitest::Test
     assert operations.all? { |operation| operation.fetch('protected') }
 
     operations.each do |operation|
+      assert_equal(
+        ['runtime', @source_path, 'All upload routes require an authenticated project role.'],
+        operation.fetch('access_citation').values_at('source', 'path', 'text')
+      )
+      assert_equal %w[400 413], operation.fetch('statuses').map { |status| status.fetch('status') }.sort
       operation.fetch('statuses').each do |status|
         assert_equal true, status.fetch('applicable')
+        expected_trigger = if status.fetch('status') == '400'
+                             'Malformed multipart request or validation input.'
+                           else
+                             'Multipart size limit is exceeded.'
+                           end
+        assert_equal expected_trigger, status.fetch('trigger')
+        expected_triggers = if status.fetch('status') == '400'
+                              {
+                                'malformed_request' => [
+                                  'Multipart or request validation fails.',
+                                  ['A malformed multipart request may produce a 400 response.']
+                                ]
+                              }
+                            else
+                              {
+                                'per_file_limit' => [
+                                  'A single PDF exceeds 10 MB.',
+                                  ['Per-file PDF parser ceiling is 10 MB for each uploaded file.']
+                                ],
+                                'aggregate_limit' => [
+                                  'The complete multipart request exceeds 11 MB.',
+                                  ['Aggregate multipart request ceiling is 11 MB across all parts.']
+                                ]
+                              }
+                            end
+        if operation.fetch('path') == '/api/projects/{projectId}/artifacts' && status.fetch('status') == '413'
+          expected_triggers.fetch('per_file_limit')[1] <<
+            'assertEquals(413, perFileResponse.statusCode(), responseText(perFileResponse));'
+          expected_triggers.fetch('aggregate_limit')[1] <<
+            'assertEquals(413, aggregateResponse.statusCode(), responseText(aggregateResponse));'
+        end
+        triggers = status.fetch('triggers')
+        assert_equal expected_triggers.keys.sort, triggers.map { |trigger| trigger.fetch('kind') }.sort
+        triggers.each do |trigger|
+          description, quotes = expected_triggers.fetch(trigger.fetch('kind'))
+          assert_equal description, trigger.fetch('description')
+          assert_equal(
+            quotes.map { |text| ['runtime', @source_path, text] },
+            trigger.fetch('citations').map { |citation| citation.values_at('source', 'path', 'text') }
+          )
+        end
         assert_equal 'not_observed', status.dig('runtime_body_evidence', 'status')
         contract = status.fetch('generated_contract')
         artifact_413 = operation.fetch('path') == '/api/projects/{projectId}/artifacts' &&
