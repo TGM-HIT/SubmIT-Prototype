@@ -17,20 +17,7 @@ class CommitScope {
         "frontend/DEV-GUIDELINES.md",
         "backend/DEV-GUIDELINES.md",
         "frontend/public/favicon.ico",
-        "harness/gates/commit-scope.java",
-        "harness/checks/Compliance-04.md",
-        "harness/roles/auditor.md",
-        "harness/roles/implementor.md",
-        "harness/roles/learner.md",
-        "harness/roles/orchestrator.md",
-        "harness/tickets/done/Bug-04.md",
-        "harness/tickets/done/Bug-05.md",
-        "harness/tickets/done/Feature-01.md",
-        "harness/tickets/done/Feature-02.md",
-        "harness/tickets/done/Feature-04.md",
-        "harness/tickets/done/Feature-05.md",
-        "harness/tickets/done/Feature-07.md",
-        "harness/tickets/done/Feature-08.md"
+        "harness/gates/commit-scope.java"
     };
     static final String[] SPEC_FILES = { "docs/SPEC.md", "backend/SPEC.md", "frontend/SPEC.md" };
 
