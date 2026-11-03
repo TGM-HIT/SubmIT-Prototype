@@ -2,7 +2,7 @@
 
 ## Intent
 
-The Dev-39 documentation follow-up leaves two backend assertion gaps intentionally unverified: the period API response tests do not assert the `schoolYear` property separately from `label`, and the label-validation tests do not prove acceptance at the one- and 100-character post-trim boundaries. The owner chose option A for Dev-39 and requested a separate backend-test follow-up: “A is enough for Dev-39, but add a follow-up ticket for backend tests.” Part D also says, “Please create a new Ticket for code changes if neccessary.” See the [preserved owner decision](../../runs/Dev-39-20261025-0933/human-acceptance.md#part-b--decisions-needed) and [evaluation](../../runs/Dev-39-20261025-0933/evaluation-1.md).
+The Dev-39 documentation follow-up leaves two backend assertion gaps intentionally unverified: the period API response tests do not assert the `schoolYear` property separately from `label`, and the label-validation tests do not prove acceptance at the one- and 100-character post-trim boundaries. The owner chose option A for Dev-39 and requested a separate backend-test follow-up: “A is enough for Dev-39, but add a follow-up ticket for backend tests.” Part D also says, “Please create a new Ticket for code changes if neccessary.” See the [preserved owner decision](../../runs/archive/Dev-39-20261025-0933/human-acceptance.md#part-b--decisions-needed) and [evaluation](../../runs/archive/Dev-39-20261025-0933/evaluation-1.md).
 
 ## Scope and contract
 
