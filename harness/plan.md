@@ -153,7 +153,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Agent-04](tickets/done/Agent-04.md) | done | Distinguish stopped outcomes from failed ledger status |
 | [Agent-05](tickets/done/Agent-05.md) | done | Authorize exact ticket-assigned plan-row content edits |
 | [Agent-06](tickets/done/Agent-06.md) | done | Remove stale Dev-09 scope allowlist entries |
-| [Agent-07](tickets/Agent-07.md) | to-do | Prevent Learner proposals from changing done tickets |
+| [Agent-07](tickets/done/Agent-07.md) | done | Prevent Learner proposals from changing done tickets |
 
 ### Features
 
