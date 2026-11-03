@@ -157,7 +157,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-82](tickets/Dev-82.md) | to-do | Classify shared archive and teacher review |
 | [Dev-83](tickets/Dev-83.md) | to-do | Classify shared allocation and application rules |
 | [Dev-84](tickets/Dev-84.md) | to-do | Classify shared invariants and close shared history |
-| [Dev-85](tickets/Dev-85.md) | in-progress | Repair rubric foundation and version history |
+| [Dev-85](tickets/done/Dev-85.md) | done | Repair rubric foundation and version history |
 | [Dev-86](tickets/Dev-86.md) | to-do | Classify rubric browsing, downloads, and publication |
 | [Dev-87](tickets/Dev-87.md) | to-do | Classify routine and final grading and metrics |
 | [Dev-88](tickets/Dev-88.md) | to-do | Classify final-grade calculations and completion inputs |
