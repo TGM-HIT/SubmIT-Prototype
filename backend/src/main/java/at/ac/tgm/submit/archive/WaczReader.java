@@ -35,8 +35,13 @@ public class WaczReader {
     private static final int GZIP_ID_1 = 0x1f;
     private static final int GZIP_ID_2 = 0x8b;
     private static final int GZIP_DEFLATE_METHOD = 8;
-    private static final int GZIP_NO_OPTIONAL_FLAGS = 0;
+    private static final int GZIP_RESERVED_FLAGS = 0xe0;
+    private static final int GZIP_HEADER_CRC_FLAG = 0x02;
+    private static final int GZIP_EXTRA_FIELD_FLAG = 0x04;
+    private static final int GZIP_FILE_NAME_FLAG = 0x08;
+    private static final int GZIP_COMMENT_FLAG = 0x10;
     private static final int BYTE_MASK = 0xff;
+    private static final int SHORT_MASK = 0xffff;
     private static final int BYTE_SHIFT_1 = 8;
     private static final int BYTE_SHIFT_2 = 16;
     private static final int BYTE_SHIFT_3 = 24;
@@ -386,13 +391,71 @@ public class WaczReader {
         if ((compressed[2] & BYTE_MASK) != GZIP_DEFLATE_METHOD) {
             throw invalid();
         }
-        if ((compressed[3] & BYTE_MASK) != GZIP_NO_OPTIONAL_FLAGS) {
+        int flags = compressed[3] & BYTE_MASK;
+        if ((flags & GZIP_RESERVED_FLAGS) != 0) {
             throw invalid();
         }
-        return GZIP_HEADER_SIZE;
+        int offset = GZIP_HEADER_SIZE;
+        offset = skipGzipExtraField(compressed, offset, flags);
+        offset = skipGzipTextField(compressed, offset, flags, GZIP_FILE_NAME_FLAG);
+        offset = skipGzipTextField(compressed, offset, flags, GZIP_COMMENT_FLAG);
+        offset = skipGzipHeaderChecksum(compressed, offset, flags);
+        if (offset > compressed.length - GZIP_TRAILER_SIZE) {
+            throw invalid();
+        }
+        return offset;
+    }
+
+    private int skipGzipExtraField(byte[] compressed, int offset, int flags) {
+        if ((flags & GZIP_EXTRA_FIELD_FLAG) == 0) {
+            return offset;
+        }
+        int extraLength = readLittleEndianUnsignedShort(compressed, offset);
+        int dataOffset = offset + Short.BYTES;
+        ensureAvailable(compressed, dataOffset, extraLength);
+        return dataOffset + extraLength;
+    }
+
+    private int skipGzipTextField(byte[] compressed, int offset, int flags, int flag) {
+        return (flags & flag) == 0 ? offset : skipZeroTerminated(compressed, offset);
+    }
+
+    private int skipGzipHeaderChecksum(byte[] compressed, int offset, int flags) {
+        if ((flags & GZIP_HEADER_CRC_FLAG) == 0) {
+            return offset;
+        }
+        ensureAvailable(compressed, offset, Short.BYTES);
+        CRC32 checksum = new CRC32();
+        checksum.update(compressed, 0, offset);
+        if (((int) checksum.getValue() & SHORT_MASK) != readLittleEndianUnsignedShort(compressed, offset)) {
+            throw invalid();
+        }
+        return offset + Short.BYTES;
+    }
+
+    private int skipZeroTerminated(byte[] bytes, int offset) {
+        while (offset < bytes.length && bytes[offset] != 0) {
+            offset++;
+        }
+        if (offset >= bytes.length) {
+            throw invalid();
+        }
+        return offset + 1;
+    }
+
+    private void ensureAvailable(byte[] bytes, int offset, int count) {
+        if (offset < 0 || count < 0 || offset > bytes.length - count) {
+            throw invalid();
+        }
+    }
+
+    private int readLittleEndianUnsignedShort(byte[] bytes, int offset) {
+        ensureAvailable(bytes, offset, Short.BYTES);
+        return (bytes[offset] & BYTE_MASK) | (bytes[offset + 1] & BYTE_MASK) << BYTE_SHIFT_1;
     }
 
     private long readLittleEndianUnsignedInt(byte[] bytes, int offset) {
+        ensureAvailable(bytes, offset, Integer.BYTES);
         long first = bytes[offset] & BYTE_MASK;
         long second = bytes[offset + 1] & BYTE_MASK;
         long third = bytes[offset + 2] & BYTE_MASK;
