@@ -14,7 +14,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Pattern;
+import java.util.zip.CRC32;
+import java.util.zip.DataFormatException;
 import java.util.zip.GZIPInputStream;
+import java.util.zip.Inflater;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import org.springframework.stereotype.Component;
@@ -26,6 +29,17 @@ public class WaczReader {
     private static final int MAX_RESOURCES = 2000;
     private static final int HEADER_DELIMITER_LENGTH = 4;
     private static final int COPY_BUFFER_SIZE = 8192;
+    private static final int GZIP_HEADER_SIZE = 10;
+    private static final int GZIP_TRAILER_SIZE = 8;
+    private static final int MIN_GZIP_MEMBER_LENGTH = GZIP_HEADER_SIZE + GZIP_TRAILER_SIZE;
+    private static final int GZIP_ID_1 = 0x1f;
+    private static final int GZIP_ID_2 = 0x8b;
+    private static final int GZIP_DEFLATE_METHOD = 8;
+    private static final int GZIP_NO_OPTIONAL_FLAGS = 0;
+    private static final int BYTE_MASK = 0xff;
+    private static final int BYTE_SHIFT_1 = 8;
+    private static final int BYTE_SHIFT_2 = 16;
+    private static final int BYTE_SHIFT_3 = 24;
     private static final String MANIFEST = "datapackage.json";
     private static final String INDEX = "indexes/index.cdxj";
     private static final String WACZ_VERSION = "1.1.1";
@@ -40,11 +54,11 @@ public class WaczReader {
     public Snapshot read(byte[] content) {
         Map<String, byte[]> entries = readEntries(content);
         String archivePath = validateManifest(entries.get(MANIFEST), entries);
-        Map<String, String> index = validateIndex(entries.get(INDEX), archivePath,
+        Map<String, IndexEntry> index = validateIndex(entries.get(INDEX), archivePath,
                 entries.get(archivePath).length);
         List<Resource> resources = readWarc(entries.get(archivePath));
         validateResources(resources);
-        validateIndexedResources(index, resources);
+        validateIndexedResources(index, resources, entries.get(archivePath));
         return new Snapshot(resources);
     }
 
@@ -158,11 +172,11 @@ public class WaczReader {
         return value.isTextual() ? value.asText() : null;
     }
 
-    private Map<String, String> validateIndex(byte[] index, String archivePath, long archiveLength) {
+    private Map<String, IndexEntry> validateIndex(byte[] index, String archivePath, long archiveLength) {
         if (index == null || index.length == 0) {
             throw invalid();
         }
-        Map<String, String> indexedResources = new LinkedHashMap<>();
+        Map<String, IndexEntry> indexedResources = new LinkedHashMap<>();
         String text = new String(index, StandardCharsets.UTF_8);
         addIndexLines(text.split("\\R", -1), archivePath, archiveLength, indexedResources);
         if (indexedResources.isEmpty()) {
@@ -172,7 +186,7 @@ public class WaczReader {
     }
 
     private void addIndexLines(String[] lines, String archivePath, long archiveLength,
-            Map<String, String> indexedResources) {
+            Map<String, IndexEntry> indexedResources) {
         for (int lineNumber = 0; lineNumber < lines.length; lineNumber++) {
             if (lines[lineNumber].isEmpty() && lineNumber == lines.length - 1) {
                 continue;
@@ -185,9 +199,9 @@ public class WaczReader {
     }
 
     private void addIndexEntry(String line, String archivePath, long archiveLength,
-            Map<String, String> indexedResources) {
+            Map<String, IndexEntry> indexedResources) {
         IndexEntry parsed = parseIndexEntry(line, archivePath, archiveLength);
-        if (indexedResources.putIfAbsent(parsed.url(), parsed.mimeType()) != null) {
+        if (indexedResources.putIfAbsent(parsed.url(), parsed) != null) {
             throw invalid();
         }
     }
@@ -202,7 +216,7 @@ public class WaczReader {
             if (!isValidIndexEntry(entry, url, archivePath, archiveLength, mimeType)) {
                 throw invalid();
             }
-            return new IndexEntry(url, mimeType);
+            return new IndexEntry(url, mimeType, entry.path("offset").asLong(), entry.path("length").asLong());
         } catch (IOException exception) {
             throw invalid();
         }
@@ -264,16 +278,126 @@ public class WaczReader {
         return start >= 0 && size > 0 && start <= archiveLength && size <= archiveLength - start;
     }
 
-    private void validateIndexedResources(Map<String, String> index, List<Resource> resources) {
+    private void validateIndexedResources(Map<String, IndexEntry> index, List<Resource> resources,
+            byte[] compressedArchive) {
         Map<String, String> actualResources = new LinkedHashMap<>();
         for (Resource resource : resources) {
             if (actualResources.putIfAbsent(resource.url(), resource.mimeType()) != null) {
                 throw invalid();
             }
         }
-        if (!index.equals(actualResources)) {
+        validateIndexRanges(index, compressedArchive);
+        Map<String, String> indexedResources = new LinkedHashMap<>();
+        index.values().forEach(entry -> indexedResources.put(entry.url(), entry.mimeType()));
+        if (!indexedResources.equals(actualResources)) {
             throw invalid();
         }
+    }
+
+    private void validateIndexRanges(Map<String, IndexEntry> index, byte[] compressedArchive) {
+        List<IndexEntry> entries = new ArrayList<>(index.values());
+        entries.sort(java.util.Comparator.comparingLong(IndexEntry::offset));
+        long expectedOffset = 0;
+        for (IndexEntry entry : entries) {
+            if (entry.offset() != expectedOffset) {
+                throw invalid();
+            }
+            int start = Math.toIntExact(entry.offset());
+            int end = Math.toIntExact(entry.offset() + entry.length());
+            byte[] compressedRecord = java.util.Arrays.copyOfRange(compressedArchive, start, end);
+            Resource resource = readSingleWarcResource(decompressGzipMember(compressedRecord));
+            if (!entry.url().equals(resource.url()) || !entry.mimeType().equals(resource.mimeType())) {
+                throw invalid();
+            }
+            expectedOffset += entry.length();
+        }
+        if (expectedOffset != compressedArchive.length) {
+            throw invalid();
+        }
+    }
+
+    private byte[] decompressGzipMember(byte[] compressed) {
+        int dataOffset = gzipDataOffset(compressed);
+        Inflater inflater = new Inflater(true);
+        try {
+            inflater.setInput(compressed, dataOffset, compressed.length - dataOffset);
+            byte[] uncompressed = inflateLimited(inflater);
+            validateGzipTrailer(compressed, dataOffset, inflater.getBytesRead(), uncompressed);
+            return uncompressed;
+        } catch (DataFormatException exception) {
+            throw invalid();
+        } finally {
+            inflater.end();
+        }
+    }
+
+    private byte[] inflateLimited(Inflater inflater) throws DataFormatException {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        byte[] buffer = new byte[COPY_BUFFER_SIZE];
+        while (!inflater.finished()) {
+            int count = inflater.inflate(buffer);
+            if (count == 0 && !inflater.finished()) {
+                throw invalid();
+            }
+            if (output.size() + count > MAX_UNZIPPED_BYTES) {
+                throw invalid();
+            }
+            output.write(buffer, 0, count);
+        }
+        return output.toByteArray();
+    }
+
+    private void validateGzipTrailer(byte[] compressed, int dataOffset, long deflatedLength,
+            byte[] uncompressed) {
+        int trailerOffset = dataOffset + Math.toIntExact(deflatedLength);
+        if (trailerOffset + GZIP_TRAILER_SIZE != compressed.length) {
+            throw invalid();
+        }
+        CRC32 checksum = new CRC32();
+        checksum.update(uncompressed);
+        if (checksum.getValue() != readLittleEndianUnsignedInt(compressed, trailerOffset)) {
+            throw invalid();
+        }
+        if (Integer.toUnsignedLong(uncompressed.length)
+                != readLittleEndianUnsignedInt(compressed, trailerOffset + Integer.BYTES)) {
+            throw invalid();
+        }
+    }
+
+    private Resource readSingleWarcResource(byte[] warc) {
+        WarcRecord record = recordAt(warc, 0);
+        if (record == null || !isResponse(record.header()) || nextRecordOffset(warc, record) != warc.length) {
+            throw invalid();
+        }
+        Resource resource = response(headerValue(record.header(), "WARC-Target-URI"), record.content());
+        if (resource == null) {
+            throw invalid();
+        }
+        return resource;
+    }
+
+    private int gzipDataOffset(byte[] compressed) {
+        if (compressed.length < MIN_GZIP_MEMBER_LENGTH) {
+            throw invalid();
+        }
+        if ((compressed[0] & BYTE_MASK) != GZIP_ID_1 || (compressed[1] & BYTE_MASK) != GZIP_ID_2) {
+            throw invalid();
+        }
+        if ((compressed[2] & BYTE_MASK) != GZIP_DEFLATE_METHOD) {
+            throw invalid();
+        }
+        if ((compressed[3] & BYTE_MASK) != GZIP_NO_OPTIONAL_FLAGS) {
+            throw invalid();
+        }
+        return GZIP_HEADER_SIZE;
+    }
+
+    private long readLittleEndianUnsignedInt(byte[] bytes, int offset) {
+        long first = bytes[offset] & BYTE_MASK;
+        long second = bytes[offset + 1] & BYTE_MASK;
+        long third = bytes[offset + 2] & BYTE_MASK;
+        long fourth = bytes[offset + 3] & BYTE_MASK;
+        return first | second << BYTE_SHIFT_1 | third << BYTE_SHIFT_2 | fourth << BYTE_SHIFT_3;
     }
 
     private void validateResources(List<Resource> resources) {
@@ -290,7 +414,7 @@ public class WaczReader {
         while (offset < warc.length) {
             WarcRecord record = recordAt(warc, offset);
             if (record == null) {
-                break;
+                throw invalid();
             }
             addResponse(resources, record);
             offset = nextRecordOffset(warc, record);
@@ -315,9 +439,12 @@ public class WaczReader {
             return null;
         }
         String header = new String(warc, offset, headerEnd - offset, StandardCharsets.ISO_8859_1);
+        if (!header.startsWith("WARC/1.0") && !header.startsWith("WARC/1.1")) {
+            throw invalid();
+        }
         int recordLength = contentLength(header);
         int recordStart = headerEnd + HEADER_DELIMITER_LENGTH;
-        if (recordLength < 0 || recordStart + recordLength > warc.length) {
+        if (recordLength < 0 || recordLength > warc.length - recordStart) {
             throw invalid();
         }
         byte[] record = java.util.Arrays.copyOfRange(warc, recordStart, recordStart + recordLength);
@@ -418,6 +545,6 @@ public class WaczReader {
     public record Resource(String url, String mimeType, String bodyBase64) {
     }
 
-    private record IndexEntry(String url, String mimeType) {
+    private record IndexEntry(String url, String mimeType, long offset, long length) {
     }
 }

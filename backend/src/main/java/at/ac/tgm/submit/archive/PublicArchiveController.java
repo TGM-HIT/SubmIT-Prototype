@@ -1,6 +1,7 @@
 package at.ac.tgm.submit.archive;
 
 import at.ac.tgm.submit.web.ApiDtos.PageResponse;
+import at.ac.tgm.submit.web.ApiDtos.ApiErrorResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
@@ -61,6 +62,15 @@ public class PublicArchiveController {
     @GetMapping("/{artifactId}/browse")
     @Operation(summary = "Read an approved WACZ website snapshot for isolated public browsing.")
     @ApiResponse(responseCode = "200", description = "Snapshot resources without private artefact metadata.")
+    @ApiResponse(responseCode = "400",
+            description = "The project or artifact ID is invalid, or the WACZ content is malformed or unsupported.",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
+                    schema = @Schema(implementation = ApiErrorResponse.class)))
+    @ApiResponse(responseCode = "404",
+            description = "The project is missing or incomplete, or the snapshot is missing, unapproved, "
+                    + "not a website archive, or belongs to another project.",
+            content = @Content(mediaType = MediaType.APPLICATION_JSON_VALUE,
+                    schema = @Schema(implementation = ApiErrorResponse.class)))
     public WaczReader.Snapshot browse(@PathVariable UUID projectId, @PathVariable UUID artifactId) {
         return browseService.browse(projectId, artifactId);
     }

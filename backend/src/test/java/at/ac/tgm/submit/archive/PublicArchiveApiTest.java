@@ -13,12 +13,17 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.Set;
 import java.util.UUID;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.GZIPOutputStream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 import java.util.zip.ZipOutputStream;
@@ -45,13 +50,20 @@ class PublicArchiveApiTest {
         UUID website = artifact(project, "WEBSITE_ARCHIVE", "APPROVED", wacz);
         UUID poster = artifact(project, "POSTER", "APPROVED", "poster".getBytes(StandardCharsets.UTF_8));
         UUID source = artifact(project, "SOURCE_DATA", "APPROVED", "source".getBytes(StandardCharsets.UTF_8));
+        artifact(project, "WEBSITE_ARCHIVE", "PRIVATE", wacz);
 
         MvcResult catalogueResult = mvc.perform(get("/api/public/projects/{projectId}/archive", project))
                 .andExpect(status().isOk()).andReturn();
         String catalogueJson = catalogueResult.getResponse().getContentAsString();
         JsonNode catalogue = mapper.readTree(catalogueJson);
+        Set<UUID> catalogueIds = new HashSet<>();
+        for (JsonNode item : catalogue.path("content")) {
+            assertTrue(item.path("id").isTextual());
+            assertTrue(catalogueIds.add(UUID.fromString(item.path("id").asText())));
+        }
         assertEquals(3, catalogue.path("totalElements").asInt());
         assertEquals(3, catalogue.path("content").size());
+        assertEquals(Set.of(website, poster, source), catalogueIds);
         assertTrue(catalogueJson.contains("WEBSITE_ARCHIVE"));
         assertTrue(catalogueJson.contains("POSTER"));
         assertTrue(catalogueJson.contains("SOURCE_DATA"));
@@ -78,6 +90,8 @@ class PublicArchiveApiTest {
         UUID incomplete = project("IN_PROGRESS");
         UUID incompleteArtifact = artifact(incomplete, "WEBSITE_ARCHIVE", "APPROVED",
                 TestingArchivePreviewConfiguration.createWaczFixture());
+        mvc.perform(get("/api/public/projects/{projectId}/archive", incomplete))
+                .andExpect(status().isNotFound());
         assertDenied(incomplete, incompleteArtifact);
 
         UUID completed = project("PROJECT_COMPLETED");
@@ -128,6 +142,9 @@ class PublicArchiveApiTest {
                 new InvalidWacz("out-of-range-index-record", "indexes/index.cdxj",
                         index.replace("\"offset\":0", "\"offset\":999999999")
                                 .getBytes(StandardCharsets.UTF_8)),
+                new InvalidWacz("in-range-false-index-range", "indexes/index.cdxj",
+                        index.replaceFirst("\"length\":[0-9]+", "\"length\":1")
+                                .getBytes(StandardCharsets.UTF_8)),
                 new InvalidWacz("wrong-index-field-type", "indexes/index.cdxj",
                         index.replace("\"status\":\"200\"", "\"status\":200")
                                 .getBytes(StandardCharsets.UTF_8)));
@@ -142,6 +159,20 @@ class PublicArchiveApiTest {
             assertArrayEquals(invalidWacz, download.getResponse().getContentAsByteArray());
             assertTrue(download.getResponse().getHeader("Content-Disposition").startsWith("attachment;"));
         }
+    }
+
+    @Test
+    void validWarcPrefixFollowedByMalformedBytesIsRejectedButRemainsDownloadable() throws Exception {
+        UUID project = project("COMPLETED");
+        byte[] malformedWacz = appendMalformedWarcTail(TestingArchivePreviewConfiguration.createWaczFixture());
+        UUID artifact = artifact(project, "WEBSITE_ARCHIVE", "APPROVED", malformedWacz);
+
+        mvc.perform(get("/api/public/projects/{projectId}/archive/{artifactId}/browse", project, artifact))
+                .andExpect(status().isBadRequest());
+        MvcResult download = mvc.perform(get("/api/public/projects/{projectId}/archive/{artifactId}",
+                project, artifact)).andExpect(status().isOk()).andReturn();
+        assertArrayEquals(malformedWacz, download.getResponse().getContentAsByteArray());
+        assertTrue(download.getResponse().getHeader("Content-Disposition").startsWith("attachment;"));
     }
 
     private void assertDenied(UUID project, UUID artifact) throws Exception {
@@ -193,6 +224,54 @@ class PublicArchiveApiTest {
             }
         }
         return output.toByteArray();
+    }
+
+    private byte[] appendMalformedWarcTail(byte[] validWacz) throws IOException {
+        Map<String, byte[]> entries = zipEntries(validWacz);
+        byte[] originalArchive = entries.get("archive/snapshot.warc.gz");
+        String[] indexLines = new String(entries.get("indexes/index.cdxj"), StandardCharsets.UTF_8)
+                .strip().split("\\R");
+        String[] firstFields = indexLines[0].split(" ", 3);
+        JsonNode firstIndexRecord = mapper.readTree(firstFields[2]);
+        int firstOffset = firstIndexRecord.path("offset").asInt();
+        int firstLength = firstIndexRecord.path("length").asInt();
+        byte[] firstCompressedRecord = Arrays.copyOfRange(
+                originalArchive, firstOffset, firstOffset + firstLength);
+        byte[] firstWarcRecord;
+        try (GZIPInputStream gzip = new GZIPInputStream(
+                new java.io.ByteArrayInputStream(firstCompressedRecord))) {
+            firstWarcRecord = gzip.readAllBytes();
+        }
+        ByteArrayOutputStream malformedRecord = new ByteArrayOutputStream();
+        malformedRecord.write(firstWarcRecord);
+        malformedRecord.write("MALFORMED WARC TRAIL".getBytes(StandardCharsets.ISO_8859_1));
+        ByteArrayOutputStream compressedRecord = new ByteArrayOutputStream();
+        try (GZIPOutputStream gzip = new GZIPOutputStream(compressedRecord)) {
+            gzip.write(malformedRecord.toByteArray());
+        }
+        byte[] malformedCompressedRecord = compressedRecord.toByteArray();
+
+        ByteArrayOutputStream updatedArchive = new ByteArrayOutputStream();
+        updatedArchive.write(malformedCompressedRecord);
+        updatedArchive.write(originalArchive, firstOffset + firstLength,
+                originalArchive.length - firstOffset - firstLength);
+
+        StringBuilder updatedIndex = new StringBuilder();
+        int currentOffset = 0;
+        for (int lineNumber = 0; lineNumber < indexLines.length; lineNumber++) {
+            String[] fields = indexLines[lineNumber].split(" ", 3);
+            ObjectNode record = (ObjectNode) mapper.readTree(fields[2]);
+            int recordLength = lineNumber == 0 ? malformedCompressedRecord.length : record.path("length").asInt();
+            record.put("offset", currentOffset);
+            record.put("length", recordLength);
+            updatedIndex.append(fields[0]).append(' ').append(fields[1]).append(' ')
+                    .append(mapper.writeValueAsString(record)).append('\n');
+            currentOffset += recordLength;
+        }
+        byte[] withMalformedArchive = replaceZipEntry(validWacz, "archive/snapshot.warc.gz",
+                updatedArchive.toByteArray());
+        return replaceZipEntry(withMalformedArchive, "indexes/index.cdxj",
+                updatedIndex.toString().getBytes(StandardCharsets.UTF_8));
     }
 
     private record InvalidWacz(String name, String entry, byte[] bytes) {

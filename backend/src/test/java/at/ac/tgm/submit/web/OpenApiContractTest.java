@@ -1877,7 +1877,7 @@ class OpenApiContractTest {
     void operationsDocumentApplicableStandardErrorResponses() throws Exception {
         JsonNode paths = apiDocument().path("paths");
         List<String> failures = new ArrayList<>();
-        assertEquals(92, TICKET_ERROR_CODES.size(), "The independent ticket oracle must list all operations.");
+        assertEquals(93, TICKET_ERROR_CODES.size(), "The independent ticket oracle must list all operations.");
         Set<String> actualOperations = new java.util.TreeSet<>();
         paths.properties().forEach(path -> path.getValue().properties().forEach(method -> {
             if (HTTP_METHODS.contains(method.getKey())) {
@@ -1963,6 +1963,21 @@ class OpenApiContractTest {
         assertIndependentConditionCorrections(paths, failures);
         assertBaselinePreservedErrorResponses(paths, failures);
         assertTrue(failures.isEmpty(), () -> String.join(System.lineSeparator(), failures));
+    }
+
+    @Test
+    void publicSnapshotBrowseDocumentsSuccessAndControlledErrorSchemas() throws Exception {
+        JsonNode responses = apiDocument().path("paths")
+                .path("/api/public/projects/{projectId}/archive/{artifactId}/browse")
+                .path("get").path("responses");
+        assertEquals(Set.of("200", "400", "404"), fieldNames(responses));
+        assertEquals("#/components/schemas/Snapshot",
+                responses.path("200").path("content").path("*/*").path("schema").path("$ref").asText());
+        for (String status : List.of("400", "404")) {
+            assertEquals("#/components/schemas/ApiErrorResponse",
+                    responses.path(status).path("content").path("application/json")
+                            .path("schema").path("$ref").asText());
+        }
     }
 
     private void assertPublicationReviewContractInventory() {
@@ -2233,7 +2248,8 @@ class OpenApiContractTest {
         Map<String, Set<String>> featureSuccessCodes = Map.of(
                 "GET /api/projects/{projectId}/assessment-rubrics", Set.of("200"),
                 "PUT /api/projects/{projectId}/assessment-rubrics", Set.of("200"),
-                "GET /api/projects/{projectId}/grading-members", Set.of("200"));
+                "GET /api/projects/{projectId}/grading-members", Set.of("200"),
+                "GET /api/public/projects/{projectId}/archive/{artifactId}/browse", Set.of("200"));
         featureSuccessCodes.forEach((location, statuses) -> baselineCodes.put(location, statuses));
         assertEquals(90, BASELINE_SUCCESS_RESPONSES.size(), "The checked-in baseline must cover all operations.");
 
@@ -2459,6 +2475,7 @@ class OpenApiContractTest {
                 post|/api/auth/login|400
                 get|/api/public/projects/{projectId}/archive|400,404
                 get|/api/public/projects/{projectId}/archive/{artifactId}|400,404
+                get|/api/public/projects/{projectId}/archive/{artifactId}/browse|400,404
                 get|/api/projects/{projectId}/students/{studentId}/final-grade|400,403,404
                 get|/api/grading-rubrics/{id}|400,404
                 get|/api/grading-rubrics/active|404
@@ -2732,6 +2749,8 @@ class OpenApiContractTest {
                 get|/api/public/projects/{projectId}/archive|404|project does not exist;not completed
                 get|/api/public/projects/{projectId}/archive/{artifactId}|400|project or artifact ID;UUID
                 get|/api/public/projects/{projectId}/archive/{artifactId}|404|project or artifact;not public
+                get|/api/public/projects/{projectId}/archive/{artifactId}/browse|400|project or artifact ID is invalid;WACZ content is malformed or unsupported
+                get|/api/public/projects/{projectId}/archive/{artifactId}/browse|404|project is missing or incomplete;snapshot is missing, unapproved, not a website archive, or belongs to another project
                 get|/api/projects/{projectId}/students/{studentId}/final-grade|400|project or student ID;UUID
                 get|/api/projects/{projectId}/students/{studentId}/final-grade|403|required role or project access
                 get|/api/projects/{projectId}/students/{studentId}/final-grade|404|project not found;student is not a project member;no final grade has been recorded

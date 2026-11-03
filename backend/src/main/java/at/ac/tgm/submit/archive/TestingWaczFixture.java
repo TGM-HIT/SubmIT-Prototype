@@ -3,6 +3,7 @@ package at.ac.tgm.submit.archive;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.zip.GZIPOutputStream;
 import java.util.zip.ZipEntry;
@@ -44,8 +45,15 @@ final class TestingWaczFixture {
                               <circle cx="24" cy="16" r="8" fill="#ffffff"/>
                             </svg>
                             """.getBytes(StandardCharsets.UTF_8)));
-            byte[] compressedWarc = gzip(warc(responses));
-            StringBuilder cdxj = cdxj(responses, compressedWarc.length);
+            List<ArchiveMember> archiveMembers = new ArrayList<>();
+            ByteArrayOutputStream archive = new ByteArrayOutputStream();
+            for (WarcResponse response : responses) {
+                byte[] compressedRecord = gzip(warcRecord(response));
+                archiveMembers.add(new ArchiveMember(response, archive.size(), compressedRecord));
+                archive.write(compressedRecord);
+            }
+            byte[] compressedWarc = archive.toByteArray();
+            StringBuilder cdxj = cdxj(archiveMembers);
             byte[] manifest = """
                     {"profile":"data-package","wacz_version":"1.1.1","resources":[
                     {"name":"archive","path":"archive/snapshot.warc.gz","mediatype":"application/gzip"},
@@ -69,33 +77,33 @@ final class TestingWaczFixture {
         }
     }
 
-    private static StringBuilder cdxj(List<WarcResponse> responses, int compressedLength) {
+    private static StringBuilder cdxj(List<ArchiveMember> archiveMembers) {
         StringBuilder result = new StringBuilder();
-        for (WarcResponse response : responses) {
+        for (ArchiveMember member : archiveMembers) {
+            WarcResponse response = member.response();
             result.append(response.url()).append(" 20260101000000 {\"url\":\"").append(response.url())
-                    .append("\",\"filename\":\"archive/snapshot.warc.gz\",\"offset\":0,\"length\":")
-                    .append(compressedLength).append(",\"mime\":\"")
+                    .append("\",\"filename\":\"archive/snapshot.warc.gz\",\"offset\":")
+                    .append(member.offset()).append(",\"length\":").append(member.compressedRecord().length)
+                    .append(",\"mime\":\"")
                     .append(response.mimeType()).append("\",\"status\":\"200\"}\n");
         }
         return result;
     }
 
-    private static byte[] warc(List<WarcResponse> responses) throws IOException {
+    private static byte[] warcRecord(WarcResponse response) throws IOException {
         ByteArrayOutputStream output = new ByteArrayOutputStream();
-        for (WarcResponse response : responses) {
-            byte[] http = ("HTTP/1.1 200 OK\r\nContent-Type: " + response.mimeType()
-                    + "\r\nContent-Length: " + response.body().length + "\r\n\r\n")
-                    .getBytes(StandardCharsets.ISO_8859_1);
-            ByteArrayOutputStream block = new ByteArrayOutputStream();
-            block.write(http);
-            block.write(response.body());
-            byte[] record = block.toByteArray();
-            output.write(("WARC/1.1\r\nWARC-Type: response\r\nWARC-Target-URI: " + response.url()
-                    + "\r\nContent-Type: application/http; msgtype=response\r\nContent-Length: "
-                    + record.length + "\r\n\r\n").getBytes(StandardCharsets.ISO_8859_1));
-            output.write(record);
-            output.write("\r\n\r\n".getBytes(StandardCharsets.ISO_8859_1));
-        }
+        byte[] http = ("HTTP/1.1 200 OK\r\nContent-Type: " + response.mimeType()
+                + "\r\nContent-Length: " + response.body().length + "\r\n\r\n")
+                .getBytes(StandardCharsets.ISO_8859_1);
+        ByteArrayOutputStream block = new ByteArrayOutputStream();
+        block.write(http);
+        block.write(response.body());
+        byte[] record = block.toByteArray();
+        output.write(("WARC/1.1\r\nWARC-Type: response\r\nWARC-Target-URI: " + response.url()
+                + "\r\nContent-Type: application/http; msgtype=response\r\nContent-Length: "
+                + record.length + "\r\n\r\n").getBytes(StandardCharsets.ISO_8859_1));
+        output.write(record);
+        output.write("\r\n\r\n".getBytes(StandardCharsets.ISO_8859_1));
         return output.toByteArray();
     }
 
@@ -114,5 +122,8 @@ final class TestingWaczFixture {
     }
 
     private record WarcResponse(String url, String mimeType, byte[] body) {
+    }
+
+    private record ArchiveMember(WarcResponse response, int offset, byte[] compressedRecord) {
     }
 }
