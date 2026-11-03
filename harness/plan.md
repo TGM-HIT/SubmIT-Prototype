@@ -139,7 +139,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-64](tickets/done/Dev-64.md) | done | Document exact catalogue rename routes |
 | [Dev-65](tickets/done/Dev-65.md) | done | Make Compliance-03 evidence method-aware and auditable |
 | [Dev-66](tickets/done/Dev-66.md) | done | Resolve missing historical run-record links |
-| [Dev-67](tickets/Dev-67.md) | in-progress | Reconcile Feature-29 ledger path and status |
+| [Dev-67](tickets/Dev-67.md) | failed | Reconcile Feature-29 ledger path and status |
 | [Dev-68](tickets/Dev-68.md) | to-do | Document teacher supervision preferences in both guide locales |
 | [Dev-69](tickets/Dev-69.md) | to-do | Add actionable period and allocation instructions to the English admin guide |
 
