@@ -19,6 +19,9 @@ class CommitScope {
         "frontend/public/favicon.ico",
         "harness/gates/commit-scope.java",
         "harness/checks/Compliance-04.md",
+        "harness/checks/Compliance-03-evidence.rb",
+        "harness/checks/test-compliance-03-evidence.rb",
+        "harness/checks/Compliance-03.md",
         "harness/roles/auditor.md",
         "harness/roles/implementor.md",
         "harness/roles/learner.md",
@@ -30,7 +33,9 @@ class CommitScope {
         "harness/tickets/done/Feature-04.md",
         "harness/tickets/done/Feature-05.md",
         "harness/tickets/done/Feature-07.md",
-        "harness/tickets/done/Feature-08.md"
+        "harness/tickets/done/Feature-08.md",
+        "harness/tickets/Dev-65.md",
+        "harness/plan.md"
     };
     static final String[] SPEC_FILES = { "docs/SPEC.md", "backend/SPEC.md", "frontend/SPEC.md" };
 
