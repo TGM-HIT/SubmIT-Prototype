@@ -198,13 +198,21 @@ function safeMimeType(value: string): string {
   return /^(text\/(html|css)|image\/(png|jpeg|gif|webp|svg\+xml))(\s*;|$)/i.test(value)
     ? value : 'application/octet-stream'
 }
+function decodeSnapshotHtml(resource: { mimeType: string; bodyBase64: string }): string {
+  const charsetParameter = resource.mimeType.match(/;\s*charset\s*=\s*(?:"([^"]+)"|'([^']+)'|([^;\s]+))/i)
+  // Captured HTML without an explicit charset uses UTF-8, the WACZ snapshot fallback.
+  const charset = charsetParameter?.[1] ?? charsetParameter?.[2] ?? charsetParameter?.[3] ?? 'utf-8'
+  const binary = atob(resource.bodyBase64)
+  const bytes = Uint8Array.from(binary, character => character.charCodeAt(0))
+  return new TextDecoder(charset).decode(bytes)
+}
 function renderSnapshotPage(url: string): void {
   const resource = snapshot.value?.resources.find(item => item.url === url)
   if (!resource || !resource.mimeType.toLowerCase().startsWith('text/html')) {
     snapshotError.value = true
     return
   }
-  const document = new DOMParser().parseFromString(atob(resource.bodyBase64), 'text/html')
+  const document = new DOMParser().parseFromString(decodeSnapshotHtml(resource), 'text/html')
   document.querySelectorAll('script, iframe, frame, object, embed, form, base, link, meta[http-equiv]')
     .forEach(element => element.remove())
   for (const element of document.querySelectorAll('*')) {

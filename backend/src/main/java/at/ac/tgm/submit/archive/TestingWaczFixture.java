@@ -34,6 +34,7 @@ final class TestingWaczFixture {
                             """
                             <!doctype html><html><head><title>Fixture detail</title></head><body>
                             <h1>Captured relative page</h1>
+                            <p>Captured UTF-8 text: café</p>
                             <img alt="Bundled archive asset" src="../assets/pixel.svg">
                             <a href="../index.html">Return to captured home</a>
                             </body></html>

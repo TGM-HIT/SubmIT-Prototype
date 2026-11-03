@@ -52,9 +52,9 @@ describe('G6 anonymous archive privacy boundary', () => {
   })
 
   it('browses the approved completed WACZ in a sandbox, resolves captured links/assets, and retains direct downloads', async () => {
-    const home = '<!doctype html><html><head><title>Captured home</title></head><body><script>window.__probe = true</script><img src="assets/pixel.png" onerror="window.__eventProbe = true"><a href="pages/about.html">Captured link</a></body></html>'
-    const about = '<!doctype html><html><head><title>Captured about</title></head><body><h1>Captured relative page</h1></body></html>'
-    const encode = (value: string) => btoa(value)
+    const home = '<!doctype html><html><head><title>Captured home</title></head><body><p>Captured UTF-8 text: café</p><script>window.__probe = true</script><img src="assets/pixel.png" onerror="window.__eventProbe = true"><a href="pages/about.html">Captured link</a></body></html>'
+    const about = '<!doctype html><html><head><title>Captured about</title></head><body><h1>Captured relative page</h1><p>Captured UTF-8 text: café</p></body></html>'
+    const encode = (value: string) => btoa(String.fromCharCode(...new TextEncoder().encode(value)))
     api.publicList.mockResolvedValue({
       content: [
         { id: 'website-file', type: 'WEBSITE_ARCHIVE', size: 120 },
@@ -93,7 +93,7 @@ describe('G6 anonymous archive privacy boundary', () => {
     expect(frame.attributes('title')).toBe('Reviewed completed-project website snapshot')
     expect(wrapper.text()).toContain('REVIEWED · READ-ONLY · COMPLETED PROJECT')
     expect(wrapper.text()).toContain('not the live website')
-    let document = frame.attributes('srcdoc')!
+    const document = frame.attributes('srcdoc')!
     expect(document).toContain("default-src 'none'")
     expect(document).toContain("connect-src 'none'")
     expect(document).toContain('data:image/png;base64,')
@@ -104,6 +104,7 @@ describe('G6 anonymous archive privacy boundary', () => {
 
     expect(document).toContain('data-archive-url="https://snapshot.example.test/pages/about.html"')
     expect(document).toContain("parent.postMessage({archiveUrl:a.dataset.archiveUrl},'*')")
+    expect(document).toContain('Captured UTF-8 text: café')
 
     const downloads = [
       ['website-file', 'approved-archive-website_archive'],

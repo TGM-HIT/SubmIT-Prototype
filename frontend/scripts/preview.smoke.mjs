@@ -723,6 +723,7 @@ test('Chrome/CDP replays the opt-in WACZ in an opaque sandbox, preserves capture
 
         const aboutDocument = await activateSnapshotLink(client, 'Open captured relative page')
         assert.match(aboutDocument, /Captured relative page/)
+        assert.match(aboutDocument, /Captured UTF-8 text: café/)
         assert.match(aboutDocument, /data:image\/svg\+xml;base64,/)
         const asset = await evaluateSnapshotFrame(client,
           '({loaded: document.images[0]?.complete, width: document.images[0]?.naturalWidth, source: document.images[0]?.currentSrc})',

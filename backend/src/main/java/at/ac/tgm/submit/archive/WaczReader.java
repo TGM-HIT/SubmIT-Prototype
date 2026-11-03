@@ -26,6 +26,7 @@ import org.springframework.stereotype.Component;
 @Component
 public class WaczReader {
     private static final int MAX_UNZIPPED_BYTES = 20 * 1024 * 1024;
+    private static final int MAX_ZIP_ENTRIES = 4096;
     private static final int MAX_RESOURCES = 2000;
     private static final int HEADER_DELIMITER_LENGTH = 4;
     private static final int COPY_BUFFER_SIZE = 8192;
@@ -72,23 +73,30 @@ public class WaczReader {
         try (ZipInputStream zip = new ZipInputStream(new ByteArrayInputStream(content))) {
             ZipEntry entry;
             int totalBytes = 0;
+            int entryCount = 0;
             while ((entry = zip.getNextEntry()) != null) {
-                if (!entry.isDirectory()) {
-                    byte[] bytes = readLimited(zip, MAX_UNZIPPED_BYTES - totalBytes);
-                    totalBytes += bytes.length;
-                    if (totalBytes > MAX_UNZIPPED_BYTES) {
-                        throw invalid();
-                    }
-                    if (entries.putIfAbsent(entry.getName(), bytes) != null) {
-                        throw invalid();
-                    }
+                if (++entryCount > MAX_ZIP_ENTRIES) {
+                    throw invalid();
                 }
+                byte[] bytes = readLimited(zip, MAX_UNZIPPED_BYTES - totalBytes);
+                totalBytes += bytes.length;
+                addZipEntry(entries, entry, bytes);
                 zip.closeEntry();
             }
         } catch (IOException exception) {
             throw invalid();
         }
         return entries;
+    }
+
+    private void addZipEntry(Map<String, byte[]> entries, ZipEntry entry, byte[] bytes) {
+        if (entry.isDirectory()) {
+            if (bytes.length != 0) {
+                throw invalid();
+            }
+        } else if (entries.putIfAbsent(entry.getName(), bytes) != null) {
+            throw invalid();
+        }
     }
 
     private String validateManifest(byte[] bytes, Map<String, byte[]> entries) {

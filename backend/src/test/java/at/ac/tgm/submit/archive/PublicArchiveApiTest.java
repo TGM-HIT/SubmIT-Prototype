@@ -22,6 +22,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Set;
 import java.util.UUID;
+import java.util.zip.CRC32;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 import java.util.zip.ZipEntry;
@@ -175,6 +176,58 @@ class PublicArchiveApiTest {
         assertTrue(download.getResponse().getHeader("Content-Disposition").startsWith("attachment;"));
     }
 
+    @Test
+    void oversizedZipDirectoryEntryIsRejectedWithinBudgetButRemainsDownloadable() throws Exception {
+        UUID project = project("COMPLETED");
+        byte[] maliciousWacz = withOversizedDirectoryEntry(TestingArchivePreviewConfiguration.createWaczFixture());
+        UUID artifact = artifact(project, "WEBSITE_ARCHIVE", "APPROVED", maliciousWacz);
+
+        mvc.perform(get("/api/public/projects/{projectId}/archive/{artifactId}/browse", project, artifact))
+                .andExpect(status().isBadRequest());
+        MvcResult download = mvc.perform(get("/api/public/projects/{projectId}/archive/{artifactId}",
+                project, artifact)).andExpect(status().isOk()).andReturn();
+        assertArrayEquals(maliciousWacz, download.getResponse().getContentAsByteArray());
+        assertTrue(download.getResponse().getHeader("Content-Disposition").startsWith("attachment;"));
+    }
+
+    @Test
+    void zipEntryCountIsBoundedButTheApprovedArchiveRemainsDownloadable() throws Exception {
+        UUID project = project("COMPLETED");
+        byte[] tooManyEntries = zipWithEmptyEntries(4097);
+        UUID artifact = artifact(project, "WEBSITE_ARCHIVE", "APPROVED", tooManyEntries);
+
+        mvc.perform(get("/api/public/projects/{projectId}/archive/{artifactId}/browse", project, artifact))
+                .andExpect(status().isBadRequest());
+        MvcResult download = mvc.perform(get("/api/public/projects/{projectId}/archive/{artifactId}",
+                project, artifact)).andExpect(status().isOk()).andReturn();
+        assertArrayEquals(tooManyEntries, download.getResponse().getContentAsByteArray());
+        assertTrue(download.getResponse().getHeader("Content-Disposition").startsWith("attachment;"));
+    }
+
+    @Test
+    void gzipOptionalFieldsAndHeaderChecksumAreSupportedAndMalformedHeadersAreRejected() throws Exception {
+        UUID project = project("COMPLETED");
+        byte[] validOptionalHeaders = rewriteGzipHeaders(
+                TestingArchivePreviewConfiguration.createWaczFixture(), "valid");
+        UUID supported = artifact(project, "WEBSITE_ARCHIVE", "APPROVED", validOptionalHeaders);
+        JsonNode snapshot = mapper.readTree(mvc.perform(get(
+                "/api/public/projects/{projectId}/archive/{artifactId}/browse", project, supported))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+        assertTrue(snapshot.path("resources").isArray());
+        assertEquals(3, snapshot.path("resources").size());
+
+        for (String defect : List.of("truncated-extra", "invalid-header-checksum")) {
+            byte[] malformed = rewriteGzipHeaders(TestingArchivePreviewConfiguration.createWaczFixture(), defect);
+            UUID artifact = artifact(project, "WEBSITE_ARCHIVE", "APPROVED", malformed);
+            mvc.perform(get("/api/public/projects/{projectId}/archive/{artifactId}/browse", project, artifact))
+                    .andExpect(result -> assertEquals(400, result.getResponse().getStatus(), defect));
+            MvcResult download = mvc.perform(get("/api/public/projects/{projectId}/archive/{artifactId}",
+                    project, artifact)).andExpect(status().isOk()).andReturn();
+            assertArrayEquals(malformed, download.getResponse().getContentAsByteArray());
+            assertTrue(download.getResponse().getHeader("Content-Disposition").startsWith("attachment;"));
+        }
+    }
+
     private void assertDenied(UUID project, UUID artifact) throws Exception {
         mvc.perform(get("/api/public/projects/{projectId}/archive/{artifactId}/browse", project, artifact))
                 .andExpect(status().isNotFound());
@@ -215,6 +268,104 @@ class PublicArchiveApiTest {
     private byte[] replaceZipEntry(byte[] archive, String name, byte[] replacement) throws IOException {
         Map<String, byte[]> entries = zipEntries(archive);
         entries.put(name, replacement);
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        try (ZipOutputStream zip = new ZipOutputStream(output)) {
+            for (Map.Entry<String, byte[]> entry : entries.entrySet()) {
+                zip.putNextEntry(new ZipEntry(entry.getKey()));
+                zip.write(entry.getValue());
+                zip.closeEntry();
+            }
+        }
+        return output.toByteArray();
+    }
+
+    private byte[] withOversizedDirectoryEntry(byte[] validWacz) throws IOException {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        try (ZipOutputStream zip = new ZipOutputStream(output)) {
+            for (Map.Entry<String, byte[]> entry : zipEntries(validWacz).entrySet()) {
+                zip.putNextEntry(new ZipEntry(entry.getKey()));
+                zip.write(entry.getValue());
+                zip.closeEntry();
+            }
+            zip.putNextEntry(new ZipEntry("untrusted-directory/"));
+            byte[] repeated = new byte[8192];
+            for (int written = 0; written <= 20 * 1024 * 1024; written += repeated.length) {
+                zip.write(repeated);
+            }
+            zip.closeEntry();
+        }
+        return output.toByteArray();
+    }
+
+    private byte[] zipWithEmptyEntries(int count) throws IOException {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        try (ZipOutputStream zip = new ZipOutputStream(output)) {
+            for (int index = 0; index < count; index++) {
+                zip.putNextEntry(new ZipEntry("entry-" + index));
+                zip.closeEntry();
+            }
+        }
+        return output.toByteArray();
+    }
+
+    private byte[] rewriteGzipHeaders(byte[] validWacz, String variant) throws IOException {
+        Map<String, byte[]> entries = zipEntries(validWacz);
+        byte[] compressedWarc = entries.get("archive/snapshot.warc.gz");
+        String[] lines = new String(entries.get("indexes/index.cdxj"), StandardCharsets.UTF_8)
+                .strip().split("\\R");
+        ByteArrayOutputStream rewrittenArchive = new ByteArrayOutputStream();
+        StringBuilder rewrittenIndex = new StringBuilder();
+        for (int index = 0; index < lines.length; index++) {
+            String[] fields = lines[index].split(" ", 3);
+            ObjectNode record = (ObjectNode) mapper.readTree(fields[2]);
+            int offset = record.path("offset").asInt();
+            int length = record.path("length").asInt();
+            byte[] member = Arrays.copyOfRange(compressedWarc, offset, offset + length);
+            if ("valid".equals(variant) || index == 0) {
+                member = optionalGzipHeader(member, variant);
+            }
+            record.put("offset", rewrittenArchive.size());
+            record.put("length", member.length);
+            rewrittenArchive.write(member);
+            rewrittenIndex.append(fields[0]).append(' ').append(fields[1]).append(' ')
+                    .append(mapper.writeValueAsString(record)).append('\n');
+        }
+        entries.put("archive/snapshot.warc.gz", rewrittenArchive.toByteArray());
+        entries.put("indexes/index.cdxj", rewrittenIndex.toString().getBytes(StandardCharsets.UTF_8));
+        return zipWithEntries(entries);
+    }
+
+    private byte[] optionalGzipHeader(byte[] member, String variant) throws IOException {
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        byte[] header = Arrays.copyOf(member, 10);
+        if ("truncated-extra".equals(variant)) {
+            header[3] = 0x04;
+            output.write(header);
+            output.write(0xff);
+            output.write(0xff);
+            output.write(member, 10, member.length - 10);
+            return output.toByteArray();
+        }
+        header[3] = 0x1e;
+        output.write(header);
+        byte[] optionalFields = new byte[] {
+            3, 0, 'W', 'A', 'R', 'C', 0, 'F', 'i', 'x', 't', 'u', 'r', 'e', 0
+        };
+        output.write(optionalFields);
+        CRC32 headerChecksum = new CRC32();
+        headerChecksum.update(header);
+        headerChecksum.update(optionalFields);
+        int checksum = (int) headerChecksum.getValue() & 0xffff;
+        if ("invalid-header-checksum".equals(variant)) {
+            checksum ^= 1;
+        }
+        output.write(checksum & 0xff);
+        output.write((checksum >>> 8) & 0xff);
+        output.write(member, 10, member.length - 10);
+        return output.toByteArray();
+    }
+
+    private byte[] zipWithEntries(Map<String, byte[]> entries) throws IOException {
         ByteArrayOutputStream output = new ByteArrayOutputStream();
         try (ZipOutputStream zip = new ZipOutputStream(output)) {
             for (Map.Entry<String, byte[]> entry : entries.entrySet()) {
