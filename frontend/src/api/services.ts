@@ -4,6 +4,7 @@ import { i18n } from '../i18n'
 
 type IdeaRequest = components['schemas']['IdeaRequest']
 type IdeaResponse = components['schemas']['IdeaResponse']
+type IdeaPdfMetadataRequest = components['schemas']['IdeaPdfMetadataRequest']
 type ApplicationPeriodRequest = components['schemas']['ApplicationPeriodRequest']
 type ApplicationPeriodResponse = components['schemas']['ApplicationPeriodResponse']
 type StudentApplicationRequest = components['schemas']['StudentApplicationRequest']
@@ -50,6 +51,10 @@ type Page<T extends { content?: unknown[] }> = Required<Omit<T, 'content'>> & {
   content: NonNullable<T['content']>
 }
 type IdeaListFilters = Pick<NonNullable<operations['list_1']['parameters']['query']>, 'schoolYear' | 'ownerId'>
+type StudentGradesFilters = Omit<
+  NonNullable<operations['listStudentGrades']['parameters']['query']>,
+  'page' | 'size'
+>
 
 function json<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
   return request<T>(path, { method, ...(body === undefined ? {} : { body }) })
@@ -92,13 +97,13 @@ export const applyingGroupsApi = {
 }
 
 export const ideasApi = {
-  async createPdf(metadata: { title: string; schoolYear: string; collaboratorIds: string[] }, file: File): Promise<IdeaResponse> {
+  async createPdf(metadata: IdeaPdfMetadataRequest, file: File): Promise<IdeaResponse> {
     const body = new FormData()
     body.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }))
     body.append('file', file, file.name)
     return request<IdeaResponse>('/api/ideas/pdf', { method: 'POST', body })
   },
-  async updatePdf(id: string, metadata: { title: string; schoolYear: string }, file: File): Promise<IdeaResponse> {
+  async updatePdf(id: string, metadata: IdeaPdfMetadataRequest, file: File): Promise<IdeaResponse> {
     const body = new FormData()
     body.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }))
     body.append('file', file, file.name)
@@ -303,11 +308,7 @@ export const gradingApi = {
   gradingMembers(projectId: string): Promise<GradingMember[]> {
     return json(`/api/projects/${encodeURIComponent(projectId)}/grading-members`)
   },
-  grades(projectId: string, page = 0, size = 20, filters?: {
-    studentId?: string
-    assessmentType?: 'ROUTINE' | 'FINAL'
-    rubricId?: string
-  }): Promise<Page<components['schemas']['PageResponseGradeResponse']>> {
+  grades(projectId: string, page = 0, size = 20, filters?: StudentGradesFilters): Promise<Page<components['schemas']['PageResponseGradeResponse']>> {
     const query = new URLSearchParams(pageQuery(page, size))
     if (filters?.studentId) query.set('studentId', filters.studentId)
     if (filters?.assessmentType) query.set('assessmentType', filters.assessmentType)

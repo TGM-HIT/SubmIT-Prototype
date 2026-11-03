@@ -15,6 +15,67 @@ import {
 type ContentItem<Service extends (...args: never[]) => Promise<{ content: unknown[] }>> =
   Awaited<ReturnType<Service>>['content'][number]
 
+test('PDF metadata and student-grade filters exactly match generated request types', () => {
+  type IdeaPdfMetadata = components['schemas']['IdeaPdfMetadataRequest']
+  type StudentGradesQuery = NonNullable<operations['listStudentGrades']['parameters']['query']>
+  type StudentGradesFilters = Omit<StudentGradesQuery, 'page' | 'size'>
+
+  expectTypeOf<Parameters<typeof ideasApi.createPdf>>()
+    .toEqualTypeOf<[metadata: IdeaPdfMetadata, file: File]>()
+  expectTypeOf<Parameters<typeof ideasApi.updatePdf>>()
+    .toEqualTypeOf<[id: string, metadata: IdeaPdfMetadata, file: File]>()
+  expectTypeOf<Awaited<ReturnType<typeof ideasApi.createPdf>>>()
+    .toEqualTypeOf<components['schemas']['IdeaResponse']>()
+  expectTypeOf<Awaited<ReturnType<typeof ideasApi.updatePdf>>>()
+    .toEqualTypeOf<components['schemas']['IdeaResponse']>()
+
+  const collaboratorsOmitted: IdeaPdfMetadata = { title: 'Idea', schoolYear: '2026/2027' }
+  const collaboratorsEmpty: IdeaPdfMetadata = { title: 'Idea', schoolYear: '2026/2027', collaboratorIds: [] }
+  const collaboratorsPopulated: IdeaPdfMetadata = {
+    title: 'Idea', schoolYear: '2026/2027', collaboratorIds: ['student-1', 'student-2'],
+  }
+  expectTypeOf<typeof collaboratorsOmitted>().toEqualTypeOf<IdeaPdfMetadata>()
+  expectTypeOf<typeof collaboratorsEmpty>().toEqualTypeOf<IdeaPdfMetadata>()
+  expectTypeOf<typeof collaboratorsPopulated>().toEqualTypeOf<IdeaPdfMetadata>()
+
+  expectTypeOf<NonNullable<Parameters<typeof gradingApi.grades>[3]>>()
+    .toEqualTypeOf<StudentGradesFilters>()
+  expectTypeOf<Parameters<typeof gradingApi.grades>>()
+    .toEqualTypeOf<[projectId: string, page?: number, size?: number, filters?: StudentGradesFilters]>()
+  expectTypeOf<Awaited<ReturnType<typeof gradingApi.grades>>>()
+    .toEqualTypeOf<Page<components['schemas']['GradeResponse']>>()
+
+  const noGradeFilters: StudentGradesFilters = {}
+  const studentFilter: StudentGradesFilters = { studentId: 'student-1' }
+  const rubricFilter: StudentGradesFilters = { rubricId: 'rubric-1' }
+  const routineFilter: StudentGradesFilters = { assessmentType: 'ROUTINE' }
+  const finalFilter: StudentGradesFilters = { assessmentType: 'FINAL' }
+  expectTypeOf<typeof noGradeFilters>().toEqualTypeOf<StudentGradesFilters>()
+  expectTypeOf<typeof studentFilter>().toEqualTypeOf<StudentGradesFilters>()
+  expectTypeOf<typeof rubricFilter>().toEqualTypeOf<StudentGradesFilters>()
+  expectTypeOf<typeof routineFilter>().toEqualTypeOf<StudentGradesFilters>()
+  expectTypeOf<typeof finalFilter>().toEqualTypeOf<StudentGradesFilters>()
+
+  if (false) {
+    // @ts-expect-error PDF metadata requires a title.
+    void ideasApi.createPdf({ schoolYear: '2026/2027' }, new File([], 'idea.pdf'))
+    // @ts-expect-error PDF metadata requires a school year.
+    void ideasApi.updatePdf('idea-1', { title: 'Idea' }, new File([], 'idea.pdf'))
+    // @ts-expect-error Collaborator identifiers must be strings.
+    void ideasApi.createPdf({ title: 'Idea', schoolYear: '2026/2027', collaboratorIds: [1] }, new File([], 'idea.pdf'))
+    void gradingApi.grades('project-1')
+    void gradingApi.grades('project-1', 0, 20, {})
+    // @ts-expect-error Assessment type is restricted to the generated phase values.
+    void gradingApi.grades('project-1', 0, 20, { assessmentType: 'OTHER' })
+    // @ts-expect-error Student identifiers are strings.
+    void gradingApi.grades('project-1', 0, 20, { studentId: 1 })
+    // @ts-expect-error Pagination remains positional, not part of the filter.
+    void gradingApi.grades('project-1', 0, 20, { page: 1 })
+    // @ts-expect-error Pagination remains positional, not part of the filter.
+    void gradingApi.grades('project-1', 0, 20, { size: 10 })
+  }
+})
+
 test('review operations use the canonical generated request shape', () => {
   type CanonicalRequest = components['schemas']['ReviewRequest']
   expectTypeOf<operations['review_1']['requestBody']['content']['application/json']>()

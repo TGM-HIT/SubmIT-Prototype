@@ -1,6 +1,35 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { configureApi } from './client'
+import type { components } from './schema'
 import { adminApi, formalApi, gradingApi, ideasApi, userApi } from './services'
+
+async function expectPdfUploadRequest(
+  fetchMock: ReturnType<typeof vi.fn>,
+  path: string,
+  method: 'POST' | 'PUT',
+  metadata: components['schemas']['IdeaPdfMetadataRequest'],
+  file: File,
+) {
+  expect(fetchMock).toHaveBeenCalledExactlyOnceWith(path, expect.objectContaining({ method }))
+
+  const body = fetchMock.mock.calls[0]?.[1]?.body
+  expect(body).toBeInstanceOf(FormData)
+  if (!(body instanceof FormData)) throw new Error('Expected PDF upload FormData')
+  expect([...body.keys()]).toEqual(['metadata', 'file'])
+
+  const metadataPart = body.get('metadata')
+  expect(metadataPart).toBeInstanceOf(Blob)
+  if (!(metadataPart instanceof Blob)) throw new Error('Expected PDF metadata Blob')
+  expect(metadataPart.type).toBe('application/json')
+  await expect(metadataPart.text().then(JSON.parse)).resolves.toEqual(metadata)
+
+  const filePart = body.get('file')
+  expect(filePart).toBeInstanceOf(File)
+  if (!(filePart instanceof File)) throw new Error('Expected PDF file part')
+  await expect(filePart.text()).resolves.toBe('original PDF bytes')
+  expect(filePart.type).toBe('application/pdf')
+  expect(filePart.name).toBe(file.name)
+}
 
 describe('grading rubric API service', () => {
   afterEach(() => {
@@ -33,6 +62,40 @@ describe('grading rubric API service', () => {
       '/api/grading-rubrics/rubric%2Frecord-id',
       expect.anything(),
     )
+  })
+
+  it('preserves grade filters, positional pagination, and response handling', async () => {
+    const response = {
+      content: [{ id: 'grade-1' }],
+      page: 0,
+      size: 20,
+      totalElements: 1,
+      totalPages: 1,
+    }
+    const fetchMock = vi.fn().mockImplementation(() => new Response(JSON.stringify(response), {
+      status: 200, headers: { 'Content-Type': 'application/json' },
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(gradingApi.grades('project/1')).resolves.toEqual(response)
+    await expect(gradingApi.grades('project/1', 0, 20, {})).resolves.toEqual(response)
+    await expect(gradingApi.grades('project/1', 0, 20, { studentId: 'student-1' })).resolves.toEqual(response)
+    await expect(gradingApi.grades('project/1', 0, 20, { rubricId: 'rubric-1' })).resolves.toEqual(response)
+    await expect(gradingApi.grades('project/1', 0, 20, { assessmentType: 'ROUTINE' })).resolves.toEqual(response)
+    await expect(gradingApi.grades('project/1', 0, 20, { assessmentType: 'FINAL' })).resolves.toEqual(response)
+    await expect(gradingApi.grades('project/1', 4, 7, { studentId: 'student 1' })).resolves.toEqual(response)
+    await expect(gradingApi.grades('project/1', 0, 20, { studentId: '', rubricId: '' })).resolves.toEqual(response)
+
+    expect(fetchMock.mock.calls.map(([url, init]) => [url, init?.method])).toEqual([
+      ['/api/projects/project%2F1/student-grades?page=0&size=20', 'GET'],
+      ['/api/projects/project%2F1/student-grades?page=0&size=20', 'GET'],
+      ['/api/projects/project%2F1/student-grades?page=0&size=20&studentId=student-1', 'GET'],
+      ['/api/projects/project%2F1/student-grades?page=0&size=20&rubricId=rubric-1', 'GET'],
+      ['/api/projects/project%2F1/student-grades?page=0&size=20&assessmentType=ROUTINE', 'GET'],
+      ['/api/projects/project%2F1/student-grades?page=0&size=20&assessmentType=FINAL', 'GET'],
+      ['/api/projects/project%2F1/student-grades?page=4&size=7&studentId=student+1', 'GET'],
+      ['/api/projects/project%2F1/student-grades?page=0&size=20', 'GET'],
+    ])
   })
 
   it('uses the phase-aware assessment and allocated-member contracts', async () => {
@@ -93,6 +156,36 @@ describe('ideas API service', () => {
   afterEach(() => {
     vi.unstubAllGlobals()
     configureApi({ getToken: () => null, onUnauthorized: () => undefined })
+  })
+
+  const metadataCases = [
+    ['omitted collaborators', { title: 'Idea', schoolYear: '2026/2027' }],
+    ['empty collaborators', { title: 'Idea', schoolYear: '2026/2027', collaboratorIds: [] }],
+    ['populated collaborators', { title: 'Idea', schoolYear: '2026/2027', collaboratorIds: ['student-1', 'student-2'] }],
+  ] satisfies Array<[string, components['schemas']['IdeaPdfMetadataRequest']]>
+
+  it.each(metadataCases)('creates a PDF idea with %s metadata unchanged', async (_label, metadata) => {
+    const response = { id: 'idea-response', title: 'Returned idea' }
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(response), {
+      status: 200, headers: { 'Content-Type': 'application/json' },
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+    const file = new File(['original PDF bytes'], 'proposal.pdf', { type: 'application/pdf' })
+
+    await expect(ideasApi.createPdf(metadata, file)).resolves.toEqual(response)
+    await expectPdfUploadRequest(fetchMock, '/api/ideas/pdf', 'POST', metadata, file)
+  })
+
+  it.each(metadataCases)('updates a PDF idea with %s metadata unchanged', async (_label, metadata) => {
+    const response = { id: 'idea-response', title: 'Returned idea' }
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify(response), {
+      status: 200, headers: { 'Content-Type': 'application/json' },
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+    const file = new File(['original PDF bytes'], 'proposal.pdf', { type: 'application/pdf' })
+
+    await expect(ideasApi.updatePdf('idea/id', metadata, file)).resolves.toEqual(response)
+    await expectPdfUploadRequest(fetchMock, '/api/ideas/idea%2Fid/pdf', 'PUT', metadata, file)
   })
 
   describe('audit API service', () => {
