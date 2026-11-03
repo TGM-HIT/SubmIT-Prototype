@@ -4,7 +4,7 @@ import { inflateSync } from 'node:zlib'
 
 export const checkpoints = [
   'workspace', 'accounts', 'idea-draft', 'idea-submitted', 'teacher-review',
-  'idea-revision', 'specification', 'accepted', 'period', 'preferences',
+  'idea-revision', 'specification', 'accepted', 'period', 'preferences', 'supervision-preference',
   'allocation', 'group', 'formal', 'formal-approved', 'rubric',
   'assessment', 'metrics', 'own-grades', 'final-grade', 'artifact-review', 'public-archive',
 ]

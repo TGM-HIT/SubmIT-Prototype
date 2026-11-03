@@ -29,6 +29,52 @@ export function assertTestingAccountRole(session, actor) {
     `${actor} login response must include ${expectedRole} in user.roles`)
 }
 
+export function assertSupervisionPreferenceEvidence(report) {
+  const projectId = report.primaryProjectId
+  assert.equal(typeof projectId, 'string', 'Primary project ID must be recorded')
+  const checkpointsForPreference = report.checkpoints.filter(({ key }) => key === 'supervision-preference')
+  assert.equal(checkpointsForPreference.length, 1, 'Capture supervision-preference exactly once')
+  assert.deepEqual(
+    { actor: checkpointsForPreference[0].actor, route: checkpointsForPreference[0].route,
+      primaryProjectId: checkpointsForPreference[0].primaryProjectId },
+    { actor: 'teacher01', route: '/ideas', primaryProjectId: projectId },
+    'Supervision preference checkpoint must show its teacher on the primary project details route',
+  )
+
+  const evidence = report.supervisionPreference
+  assert.ok(evidence, 'Teacher UI save and persisted preference readback must be recorded')
+  assert.equal(evidence.actor, 'teacher01')
+  assert.equal(evidence.projectId, projectId)
+  assert.equal(evidence.preference, 'WANTS_TO_SUPERVISE')
+  const submission = report.requests[evidence.submissionRequestIndex]
+  assert.ok(submission, 'Successful teacher form submission must be present in request evidence')
+  const preferenceWrites = report.requests.filter((request) =>
+    request.route === `/api/ideas/${projectId}/supervision-preference` && request.method !== 'GET')
+  assert.equal(preferenceWrites.length, 1, 'Preference state must have exactly one recorded write')
+  assert.equal(preferenceWrites[0], submission, 'The preference write must be the teacher browser form submission')
+  assert.deepEqual(
+    { actor: submission.actor, route: submission.route, method: submission.method,
+      status: submission.status, source: submission.source, label: submission.label },
+    { actor: 'teacher01', route: `/api/ideas/${projectId}/supervision-preference`, method: 'PUT',
+      status: evidence.submissionStatus, source: 'browser-control', label: 'Save preference' },
+    'Preference must be submitted successfully by the teacher browser form, not an API write',
+  )
+  const verification = report.requests[evidence.verificationRequestIndex]
+  assert.ok(verification, 'Read-only persisted preference verification must be present in request evidence')
+  assert.deepEqual(
+    { actor: verification.actor, route: verification.route, method: verification.method,
+      status: verification.status },
+    { actor: 'teacher01', route: `/api/ideas/${projectId}`, method: 'GET', status: 200 },
+    'Persisted value must be verified by an authorized read-only idea GET',
+  )
+  assert.ok(evidence.verificationRequestIndex > evidence.submissionRequestIndex,
+    'Read-only persisted preference verification must follow the UI save')
+  assert.ok(checkpointsForPreference[0].afterRequestIndex >= evidence.verificationRequestIndex,
+    'Supervision preference screenshot must follow persisted readback')
+  assert.equal(evidence.verifiedPreference, 'WANTS_TO_SUPERVISE',
+    'Read-only GET must confirm the selected preference belongs to teacher01')
+}
+
 export function gradingMemberOptionState(select, label) {
   if (!select || select.disabled) return { state: 'not-ready' }
   const matches = [...select.options].map((option, index) => ({ option, index }))
@@ -365,7 +411,8 @@ export class Lifecycle {
     assert.deepEqual(alerts, [], 'No application errors at capture')
     await saveScreenshot(this.client, path.join(this.output, this.locale.language, 'images'), `${key}.png`)
     this.report.checkpoints.push({ key, stage: this.stage, actor: this.actor, route: this.route,
-      primaryProjectId: this.primary, expected, viewport: desktop })
+      primaryProjectId: this.primary, expected, viewport: desktop,
+      ...(key === 'supervision-preference' ? { afterRequestIndex: this.report.requests.length - 1 } : {}) })
     console.log(`Captured ${key}: ${this.actor} ${this.route}`)
   }
 
@@ -416,10 +463,14 @@ export class Lifecycle {
     try {
       await this.story()
       assert.deepEqual(this.report.checkpoints.map((entry) => entry.key).sort(), [...checkpoints].sort())
+      assertSupervisionPreferenceEvidence(this.report)
       this.checkErrors()
     } catch (error) {
       this.report.failure ??= { stage: this.stage, actor: this.actor, route: this.route, primary: this.primary,
         message: error.message, browserErrors: [...this.errors] }
+      this.report.failure.visibleErrors = await this.evaluate(
+        `Array.from(document.querySelectorAll('[role=alert],.error-box')).map(e=>e.textContent.trim()).filter(Boolean)`,
+      ).catch(() => [])
       // Failure screenshots are evidence only, never promoted as guide checkpoints.
       if (!this.report.failure.screenshot) {
         await saveScreenshot(this.client, this.work, 'failure-desktop.png').catch(() => {})
@@ -557,7 +608,35 @@ export class Lifecycle {
     await this.fill('#teacher-id', this.sessions.teacher01.user.id)
     await this.button('Confirm supervisor')
     await this.wait(`document.body.textContent.includes(${JSON.stringify(this.sessions.teacher01.user.displayName)})`, 'supervisor assigned')
-    await this.go('/applications')
+
+    await this.as('teacher01', '/ideas')
+    await this.ideaDetails()
+    await this.wait(`!!document.querySelector('#preference') && !!document.querySelector('form:has(#preference) button')`,
+      'teacher supervision preference form')
+    await this.selectOption('#preference', 'WANTS_TO_SUPERVISE')
+    const savedPreference = await this.mutateUI('Save preference',
+      `/api/ideas/${this.primary}/supervision-preference`, 'PUT')
+    assert.equal(savedPreference.teacherId, this.sessions.teacher01.user.id)
+    assert.equal(savedPreference.preference, 'WANTS_TO_SUPERVISE')
+    const submissionRequestIndex = this.report.requests.findLastIndex((request) =>
+      request.actor === 'teacher01' && request.route === `/api/ideas/${this.primary}/supervision-preference`
+      && request.method === 'PUT' && request.source === 'browser-control' && request.label === 'Save preference')
+    assert.ok(submissionRequestIndex >= 0)
+    const verificationRequestIndex = this.report.requests.length
+    const persistedIdea = await this.api('teacher01', `/api/ideas/${this.primary}`)
+    const persistedPreference = persistedIdea.supervisionPreferences?.find((entry) =>
+      entry.teacherId === this.sessions.teacher01.user.id)
+    assert.equal(persistedPreference?.preference, 'WANTS_TO_SUPERVISE',
+      'Fresh read-only idea GET must confirm teacher01 preference persisted')
+    this.report.supervisionPreference = {
+      actor: 'teacher01', projectId: this.primary, preference: 'WANTS_TO_SUPERVISE',
+      submissionRequestIndex, submissionStatus: this.report.requests[submissionRequestIndex].status,
+      verificationRequestIndex, verifiedPreference: persistedPreference.preference,
+    }
+    await this.shot('supervision-preference',
+      `document.querySelector('#preference')?.value === 'WANTS_TO_SUPERVISE'`)
+
+    await this.as('admin01', '/applications')
     await this.button('＋ Configure period')
     await this.fill('#period-label', this.text.period)
     await this.fill('#period-year', this.year)

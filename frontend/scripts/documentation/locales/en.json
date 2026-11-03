@@ -123,6 +123,14 @@
           ]
         },
         {
+          "id": "supervision-preference",
+          "title": "Record or revise your supervision preference",
+          "text": "On `/ideas`, choose **Details & history** for a project. Under **Your supervision preference**, choose **Wants to supervise** in **Preference**, then select **Save preference**. To revise it later, choose a different preference and save again. This records your interest in supervising and is separate from a review or approval decision.",
+          "images": [
+            {"key": "supervision-preference", "alt": "Teacher records Wants to supervise in the project details and history", "caption": "The saved supervision preference is separate from a review or approval decision."}
+          ]
+        },
+        {
           "id": "acceptance",
           "title": "Accept the completed specification",
           "text": "Review the submitted specification using **Work size**, **Curriculum relevance**, **Technical complexity**, **Feasibility**, **Learning value**, **Resource needs**, **Risk & dependencies**, and **Overall recommendation**. These fields are distinct from optional ratings in the initial idea review. **Accept for student applications** followed by **Record decision** makes the project available in the application catalogue. This is separate from the earlier approval to develop a specification. An administrator then [configures the period and supervision](administration.md#period).",

@@ -10,7 +10,7 @@ import { generate, repo } from './run.mjs'
 import { loadLocale, renderGuides, validateGuides, validateLocale, validatePng, checkpoints, roles } from './guides.mjs'
 import { collectBrowserErrors } from '../preview.mjs'
 import {
-  assertMatchingRubricIds, assertTestingAccountRole, gradingMemberOptionState, Lifecycle,
+  assertMatchingRubricIds, assertSupervisionPreferenceEvidence, assertTestingAccountRole, gradingMemberOptionState, Lifecycle,
 } from './scenario.mjs'
 import { assertPublicBoundary } from './privacy.mjs'
 import { createServer } from 'node:http'
@@ -125,6 +125,7 @@ for (const language of ['en', 'de']) {
     const inventory = await validateGuides(root, language)
     assert.equal(inventory.files.length, 5)
     assert.deepEqual(inventory.checkpoints, [...checkpoints].sort())
+    assert.ok(inventory.checkpoints.includes('supervision-preference'))
     for (const role of roles) {
       const text = await readFile(path.join(root, language, `${role}.md`), 'utf8')
       for (const chapter of locale.guides[role].chapters) {
@@ -134,8 +135,63 @@ for (const language of ['en', 'de']) {
         for (const image of chapter.images) assert.ok(text.includes(`![${image.alt}]`))
       }
     }
+    const teacherGuide = await readFile(path.join(root, language, 'lehrkraefte.md'), 'utf8')
+    const preferenceChapter = locale.guides.lehrkraefte.chapters.find((chapter) =>
+      chapter.images?.some((image) => image.key === 'supervision-preference'))
+    assert.ok(preferenceChapter, `${language} teacher guide must author the supervision preference chapter`)
+    for (const required of [
+      '/ideas', 'Details & history', 'Your supervision preference', 'Preference',
+      'Wants to supervise', 'Save preference', 'supervision-preference.png',
+    ]) {
+      assert.ok(teacherGuide.includes(required), `${language} rendered teacher guide must include ${required}`)
+    }
+    assert.ok(teacherGuide.includes(`](${`#${preferenceChapter.id}`})`),
+      `${language} teacher guide contents must link to the preference chapter`)
+    assert.ok(teacherGuide.includes(`id="${preferenceChapter.id}"`),
+      `${language} teacher guide must render the preference chapter anchor`)
+    assert.ok(teacherGuide.includes('different preference') || teacherGuide.includes('andere Präferenz'),
+      `${language} teacher guide must explain how to revise the saved preference`)
+    assert.ok(teacherGuide.includes('review or approval decision')
+      || teacherGuide.includes('Prüf- oder Genehmigungsentscheidung'),
+    `${language} teacher guide must distinguish preference from a review/approval decision`)
   })
 }
+
+test('D1 teacher supervision preference evidence requires one UI write, later readback and matching checkpoint', () => {
+  const projectId = 'primary-project'
+  const report = {
+    primaryProjectId: projectId,
+    checkpoints: [{
+      key: 'supervision-preference', actor: 'teacher01', route: '/ideas',
+      primaryProjectId: projectId, afterRequestIndex: 1,
+    }],
+    requests: [
+      { actor: 'teacher01', route: `/api/ideas/${projectId}/supervision-preference`, method: 'PUT',
+        status: 200, source: 'browser-control', label: 'Save preference' },
+      { actor: 'teacher01', route: `/api/ideas/${projectId}`, method: 'GET', status: 200 },
+    ],
+    supervisionPreference: {
+      actor: 'teacher01', projectId, preference: 'WANTS_TO_SUPERVISE',
+      submissionRequestIndex: 0, submissionStatus: 200,
+      verificationRequestIndex: 1, verifiedPreference: 'WANTS_TO_SUPERVISE',
+    },
+  }
+  assert.doesNotThrow(() => assertSupervisionPreferenceEvidence(report))
+  const mutations = [
+    (invalid) => { invalid.requests[0].source = 'api' },
+    (invalid) => { invalid.requests[0].status = 400 },
+    (invalid) => { invalid.requests.push({ ...invalid.requests[0] }) },
+    (invalid) => { invalid.supervisionPreference.verificationRequestIndex = 0 },
+    (invalid) => { invalid.supervisionPreference.verifiedPreference = 'WILLING_TO_SUPERVISE' },
+    (invalid) => { invalid.checkpoints[0].actor = 'admin01' },
+    (invalid) => { invalid.checkpoints[0].afterRequestIndex = 0 },
+  ]
+  for (const mutate of mutations) {
+    const invalid = structuredClone(report)
+    mutate(invalid)
+    assert.throws(() => assertSupervisionPreferenceEvidence(invalid))
+  }
+})
 
 for (const failure of ['missing', 'corrupt', 'dimensions', 'payload', 'link', 'anchor', 'secret', 'absolute']) {
   test(`D1 rejects ${failure} output`, async (t) => {

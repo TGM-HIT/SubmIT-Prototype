@@ -103,6 +103,12 @@
           "images": [{"key":"teacher-review","alt":"Lehrkraft prüft die fremde Hauptidee mit Rückgabeentscheidung und begründeter Rückmeldung","caption":"Eine andere Person als der Autor trifft die Prüfentscheidung."}]
         },
         {
+          "id": "betreuungspraeferenz",
+          "title": "Betreuungspräferenz erfassen oder ändern",
+          "text": "Auf `/ideas` beim Projekt **Details & history** öffnen. Unter **Your supervision preference** in **Preference** **Wants to supervise** auswählen und **Save preference** wählen. Zum Ändern später eine andere Präferenz auswählen und erneut speichern. Damit wird das Interesse an der Betreuung festgehalten; es ist unabhängig von einer Prüf- oder Genehmigungsentscheidung.",
+          "images": [{"key":"supervision-preference","alt":"Lehrkraft erfasst Wants to supervise in den Projektdetails und im Verlauf","caption":"Die gespeicherte Betreuungspräferenz ist unabhängig von einer Prüf- oder Genehmigungsentscheidung."}]
+        },
+        {
           "id": "annahme",
           "title": "Vollständige Spezifikation annehmen",
           "text": "Die eingereichte Spezifikation wird erneut unter **Review** geprüft. Hier **Work size** (Arbeitsumfang), **Curriculum relevance** (Lehrplanbezug), **Technical complexity** (technische Komplexität), **Feasibility** (Machbarkeit), **Learning value** (Lernwert), **Resource needs** (Ressourcenbedarf), **Risk & dependencies** (Risiken und Abhängigkeiten) sowie **Overall recommendation** ausfüllen; die optionalen Ratings der ersten Ideenprüfung sind davon zu unterscheiden. **Accept for student applications** und **Record decision** nehmen sie in den Bewerbungskatalog auf. Das ist eine andere Entscheidung als die frühere Freigabe zur Spezifikationsarbeit. Anschließend richtet die [Administration die Phase](administration.md#bewerbungsphase) ein und weist die Betreuung zu.",
