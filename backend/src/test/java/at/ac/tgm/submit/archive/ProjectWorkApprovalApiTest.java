@@ -152,6 +152,11 @@ class ProjectWorkApprovalApiTest {
     }
 
     @Test
+    void publicationReviewRejectsEmbeddedDecisionValue() throws Exception {
+        reviewArtifact(UUID.randomUUID(), "XSUBMITX", null).andExpect(status().isBadRequest());
+    }
+
+    @Test
     void preservesArtifactValidationBeforeApprovalConflict() throws Exception {
         UUID project = project("IN_PROGRESS");
         store.create("formal_application", studentId.toString(), project.toString(), "DRAFT", store.object());

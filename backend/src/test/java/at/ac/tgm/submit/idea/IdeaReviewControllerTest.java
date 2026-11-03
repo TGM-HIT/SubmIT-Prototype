@@ -82,6 +82,23 @@ class IdeaReviewControllerTest {
         }
     }
 
+    @Test
+    void blankIdeaTitleIsRejectedByApi() throws Exception {
+        Map<String, Object> request = new HashMap<>();
+        request.put("title", "");
+        request.put("description", "An otherwise valid idea description.");
+        request.put("intendedOutcome", "An otherwise valid intended outcome.");
+        request.put("scopePoints", List.of("An otherwise valid scope point."));
+        request.put("learningTopics", List.of("An otherwise valid learning topic."));
+        request.put("schoolYear", "2026/2027");
+
+        mockMvc.perform(post("/api/ideas")
+                        .header("Authorization", "Bearer " + studentToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isBadRequest());
+    }
+
     @AfterEach
     void restoreTestingAccountNames() {
         if (originalDisplayNames == null) {

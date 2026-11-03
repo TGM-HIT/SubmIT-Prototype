@@ -496,7 +496,7 @@ class OpenApiContractTest {
         JsonNode feedback = properties.path("feedback");
         assertEquals("string", feedback.path("type").asText());
         assertEquals(5000, feedback.path("maxLength").asInt());
-        assertEquals(0, feedback.path("minLength").asInt());
+        assertEquals(1, feedback.path("minLength").asInt());
         assertEquals("Required, non-blank written feedback; at most 5,000 characters.",
                 feedback.path("description").asText());
 
@@ -536,8 +536,9 @@ class OpenApiContractTest {
             ObjectNode expected = ((ObjectNode) baseline.path("schemas").path(oldName)).deepCopy();
             ((ObjectNode) expected.path("properties").path("decision"))
                     .put("description", sharedSchema.path("properties").path("decision").path("description").asText());
+            ((ObjectNode) expected.path("properties").path("feedback")).put("minLength", 1);
             assertEquals(expected, sharedSchema,
-                    "The canonical schema must preserve " + oldName + " except its decision description.");
+                    "The canonical schema must preserve " + oldName + " except the authorized request constraints.");
         }
 
         JsonNode document = apiDocument();
@@ -555,7 +556,11 @@ class OpenApiContractTest {
         JsonNode baseline = baselineReviewFixture();
         JsonNode document = apiDocument();
         JsonNode schemas = document.path("components").path("schemas");
-        assertEquals(baseline.path("schemas").path("PublicationReviewRequest"),
+        ObjectNode expectedPublicationReview = ((ObjectNode) baseline.path("schemas")
+                .path("PublicationReviewRequest")).deepCopy();
+        ((ObjectNode) expectedPublicationReview.path("properties").path("decision"))
+                .put("pattern", "^(SUBMIT|APPROVE|REJECT|UNPUBLISH)$");
+        assertEquals(expectedPublicationReview,
                 schemas.path("PublicationReviewRequest"));
         assertEquals(baseline.path("publicationOperation").path("requestBody"),
                 document.path("paths").path(baseline.path("publicationOperation").path("path").asText())
@@ -1469,6 +1474,63 @@ class OpenApiContractTest {
     }
 
     @Test
+    void requiredNonBlankRequestStringsDeclareMinimumLength() throws Exception {
+        JsonNode schemas = apiDocument().path("components").path("schemas");
+        assertRequestStringMinimum(schemas, "VersionTransition", "reason", 2000, false);
+        assertRequestStringMinimum(schemas, "IdeaRequest", "title", 200, false);
+        assertRequestStringMinimum(schemas, "IdeaRequest", "description", 5000, false);
+        assertRequestStringMinimum(schemas, "IdeaRequest", "intendedOutcome", 2000, false);
+        assertRequestStringMinimum(schemas, "IdeaRequest", "scopePoints", 1000, true);
+        assertRequestStringMinimum(schemas, "IdeaRequest", "learningTopics", 200, true);
+        assertRequestStringMinimum(schemas, "IdeaRequest", "schoolYear", 20, false);
+        assertRequestStringMinimum(schemas, "SpecificationRequest", "objectives", 2000, true);
+        assertRequestStringMinimum(schemas, "SpecificationRequest", "intendedUsers", 1000, true);
+        assertRequestStringMinimum(schemas, "SpecificationRequest", "requirements", 2000, true);
+        assertRequestStringMinimum(schemas, "SpecificationRequest", "deliverables", 1000, true);
+        assertRequestStringMinimum(schemas, "SpecificationRequest", "scope", 5000, false);
+        assertRequestStringMinimum(schemas, "SpecificationRequest", "dependencies", 1000, true);
+        assertRequestStringMinimum(schemas, "FormalApplicationRequest", "topic", 200, false);
+        assertRequestStringMinimum(schemas, "FormalApplicationRequest", "initialSituation", 400, false);
+        assertRequestStringMinimum(schemas, "FormalApplicationRequest", "objective", 400, false);
+        assertRequestStringMinimum(schemas, "IndividualTopic", "topic", 200, false);
+        assertRequestStringMinimum(schemas, "Milestone", "text", 1000, false);
+        assertRequestStringMinimum(schemas, "StudentText", "text", 2400, false);
+        assertRequestStringMinimum(schemas, "ApplicationPeriodRequest", "schoolYear", 20, false);
+        assertRequestStringMinimum(schemas, "ArtifactUploadRequest", "title", 200, false);
+        assertRequestStringMinimum(schemas, "ReviewRequest", "feedback", 5000, false);
+        assertRequestStringMinimum(schemas, "AggregationRuleDto", "id", 100, false);
+        assertRequestStringMinimum(schemas, "CategoryDto", "id", 100, false);
+        assertRequestStringMinimum(schemas, "CategoryDto", "name", 200, false);
+        assertRequestStringMinimum(schemas, "CriterionDto", "id", 100, false);
+        assertRequestStringMinimum(schemas, "CriterionDto", "name", 200, false);
+        assertRequestStringMinimum(schemas, "MetricDefinitionDto", "id", 100, false);
+        assertRequestStringMinimum(schemas, "MetricDefinitionDto", "name", 200, false);
+        assertRequestStringMinimum(schemas, "PublishRubricRequest", "version", 100, false);
+        assertRequestStringMinimum(schemas, "PublishRubricRequest", "name", 200, false);
+    }
+
+    @Test
+    void fullMatchRequestConstraintsRejectEmbeddedValues() throws Exception {
+        JsonNode schemas = apiDocument().path("components").path("schemas");
+        assertFullMatchConstraint(schemas, "StudentGradeRequest", "assessedOn", "2026-10-22",
+                "x2026-10-22x", true);
+        assertFullMatchConstraint(schemas, "GradeRevisionRequest", "assessedOn", "2026-10-22",
+                "x2026-10-22x", true);
+        assertFullMatchConstraint(schemas, "GroupGradeRequest", "assessedOn", "2026-10-22",
+                "x2026-10-22x", true);
+        assertFullMatchConstraint(schemas, "PublishRubricRequest", "effectiveFrom", "2026-10-22",
+                "x2026-10-22x", true);
+        assertFullMatchConstraint(schemas, "PublishRubricRequest", "effectiveTo", "2026-10-22",
+                "x2026-10-22x", true);
+        assertFullMatchConstraint(schemas, "AggregationRuleDto", "scope", "STUDENT", "xSTUDENTx", false);
+        assertFullMatchConstraint(schemas, "AggregationRuleDto", "type", "WEIGHTED_AVERAGE",
+                "xWEIGHTED_AVERAGEx", false);
+        assertFullMatchConstraint(schemas, "CriterionDto", "subject", "BOTH", "xBOTHx", false);
+        assertFullMatchConstraint(schemas, "PublicationReviewRequest", "decision", "SUBMIT",
+                "XSUBMITX", false);
+    }
+
+    @Test
     void catalogueEntryNameConstraintsAreDocumented() throws Exception {
         MvcResult result = mockMvc.perform(get("/v3/api-docs"))
                 .andExpect(status().isOk())
@@ -1560,7 +1622,7 @@ class OpenApiContractTest {
         assertEquals("Required, non-blank idea title; at most 200 characters.",
                 jsonIdeaTitle.path("description").asText());
         assertEquals(200, jsonIdeaTitle.path("maxLength").asInt());
-        assertEquals(0, jsonIdeaTitle.path("minLength").asInt());
+        assertEquals(1, jsonIdeaTitle.path("minLength").asInt());
         assertEquals(objectMapper.readTree("""
                 {"type":"object","properties":{
                   "status":{"type":"integer","format":"int32","description":"HTTP response status code."},
@@ -2192,6 +2254,57 @@ class OpenApiContractTest {
             }
         }
         assertTrue(failures.isEmpty(), () -> String.join(System.lineSeparator(), failures));
+    }
+
+    private void assertRequestStringMinimum(JsonNode schemas, String component, String propertyName,
+            int maxLength, boolean arrayItem) {
+        JsonNode property = schemas.path(component).path("properties").path(propertyName);
+        assertTrue(property.isObject(), component + "." + propertyName + " must have a generated property schema");
+        if (arrayItem) {
+            assertEquals("array", property.path("type").asText(),
+                    component + "." + propertyName + " must remain an array");
+            property = property.path("items");
+        }
+        assertTrue(property.path("type").isTextual(),
+                component + "." + propertyName + " must declare a string type");
+        assertEquals("string", property.path("type").textValue(),
+                component + "." + propertyName + " must be a string");
+        assertTrue(property.path("minLength").isIntegralNumber(),
+                component + "." + propertyName + " must declare an integral minLength");
+        assertEquals(1, property.path("minLength").intValue(),
+                component + "." + propertyName + " must reject empty strings");
+        assertTrue(property.path("maxLength").isIntegralNumber(),
+                component + "." + propertyName + " must retain an integral maxLength");
+        assertEquals(maxLength, property.path("maxLength").intValue(),
+                component + "." + propertyName + " maxLength changed");
+    }
+
+    private void assertFullMatchConstraint(JsonNode schemas, String component, String propertyName,
+            String validValue, String embeddedValue, boolean date) {
+        JsonNode property = schemas.path(component).path("properties").path(propertyName);
+        assertTrue(property.isObject(), component + "." + propertyName + " must have a generated property schema");
+        if (date) {
+            assertEquals("date", property.path("format").asText(),
+                    component + "." + propertyName + " must retain format: date");
+        }
+        boolean hasPattern = property.path("pattern").isTextual();
+        boolean hasEnum = property.path("enum").isArray();
+        assertTrue(hasPattern || hasEnum,
+                component + "." + propertyName + " must expose a pattern or enum constraint");
+        assertFalse(hasPattern && hasEnum,
+                component + "." + propertyName + " must use one full-match representation");
+        if (hasPattern) {
+            Pattern emittedPattern = Pattern.compile(property.path("pattern").textValue());
+            assertTrue(emittedPattern.matcher(validValue).find(),
+                    component + "." + propertyName + " must accept " + validValue);
+            assertFalse(emittedPattern.matcher(embeddedValue).find(),
+                    component + "." + propertyName + " must reject embedded value " + embeddedValue);
+        } else {
+            assertTrue(containsTextualMember(property.path("enum"), validValue),
+                    component + "." + propertyName + " enum must accept " + validValue);
+            assertFalse(containsTextualMember(property.path("enum"), embeddedValue),
+                    component + "." + propertyName + " enum must reject embedded value " + embeddedValue);
+        }
     }
 
     private JsonNode apiDocument() throws Exception {
