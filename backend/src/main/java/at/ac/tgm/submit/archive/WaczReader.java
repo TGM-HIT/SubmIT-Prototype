@@ -8,10 +8,12 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Pattern;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
@@ -26,6 +28,9 @@ public class WaczReader {
     private static final int COPY_BUFFER_SIZE = 8192;
     private static final String MANIFEST = "datapackage.json";
     private static final String INDEX = "indexes/index.cdxj";
+    private static final String WACZ_VERSION = "1.1.1";
+    private static final Pattern ARCHIVE_PATH = Pattern.compile("archive/[A-Za-z0-9_-]+(?:/[A-Za-z0-9_-]+)*\\.warc\\.gz");
+    private static final Pattern CDXJ_TIMESTAMP = Pattern.compile("[0-9]{14}");
     private final ObjectMapper objectMapper;
 
     public WaczReader(ObjectMapper objectMapper) {
@@ -34,10 +39,12 @@ public class WaczReader {
 
     public Snapshot read(byte[] content) {
         Map<String, byte[]> entries = readEntries(content);
-        validateManifest(entries.get(MANIFEST));
-        validateIndex(entries.get(INDEX));
-        List<Resource> resources = readResources(entries);
+        String archivePath = validateManifest(entries.get(MANIFEST), entries);
+        Map<String, String> index = validateIndex(entries.get(INDEX), archivePath,
+                entries.get(archivePath).length);
+        List<Resource> resources = readWarc(entries.get(archivePath));
         validateResources(resources);
+        validateIndexedResources(index, resources);
         return new Snapshot(resources);
     }
 
@@ -53,7 +60,9 @@ public class WaczReader {
                     if (totalBytes > MAX_UNZIPPED_BYTES) {
                         throw invalid();
                     }
-                    entries.put(entry.getName(), bytes);
+                    if (entries.putIfAbsent(entry.getName(), bytes) != null) {
+                        throw invalid();
+                    }
                 }
                 zip.closeEntry();
             }
@@ -63,39 +72,208 @@ public class WaczReader {
         return entries;
     }
 
-    private void validateManifest(byte[] bytes) {
+    private String validateManifest(byte[] bytes, Map<String, byte[]> entries) {
         if (bytes == null || bytes.length == 0) {
             throw invalid();
         }
         try {
-            JsonNode manifest = objectMapper.readTree(bytes);
-            if (!manifest.isObject() || !manifest.path("wacz_version").isTextual()
-                    || !manifest.path("resources").isArray()) {
-                throw invalid();
-            }
+            return manifestArchivePath(objectMapper.readTree(bytes), entries);
         } catch (IOException exception) {
             throw invalid();
         }
     }
 
-    private void validateIndex(byte[] index) {
-        if (index == null || index.length == 0) {
+    private String manifestArchivePath(JsonNode manifest, Map<String, byte[]> entries) {
+        if (!hasSupportedManifestHeader(manifest)) {
+            throw invalid();
+        }
+        JsonNode resources = manifest.path("resources");
+        if (!isExpectedResourceArray(resources)) {
+            throw invalid();
+        }
+        return declaredArchivePath(manifestResources(resources), entries);
+    }
+
+    private Map<String, String> manifestResources(JsonNode resources) {
+        Map<String, String> paths = new HashMap<>();
+        for (JsonNode resource : resources) {
+            addManifestResource(paths, resource);
+        }
+        return paths;
+    }
+
+    private String declaredArchivePath(Map<String, String> paths, Map<String, byte[]> entries) {
+        String archivePath = paths.get("archive");
+        if (archivePath == null || !paths.containsKey("index")) {
+            throw invalid();
+        }
+        if (!entries.containsKey(archivePath) || !entries.containsKey(INDEX)) {
+            throw invalid();
+        }
+        return archivePath;
+    }
+
+    private boolean hasSupportedManifestHeader(JsonNode manifest) {
+        return manifest.isObject() && "data-package".equals(manifest.path("profile").asText())
+                && WACZ_VERSION.equals(manifest.path("wacz_version").asText());
+    }
+
+    private boolean isExpectedResourceArray(JsonNode resources) {
+        return resources.isArray() && resources.size() == 2;
+    }
+
+    private void addManifestResource(Map<String, String> paths, JsonNode resource) {
+        if (!resource.isObject()) {
+            throw invalid();
+        }
+        String name = textField(resource, "name");
+        String path = textField(resource, "path");
+        String mediaType = textField(resource, "mediatype");
+        if (!hasRequiredResourceFields(name, path, mediaType)) {
+            throw invalid();
+        }
+        if (!isValidArchiveResource(name, path, mediaType) && !isValidIndexResource(name, path, mediaType)) {
+            throw invalid();
+        }
+        if (paths.putIfAbsent(name, path) != null) {
             throw invalid();
         }
     }
 
-    private List<Resource> readResources(Map<String, byte[]> entries) {
-        List<Resource> resources = new ArrayList<>();
-        for (Map.Entry<String, byte[]> entry : entries.entrySet()) {
-            if (isWarc(entry.getKey())) {
-                resources.addAll(readWarc(entry.getValue()));
-            }
-        }
-        return resources;
+    private boolean hasRequiredResourceFields(String name, String path, String mediaType) {
+        return name != null && path != null && mediaType != null;
     }
 
-    private boolean isWarc(String path) {
-        return path.startsWith("archive/") && path.endsWith(".warc.gz");
+    private boolean isValidArchiveResource(String name, String path, String mediaType) {
+        return "archive".equals(name) && ARCHIVE_PATH.matcher(path).matches()
+                && "application/gzip".equals(mediaType);
+    }
+
+    private boolean isValidIndexResource(String name, String path, String mediaType) {
+        return "index".equals(name) && INDEX.equals(path) && "application/x-cdxj".equals(mediaType);
+    }
+
+    private String textField(JsonNode object, String field) {
+        JsonNode value = object.path(field);
+        return value.isTextual() ? value.asText() : null;
+    }
+
+    private Map<String, String> validateIndex(byte[] index, String archivePath, long archiveLength) {
+        if (index == null || index.length == 0) {
+            throw invalid();
+        }
+        Map<String, String> indexedResources = new LinkedHashMap<>();
+        String text = new String(index, StandardCharsets.UTF_8);
+        addIndexLines(text.split("\\R", -1), archivePath, archiveLength, indexedResources);
+        if (indexedResources.isEmpty()) {
+            throw invalid();
+        }
+        return indexedResources;
+    }
+
+    private void addIndexLines(String[] lines, String archivePath, long archiveLength,
+            Map<String, String> indexedResources) {
+        for (int lineNumber = 0; lineNumber < lines.length; lineNumber++) {
+            if (lines[lineNumber].isEmpty() && lineNumber == lines.length - 1) {
+                continue;
+            }
+            if (lines[lineNumber].isEmpty()) {
+                throw invalid();
+            }
+            addIndexEntry(lines[lineNumber], archivePath, archiveLength, indexedResources);
+        }
+    }
+
+    private void addIndexEntry(String line, String archivePath, long archiveLength,
+            Map<String, String> indexedResources) {
+        IndexEntry parsed = parseIndexEntry(line, archivePath, archiveLength);
+        if (indexedResources.putIfAbsent(parsed.url(), parsed.mimeType()) != null) {
+            throw invalid();
+        }
+    }
+
+    private IndexEntry parseIndexEntry(String line, String archivePath, long archiveLength) {
+        int secondSpace = indexJsonStart(line);
+        int firstSpace = line.indexOf(' ');
+        String url = line.substring(0, firstSpace);
+        try {
+            JsonNode entry = objectMapper.readTree(line.substring(secondSpace));
+            String mimeType = textField(entry, "mime");
+            if (!isValidIndexEntry(entry, url, archivePath, archiveLength, mimeType)) {
+                throw invalid();
+            }
+            return new IndexEntry(url, mimeType);
+        } catch (IOException exception) {
+            throw invalid();
+        }
+    }
+
+    private int indexJsonStart(String line) {
+        int firstSpace = line.indexOf(' ');
+        int secondSpace = firstSpace < 0 ? -1 : line.indexOf(' ', firstSpace + 1);
+        if (firstSpace <= 0 || secondSpace <= firstSpace + 1) {
+            throw invalid();
+        }
+        String timestamp = line.substring(firstSpace + 1, secondSpace);
+        if (!CDXJ_TIMESTAMP.matcher(timestamp).matches()) {
+            throw invalid();
+        }
+        return secondSpace + 1;
+    }
+
+    private boolean isValidIndexEntry(JsonNode entry, String url, String archivePath, long archiveLength,
+            String mimeType) {
+        if (!entry.isObject()) {
+            return false;
+        }
+        if (!hasIndexIdentity(entry, url, archivePath)) {
+            return false;
+        }
+        if (!entry.path("status").isTextual()) {
+            return false;
+        }
+        return hasValidIndexMetadata(entry, mimeType, archiveLength);
+    }
+
+    private boolean hasIndexIdentity(JsonNode entry, String url, String archivePath) {
+        return url.equals(textField(entry, "url")) && archivePath.equals(textField(entry, "filename"));
+    }
+
+    private boolean hasValidIndexMetadata(JsonNode entry, String mimeType, long archiveLength) {
+        return mimeType != null && !mimeType.isBlank() && hasValidIndexRange(entry, archiveLength)
+                && "200".equals(entry.path("status").asText());
+    }
+
+    private boolean hasValidIndexRange(JsonNode entry, long archiveLength) {
+        JsonNode offset = entry.path("offset");
+        JsonNode length = entry.path("length");
+        if (!hasIntegralIndexBounds(offset, length)) {
+            return false;
+        }
+        long start = offset.asLong();
+        long size = length.asLong();
+        return isIndexRangeWithinArchive(start, size, archiveLength);
+    }
+
+    private boolean hasIntegralIndexBounds(JsonNode offset, JsonNode length) {
+        return offset.isIntegralNumber() && length.isIntegralNumber()
+                && offset.canConvertToLong() && length.canConvertToLong();
+    }
+
+    private boolean isIndexRangeWithinArchive(long start, long size, long archiveLength) {
+        return start >= 0 && size > 0 && start <= archiveLength && size <= archiveLength - start;
+    }
+
+    private void validateIndexedResources(Map<String, String> index, List<Resource> resources) {
+        Map<String, String> actualResources = new LinkedHashMap<>();
+        for (Resource resource : resources) {
+            if (actualResources.putIfAbsent(resource.url(), resource.mimeType()) != null) {
+                throw invalid();
+            }
+        }
+        if (!index.equals(actualResources)) {
+            throw invalid();
+        }
     }
 
     private void validateResources(List<Resource> resources) {
@@ -238,5 +416,8 @@ public class WaczReader {
     }
 
     public record Resource(String url, String mimeType, String bodyBase64) {
+    }
+
+    private record IndexEntry(String url, String mimeType) {
     }
 }

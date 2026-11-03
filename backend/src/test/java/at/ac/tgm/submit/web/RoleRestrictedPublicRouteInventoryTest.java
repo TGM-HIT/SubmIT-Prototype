@@ -250,7 +250,8 @@ class RoleRestrictedPublicRouteInventoryTest {
                 "GET /v3/api-docs",
                 "GET /v3/api-docs.yaml",
                 "GET /api/public/projects/{projectId}/archive",
-                "GET /api/public/projects/{projectId}/archive/{artifactId}");
+                "GET /api/public/projects/{projectId}/archive/{artifactId}",
+                "GET /api/public/projects/{projectId}/archive/{artifactId}/browse");
         actual.removeAll(nonRoleGated);
         assertEquals(actual, ROUTES.stream().map(RoutePolicy::methodAndPath)
                 .collect(java.util.stream.Collectors.toSet()),

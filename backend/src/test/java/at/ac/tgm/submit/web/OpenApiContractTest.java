@@ -1045,7 +1045,7 @@ class OpenApiContractTest {
 
         List<String> failures = new ArrayList<>();
         int operations = checkOperations(document.path("paths"), failures);
-        assertEquals(98, operations, "The generated API operation count should be reviewed when endpoints change.");
+        assertEquals(99, operations, "The generated API operation count should be reviewed when endpoints change.");
         JsonNode schemas = document.path("components").path("schemas");
         checkComponentSchemas(schemas, failures);
         checkResponseRequiredness(schemas, failures);
@@ -1829,7 +1829,8 @@ class OpenApiContractTest {
         Set<String> publicOperations = Set.of(
                 "post /api/auth/register", "post /api/auth/login",
                 "get /api/public/projects/{projectId}/archive",
-                "get /api/public/projects/{projectId}/archive/{artifactId}");
+                "get /api/public/projects/{projectId}/archive/{artifactId}",
+                "get /api/public/projects/{projectId}/archive/{artifactId}/browse");
 
         Iterator<Map.Entry<String, JsonNode>> pathFields = paths.properties().iterator();
         while (pathFields.hasNext()) {
@@ -1867,7 +1868,7 @@ class OpenApiContractTest {
                 }
             }
         }
-        assertEquals(98, operationCount);
+        assertEquals(99, operationCount);
         assertEquals(94, protectedCount);
         assertTrue(failures.isEmpty(), () -> String.join(System.lineSeparator(), failures));
     }
@@ -1887,6 +1888,7 @@ class OpenApiContractTest {
         expectedOperations.addAll(BASELINE_SUCCESS_RESPONSES.stream()
                 .map(operation -> operation.method() + " " + operation.path()).toList());
         expectedOperations.addAll(Set.of(
+                "get /api/public/projects/{projectId}/archive/{artifactId}/browse",
                 "get /api/application-periods/{periodId}/applying-groups",
                 "post /api/application-periods/{periodId}/applying-groups",
                 "get /api/application-periods/{periodId}/applying-groups/{id}",

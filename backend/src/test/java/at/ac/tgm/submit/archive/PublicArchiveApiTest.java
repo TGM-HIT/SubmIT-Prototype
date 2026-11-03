@@ -10,9 +10,18 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import at.ac.tgm.submit.data.RecordStore;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.UUID;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipInputStream;
+import java.util.zip.ZipOutputStream;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -93,6 +102,48 @@ class PublicArchiveApiTest {
                 .andExpect(status().isOk());
     }
 
+    @Test
+    void unsupportedOrStructurallyInvalidWaczIsRejectedButRemainsDownloadable() throws Exception {
+        UUID project = project("COMPLETED");
+        byte[] valid = TestingArchivePreviewConfiguration.createWaczFixture();
+        Map<String, byte[]> entries = zipEntries(valid);
+        String manifest = new String(entries.get("datapackage.json"), StandardCharsets.UTF_8);
+        String index = new String(entries.get("indexes/index.cdxj"), StandardCharsets.UTF_8);
+        ObjectNode emptyResources = (ObjectNode) mapper.readTree(entries.get("datapackage.json"));
+        emptyResources.set("resources", mapper.createArrayNode());
+        List<InvalidWacz> invalidCases = List.of(
+                new InvalidWacz("unsupported-version", "datapackage.json",
+                        manifest.replace("\"wacz_version\":\"1.1.1\"", "\"wacz_version\":\"9.9.9\"")
+                                .getBytes(StandardCharsets.UTF_8)),
+                new InvalidWacz("malformed-resources", "datapackage.json",
+                        mapper.writeValueAsBytes(emptyResources)),
+                new InvalidWacz("missing-declared-archive", "datapackage.json",
+                        manifest.replace("archive/snapshot.warc.gz", "archive/missing.warc.gz")
+                                .getBytes(StandardCharsets.UTF_8)),
+                new InvalidWacz("malformed-index", "indexes/index.cdxj",
+                        "not a CDXJ index".getBytes(StandardCharsets.UTF_8)),
+                new InvalidWacz("mismatched-index-archive", "indexes/index.cdxj",
+                        index.replace("archive/snapshot.warc.gz", "archive/other.warc.gz")
+                                .getBytes(StandardCharsets.UTF_8)),
+                new InvalidWacz("out-of-range-index-record", "indexes/index.cdxj",
+                        index.replace("\"offset\":0", "\"offset\":999999999")
+                                .getBytes(StandardCharsets.UTF_8)),
+                new InvalidWacz("wrong-index-field-type", "indexes/index.cdxj",
+                        index.replace("\"status\":\"200\"", "\"status\":200")
+                                .getBytes(StandardCharsets.UTF_8)));
+
+        for (InvalidWacz invalidCase : invalidCases) {
+            byte[] invalidWacz = replaceZipEntry(valid, invalidCase.entry(), invalidCase.bytes());
+            UUID artifact = artifact(project, "WEBSITE_ARCHIVE", "APPROVED", invalidWacz);
+            mvc.perform(get("/api/public/projects/{projectId}/archive/{artifactId}/browse", project, artifact))
+                    .andExpect(result -> assertEquals(400, result.getResponse().getStatus(), invalidCase.name()));
+            MvcResult download = mvc.perform(get("/api/public/projects/{projectId}/archive/{artifactId}",
+                    project, artifact)).andExpect(status().isOk()).andReturn();
+            assertArrayEquals(invalidWacz, download.getResponse().getContentAsByteArray());
+            assertTrue(download.getResponse().getHeader("Content-Disposition").startsWith("attachment;"));
+        }
+    }
+
     private void assertDenied(UUID project, UUID artifact) throws Exception {
         mvc.perform(get("/api/public/projects/{projectId}/archive/{artifactId}/browse", project, artifact))
                 .andExpect(status().isNotFound());
@@ -115,5 +166,35 @@ class PublicArchiveApiTest {
                 .put("uploadedAt", "2026-01-01T00:00:00Z");
         payload.put("publicationStatus", status);
         return store.create("artifact", PRIVATE_SENTINEL, projectId.toString(), status, payload).getId();
+    }
+
+    private Map<String, byte[]> zipEntries(byte[] archive) throws IOException {
+        Map<String, byte[]> entries = new LinkedHashMap<>();
+        try (ZipInputStream zip = new ZipInputStream(new java.io.ByteArrayInputStream(archive))) {
+            ZipEntry entry;
+            while ((entry = zip.getNextEntry()) != null) {
+                if (!entry.isDirectory()) {
+                    entries.put(entry.getName(), zip.readAllBytes());
+                }
+            }
+        }
+        return entries;
+    }
+
+    private byte[] replaceZipEntry(byte[] archive, String name, byte[] replacement) throws IOException {
+        Map<String, byte[]> entries = zipEntries(archive);
+        entries.put(name, replacement);
+        ByteArrayOutputStream output = new ByteArrayOutputStream();
+        try (ZipOutputStream zip = new ZipOutputStream(output)) {
+            for (Map.Entry<String, byte[]> entry : entries.entrySet()) {
+                zip.putNextEntry(new ZipEntry(entry.getKey()));
+                zip.write(entry.getValue());
+                zip.closeEntry();
+            }
+        }
+        return output.toByteArray();
+    }
+
+    private record InvalidWacz(String name, String entry, byte[] bytes) {
     }
 }
