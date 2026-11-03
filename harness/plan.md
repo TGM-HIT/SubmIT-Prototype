@@ -56,7 +56,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Bug-25](tickets/done/Bug-25.md) | done | Represent the documented ALLOCATING period status |
 | [Bug-26](tickets/done/Bug-26.md) | done | Display all dates and times in the user's locale |
 | [Bug-27](tickets/done/Bug-27.md) | done | Gate project realization on formal-application approval |
-| [Bug-28](tickets/Bug-28.md) | to-do | Make generated request string constraints match runtime validation |
+| [Bug-28](tickets/done/Bug-28.md) | done | Make generated request string constraints match runtime validation |
 | [Bug-29](tickets/done/Bug-29.md) | done | Declare always-returned audit and group-member response fields |
 | [Bug-30](tickets/done/Bug-30.md) | done | Show meaningful audit events with timestamps, resources, and actors |
 | [Bug-31](tickets/done/Bug-31.md) | done | Show group members by name in student Formal proposals |
