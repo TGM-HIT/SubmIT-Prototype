@@ -20,6 +20,42 @@ const defaults = {
   sessionFile: path.join(frontendDir, '.preview', 'session.json'),
 }
 
+export async function activateSnapshotLink(client, label, timeoutMs = 3000) {
+  const before = await evaluatePage(client,
+    'document.querySelector("iframe")?.getAttribute("srcdoc") ?? ""', 'read initial archive frame')
+  await evaluateSnapshotFrame(client,
+    `(() => { const link=[...document.querySelectorAll('a')].find(item => item.textContent.trim() === ${JSON.stringify(label)}); if (!link) throw new Error('No captured link matches the requested label'); link.focus(); link.click(); return true })()`,
+    `activate captured link ${JSON.stringify(label)}`)
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    const current = await evaluatePage(client,
+      'document.querySelector("iframe")?.getAttribute("srcdoc") ?? ""', 'wait for captured page')
+    if (current && current !== before) return current
+    await new Promise(resolve => setTimeout(resolve, 50))
+  }
+  throw new Error(`Captured link ${JSON.stringify(label)} did not load another archived page.`)
+}
+
+export async function evaluateSnapshotFrame(client, expression, description = 'evaluate isolated snapshot frame') {
+  const targets = await client.send('Target.getTargets')
+  const target = targets.targetInfos?.find(item => item.type === 'iframe' && item.url === 'about:srcdoc')
+  if (!target) {
+    throw new Error(`No isolated archive snapshot frame is open; observed ${JSON.stringify(
+      targets.targetInfos?.filter(item => item.type === 'iframe').map(item => item.url) ?? [])}.`)
+  }
+  const attached = await client.send('Target.attachToTarget', { targetId: target.targetId, flatten: true })
+  try {
+    const result = await client.send('Runtime.evaluate', {
+      expression,
+      returnByValue: true,
+      awaitPromise: true,
+    }, attached.sessionId)
+    if (result.exceptionDetails) throw new Error(`Could not ${description}: ${result.exceptionDetails.text}`)
+    return result.result?.value
+  } finally {
+    await client.send('Target.detachFromTarget', { sessionId: attached.sessionId }).catch(() => undefined)
+  }
+}
 export const SUPPORTED_BROWSER_KEYS = Object.freeze([
   'Tab', 'Shift+Tab', 'Escape', 'Enter', 'Space', 'ArrowLeft', 'ArrowRight',
   'ArrowUp', 'ArrowDown', 'Home', 'End',
@@ -129,6 +165,7 @@ export function parseArgs(args) {
     seedIdeaHistory: undefined,
     seedAllocationPinPreview: false,
     seedRubricPaginationPreview: false,
+    seedArchivePreview: false,
     evidenceReport: undefined,
     fill: [],
     click: [],
@@ -190,6 +227,8 @@ export function parseArgs(args) {
       options.seedAllocationPinPreview = true
     } else if (flag === '--seed-rubric-pagination-preview') {
       options.seedRubricPaginationPreview = true
+    } else if (flag === '--seed-archive-preview') {
+      options.seedArchivePreview = true
     } else if (flag === '--session') {
       options.session = true
     } else if (['--session-start', '--session-url', '--session-stop'].includes(flag)) {
@@ -274,7 +313,7 @@ export function parseArgs(args) {
           })
         } else if (['click', 'download', 'assert-action-visible', 'wait', 'read', 'focus', 'scroll', 'screenshot', 'key', 'tab-to', 'select-index',
               'select-by-key', 'select-option', 'click-by-name', 'wait-text', 'assert-disabled',
-          'navigate', 'assert-url'].includes(action) && argument) {
+          'navigate', 'assert-url', 'archive-link'].includes(action) && argument) {
           if (action === 'screenshot' && path.basename(argument) !== argument) {
             throw new Error('--step screenshot must use a filename, not a path.')
           }
@@ -339,10 +378,11 @@ export function parseArgs(args) {
             options.steps.push({ action, value: argument })
           }
         } else if (['reload', 'accept-confirms', 'reject-confirms', 'offline', 'online', 'measure-overflow',
+          'assert-archive-isolation',
           'assert-dialog-contained', 'assert-dialog-closed'].includes(action) && !argument) {
           options.steps.push({ action })
         } else {
-          throw new Error('--step must be fill:SELECTOR=VALUE, set-json-field:SELECTOR=FIELD=VALUE, set-file:SELECTOR=REPOSITORY_RELATIVE_PATH, select-index:SELECTOR=INDEX, select-by-key:SELECTOR=VALUE, select-option:SELECTOR=EXPECTED_OPTION_LABEL, click-by-name:SELECTOR=EXPECTED_NAME, wait-text:SELECTOR=EXPECTED_TEXT, assert-disabled:SELECTOR, click-record-action:TITLE_OR_ID|SELECTOR, read-record:TITLE_OR_ID, click:SELECTOR, download:SELECTOR, tab-to:SELECTOR, wait:SELECTOR, read:SELECTOR, focus:SELECTOR, scroll:SELECTOR, navigate:/SAME_ORIGIN_PATH, assert-url:PATH_AND_QUERY, reload, screenshot:FILE, key:SUPPORTED_KEY, assert-dialog-contained, assert-dialog-closed, accept-confirms, reject-confirms, offline, online, or measure-overflow.')
+          throw new Error('--step must be fill:SELECTOR=VALUE, set-json-field:SELECTOR=FIELD=VALUE, set-file:SELECTOR=REPOSITORY_RELATIVE_PATH, select-index:SELECTOR=INDEX, select-by-key:SELECTOR=VALUE, select-option:SELECTOR=EXPECTED_OPTION_LABEL, click-by-name:SELECTOR=EXPECTED_NAME, wait-text:SELECTOR=EXPECTED_TEXT, assert-disabled:SELECTOR, click-record-action:TITLE_OR_ID|SELECTOR, read-record:TITLE_OR_ID, click:SELECTOR, archive-link:TEXT, assert-archive-isolation, download:SELECTOR, tab-to:SELECTOR, wait:SELECTOR, read:SELECTOR, focus:SELECTOR, scroll:SELECTOR, navigate:/SAME_ORIGIN_PATH, assert-url:PATH_AND_QUERY, reload, screenshot:FILE, key:SUPPORTED_KEY, assert-dialog-contained, assert-dialog-closed, accept-confirms, reject-confirms, offline, online, or measure-overflow.')
         }
       } else {
         options[name] = value
@@ -416,6 +456,9 @@ export function parseArgs(args) {
   }
   if (options.session && (options.url || !options.start)) {
     throw new Error('--session uses the URL of the running shared session; do not combine it with --url or --no-start.')
+  }
+  if ((options.session || options.sessionCommand) && options.seedArchivePreview) {
+    throw new Error('--seed-archive-preview requires a fresh, one-shot testing preview and cannot be combined with a shared session.')
   }
   if (options.session && (explicitPorts.has('frontendPort') || explicitPorts.has('backendPort'))) {
     throw new Error('--session uses the ports of the running shared session; pass --frontend-port/--backend-port to --session-start instead.')
@@ -947,16 +990,23 @@ export async function findChrome(selected) {
 }
 
 function listen(child, label) {
+  const reportLine = (line) => {
+    if (line.trim()) {
+      console.log(`[${label}] ${line}`)
+      const fixture = line.match(/ARCHIVE_PREVIEW_PROJECT_ID=([0-9a-f-]{36})/i)
+      if (fixture) child.archivePreviewProjectId = fixture[1]
+    }
+  }
   for (const [stream, name] of [[child.stdout, 'stdout'], [child.stderr, 'stderr']]) {
     stream?.setEncoding('utf8')
     let pending = ''
     stream?.on('data', (chunk) => {
       const lines = (pending + chunk).split(/\r?\n/)
       pending = lines.pop() ?? ''
-      for (const line of lines) if (line.trim()) console.log(`[${label}] ${line}`)
+      for (const line of lines) reportLine(line)
     })
     stream?.on('end', () => {
-      if (pending.trim()) console.log(`[${label}] ${pending}`)
+      reportLine(pending)
     })
   }
 }
@@ -1021,7 +1071,7 @@ function connectCdp(url) {
   })
   return new Promise((resolve, reject) => {
     socket.addEventListener('open', () => resolve({
-      send(method, params = {}) {
+      send(method, params = {}, sessionId) {
         const id = ++nextId
         return new Promise((commandResolve, commandReject) => {
           const timer = setTimeout(() => {
@@ -1029,7 +1079,7 @@ function connectCdp(url) {
             commandReject(new Error(`Chrome DevTools command timed out: ${method}`))
           }, 15_000)
           pending.set(id, { resolve: commandResolve, reject: commandReject, timer })
-          socket.send(JSON.stringify({ id, method, params }))
+          socket.send(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }))
         })
       },
       onEvent(listener) {
@@ -1736,6 +1786,34 @@ export async function applyPageSteps(client, steps, {
       }`
       await evaluatePage(client, `(${expression})(${JSON.stringify(step.value)})`, `click ${step.value}`)
       log(`Clicked ${step.value}.`)
+    } else if (step.action === 'archive-link') {
+      await activateSnapshotLink(client, step.value)
+      log(`Activated captured snapshot link ${JSON.stringify(step.value)} in the isolated archive frame.`)
+    } else if (step.action === 'assert-archive-isolation') {
+      const state = await evaluatePage(client, `(() => {
+        const frame = document.querySelector('.archive-snapshot-frame');
+        if (!frame) throw new Error('The approved snapshot viewer is not open.');
+        const sandbox = frame.getAttribute('sandbox') || '';
+        const source = frame.getAttribute('srcdoc') || '';
+        let frameDocumentAccessible = true;
+        try { void frame.contentWindow.document; } catch { frameDocumentAccessible = false; }
+        return {
+          sandbox,
+          allowsSameOrigin: sandbox.split(/\\s+/).includes('allow-same-origin'),
+          frameDocumentAccessible,
+          probeExecuted: window.__archiveProbeExecuted ?? null,
+          appStorageProbe: localStorage.getItem('archiveProbe'),
+          appCookieProbe: document.cookie.split(';').some((item) => item.trim().startsWith('archiveProbe=')),
+          restrictiveCsp: source.includes("default-src 'none'"),
+          embeddedAsset: /data:image\\/svg\\+xml;base64,/.test(source),
+        };
+      })()`, 'verify archived content isolation')
+      if (state.sandbox !== 'allow-scripts' || state.allowsSameOrigin || state.frameDocumentAccessible
+          || state.probeExecuted !== null || state.appStorageProbe !== null || state.appCookieProbe
+          || !state.restrictiveCsp || !state.embeddedAsset) {
+        throw new Error(`The archive isolation boundary did not hold: ${JSON.stringify(state)}`)
+      }
+      log(`Archive isolation verified: ${JSON.stringify(state)}`)
     } else if (step.action === 'click-by-name') {
       await clickEnabledControlByName(client, step.selector, step.value, {
         timeoutMs: optionWaitTimeoutMs,
@@ -2193,12 +2271,15 @@ Options:
   --output-dir DIR                Screenshot directory (default frontend/.preview)
   --screenshot FILE               Screenshot filename (default preview.png)
   --evidence-report FILE          Retain sanitized request, fixture and interaction evidence in the output directory
-  --path PATH                     Page path to inspect, e.g. /login or /ideas
+  --path PATH                     Page path to inspect, e.g. /login or /ideas; with archive opt-in, use
+                                  /archive/{archiveProjectId} to visit the generated public archive
   --auth --username USER          Authenticate using the local testing account
   --seed-idea-owner USER           Create and submit a synthetic idea using a student testing account before opening the page
   --seed-idea-history USER         Create a synthetic idea with review and preference history for display verification
   --seed-rubric-pagination-preview Seed 21 synthetic future-effective versions for an admin01 /rubrics walkthrough
   --seed-allocation-pin-preview    Opt in to a testing-profile period with 21 pins and 22 applications
+  --seed-archive-preview           Opt in to an approved completed-project WACZ snapshot fixture (fresh preview only);
+                                  prints its project ID for /archive/<project-id>
   --seed-idea-title TITLE          Distinctive title for the seeded idea so a later invocation can find it
   --fill SELECTOR=VALUE           Fill an input, textarea, or select; may be repeated
   --click SELECTOR                Click an element; may be repeated
@@ -2230,7 +2311,7 @@ Use --fill, --click, --wait-for, and --expand-select to perform reusable preview
 or repeat --step ACTION:VALUE to sequence conditional flows. Steps support fill:SELECTOR=VALUE, click:SELECTOR,
 click-row-action:USERNAME|SELECTOR,
 wait:SELECTOR, read:SELECTOR, focus:SELECTOR, scroll:SELECTOR, download:SELECTOR,
-navigate:/SAME_ORIGIN_PATH, assert-url:PATH_AND_QUERY, reload,
+navigate:/SAME_ORIGIN_PATH, assert-url:PATH_AND_QUERY, archive-link:TEXT, assert-archive-isolation, reload,
 key:Tab|Shift+Tab|Escape|Enter|Space|ArrowLeft|ArrowRight|ArrowUp|ArrowDown|Home|End,
 tab-to:SELECTOR uses actual Tab key input to reach and report focus on a selector within 80 presses,
 select-index:SELECTOR=INDEX, select-by-key:SELECTOR=VALUE, screenshot:FILE, assert-dialog-contained, assert-dialog-closed,
@@ -2318,10 +2399,11 @@ export async function run(options, {
     }
     await assertPortsFree([['Frontend', options.frontendPort], ['Backend', options.backendPort]])
   }
-  const url = buildUrl(options)
+  let url = buildUrl(options)
   const children = []
   const childEnv = { ...process.env, ...serviceEnv }
   if (options.seedAllocationPinPreview) childEnv.DADB_TESTING_ALLOCATION_PIN_PREVIEW = 'true'
+  if (options.seedArchivePreview) childEnv.DADB_TESTING_ARCHIVE_PREVIEW = 'true'
   delete childEnv.PREVIEW_PASSWORD
   if (options.passwordEnv) delete childEnv[options.passwordEnv]
   let browser
@@ -2358,6 +2440,21 @@ export async function run(options, {
       }
       console.log(`Backend ready: http://127.0.0.1:${backendPort}`)
       await new Promise((resolve) => setTimeout(resolve, 500))
+      if (options.seedArchivePreview) {
+        const fixtureWaitDeadline = Date.now() + options.startupTimeout
+        while (!backend.archivePreviewProjectId && Date.now() < fixtureWaitDeadline) {
+          await new Promise((resolve) => setTimeout(resolve, 50))
+        }
+        if (!backend.archivePreviewProjectId) {
+          throw new Error('The opt-in archive preview fixture did not report its project ID; inspect the backend startup log.')
+        }
+        options.archivePreviewProjectId = backend.archivePreviewProjectId
+        if (options.pagePath?.includes('{archiveProjectId}')) {
+          options.pagePath = options.pagePath.replaceAll('{archiveProjectId}', backend.archivePreviewProjectId)
+          url = buildUrl(options)
+        }
+        console.log(`Archive preview project ID: ${options.archivePreviewProjectId}`)
+      }
       assertSpawnedAlive(backend, 'backend', backendPort)
       options.fixtureSetup = await seedRequested(options, `http://127.0.0.1:${backendPort}`)
       const frontendPort = options.frontendPort

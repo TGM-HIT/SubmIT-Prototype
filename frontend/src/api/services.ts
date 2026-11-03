@@ -354,6 +354,12 @@ export const archiveApi = {
     return request(`/api/public/projects/${encodeURIComponent(projectId)}/archive/${encodeURIComponent(artifactId)}`,
       { public: true })
   },
+  publicSnapshot(projectId: string, artifactId: string): Promise<{
+    resources: Array<{ url: string; mimeType: string; bodyBase64: string }>
+  }> {
+    return request(`/api/public/projects/${encodeURIComponent(projectId)}/archive/${encodeURIComponent(artifactId)}/browse`,
+      { public: true })
+  },
   list(projectId: string, page = 0): Promise<Page<components['schemas']['PageResponseArtifactResponse']>> {
     return json(`/api/projects/${encodeURIComponent(projectId)}/artifacts?${pageQuery(page)}`)
   },

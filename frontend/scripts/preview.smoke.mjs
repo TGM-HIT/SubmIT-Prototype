@@ -29,6 +29,9 @@ import {
   launchBrowser,
   configureBrowserLocale,
   run,
+  activateSnapshotLink,
+  evaluateSnapshotFrame,
+  evaluatePage,
   RECORD_LOCATOR_EXPRESSION,
   viewportFor,
   waitForReady,
@@ -92,6 +95,11 @@ test('canceled download retains sanitized begin/progress, request, console and C
     assert.match(report.consoleErrors[0], /Bearer \[redacted\]/)
     assert.doesNotMatch(text, /private-token|private-credential/)
   } finally { await rm(outputDir, { recursive: true, force: true }) }
+})
+
+test('archive-link is a supported ordered preview action', () => {
+  assert.deepEqual(parseArgs(['--step', 'archive-link:Open captured relative page']).steps,
+    [{ action: 'archive-link', value: 'Open captured relative page' }])
 })
 
 test('action visibility checks fail clipped or unfocused controls, not just document width', async () => {
@@ -625,6 +633,159 @@ test('successful and failed preview runs clean up only their own browser profile
   }), /injected preview failure/)
   assert.deepEqual(await readdir(profileRoot), ['unrelated-existing-session'])
   assert.equal(await readFile(unrelatedSession, 'utf8'), 'keep')
+})
+
+test('archive preview opt-in parses, applies only the testing-profile flag, and rejects shared sessions', async () => {
+  const options = parseArgs(['--no-start', '--seed-archive-preview', '--url', 'http://127.0.0.1:5173'])
+  assert.equal(options.seedArchivePreview, true)
+  await run(options, {
+    browserLauncher: async (_options, _url, { env }) => {
+      assert.equal(env.DADB_TESTING_ARCHIVE_PREVIEW, 'true')
+      return { browser: null, profile: null, client: null, errors: [], page: { title: 'Archive', url: 'http://127.0.0.1:5173' } }
+    },
+    capture: async () => {},
+  })
+  assert.throws(() => parseArgs(['--session', '--seed-archive-preview']),
+    /fresh, one-shot testing preview/)
+})
+
+test('archive isolation assertion is a supported ordered preview step', () => {
+  assert.deepEqual(parseArgs(['--step', 'assert-archive-isolation']).steps,
+    [{ action: 'assert-archive-isolation' }])
+})
+
+test('Chrome/CDP replays the opt-in WACZ in an opaque sandbox, preserves captured navigation/assets, and rejects malformed replay', {
+    timeout: 300_000,
+  }, async () => {
+    const options = parseArgs([
+      '--seed-archive-preview',
+      '--path', '/archive/{archiveProjectId}',
+      '--network-report',
+      '--locale', 'en-US',
+      '--startup-timeout', '180000',
+    ])
+    await run(options, {
+      capture: async ({ client, errors }) => {
+        await assertBrowserState(client, {
+          description: 'anonymous completed-project public archive loads',
+          expression: 'document.querySelector("h2")?.textContent === "Completed project archive"',
+          expected: true,
+          timeoutMs: 20_000,
+        })
+        const base = await evaluatePage(client, `(() => {
+          localStorage.setItem('__bug15_archive_origin_probe', 'unchanged');
+          document.cookie = '__bug15_archive_origin_probe=unchanged';
+          return { url: location.href, label: document.querySelector('.page-intro')?.textContent ?? '',
+            browse: [...document.querySelectorAll('.data-row button')].some(button => button.textContent.includes('Browse reviewed snapshot')),
+            links: [...document.querySelectorAll('.data-row a')].map(link => link.href) };
+        })()`, 'inspect anonymous archive fixture')
+        assert.match(base.url, /\/archive\/[0-9a-f-]{36}$/i)
+        assert.equal(base.browse, true)
+        await evaluatePage(client, `(() => {
+          const button = [...document.querySelectorAll('.data-row button')]
+            .find(item => item.textContent.trim() === 'Browse reviewed snapshot');
+          if (!button) throw new Error('Browse control is missing');
+          button.focus(); button.click(); return true;
+        })()`, 'open approved snapshot')
+        await assertBrowserState(client, {
+          description: 'approved snapshot viewer opens',
+          expression: 'Boolean(document.querySelector(".archive-snapshot-frame"))',
+          expected: true,
+          timeoutMs: 20_000,
+        })
+        const isolated = await evaluatePage(client, `(() => {
+          const frame = document.querySelector('.archive-snapshot-frame');
+          let frameDocumentAccessible = true;
+          try { void frame.contentWindow.document; } catch { frameDocumentAccessible = false; }
+          return {
+            sandbox: frame.getAttribute('sandbox'),
+            frameDocumentAccessible,
+            srcdoc: frame.getAttribute('srcdoc') ?? '',
+            probe: window.__archiveProbeExecuted ?? null,
+            storage: localStorage.getItem('__bug15_archive_origin_probe'),
+            cookie: document.cookie.includes('__bug15_archive_origin_probe=unchanged'),
+          };
+        })()`, 'inspect active-content isolation boundary')
+        assert.equal(isolated.sandbox, 'allow-scripts')
+        assert.equal(isolated.frameDocumentAccessible, false)
+        assert.equal(isolated.probe, null)
+        assert.equal(isolated.storage, 'unchanged')
+        assert.equal(isolated.cookie, true)
+        assert.match(isolated.srcdoc, /default-src 'none'/)
+        assert.match(isolated.srcdoc, /data:image\/svg\+xml;base64,/)
+        assert.doesNotMatch(isolated.srcdoc, /archiveProbeExecuted/)
+        assert.doesNotMatch(isolated.srcdoc, /onerror=/i)
+        assert.doesNotMatch(isolated.srcdoc, /src="https?:/i)
+        const bridge = await evaluateSnapshotFrame(client,
+          '({ready: window.__archiveViewerBridgeReady === true, links: document.querySelectorAll("a[data-archive-url]").length, title: document.title})',
+          'inspect captured-page link bridge')
+        assert.deepEqual(bridge, { ready: true, links: 1, title: 'Fixture home' })
+
+        const aboutDocument = await activateSnapshotLink(client, 'Open captured relative page')
+        assert.match(aboutDocument, /Captured relative page/)
+        assert.match(aboutDocument, /data:image\/svg\+xml;base64,/)
+        const asset = await evaluateSnapshotFrame(client,
+          '({loaded: document.images[0]?.complete, width: document.images[0]?.naturalWidth, source: document.images[0]?.currentSrc})',
+          'inspect bundled archive asset')
+        assert.equal(asset.loaded, true)
+        assert.ok(asset.width > 0)
+        assert.match(asset.source, /^data:image\/svg\+xml;base64,/)
+
+        await evaluatePage(client, `(() => {
+          const button = [...document.querySelectorAll('button')]
+            .find(item => item.textContent.trim() === 'Close snapshot');
+          if (!button) throw new Error('Close snapshot control is missing');
+          button.click(); return true;
+        })()`, 'close approved snapshot')
+        let intercepted = 0
+        let fulfillment
+        client.onEvent(({ method, params }) => {
+          if (method === 'Fetch.requestPaused' && params.request.url.endsWith('/browse')) {
+            intercepted += 1
+            fulfillment = client.send('Fetch.fulfillRequest', {
+              requestId: params.requestId,
+              responseCode: 200,
+              responseHeaders: [
+                { name: 'Content-Type', value: 'application/json' },
+                { name: 'Access-Control-Allow-Origin', value: '*' },
+                { name: 'Cache-Control', value: 'no-store' },
+              ],
+              body: Buffer.from('{"resources":[]}').toString('base64'),
+            })
+          } else if (method === 'Fetch.requestPaused') {
+            void client.send('Fetch.continueRequest', { requestId: params.requestId })
+          }
+        })
+        await client.send('Fetch.enable', { patterns: [{ urlPattern: '*archive/*/browse', requestStage: 'Response' }] })
+        await evaluatePage(client, `(() => {
+          const button = [...document.querySelectorAll('.data-row button')]
+            .find(item => item.textContent.trim() === 'Browse reviewed snapshot');
+          if (!button) throw new Error('Browse control is missing');
+          button.click(); return true;
+        })()`, 'retry malformed snapshot')
+        await assertBrowserState(client, {
+          description: 'malformed WACZ response shows a browse error without rendering a frame',
+          expression: '({error: document.querySelector("[role=alert]")?.textContent?.includes("malformed or unsupported"), frame: Boolean(document.querySelector(".archive-snapshot-frame"))})',
+          expected: { error: true, frame: false },
+          timeoutMs: 20_000,
+        })
+        await fulfillment
+        await client.send('Fetch.disable')
+        assert.equal(intercepted, 1)
+        const final = await evaluatePage(client, `({
+          probe: window.__archiveProbeExecuted ?? null,
+          storage: localStorage.getItem('__bug15_archive_origin_probe'),
+          browseError: document.querySelector('[role=alert]')?.textContent ?? '',
+          downloadAvailable: [...document.querySelectorAll('.data-row button')].some(button => button.textContent.includes('Download approved snapshot')),
+        })`, 'verify malformed fixture error and preserved download')
+        assert.equal(final.probe, null)
+        assert.equal(final.storage, 'unchanged')
+        assert.match(final.browseError, /malformed or unsupported/)
+        assert.equal(final.downloadAvailable, true)
+        assert.equal([...errors.requests.values()].some(request => /snapshot\.example\.test/.test(request.url)), false,
+          'archived link and bundled asset are served without requests to the snapshot host')
+      },
+    })
 })
 
 test('seeds a synthetic submitted idea using only the local testing-profile API', async () => {

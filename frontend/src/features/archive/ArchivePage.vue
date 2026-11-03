@@ -7,12 +7,36 @@
         <div v-if="publicEntries.content.length" class="data-list">
           <article v-for="artifact in publicEntries.content" :key="artifact.id" class="data-row">
             <div class="row-main"><h2>{{ publicType(artifact.type) }}</h2><p>{{ readable(artifact.type) }} · {{ formatSize(artifact.size) }}</p><p class="muted">{{ $t('archive.approvedContent') }}</p></div>
-            <button class="button" @click="downloadPublic(artifact)">{{ $t('archive.downloadApproved') }}</button>
+            <div class="actions">
+              <button v-if="artifact.type === 'WEBSITE_ARCHIVE'" class="button button-secondary" @click="browsePublic(artifact)">{{ $t('archive.browseSnapshot') }}</button>
+              <button class="button" @click="downloadPublic(artifact)">{{ $t('archive.downloadApproved') }}</button>
+            </div>
           </article>
         </div>
         <p v-else class="empty">{{ $t('archive.noPublicFiles') }}</p>
         <div class="pagination"><span>{{ $t('archive.page', { current: number(publicEntries.page + 1), total: number(Math.max(publicEntries.totalPages, 1)) }) }}</span><div class="actions"><button class="button button-secondary button-small" :disabled="publicEntries.page === 0" @click="loadPublic(publicEntries.page - 1)">{{ $t('archive.previous') }}</button><button class="button button-secondary button-small" :disabled="publicEntries.page + 1 >= publicEntries.totalPages" @click="loadPublic(publicEntries.page + 1)">{{ $t('archive.next') }}</button></div></div>
       </AsyncPanel>
+      <section v-if="snapshotLoading || snapshotError || snapshot" class="panel stack" aria-live="polite">
+        <p v-if="snapshotLoading" role="status">{{ $t('archive.snapshotLoading') }}</p>
+        <div v-if="snapshotError" role="alert">
+          <p>{{ $t('archive.snapshotError') }}</p>
+          <button v-if="selectedSnapshot" class="button button-secondary" @click="browsePublic(selectedSnapshot)">{{ $t('common.retry') }}</button>
+        </div>
+        <template v-if="snapshot && currentSnapshotUrl">
+          <div class="page-heading">
+            <div><p class="eyebrow">{{ $t('archive.snapshotEyebrow') }}</p><h2 class="section-title">{{ $t('archive.snapshotTitle') }}</h2></div>
+            <button class="button button-secondary" @click="closeSnapshot">{{ $t('archive.closeSnapshot') }}</button>
+          </div>
+          <p>{{ $t('archive.snapshotDescription') }}</p>
+          <iframe
+            :key="currentSnapshotUrl"
+            class="archive-snapshot-frame w-full min-h-[65vh] border border-slate-300 bg-white"
+            title="Reviewed completed-project website snapshot"
+            sandbox="allow-scripts"
+            :srcdoc="snapshotDocument"
+          />
+        </template>
+      </section>
       <div class="notice">{{ $t('archive.websiteSafety') }}</div>
     </template>
     <template v-else>
@@ -60,7 +84,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { RouterLink } from 'vue-router'
 import type { components } from '../../api/schema'
@@ -82,6 +106,14 @@ const projectId = ref('')
 const loaded = ref(false)
 const fileInput = ref<HTMLInputElement | null>(null)
 const publicEntries = ref<Page<PublicArtifact>>(emptyPage())
+type PublicSnapshot = Awaited<ReturnType<typeof archiveApi.publicSnapshot>>
+const snapshot = ref<PublicSnapshot | null>(null)
+const selectedSnapshot = ref<PublicArtifact | null>(null)
+const currentSnapshotUrl = ref('')
+const snapshotLoading = ref(false)
+const snapshotError = ref(false)
+const snapshotAssets = new Map<string, string>()
+const snapshotDocument = ref('')
 const privateEntries = ref<Page<PrivateArtifact>>(emptyPage())
 const uploadForm = reactive({ type: 'WEBSITE_ARCHIVE', title: '', description: '', publicationSubmissionMetadata: '' })
 const requiredTypes = ['WEBSITE_ARCHIVE', 'POSTER', 'SOURCE_DATA']
@@ -123,6 +155,120 @@ async function downloadPublic(entry: PublicArtifact): Promise<void> {
   if (!entry.id) return
   const blob = await task.run(() => archiveApi.publicContent(String(route.params.projectId), entry.id!))
   if (blob) downloadBlob(blob, `approved-archive-${entry.type?.toLowerCase() ?? 'artifact'}`)
+}
+async function browsePublic(entry: PublicArtifact): Promise<void> {
+  if (!entry.id) return
+  selectedSnapshot.value = entry
+  snapshotLoading.value = true
+  snapshotError.value = false
+  window.removeEventListener('message', handleSnapshotMessage)
+  window.addEventListener('message', handleSnapshotMessage)
+  snapshot.value = null
+  currentSnapshotUrl.value = ''
+  clearSnapshotAssets()
+  try {
+    const result = await archiveApi.publicSnapshot(String(route.params.projectId), entry.id)
+    if (!Array.isArray(result.resources) || result.resources.length === 0
+      || result.resources.some(resource => typeof resource.url !== 'string'
+        || typeof resource.mimeType !== 'string' || typeof resource.bodyBase64 !== 'string')) {
+      throw new Error('Malformed snapshot response')
+    }
+    snapshot.value = result
+    for (const resource of result.resources) {
+      if (resource.mimeType.startsWith('text/html') || resource.mimeType.startsWith('image/')
+        || resource.mimeType.startsWith('text/css')) {
+        const mimeType = safeMimeType(resource.mimeType)
+        if (mimeType.startsWith('image/')) {
+          snapshotAssets.set(resource.url, `data:${mimeType};base64,${resource.bodyBase64}`)
+        }
+      }
+    }
+    const firstPage = result.resources.find(resource => resource.mimeType.toLowerCase().startsWith('text/html'))
+    if (!firstPage) throw new Error('Snapshot has no HTML page')
+    currentSnapshotUrl.value = firstPage.url
+    renderSnapshotPage(firstPage.url)
+  } catch {
+    snapshot.value = null
+    snapshotError.value = true
+  } finally {
+    snapshotLoading.value = false
+  }
+}
+function safeMimeType(value: string): string {
+  return /^(text\/(html|css)|image\/(png|jpeg|gif|webp|svg\+xml))(\s*;|$)/i.test(value)
+    ? value : 'application/octet-stream'
+}
+function renderSnapshotPage(url: string): void {
+  const resource = snapshot.value?.resources.find(item => item.url === url)
+  if (!resource || !resource.mimeType.toLowerCase().startsWith('text/html')) {
+    snapshotError.value = true
+    return
+  }
+  const document = new DOMParser().parseFromString(atob(resource.bodyBase64), 'text/html')
+  document.querySelectorAll('script, iframe, frame, object, embed, form, base, link, meta[http-equiv]')
+    .forEach(element => element.remove())
+  for (const element of document.querySelectorAll('*')) {
+    for (const attribute of [...element.attributes]) {
+      const name = attribute.name.toLowerCase()
+      if (name.startsWith('on') || name === 'srcset' || name === 'action' || name === 'formaction') {
+        element.removeAttribute(attribute.name)
+      } else if (name === 'src') {
+        const resolved = resolveSnapshotUrl(attribute.value, url)
+        const asset = resolved ? snapshotAssets.get(resolved) : undefined
+        if (asset && (element.tagName === 'IMG' || element.tagName === 'SOURCE')) element.setAttribute('src', asset)
+        else element.removeAttribute('src')
+      } else if (name === 'href') {
+        const resolved = resolveSnapshotUrl(attribute.value, url)
+        const target = snapshot.value?.resources.find(item => item.url === resolved)
+        if (target?.mimeType.toLowerCase().startsWith('text/html')) {
+          element.setAttribute('href', '#')
+          element.setAttribute('data-archive-url', target.url)
+        } else {
+          element.removeAttribute('href')
+        }
+      }
+    }
+  }
+  const bridge = document.createElement('script')
+  bridge.textContent = `window.__archiveViewerBridgeReady=true;document.addEventListener('click',event=>{const a=event.target.closest('a[data-archive-url]');if(a){event.preventDefault();parent.postMessage({archiveUrl:a.dataset.archiveUrl},'*')}});`
+  const csp = document.createElement('meta')
+  csp.httpEquiv = 'Content-Security-Policy'
+  csp.content = "default-src 'none'; img-src blob: data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'none'; form-action 'none'; base-uri 'none'; object-src 'none'; frame-src 'none'"
+  document.head.prepend(csp)
+  document.body.append(bridge)
+  snapshotDocument.value = `<!doctype html>${document.documentElement.outerHTML}`
+}
+function resolveSnapshotUrl(value: string, pageUrl: string): string | undefined {
+  try {
+    const resolved = new URL(value, pageUrl)
+    if (!['http:', 'https:'].includes(resolved.protocol)) return undefined
+    return snapshot.value?.resources.find(resource => {
+      try { return new URL(resource.url).href === resolved.href } catch { return false }
+    })?.url
+  } catch {
+    return undefined
+  }
+}
+function handleSnapshotMessage(event: MessageEvent): void {
+  const frame = document.querySelector<HTMLIFrameElement>('.archive-snapshot-frame')
+  if (event.source !== frame?.contentWindow || typeof event.data?.archiveUrl !== 'string') return
+  const target = snapshot.value?.resources.find(resource => resource.url === event.data.archiveUrl
+    && resource.mimeType.toLowerCase().startsWith('text/html'))
+  if (!target) return
+  currentSnapshotUrl.value = target.url
+  renderSnapshotPage(target.url)
+}
+function clearSnapshotAssets(): void {
+  snapshotAssets.clear()
+}
+function closeSnapshot(): void {
+  snapshot.value = null
+  selectedSnapshot.value = null
+  snapshotError.value = false
+  currentSnapshotUrl.value = ''
+  snapshotDocument.value = ''
+  clearSnapshotAssets()
+  window.removeEventListener('message', handleSnapshotMessage)
 }
 async function loadPrivate(page = 0): Promise<void> {
   if (!projectId.value) return
@@ -179,4 +325,5 @@ async function completeProject(): Promise<void> {
 onMounted(() => {
   if (props.publicOnly) void loadPublic()
 })
+onUnmounted(closeSnapshot)
 </script>

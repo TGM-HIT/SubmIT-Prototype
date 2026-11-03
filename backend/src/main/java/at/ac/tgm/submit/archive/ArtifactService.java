@@ -177,6 +177,17 @@ public class ArtifactService {
         return mapper.decodeContent(artifact);
     }
 
+    @Transactional(readOnly = true)
+    public byte[] publicSnapshotContent(UUID projectId, UUID artifactId) {
+        requireCompletedProject(projectAccess.findProject(projectId));
+        StoredRecord artifact = projectAccess.findArtifact(artifactId);
+        if (!projectId.toString().equals(artifact.getParentId()) || !APPROVED.equals(artifactStatus(artifact))
+                || !ArtifactType.WEBSITE_ARCHIVE.name().equals(store.parse(artifact).path("type").asText())) {
+            throw new EntityNotFoundException("Public website snapshot was not found.");
+        }
+        return mapper.decodeContent(artifact);
+    }
+
     @Transactional
     @PreAuthorize("hasRole('TEACHER')")
     public CompletionResponse complete(AuthenticatedUser caller, UUID projectId) {

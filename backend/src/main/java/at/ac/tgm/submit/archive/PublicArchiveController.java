@@ -26,9 +26,11 @@ public class PublicArchiveController {
     private static final int MAX_PAGE_SIZE = 100;
 
     private final ArtifactService service;
+    private final PublicArchiveBrowseService browseService;
 
-    public PublicArchiveController(ArtifactService service) {
+    public PublicArchiveController(ArtifactService service, PublicArchiveBrowseService browseService) {
         this.service = service;
+        this.browseService = browseService;
     }
 
     @GetMapping
@@ -54,6 +56,13 @@ public class PublicArchiveController {
                 .header("X-Content-Type-Options", "nosniff")
                 .header(HttpHeaders.CACHE_CONTROL, "private, no-store")
                 .body(bytes);
+    }
+
+    @GetMapping("/{artifactId}/browse")
+    @Operation(summary = "Read an approved WACZ website snapshot for isolated public browsing.")
+    @ApiResponse(responseCode = "200", description = "Snapshot resources without private artefact metadata.")
+    public WaczReader.Snapshot browse(@PathVariable UUID projectId, @PathVariable UUID artifactId) {
+        return browseService.browse(projectId, artifactId);
     }
 
     private int normalizeSize(int size) {

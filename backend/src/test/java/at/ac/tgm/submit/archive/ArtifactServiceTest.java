@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import at.ac.tgm.submit.data.RecordStore;
 import at.ac.tgm.submit.data.StoredRecord;
@@ -112,7 +113,8 @@ class ArtifactServiceTest {
 
         UUID websiteId = archive.content().stream()
                 .filter(item -> item.type() == ArtifactType.WEBSITE_ARCHIVE).findFirst().orElseThrow().id();
-        PublicArchiveController controller = new PublicArchiveController(service);
+        PublicArchiveController controller = new PublicArchiveController(service,
+                new PublicArchiveBrowseService(service, new WaczReader(new ObjectMapper())));
         var download = controller.content(projectId, websiteId);
         assertEquals(MediaType.APPLICATION_OCTET_STREAM, download.getHeaders().getContentType());
         assertTrue(download.getHeaders().getFirst("Content-Disposition").startsWith("attachment;"));
