@@ -1,0 +1,60 @@
+# Optimization-02. Reduce memory used by PDF test record snapshots
+
+## Intent
+
+`IdeaPdfApiTest.recordSnapshot()` joins every record's metadata and full payload into another string, then retains and sorts those strings. The invalid-upload test keeps an original snapshot while repeatedly constructing comparison snapshots. Other tests in the class persist 10 MiB idea and specification PDFs, whose base64 payloads and revision records make these copies expensive.
+
+Reduce this test-owned snapshot overhead without weakening the HTTP-level guarantee that rejected uploads do not create, delete, or change any records. The owner's preceding investigation reports a full-suite default-heap `OutOfMemoryError` at this join, although the class alone passes; extra suite context exposed the copying cost, not a demonstrated production PDF defect.
+
+## Source
+
+Source: owner request and supplied memory investigation (not re-run during ticket authoring); repository revision: 35c40f9dbf01878521201528c121c40a40b812ed; `backend/src/test/java/at/ac/tgm/submit/idea/IdeaPdfApiTest.java`:157–167 (large-PDF fixture), 305–323 (retained baseline and invalid-upload assertions), 559–566 (whole-record string snapshot).
+
+## Scope and contract
+
+- Change `recordSnapshot()` and its immediate test-owned comparison support in `backend/src/test/java/at/ac/tgm/submit/idea/IdeaPdfApiTest.java`. A small helper and focused regression tests in the same test package are permitted. Do not generalize this into a snapshot framework or add dependencies.
+- Compare all records as an order-independent **multiset**, preserving identities, multiplicity, insertions/deletions, and changes to every currently captured field: `id`, `type`, `ownerId`, `parentId`, `status`, `referenceType`, `payload`, and `createdAt`. Payload-only changes must remain detectable, including same-length edits anywhere in a large payload. Do not filter record types, compare counts alone, sample payloads, or omit private PDF/revision/audit data from the comparison.
+- Snapshots must be detached immutable comparison values, not retained entity or payload references that can change with later mutations. Snapshot storage should scale with record count, not total payload length; processing a payload must use bounded additional working storage.
+- An incremental strong JDK digest, such as SHA-256, with compact per-record entries is sufficient; cryptographic collision resistance is not an absolute proof of equality. If using fingerprints, process all data with explicit field boundaries and null markers, and a deterministic encoding that distinguishes the represented Java strings. Handle empty values, literal `"null"`, embedded delimiters, and Unicode/chunk boundaries unambiguously. Another approach is acceptable only if it meets the same memory and comparison requirements.
+- Do not merely move the copies into whole-payload `getBytes()`, JSON parsing/reserialization, string joins, concatenation, or other payload-sized intermediate buffers. Small fixed-size chunks are acceptable. Keeping `repository.findAll()` is acceptable: it still materializes record payloads, and this ticket does not claim to eliminate that cost or bound total suite memory. No production repository/entity/service/controller changes.
+- Retain every existing HTTP invalid-upload assertion, including status checks and the full-record no-side-effect checks in `invalidIdeaAndSpecificationUploadsDoNotCreateOrChangeRecords`. Preserve the metadata-invalid-upload tests and all other PDF API assertions. Helper-level regressions supplement, never replace, public HTTP coverage.
+- Do not change heap limits, Gradle/JVM configuration, Spring context caching, test ordering/isolation, fixture sizes, or unrelated helpers such as `pdfMetadataStateSnapshot()`. Do not skip tests or clear large records merely to hide memory pressure. No frontend, API contract, generated artifact, product specification, or developer-tooling changes are required.
+- `Optimization-01` concerns production student-list queries and is not a prerequisite; do not combine that repository work with this test-only change.
+
+## Mechanical checks (the Evaluator re-runs)
+
+Durable automated tests (join the backend build; names below describe required scenarios):
+
+- `recordSnapshotsMatchIndependentOfOrderAndRemainDetached`: identical input records in different iteration orders compare equal; repeated snapshots match. After capturing a baseline, mutate an input entity and confirm the stored baseline did not change, the new snapshot differs, and restoring the original values restores equality. Cover empty input too.
+- `recordSnapshotsDetectEveryStoredFieldMutation`: vary each of the eight fields listed above individually while holding all other fields and records constant; every resulting snapshot differs from its original baseline. Include changes in idea, revision, audit, and an unrelated record type so coverage cannot be narrowed to the upload target.
+- `recordSnapshotsDetectPayloadOnlyChangesAcrossChunks`: with identical IDs, metadata, record count, and payload length, change only payload content near its beginning, across a processing-chunk boundary, and near its end. Every changed snapshot differs; identical large payloads match.
+- `recordSnapshotsDistinguishFieldBoundariesAndNulls`: distinct field tuples cannot alias through separator placement or null conversion. Exercise null, literal `"null"`, empty text, embedded separators, and Unicode including a surrogate pair across a chunk boundary if encoding is chunked. Equal original tuples still match.
+- `recordSnapshotsDetectInsertionsDeletionsAndMultiplicity`: adding, deleting, or replacing a row's identity changes the snapshot. At the test-owned transformation boundary, repeated equal entries retain their multiplicity rather than collapsing into a set; reordered copies of that multiset match. Synthetic duplicates here do not imply duplicate database primary keys.
+- `recordSnapshotsKeepLargePayloadStateCompact`: for the same record count and metadata, increase payloads from small strings to the representative 10 MiB PDF/base64 size. Assert that retained comparison entries remain compact and detached rather than storing full payloads/entities, and comparison remains repeatable. This structural regression is not a substitute for allocation measurement below.
+- Run the existing `invalidIdeaAndSpecificationUploadsDoNotCreateOrChangeRecords` through `POST /api/ideas/pdf` and `PUT /api/ideas/{id}/specification/pdf`: empty file, wrong extension, invalid signature, over-limit file, and conflicting narrative fields still produce HTTP 400 and leave the full record snapshot unchanged. Keep the existing `invalidPdfMetadataIsRejectedWithoutAnySideEffectsOnBothWriteRoutes` and `ideaPdfCreateReadAuthorizationAndBoundarySize` assertions intact, including valid 10 MiB uploads/readback. Run the entire class, not only new helper tests.
+
+Standard project checks, from `backend/`, using repository-default heap/settings:
+
+- `./gradlew compileJava compileTestJava --rerun-tasks`
+- `./gradlew test --tests at.ac.tgm.submit.idea.IdeaPdfApiTest --rerun-tasks`
+- `./gradlew test --rerun-tasks`
+- `./gradlew checkstyleMain` (tests remain outside Checkstyle scope; do not change configuration or add suppressions).
+- No frontend checks or OpenAPI generation apply to this test-only scope.
+
+If the full default suite still runs out of memory elsewhere, retain the command, failure location and available diagnostic evidence, and report a separate blocker. Do not expand this ticket, increase the heap, skip tests, or weaken assertions to claim a pass. Full-suite verification remains unpassed until resolved or explicitly dispositioned by the owner.
+
+## One-time manual verification (in addition to automated tests)
+
+- **Implementor-performed — controlled allocation comparison:** compare the pre-change join-based snapshot at the cited revision with the optimized construction. Explicitly populate the same fixture used by `ideaPdfCreateReadAuthorizationAndBoundarySize`: a 10 MiB idea PDF and a 10 MiB specification PDF, including the revision records actually persisted by that flow. Use the same seed data and complete record list for both measurements; do not rely on JUnit method order to leave the large PDFs present.
+- Hold JDK, default test-worker heap/JVM settings, fixture contents, record count, retained original snapshot, warm-up protocol, and number of repeated snapshots constant. Vary only the snapshot construction/representation. Measure allocated bytes for construction on the already materialized records, excluding fixture setup and `findAll()` hydration, using JDK per-thread allocation counters or equivalent allocation profiling. Use at least three measured repetitions after warm-up; report per-repetition bytes and the median for each version. Require at least **90% less additional allocation per snapshot** for this populated large-PDF fixture. Free-heap deltas, elapsed time, and test counts alone are not allocation evidence. Separately describe retained entry sizes and the still-present repository materialization cost; do not claim a 90% reduction in total JVM memory.
+- Retain the reproducible fixture/profiling procedure, exact commands, JDK and heap details, record/payload-size inventory, measurement boundaries, and raw before/after results under distinct `harness/runs/<run-id>/evidence/snapshot-memory-before/` and `harness/runs/<run-id>/evidence/snapshot-memory-after/` locations (ignored by Git). Keep results aggregate: no credentials, tokens, or private payload contents. Temporary measurement scaffolding must remain test-only; an expensive legacy implementation need not ship in the permanent regression suite.
+- This comparison is a one-time measured experiment because the legacy control does not ship and GC-sensitive global-memory thresholds do not belong in routine CI. The durable compact-state regression protects the chosen representation. If allocation instrumentation or the populated fixture cannot be obtained, report the exact missing prerequisite as an unverified check; do not substitute a heap increase or claim reduction from a passing suite alone. No browser or human-only walkthrough applies.
+
+## Acceptance criteria (the Evaluator judges)
+
+- Snapshots use compact detached comparison values and bounded additional payload-processing storage, without whole-payload copies; covered by `recordSnapshotsKeepLargePayloadStateCompact`, `recordSnapshotsMatchIndependentOfOrderAndRemainDetached`, and source review.
+- For the same full record multiset, changing only iteration order preserves equality; individual field/payload edits, identity replacement, insertion, deletion, and multiplicity changes are detected. The named mutation, chunk, encoding, order, and multiplicity regressions above all pass. Fingerprint equality carries the stated collision-risk qualification, not an absolute collision-free guarantee.
+- All existing public HTTP invalid-upload and valid-boundary assertions remain effective with the same requests, fixture sizes, statuses, and no-side-effect expectations as the cited baseline; only snapshot representation changes. The complete `IdeaPdfApiTest` passes under default settings.
+- The controlled allocation comparison achieves at least 90% lower additional snapshot-construction allocation against the cited join-based baseline with all listed factors held constant. This is measured evidence, not inferred from the number of passing tests; it is manual-only for the reason above.
+- Standard backend compilation, full default `./gradlew test --rerun-tasks`, and Checkstyle checks pass. Any remaining unrelated OOM is reported separately with verification explicitly unpassed, rather than concealed by changed configuration or coverage.
+- Existing production/API behavior and all work outside the scoped test comparison remain unchanged; no unrelated cleanup, new framework/dependency, configuration workaround, or generated-file edit. No check is claimed that was not performed.
