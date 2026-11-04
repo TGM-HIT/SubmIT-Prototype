@@ -557,12 +557,7 @@ class IdeaPdfApiTest {
     }
 
     private List<String> recordSnapshot() {
-        return store.repository().findAll().stream()
-                .map(record -> String.join("\u001f", List.of(record.getId().toString(), String.valueOf(record.getType()),
-                        String.valueOf(record.getOwnerId()), String.valueOf(record.getParentId()),
-                        String.valueOf(record.getStatus()), String.valueOf(record.getReferenceType()),
-                        String.valueOf(record.getPayload()), String.valueOf(record.getCreatedAt()))))
-                .sorted().toList();
+        return RecordSnapshots.capture(store.repository().findAll());
     }
 
     private List<String> pdfMetadataStateSnapshot() {
