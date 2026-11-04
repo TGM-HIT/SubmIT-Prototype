@@ -43,7 +43,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Bug-11](tickets/done/Bug-11.md) | done | Align request-array constraints with API validation |
 | [Bug-12](tickets/done/Bug-12.md) | done | Complete response requiredness and nullability in OpenAPI |
 | [Bug-14](tickets/done/Bug-14.md) | done | Document successful OpenAPI response statuses |
-| [Bug-15](tickets/Bug-15.md) | to-do | Provide safe browsing for approved website snapshots |
+| [Bug-15](tickets/done/Bug-15.md) | done | Provide safe browsing for approved website snapshots |
 | [Bug-16](tickets/done/Bug-16.md) | done | Align pagination defaults and maximum with the API contract |
 | [Bug-17](tickets/done/Bug-17.md) | done | Document specified error responses in OpenAPI |
 | [Bug-18](tickets/done/Bug-18.md) | done | Implement documented idea-list filters |
