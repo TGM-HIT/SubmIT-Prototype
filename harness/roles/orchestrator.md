@@ -36,6 +36,8 @@ With both gates clean, dispatch the Evaluator with the diff (or explicit no-diff
 
 If the Evaluator explicitly reports that it cannot write the verdict artifact, require its complete verdict text in its response. Save that exact text, without summarizing or changing its findings or verdict, to the requested `evaluation-N.md` path using a supported editing tool; read it back and log the fallback, its reported tool limitation and that the artifact was coordinator-preserved before proceeding. Do not overwrite an existing verdict artifact or invent missing evaluation text. If the complete verdict cannot be obtained or persisted, stop with the artifact failure recorded; a short returned status is not a substitute for the evaluation.
 
+Before accepting a successful required-check result, preserve the distinction between the prescribed configuration and diagnostic resource overrides. Heap, worker-count, init-script and other relevant runtime overrides are part of the check identity. A successful override run cannot substitute for a failed prescribed run unless the ticket explicitly permits that configuration. Carry the unmet check into revision when there is actionable implementation work, or into the existing human-disposition path when appropriate; an actionable regression is not human-only verification. An authorized disposition must explicitly name the unmet check and preserve its unverified status rather than turn it into an Evaluator pass. This does not forbid diagnostic reruns, authorize unrelated repairs or reopen completed historical tickets.
+
 Evaluator verdicts are `pass`, `revise`, or `awaiting-human`.
 
 - On `pass`, close out as done.
