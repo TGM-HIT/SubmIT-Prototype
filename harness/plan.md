@@ -129,7 +129,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-54](tickets/done/Dev-54.md) | done | Consolidate duplicate review request schemas |
 | [Dev-55](tickets/done/Dev-55.md) | done | Seed the draft grading rubric for testing |
 | [Dev-56](tickets/done/Dev-56.md) | done | Correct the backend Java namespace |
-| [Dev-57](tickets/Dev-57.md) | awaiting-human | Run PostgreSQL and pgAdmin in Docker Compose |
+| [Dev-57](tickets/Dev-57.md) | in-progress | Run PostgreSQL and pgAdmin in Docker Compose |
 | [Dev-58](tickets/done/Dev-58.md) | done | Automate frontend browser keyboard navigation tests |
 | [Dev-59](tickets/done/Dev-59.md) | done | Load TGM workbook preferences in a dedicated testing profile |
 | [Dev-60](tickets/done/Dev-60.md) | done | Allow Markdown and PDF idea and specification submissions |
