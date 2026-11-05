@@ -3,4 +3,7 @@
 **/.gradle
 frontend/dist
 /contracts/openapi.yaml
+docs/Projekte_2026_27.xlsx
+.env
+.env.*
 .git

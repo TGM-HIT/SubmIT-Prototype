@@ -15,6 +15,8 @@ BOOTSTRAP_PATH = (
 )
 APPLICATION_PROPERTIES_PATH = ROOT / "backend/src/main/resources/application.properties"
 BUILD_PATH = ROOT / "backend/build.gradle"
+DOCKERFILE_PATH = ROOT / "backend/Dockerfile"
+DOCKERIGNORE_PATH = ROOT / ".dockerignore"
 
 
 def require(condition: bool, message: str) -> None:
@@ -27,6 +29,8 @@ compose = COMPOSE_PATH.read_text()
 bootstrap = BOOTSTRAP_PATH.read_text()
 application_properties = APPLICATION_PROPERTIES_PATH.read_text()
 build = BUILD_PATH.read_text()
+dockerfile = DOCKERFILE_PATH.read_text()
+dockerignore = DOCKERIGNORE_PATH.read_text()
 makefile = (ROOT / "Makefile").read_text()
 
 
@@ -250,6 +254,201 @@ require(
     "PostgreSQL JDBC driver must be a runtime dependency",
 )
 
+
+def validate_docker_test_stage_boundary(dockerfile_text: str, dockerignore_text: str) -> None:
+    """Validate full Docker tests and prevent private workbook context/image inputs."""
+    lines = dockerfile_text.splitlines()
+    stage = None
+    test_stage = []
+    test_command = "RUN ./gradlew --no-daemon test checkstyleMain bootJar"
+    test_command_count = 0
+    sentinel_count = 0
+    makefile_copies = []
+    make_setup_lines = []
+    runtime_stages = []
+
+    for line_number, raw_line in enumerate(lines, start=1):
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        from_match = re.match(r"(?i)^FROM\b.*?\s+AS\s+([A-Za-z0-9_-]+)\s*$", line)
+        if line.upper().startswith("FROM "):
+            stage = from_match.group(1).lower() if from_match else f"stage-{len(runtime_stages)}"
+            if stage != "build":
+                runtime_stages.append(stage)
+            continue
+
+        if line == test_command:
+            test_command_count += 1
+            require(stage == "build", "full Docker test command must run in the build stage")
+            test_stage.append(line_number)
+        if stage == "build" and "apt-get install -y --no-install-recommends make" in line:
+            make_setup_lines.append(line_number)
+        if "Projekte_2026_27.xlsx" in line:
+            require(
+                stage == "build" and line == (
+                    "RUN mkdir -p /workspace/docs && : > /workspace/docs/Projekte_2026_27.xlsx"
+                ),
+                "workbook-path sentinel may only be generated empty in the build stage",
+            )
+            sentinel_count += 1
+
+        if line.upper().startswith(("COPY ", "ADD ")):
+            parts = line.split()
+            instruction = parts[0].upper()
+            args = parts[1:]
+            from_image = any(arg.startswith("--from=") for arg in args)
+            sources = [arg for arg in args if not arg.startswith("--")]
+            require(len(sources) >= 2, f"malformed Docker {instruction} at line {line_number}")
+            inputs = sources[:-1]
+            for source in inputs:
+                normalized = source.lstrip("/")
+                require(
+                    not (
+                        normalized == "docs"
+                        or normalized.startswith("docs/")
+                        or normalized == "."
+                        or normalized in ("./", "*", "**")
+                    ),
+                    "Docker image must not copy docs/, the private workbook, or the whole build context",
+                )
+                if Path(source).name == "Makefile" and not from_image:
+                    makefile_copies.append((stage, line_number, source))
+                if from_image and stage != "build":
+                    require(
+                        not (
+                            source.rstrip("/") in ("/workspace", "/workspace/docs")
+                            or source.startswith("/workspace/docs/")
+                            or source in ("/workspace/*", "/workspace/**")
+                        ),
+                        "runtime image must not include the build-stage workbook sentinel",
+                    )
+
+    require(test_command_count == 1, "Docker test-stage command must remain exactly ./gradlew --no-daemon test checkstyleMain bootJar")
+    require(len(test_stage) == 1, "Docker test-stage command must execute once without filtering")
+    require(
+        len(makefile_copies) == 1
+        and makefile_copies[0][0] == "build"
+        and makefile_copies[0][2] == "Makefile",
+        "root Makefile may be copied only as a build-stage input",
+    )
+    require(
+        makefile_copies[0][1] < test_stage[0],
+        "root Makefile must be available before the full Docker test command",
+    )
+    require(
+        len(make_setup_lines) == 1 and make_setup_lines[0] < test_stage[0],
+        "Docker build stage must install make before running Makefile-dependent tests",
+    )
+    require(sentinel_count == 1, "Docker tests require one empty build-stage workbook-path sentinel")
+    sentinel_line = next(
+        line_number
+        for line_number, raw_line in enumerate(lines, start=1)
+        if raw_line.strip() == "RUN mkdir -p /workspace/docs && : > /workspace/docs/Projekte_2026_27.xlsx"
+    )
+    require(
+        sentinel_line < test_stage[0],
+        "empty workbook-path sentinel must exist before Docker tests run",
+    )
+    ignore_patterns = {
+        entry.strip().lstrip("/")
+        for entry in dockerignore_text.splitlines()
+        if entry.strip() and not entry.lstrip().startswith("#")
+    }
+    require(
+        "docs/Projekte_2026_27.xlsx" in ignore_patterns,
+        ".dockerignore must exclude exactly docs/Projekte_2026_27.xlsx",
+    )
+    require(
+        {".env", ".env.*"}.issubset(ignore_patterns),
+        ".dockerignore must exclude local environment files containing credentials",
+    )
+
+
+def check_docker_test_stage_boundary() -> None:
+    """Named startup regression check, including negative guard probes."""
+    validate_docker_test_stage_boundary(dockerfile, dockerignore)
+
+    def must_reject(label: str, candidate_dockerfile: str, candidate_ignore: str) -> None:
+        try:
+            validate_docker_test_stage_boundary(candidate_dockerfile, candidate_ignore)
+        except SystemExit:
+            return
+        raise SystemExit(f"Docker test-stage boundary regression failed to reject {label}")
+
+    must_reject(
+        "a filtered/replaced full test command",
+        dockerfile.replace(
+            "RUN ./gradlew --no-daemon test checkstyleMain bootJar",
+            "RUN ./gradlew --no-daemon test --tests '*SmokeTest'",
+        ),
+        dockerignore,
+    )
+    must_reject(
+        "copying docs/ into the image",
+        dockerfile.replace(
+            "COPY backend/src src",
+            "COPY backend/src src\nCOPY docs /workspace/docs",
+        ),
+        dockerignore,
+    )
+    must_reject(
+        "copying the private workbook into the image",
+        dockerfile.replace(
+            "COPY backend/src src",
+            "COPY backend/src src\n"
+            "COPY docs/Projekte_2026_27.xlsx /workspace/docs/Projekte_2026_27.xlsx",
+        ),
+        dockerignore,
+    )
+    must_reject(
+        "omitting the exact private workbook context exclusion",
+        dockerfile,
+        "\n".join(
+            line for line in dockerignore.splitlines()
+            if line.strip() != "docs/Projekte_2026_27.xlsx"
+        ),
+    )
+    must_reject(
+        "including private environment credentials in Docker context",
+        dockerfile,
+        "\n".join(
+            line for line in dockerignore.splitlines()
+            if line.strip() not in (".env", ".env.*")
+        ),
+    )
+    must_reject(
+        "copying the root Makefile into the runtime stage",
+        dockerfile.replace("COPY Makefile /workspace/Makefile\n", "").replace(
+            "FROM eclipse-temurin:23-jre",
+            "FROM eclipse-temurin:23-jre\nCOPY Makefile /workspace/Makefile",
+        ),
+        dockerignore,
+    )
+    must_reject(
+        "omitting make from the build-stage test setup",
+        dockerfile.replace(
+            "&& apt-get install -y --no-install-recommends make \\",
+            "&& apt-get install -y --no-install-recommends ca-certificates \\",
+        ),
+        dockerignore,
+    )
+    must_reject(
+        "carrying the empty sentinel into the runtime stage",
+        dockerfile.replace(
+            "RUN mkdir -p /workspace/docs && : > /workspace/docs/Projekte_2026_27.xlsx\n",
+            "",
+        ).replace(
+            "FROM eclipse-temurin:23-jre",
+            "FROM eclipse-temurin:23-jre\n"
+            "RUN mkdir -p /workspace/docs && : > /workspace/docs/Projekte_2026_27.xlsx",
+        ),
+        dockerignore,
+    )
+
+
+check_docker_test_stage_boundary()
+
 warning = "Note: no initial admin configured (see .env.example)"
 secret = "startup-check-test-password"
 for username, password, should_warn in (
@@ -276,4 +475,4 @@ for username, password, should_warn in (
     require((warning in output) == should_warn, "Make administrator warning does not match both-values convention")
     require(secret not in output, "Make administrator diagnostic leaked a password value")
 
-print("Startup configuration wiring is consistent.")
+print("Startup configuration wiring and Docker test-stage boundary are consistent.")
