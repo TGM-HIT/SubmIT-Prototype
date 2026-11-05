@@ -143,6 +143,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-67](tickets/done/Dev-67.md) | done | Reconcile Feature-29 ledger path and status |
 | [Dev-68](tickets/done/Dev-68.md) | done | Document teacher supervision preferences in both guide locales |
 | [Dev-69](tickets/done/Dev-69.md) | done | Add actionable period and allocation instructions to the English admin guide |
+| [Dev-70](tickets/Dev-70.md) | to-do | Promote reusable archived verification scripts into documented shared tooling |
 
 ### Agents
 
