@@ -2,6 +2,8 @@
 
 Requires JDK 23. The development datasource is an in-memory H2 database.
 
+Direct local `bootRun`, testing-profile runs, and backend tests continue to use the default H2 datasource unless explicitly configured otherwise. Docker Compose alone passes PostgreSQL connection properties to its backend container; its PostgreSQL JDBC driver is included at runtime, while H2 remains available for local and test startup.
+
 Set bootstrap administrator credentials and a signing secret before starting the application:
 
 ```sh
