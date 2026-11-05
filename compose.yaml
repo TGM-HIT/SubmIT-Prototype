@@ -1,6 +1,6 @@
 # Build, test and run the complete application after replacing the local-only
 # database and pgAdmin credential placeholders in .env:
-#   cp .env.example .env && docker compose up --build
+#   cp .env.example .env && ./scripts/compose.sh up --build
 # Tests, typecheck and checkstyle run as part of the image builds.
 services:
   database:
@@ -35,15 +35,21 @@ services:
     restart: unless-stopped
 
   pgadmin:
-    image: dpage/pgadmin4:9.10
+    image: dpage/pgadmin4:9.19
     environment:
       PGADMIN_DEFAULT_EMAIL: ${PGADMIN_DEFAULT_EMAIL:?Set PGADMIN_DEFAULT_EMAIL in .env}
       PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_DEFAULT_PASSWORD:?Set PGADMIN_DEFAULT_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in .env}
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
     ports:
       - "127.0.0.1:${PGADMIN_PORT:?Set PGADMIN_PORT in .env}:80"
     depends_on:
       database:
         condition: service_healthy
+    entrypoint: ["/usr/local/bin/submit-pgadmin-entrypoint.sh"]
+    volumes:
+      - ./scripts/pgadmin-entrypoint.sh:/usr/local/bin/submit-pgadmin-entrypoint.sh:ro
+      - pgadmin-data:/var/lib/pgadmin
     restart: unless-stopped
 
   frontend:
@@ -58,3 +64,4 @@ services:
 
 volumes:
   postgres-data:
+  pgadmin-data:

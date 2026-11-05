@@ -19,14 +19,28 @@ Requires Docker with Compose.
 ```sh
 cp .env.example .env   # replace the local-only database and pgAdmin passwords
 # also set the initial admin account and JWT secret
-docker compose up --build
+export COMPOSE_PROJECT_NAME=submit-local
+./scripts/compose.sh up --build
 ```
 
 Replace both local-only password placeholders in `.env` with distinct values before starting the stack. Do not reuse the bootstrap administrator password. The image builds run backend tests and Checkstyle plus frontend typecheck and tests; a failure aborts the build. The UI is served at http://localhost:8081 by default and proxies `/api` to the backend. Set `DADB_PORT` in `.env` to select another host port. The initial administrator is created only when both `DADB_BOOTSTRAPADMIN_USERNAME` and `DADB_BOOTSTRAPADMIN_PASSWORD` are set; use those values to sign in.
 
-Compose starts PostgreSQL and configures only the containerized backend to use it. PostgreSQL listens on the Compose network at `database:5432` and is not published on a host port. The named `postgres-data` volume preserves database contents; ordinary `docker compose down` stops and removes the containers but leaves the data volume intact.
+Compose starts PostgreSQL and configures only the containerized backend to use it. PostgreSQL listens on the Compose network at `database:5432` and is not published on a host port. The named `postgres-data` volume preserves database contents; the wrapper's ordinary `down` stops and removes the containers but leaves the data volume intact.
 
-pgAdmin is available at http://localhost:5050 by default; set `PGADMIN_PORT` in `.env` to choose another host port. Its web port is bound to localhost. Sign in using `PGADMIN_DEFAULT_EMAIL` and `PGADMIN_DEFAULT_PASSWORD` from `.env`. To register the Compose database in pgAdmin, create a server connection with host `database`, port `5432`, maintenance database `POSTGRES_DB`, username `POSTGRES_USER`, and password `POSTGRES_PASSWORD`, using the corresponding values from `.env`. The pgAdmin container connects over the Compose network; do not use `localhost` as its database host.
+The wrapper always supplies the explicitly configured Compose project and environment file as well as the repository Compose file. Relative values of `SUBMIT_COMPOSE_ENV_FILE` are resolved from the repository root; it defaults to `.env`. For example, from a new shell in the repository root, set up the reported custom deployment once and then use the same wrapper for both lifecycle operations:
+
+```sh
+export SUBMIT_COMPOSE_ENV_FILE="$PWD/docker.env"
+export COMPOSE_PROJECT_NAME=submit-dev57-ha
+./scripts/compose.sh up --build -d --wait --wait-timeout 240
+./scripts/compose.sh down
+```
+
+Set up the variables again in each new shell; the wrapper does not discover or remember an earlier invocation. For an already-running instance of that deployment, the explicit raw shutdown is `docker compose --project-name submit-dev57-ha --env-file docker.env down`. Use ordinary `down` for routine shutdown; it leaves the named data volumes intact.
+
+pgAdmin is available at http://localhost:5050 by default; set `PGADMIN_PORT` in `.env` to choose another host port. Its web port is bound to localhost. Sign in using `PGADMIN_DEFAULT_EMAIL` and `PGADMIN_DEFAULT_PASSWORD` from `.env`. The signed-in administrator has one preconfigured **SubmIT** server at `database:5432`, using `POSTGRES_DB` and `POSTGRES_USER`; enter `POSTGRES_PASSWORD` if pgAdmin prompts when connecting. Do not use `localhost` as the database host. pgAdmin's `pgadmin-data` volume preserves its configuration and user-created registrations across ordinary shutdown and recreation.
+
+The Compose image is pinned to official stable pgAdmin **9.19**. The official pgAdmin site (https://www.pgadmin.org/) identified 9.19, released 2026-10-29, as the newest stable release; the official `dpage/pgadmin4:9.19` image was verified available on 2026-11-05. The container's supported server-definition import is used only on first initialization; startup does not replace unrelated registrations.
 
 Run `./scripts/check-docker-build-contexts.sh` from the repository root to verify with diagnostic Docker builds that generated outputs are excluded while required source and configuration files remain available. This check requires the Docker CLI and access to a running Docker daemon; it creates and removes disposable probes under generated-output paths.
 
@@ -40,4 +54,4 @@ The backend reads `docs/Projekte_2026_27.xlsx` locally at startup. Keep that own
 
 ## Startup wiring check
 
-Run `make startup-config-check` from the repository root to verify the sample administrator, frontend-port, PostgreSQL, and pgAdmin variables; required secret interpolation; Compose datasource and health wiring; localhost-only pgAdmin port; image versions and named-volume configuration; the default H2 datasource and JDBC runtime dependencies; existing backend bindings; and the both-values bootstrap guard. This configuration-only check uses Python's standard library and also runs automatically as part of `make check`. Validate the Compose file without printing its resolved configuration with `docker compose --env-file .env.example config --quiet`.
+Run `make startup-config-check` in a verified private-file-free copy of the repository to check the wrapper, sample administrator/frontend/PostgreSQL/pgAdmin settings, required interpolation, Compose wiring and image pin, SubmIT provisioning and import lifecycle, context exclusions, default H2 datasource, existing backend bindings, and bootstrap guard. The check uses Python's standard library; Docker-backed probes require an available Docker daemon. Validate Compose without printing resolved configuration using `./scripts/compose.sh config --quiet` after setting a valid project and environment file.

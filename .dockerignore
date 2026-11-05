@@ -6,4 +6,6 @@ frontend/dist
 docs/Projekte_2026_27.xlsx
 .env
 .env.*
+!.env.example
+docker.env
 .git
