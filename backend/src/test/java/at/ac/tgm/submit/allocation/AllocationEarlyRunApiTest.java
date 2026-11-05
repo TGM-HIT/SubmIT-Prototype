@@ -1019,6 +1019,9 @@ class AllocationEarlyRunApiTest {
                 users.findByUsername("admin01").orElseThrow().getId().toString(),
                 projectId.toString(), "ALLOCATED", groupPayload);
 
+        finalizedPeriod = store.repository().findById(finalizedPeriodId).orElseThrow();
+        finalizedRun = store.repository().findById(finalizedRun.getId()).orElseThrow();
+        finalizedGroup = store.repository().findById(finalizedGroup.getId()).orElseThrow();
         StoredRecord.Details periodBefore = details(finalizedPeriod);
         StoredRecord.Details runBefore = details(finalizedRun);
         StoredRecord.Details groupBefore = details(finalizedGroup);

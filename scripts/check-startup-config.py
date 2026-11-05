@@ -2,6 +2,7 @@
 """Check that sample, Compose, and backend startup configuration stays aligned."""
 
 from pathlib import Path
+import posixpath
 import re
 import subprocess
 
@@ -302,7 +303,7 @@ def validate_docker_test_stage_boundary(dockerfile_text: str, dockerignore_text:
             require(len(sources) >= 2, f"malformed Docker {instruction} at line {line_number}")
             inputs = sources[:-1]
             for source in inputs:
-                normalized = source.lstrip("/")
+                normalized = posixpath.normpath(source).lstrip("/")
                 require(
                     not (
                         normalized == "docs"
@@ -312,7 +313,7 @@ def validate_docker_test_stage_boundary(dockerfile_text: str, dockerignore_text:
                     ),
                     "Docker image must not copy docs/, the private workbook, or the whole build context",
                 )
-                if Path(source).name == "Makefile" and not from_image:
+                if Path(source).name == "Makefile":
                     makefile_copies.append((stage, line_number, source))
                 if from_image and stage != "build":
                     require(
@@ -359,6 +360,12 @@ def validate_docker_test_stage_boundary(dockerfile_text: str, dockerignore_text:
         "docs/Projekte_2026_27.xlsx" in ignore_patterns,
         ".dockerignore must exclude exactly docs/Projekte_2026_27.xlsx",
     )
+    # Fail closed: this repository's private-input exclusions must not be
+    # overridden by Docker's ordered negation/re-inclusion rules.
+    require(
+        not any(entry.startswith("!") for entry in ignore_patterns),
+        ".dockerignore must not negate private-input context exclusions",
+    )
     require(
         {".env", ".env.*"}.issubset(ignore_patterns),
         ".dockerignore must exclude local environment files containing credentials",
@@ -393,6 +400,14 @@ def check_docker_test_stage_boundary() -> None:
         dockerignore,
     )
     must_reject(
+        "copying ./docs into the image",
+        dockerfile.replace(
+            "COPY backend/src src",
+            "COPY backend/src src\nCOPY ./docs /workspace/docs",
+        ),
+        dockerignore,
+    )
+    must_reject(
         "copying the private workbook into the image",
         dockerfile.replace(
             "COPY backend/src src",
@@ -410,6 +425,11 @@ def check_docker_test_stage_boundary() -> None:
         ),
     )
     must_reject(
+        "re-including the private workbook after its context exclusion",
+        dockerfile,
+        dockerignore + "\n!docs/Projekte_2026_27.xlsx\n",
+    )
+    must_reject(
         "including private environment credentials in Docker context",
         dockerfile,
         "\n".join(
@@ -422,6 +442,15 @@ def check_docker_test_stage_boundary() -> None:
         dockerfile.replace("COPY Makefile /workspace/Makefile\n", "").replace(
             "FROM eclipse-temurin:23-jre",
             "FROM eclipse-temurin:23-jre\nCOPY Makefile /workspace/Makefile",
+        ),
+        dockerignore,
+    )
+    must_reject(
+        "copying the build-stage Makefile into the runtime stage",
+        dockerfile.replace(
+            "FROM eclipse-temurin:23-jre",
+            "FROM eclipse-temurin:23-jre\n"
+            "COPY --from=build /workspace/Makefile /app/Makefile",
         ),
         dockerignore,
     )
