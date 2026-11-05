@@ -2,8 +2,10 @@
 """Check that sample, Compose, and backend startup configuration stays aligned."""
 
 from pathlib import Path
-import posixpath
+import fnmatch
+import json
 import re
+import shlex
 import subprocess
 
 
@@ -294,22 +296,86 @@ def validate_docker_test_stage_boundary(dockerfile_text: str, dockerignore_text:
             )
             sentinel_count += 1
 
-        if line.upper().startswith(("COPY ", "ADD ")):
-            parts = line.split()
-            instruction = parts[0].upper()
-            args = parts[1:]
-            from_image = any(arg.startswith("--from=") for arg in args)
-            sources = [arg for arg in args if not arg.startswith("--")]
+        copy_match = re.match(r"(?i)^(COPY|ADD)\s+(.+)$", line)
+        if copy_match is not None:
+            instruction = copy_match.group(1).upper()
+            arguments = copy_match.group(2)
+            options = []
+            while arguments.startswith("--"):
+                option_parts = arguments.split(None, 1)
+                option = option_parts[0]
+                remainder = option_parts[1] if len(option_parts) == 2 else ""
+                name, equals, value = option.partition("=")
+                takes_value = {
+                    "--checksum",
+                    "--chmod",
+                    "--chown",
+                    "--exclude",
+                    "--from",
+                }
+                boolean_options = {"--link", "--parents"}
+                require(
+                    name in takes_value | boolean_options,
+                    f"unsupported Docker {instruction} option at line {line_number}",
+                )
+                if name in takes_value and not equals:
+                    require(
+                        remainder,
+                        f"Docker {instruction} option is missing a value at line {line_number}",
+                    )
+                    value_parts = remainder.split(None, 1)
+                    value = value_parts[0]
+                    arguments = value_parts[1] if len(value_parts) == 2 else ""
+                else:
+                    arguments = remainder
+                if equals:
+                    require(value != "", f"empty Docker {instruction} option at line {line_number}")
+                options.append((name, value if equals or name in takes_value else None))
+                if not arguments:
+                    break
+
+            if arguments.startswith("["):
+                try:
+                    sources = json.loads(arguments)
+                except json.JSONDecodeError:
+                    require(False, f"malformed JSON Docker {instruction} at line {line_number}")
+                require(
+                    isinstance(sources, list) and all(isinstance(item, str) for item in sources),
+                    f"malformed JSON Docker {instruction} at line {line_number}",
+                )
+            else:
+                try:
+                    sources = shlex.split(arguments)
+                except ValueError:
+                    require(False, f"malformed shell Docker {instruction} at line {line_number}")
+            from_image = any(name == "--from" for name, _ in options)
             require(len(sources) >= 2, f"malformed Docker {instruction} at line {line_number}")
             inputs = sources[:-1]
             for source in inputs:
-                normalized = posixpath.normpath(source).lstrip("/")
+                # Docker resolves build-context paths from the context root:
+                # leading slashes and parent traversal cannot escape that root.
+                components = []
+                for component in source.replace("\\", "/").split("/"):
+                    if component in ("", "."):
+                        continue
+                    if component == "..":
+                        if components:
+                            components.pop()
+                        continue
+                    components.append(component)
+                normalized = "/".join(components)
+                first_component = normalized.split("/", 1)[0] if normalized else ""
+                selects_docs = (
+                    normalized == "docs"
+                    or normalized.startswith("docs/")
+                    or fnmatch.fnmatchcase("docs", first_component)
+                )
                 require(
                     not (
-                        normalized == "docs"
-                        or normalized.startswith("docs/")
+                        selects_docs
                         or normalized == "."
-                        or normalized in ("./", "*", "**")
+                        or normalized == ""
+                        or normalized in ("*", "**")
                     ),
                     "Docker image must not copy docs/, the private workbook, or the whole build context",
                 )
@@ -404,6 +470,86 @@ def check_docker_test_stage_boundary() -> None:
         dockerfile.replace(
             "COPY backend/src src",
             "COPY backend/src src\nCOPY ./docs /workspace/docs",
+        ),
+        dockerignore,
+    )
+    must_reject(
+        "copying docs through parent traversal",
+        dockerfile.replace(
+            "COPY backend/src src",
+            "COPY backend/src src\nCOPY ../docs /workspace/docs",
+        ),
+        dockerignore,
+    )
+    must_reject(
+        "copying docs through normalized parent traversal",
+        dockerfile.replace(
+            "COPY backend/src src",
+            "COPY nested/../../docs /workspace/docs",
+        ),
+        dockerignore,
+    )
+    must_reject(
+        "copying docs with a glob that selects the docs directory",
+        dockerfile.replace(
+            "COPY backend/src src",
+            "COPY d* /workspace",
+        ),
+        dockerignore,
+    )
+    must_reject(
+        "JSON-form COPY of docs",
+        dockerfile.replace(
+            "COPY backend/src src",
+            'COPY ["docs", "/workspace/docs"]',
+        ),
+        dockerignore,
+    )
+    must_reject(
+        "tab-separated shell COPY of parent-traversal docs",
+        dockerfile.replace(
+            "COPY backend/src src",
+            "COPY\t../docs /workspace/docs",
+        ),
+        dockerignore,
+    )
+    must_reject(
+        "tab-separated JSON ADD of docs",
+        dockerfile.replace(
+            "COPY backend/src src",
+            'ADD\t["docs", "/workspace/docs"]',
+        ),
+        dockerignore,
+    )
+    must_reject(
+        "JSON COPY with an option and parent-traversal docs",
+        dockerfile.replace(
+            "COPY backend/src src",
+            'COPY --chown=1000:1000 ["../docs", "/workspace/docs"]',
+        ),
+        dockerignore,
+    )
+    must_reject(
+        "JSON-form COPY of parent-traversal docs",
+        dockerfile.replace(
+            "COPY backend/src src",
+            'COPY ["../docs", "/workspace/docs"]',
+        ),
+        dockerignore,
+    )
+    must_reject(
+        "JSON-form ADD of docs",
+        dockerfile.replace(
+            "COPY backend/src src",
+            'ADD ["docs", "/workspace/docs"]',
+        ),
+        dockerignore,
+    )
+    must_reject(
+        "shell-form ADD of parent-traversal docs",
+        dockerfile.replace(
+            "COPY backend/src src",
+            "ADD ../docs /workspace/docs",
         ),
         dockerignore,
     )
