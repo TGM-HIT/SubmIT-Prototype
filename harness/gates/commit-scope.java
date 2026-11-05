@@ -9,13 +9,6 @@ class CommitScope {
         "frontend/scripts/"
     };
     static final String[] ALLOWED_FILES = {
-        "backend/Dockerfile",
-        ".dockerignore",
-        "compose.yaml",
-        "backend/build.gradle",
-        "backend/README.md",
-        "README.md",
-        "scripts/check-startup-config.py",
         ".gitignore",
         ".env.example",
         "Makefile",
