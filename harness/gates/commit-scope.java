@@ -16,6 +16,13 @@ class CommitScope {
         "frontend/package.json",
         "frontend/DEV-GUIDELINES.md",
         "backend/DEV-GUIDELINES.md",
+        "scripts/compose.sh",
+        "scripts/pgadmin-entrypoint.sh",
+        "scripts/check-startup-config.py",
+        "compose.yaml",
+        ".dockerignore",
+        "README.md",
+        "backend/README.md",
         "frontend/public/favicon.ico",
         "harness/gates/commit-scope.java"
     };
