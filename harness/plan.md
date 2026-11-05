@@ -194,7 +194,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 
 | Ticket | Status | Specification |
 | --- | --- | --- |
-| [Optimization-01](tickets/Optimization-01.md) | to-do | Query student-owned ideas without scanning the full catalogue |
+| [Optimization-01](tickets/done/Optimization-01.md) | done | Query student-owned ideas without scanning the full catalogue |
 | [Optimization-02](tickets/done/Optimization-02.md) | done | Reduce memory used by PDF test record snapshots |
 
 ## Compliance checks
