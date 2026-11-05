@@ -27,8 +27,13 @@ final class RecordSnapshots {
             field(digest, buffer, record.getId() == null ? null : record.getId().toString());
             field(digest, buffer, record.getType());
             field(digest, buffer, record.getOwnerId());
+            field(digest, buffer, record.getCollaborator1Id());
+            field(digest, buffer, record.getCollaborator2Id());
+            field(digest, buffer, record.getCollaborator3Id());
+            field(digest, buffer, record.getCollaborator4Id());
             field(digest, buffer, record.getParentId());
             field(digest, buffer, record.getStatus());
+            field(digest, buffer, record.getIdeaSchoolYear());
             field(digest, buffer, record.getReferenceType());
             field(digest, buffer, record.getPayload());
             field(digest, buffer, record.getCreatedAt() == null ? null : record.getCreatedAt().toString());

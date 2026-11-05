@@ -15,7 +15,32 @@ import org.springframework.data.repository.query.Param;
 public interface StoredRecordRepository extends JpaRepository<StoredRecord, UUID> {
     Page<StoredRecord> findByType(String type, Pageable pageable);
 
+    long countByType(String type);
+
+    Page<StoredRecord> findByTypeOrderByIdAsc(String type, Pageable pageable);
+
     Page<StoredRecord> findByTypeAndOwnerId(String type, String ownerId, Pageable pageable);
+
+    @Query(value = "select record from StoredRecord record where record.type = 'idea' "
+            + "and (record.ownerId = :callerId or record.collaborator1Id = :callerId "
+            + "or record.collaborator2Id = :callerId or record.collaborator3Id = :callerId "
+            + "or record.collaborator4Id = :callerId) "
+            + "and (:ownerId is null or record.ownerId = :ownerId or record.collaborator1Id = :ownerId "
+            + "or record.collaborator2Id = :ownerId or record.collaborator3Id = :ownerId "
+            + "or record.collaborator4Id = :ownerId) "
+            + "and (:status is null or record.status = :status) "
+            + "and (:schoolYear is null or record.ideaSchoolYear = :schoolYear)",
+            countQuery = "select count(record) from StoredRecord record where record.type = 'idea' "
+                    + "and (record.ownerId = :callerId or record.collaborator1Id = :callerId "
+                    + "or record.collaborator2Id = :callerId or record.collaborator3Id = :callerId "
+                    + "or record.collaborator4Id = :callerId) "
+                    + "and (:ownerId is null or record.ownerId = :ownerId or record.collaborator1Id = :ownerId "
+                    + "or record.collaborator2Id = :ownerId or record.collaborator3Id = :ownerId "
+                    + "or record.collaborator4Id = :ownerId) "
+                    + "and (:status is null or record.status = :status) "
+                    + "and (:schoolYear is null or record.ideaSchoolYear = :schoolYear)")
+    Page<StoredRecord> findStudentIdeas(@Param("callerId") String callerId, @Param("ownerId") String ownerId,
+            @Param("status") String status, @Param("schoolYear") String schoolYear, Pageable pageable);
 
     Page<StoredRecord> findByTypeAndParentId(String type, String parentId, Pageable pageable);
 

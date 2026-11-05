@@ -360,7 +360,7 @@ class TestingIdeasFixtureTest {
     @Test
     void invalidWithdrawnEditLeavesPayloadAndRelatedRecordsUnchanged() throws Exception {
         String token = login("student01");
-        JsonNode source = getIdea(token, getIdeas(token).path("content").get(0).path("id").asText());
+        JsonNode source = submittedIdea(token);
         String id = source.path("id").asText();
         mockMvc.perform(post("/api/ideas/{id}/withdraw", id).header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk());
@@ -381,7 +381,7 @@ class TestingIdeasFixtureTest {
     @Test
     void directWithdrawnResubmissionRejectsInvalidStoredPayloadWithoutChangingState() throws Exception {
         String token = login("student01");
-        JsonNode source = getIdea(token, getIdeas(token).path("content").get(0).path("id").asText());
+        JsonNode source = submittedIdea(token);
         String id = source.path("id").asText();
         mockMvc.perform(post("/api/ideas/{id}/withdraw", id).header("Authorization", "Bearer " + token))
                 .andExpect(status().isOk());
@@ -470,7 +470,7 @@ class TestingIdeasFixtureTest {
     @Test
     void onlyTheOwnerStudentCanEditOrResubmitAWithdrawnIdea() throws Exception {
         String ownerToken = login("student01");
-        JsonNode source = getIdea(ownerToken, getIdeas(ownerToken).path("content").get(0).path("id").asText());
+        JsonNode source = submittedIdea(ownerToken);
         String id = source.path("id").asText();
         mockMvc.perform(post("/api/ideas/{id}/withdraw", id).header("Authorization", "Bearer " + ownerToken))
                 .andExpect(status().isOk());
@@ -581,6 +581,17 @@ class TestingIdeasFixtureTest {
                 .andExpect(status().isOk())
                 .andReturn();
         return objectMapper.readTree(result.getResponse().getContentAsString());
+    }
+
+    private JsonNode submittedIdea(String token) throws Exception {
+        JsonNode content = getIdeas(token).get("content");
+        assertTrue(content != null && content.isArray());
+        for (JsonNode candidate : content) {
+            if ("IDEA_SUBMITTED".equals(candidate.path("status").asText())) {
+                return getIdea(token, candidate.path("id").asText());
+            }
+        }
+        throw new AssertionError("Expected the seeded owner idea in IDEA_SUBMITTED state.");
     }
 
     private String createAndSubmit(String token, String title) throws Exception {

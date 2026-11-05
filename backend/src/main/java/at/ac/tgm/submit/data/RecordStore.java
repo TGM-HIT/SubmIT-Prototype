@@ -6,6 +6,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import jakarta.persistence.EntityNotFoundException;
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -14,6 +16,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class RecordStore {
+    private static final String IDEA = "idea";
+    private static final int MAX_INDEXED_COLLABORATORS = 4;
     private final StoredRecordRepository records;
     private final ObjectMapper objectMapper;
     private final jakarta.persistence.EntityManager entityManager;
@@ -29,7 +33,9 @@ public class RecordStore {
     public StoredRecord create(String type, String ownerId, String parentId, String status, JsonNode payload) {
         StoredRecord.Details details = new StoredRecord.Details(type, ownerId, parentId, status, null,
                 encode(payload), Instant.now());
-        return records.save(new StoredRecord(UUID.randomUUID(), details));
+        StoredRecord record = new StoredRecord(UUID.randomUUID(), details);
+        synchronizeIdeaListIndex(record, payload);
+        return records.save(record);
     }
 
     @Transactional
@@ -60,11 +66,45 @@ public class RecordStore {
         return records.findByType(type, pageable);
     }
 
+    @Transactional(readOnly = true)
+    public Page<StoredRecord> pageStudentIdeas(UUID callerId, UUID ownerId, String status, String schoolYear,
+            Pageable pageable) {
+        return records.findStudentIdeas(callerId.toString(), ownerId == null ? null : ownerId.toString(),
+                status, schoolYear, pageable);
+    }
+
     @Transactional
     public void update(StoredRecord record, String status, JsonNode payload) {
         record.setStatus(status);
         record.setPayload(encode(payload));
+        synchronizeIdeaListIndex(record, payload);
         records.save(record);
+    }
+
+    public void synchronizeIdeaListIndex(StoredRecord record, JsonNode payload) {
+        if (!IDEA.equals(record.getType())) {
+            return;
+        }
+        List<String> collaborators = new ArrayList<>();
+        JsonNode owners = payload.path("ownerIds");
+        if (owners.isArray()) {
+            owners.forEach(owner -> {
+                String ownerId = owner.asText();
+                if (!ownerId.isBlank()) {
+                    ownerId = UUID.fromString(ownerId).toString();
+                    if (!ownerId.equals(record.getOwnerId()) && !collaborators.contains(ownerId)
+                            && collaborators.size() < MAX_INDEXED_COLLABORATORS) {
+                        collaborators.add(ownerId);
+                    }
+                }
+            });
+        }
+        record.setIdeaListIndex(at(collaborators, 0), at(collaborators, 1), at(collaborators, 2),
+                at(collaborators, 3), payload.path("schoolYear").asText());
+    }
+
+    private String at(List<String> values, int index) {
+        return index < values.size() ? values.get(index) : null;
     }
 
     @Transactional

@@ -52,13 +52,18 @@ class RecordSnapshotsTest {
         for (String type : List.of("idea", "specification_revision", "audit", "unrelated")) {
             StoredRecord original = record(type, "payload");
             List<String> baseline = snapshot(original, record("constant", "unchanged"));
-            for (int field = 0; field < 8; field++) {
+            for (int field = 0; field < 13; field++) {
                 StoredRecord changed = new StoredRecord(field == 0 ? new UUID(0, 2) : ID,
                         new StoredRecord.Details(field == 1 ? type + "changed" : type,
-                                field == 2 ? "other" : "owner", field == 3 ? "other" : "parent",
-                                field == 4 ? "other" : "status", field == 5 ? "other" : "reference",
-                                field == 6 ? "changed" : "payload",
-                                field == 7 ? CREATED.plusNanos(1) : CREATED));
+                                field == 2 ? "other" : "owner", field == 7 ? "other" : "parent",
+                                field == 8 ? "other" : "status", field == 10 ? "other" : "reference",
+                                field == 11 ? "changed" : "payload",
+                                field == 12 ? CREATED.plusNanos(1) : CREATED));
+                changed.setIdeaListIndex(field == 3 ? "collaborator-1" : null,
+                        field == 4 ? "collaborator-2" : null,
+                        field == 5 ? "collaborator-3" : null,
+                        field == 6 ? "collaborator-4" : null,
+                        field == 9 ? "another-year" : null);
                 assertNotEquals(baseline, snapshot(changed, record("constant", "unchanged")),
                         type + " field " + field);
             }

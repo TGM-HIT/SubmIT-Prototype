@@ -30,6 +30,22 @@ class IdeaListService {
     @Transactional(readOnly = true)
     ApiDtos.PageResponse<ApiDtos.IdeaResponse> list(AuthenticatedUser caller, IdeaListFilters filters, int page, int size) {
         PageRequest pageRequest = PageRequest.of(page, size);
+        if (caller.hasRole(Role.STUDENT)) {
+            return studentList(caller, filters, pageRequest);
+        }
+        return staffList(caller, filters, pageRequest);
+    }
+
+    private ApiDtos.PageResponse<ApiDtos.IdeaResponse> studentList(AuthenticatedUser caller, IdeaListFilters filters,
+            PageRequest pageRequest) {
+        Page<StoredRecord> result = store.pageStudentIdeas(caller.id(), filters.ownerId(),
+                filters.status() == null || filters.status().isBlank() ? null : filters.status(),
+                filters.schoolYear(), pageRequest);
+        return response(result, caller);
+    }
+
+    private ApiDtos.PageResponse<ApiDtos.IdeaResponse> staffList(AuthenticatedUser caller, IdeaListFilters filters,
+            PageRequest pageRequest) {
         List<StoredRecord> ideas = new ArrayList<>();
         Page<StoredRecord> batch;
         int scanPage = 0;
@@ -48,6 +64,10 @@ class IdeaListService {
         int start = Math.min((int) pageRequest.getOffset(), visible.size());
         int end = Math.min(start + pageRequest.getPageSize(), visible.size());
         Page<StoredRecord> result = new PageImpl<>(visible.subList(start, end), pageRequest, visible.size());
+        return response(result, caller);
+    }
+
+    private ApiDtos.PageResponse<ApiDtos.IdeaResponse> response(Page<StoredRecord> result, AuthenticatedUser caller) {
         return new ApiDtos.PageResponse<>(mapper.responses(result.getContent(), caller.role()), result.getNumber(),
                 result.getSize(), result.getTotalElements(), result.getTotalPages());
     }
