@@ -4,6 +4,7 @@
 from pathlib import Path
 import fnmatch
 import json
+import posixpath
 import re
 import shlex
 import subprocess
@@ -382,11 +383,14 @@ def validate_docker_test_stage_boundary(dockerfile_text: str, dockerignore_text:
                 if Path(source).name == "Makefile":
                     makefile_copies.append((stage, line_number, source))
                 if from_image and stage != "build":
+                    # --from sources are rooted at the source stage's filesystem
+                    # root. Clean traversal before checking the build-stage boundary.
+                    source_stage_path = posixpath.normpath("/" + source.lstrip("/"))
                     require(
                         not (
-                            source.rstrip("/") in ("/workspace", "/workspace/docs")
-                            or source.startswith("/workspace/docs/")
-                            or source in ("/workspace/*", "/workspace/**")
+                            source_stage_path in ("/workspace", "/workspace/docs")
+                            or source_stage_path.startswith("/workspace/docs/")
+                            or source_stage_path in ("/workspace/*", "/workspace/**")
                         ),
                         "runtime image must not include the build-stage workbook sentinel",
                     )
@@ -617,6 +621,33 @@ def check_docker_test_stage_boundary() -> None:
             "FROM eclipse-temurin:23-jre",
             "FROM eclipse-temurin:23-jre\n"
             "RUN mkdir -p /workspace/docs && : > /workspace/docs/Projekte_2026_27.xlsx",
+        ),
+        dockerignore,
+    )
+    must_reject(
+        "parent-normalized build-stage docs source in the runtime stage",
+        dockerfile.replace(
+            "FROM eclipse-temurin:23-jre",
+            "FROM eclipse-temurin:23-jre\n"
+            "COPY --from=build /workspace/../workspace/docs /app/docs",
+        ),
+        dockerignore,
+    )
+    must_reject(
+        "relative parent-normalized build-stage docs source in the runtime stage",
+        dockerfile.replace(
+            "FROM eclipse-temurin:23-jre",
+            "FROM eclipse-temurin:23-jre\n"
+            "ADD --from=build workspace/../workspace/docs /app/docs",
+        ),
+        dockerignore,
+    )
+    must_reject(
+        "JSON parent-normalized build-stage docs source in the runtime stage",
+        dockerfile.replace(
+            "FROM eclipse-temurin:23-jre",
+            'FROM eclipse-temurin:23-jre\n'
+            'COPY --from=build ["workspace/../workspace/docs", "/app/docs"]',
         ),
         dockerignore,
     )
