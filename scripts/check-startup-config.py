@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check that sample, Compose, and backend startup configuration stays aligned."""
+"""Check startup wiring, documentation, and ticket-bounded Compose lifecycle behavior."""
 
 from pathlib import Path
 import http.cookiejar
@@ -32,6 +32,39 @@ DOCKERFILE_PATH = ROOT / "backend/Dockerfile"
 DOCKERIGNORE_PATH = ROOT / ".dockerignore"
 COMPOSE_WRAPPER_PATH = ROOT / "scripts/compose.sh"
 PGADMIN_ENTRYPOINT_PATH = ROOT / "scripts/pgadmin-entrypoint.sh"
+ROOT_README_PATH = ROOT / "README.md"
+BACKEND_README_PATH = ROOT / "backend/README.md"
+AUDIT_GIT_ROOT = Path(os.environ.get("STARTUP_CONFIG_AUDIT_GIT_ROOT", ROOT)).resolve()
+
+# Keep ticket outputs separate from the Orchestrator's temporary scope-gate
+# allowance. The latter is not an implementation deliverable or an audit input.
+TICKET_BASELINE = "714e15550b747653b2c97f39a488469389dd0231"
+PASS_ONE_COMMIT = "c4808206dff0f800a4e6c0c55521fef1b2093ffb"
+PASS_ONE_PARENT = "62b1be85c8bd127bd49671eb6b021a2b784df5ce"
+IMPLEMENTATION_DELIVERABLES = frozenset(
+    {
+        ".dockerignore",
+        ".env.example",
+        "README.md",
+        "backend/README.md",
+        "compose.yaml",
+        "scripts/check-startup-config.py",
+        "scripts/compose.sh",
+        "scripts/pgadmin-entrypoint.sh",
+    }
+)
+TICKET_SCOPE_GATE_ALLOWANCE = frozenset(
+    {
+        "scripts/compose.sh",
+        "scripts/pgadmin-entrypoint.sh",
+        "scripts/check-startup-config.py",
+        "compose.yaml",
+        ".dockerignore",
+        "README.md",
+        "backend/README.md",
+    }
+)
+COORDINATOR_SCOPE_GATE_CHANGE = frozenset({"harness/gates/commit-scope.java"})
 
 
 def require(condition: bool, message: str) -> None:
@@ -49,6 +82,216 @@ dockerignore = DOCKERIGNORE_PATH.read_text()
 makefile = (ROOT / "Makefile").read_text()
 compose_wrapper = COMPOSE_WRAPPER_PATH.read_text()
 pgadmin_entrypoint = PGADMIN_ENTRYPOINT_PATH.read_text()
+root_readme = ROOT_README_PATH.read_text()
+backend_readme = BACKEND_README_PATH.read_text()
+
+
+def git_names(*arguments: str) -> set[str]:
+    result = subprocess.run(
+        ["git", "-C", str(AUDIT_GIT_ROOT), *arguments],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    require(result.returncode == 0, "ticket path audit could not read Git path metadata")
+    return {path for path in result.stdout.splitlines() if path}
+
+
+def is_generated_or_protected_artifact(path: str) -> bool:
+    normalized = path.replace("\\", "/")
+    name = normalized.rsplit("/", 1)[-1].lower()
+    protected_paths = {
+        ".env",
+        "docker.env",
+        "docs/projekte_2026_27.xlsx",
+        "bugs-and-ideas.md",
+    }
+    if normalized.lower() in protected_paths:
+        return True
+    if name == ".env.example":
+        return False
+    if name.startswith(".env") or name in {
+        ".pgpass",
+        "credentials.json",
+        "credential.json",
+        "servers.json",
+        "server.json",
+        "pgadmin4.db",
+    }:
+        return True
+    if name.startswith(("pgadmin4.db", "pgadmin.db")):
+        return True
+    if any(
+        part.lower() in {"postgres-data", "pgadmin-data"}
+        for part in normalized.split("/")
+    ):
+        return True
+    return name.endswith(
+        (
+            ".db",
+            ".db-journal",
+            ".db-shm",
+            ".db-wal",
+            ".sqlite",
+            ".sqlite3",
+            ".pem",
+            ".key",
+            ".p12",
+            ".pfx",
+        )
+    )
+
+
+def check_ticket_documentation_and_path_audit() -> None:
+    require(
+        TICKET_SCOPE_GATE_ALLOWANCE
+        == IMPLEMENTATION_DELIVERABLES - {".env.example"},
+        "ticket scope-gate allowance must remain separate from the eight deliverables",
+    )
+    protected_artifact_examples = (
+        ".env",
+        "docker.env",
+        "docs/Projekte_2026_27.xlsx",
+        "bugs-and-ideas.md",
+        "credentials.json",
+        "servers.json",
+        "pgadmin4.db-wal",
+        "pgadmin-data/pgadmin4.db",
+        "postgres-data/PG_VERSION",
+        "tls/server.key",
+    )
+    require(
+        all(is_generated_or_protected_artifact(path) for path in protected_artifact_examples)
+        and not is_generated_or_protected_artifact(".env.example"),
+        "tracked-artifact audit must reject protected inputs and generated credentials/state",
+    )
+
+    make_rule = re.search(
+        r"(?ms)^startup-config-check:[^\n]*\n((?:\t[^\n]*\n?)+)",
+        makefile,
+    )
+    require(
+        make_rule is not None
+        and "python3 scripts/check-startup-config.py" in make_rule.group(1),
+        "make startup-config-check must execute this durable audit",
+    )
+
+    wrapper_defaults = (
+        'env_file=${SUBMIT_COMPOSE_ENV_FILE-"$repo_root/.env"}' in compose_wrapper
+        and 'compose_file=$repo_root/compose.yaml' in compose_wrapper
+        and 'exec docker compose' in compose_wrapper
+        and '--project-name "$project_name"' in compose_wrapper
+        and '--env-file "$env_file"' in compose_wrapper
+        and '--file "$compose_file"' in compose_wrapper
+    )
+    require(
+        wrapper_defaults,
+        "README workflows must be checked against the wrapper's actual project, env, and Compose selection",
+    )
+    require(
+        "cp .env.example .env" in root_readme
+        and "COMPOSE_PROJECT_NAME=submit-local" in root_readme
+        and "./scripts/compose.sh up --build" in root_readme
+        and "it defaults to `.env`" in root_readme,
+        "root README must document the default root-.env wrapper workflow",
+    )
+
+    reported_pair = (
+        'export SUBMIT_COMPOSE_ENV_FILE="$PWD/docker.env"' in root_readme
+        and "export COMPOSE_PROJECT_NAME=submit-dev57-ha" in root_readme
+        and "./scripts/compose.sh up --build -d --wait --wait-timeout 240" in root_readme
+        and "./scripts/compose.sh down" in root_readme
+        and "docker compose --project-name submit-dev57-ha --env-file docker.env down"
+        in root_readme
+    )
+    require(reported_pair, "root README must retain the reported paired wrapper and raw shutdown")
+    require(
+        "each new shell" in root_readme
+        and "does not discover or remember an earlier invocation" in root_readme,
+        "root README must state per-shell setup and no prior-invocation discovery",
+    )
+    require(
+        "explicitly configured Compose project and environment file" in root_readme
+        and "repository Compose file" in root_readme,
+        "root README must describe the wrapper-selected project, environment, and Compose file",
+    )
+    require(
+        "ordinary `down`" in root_readme
+        and "down -v" not in root_readme
+        and "ordinary `down`" in backend_readme
+        and "down -v" not in backend_readme,
+        "README shutdown guidance must describe ordinary down only",
+    )
+    require(
+        "Direct local `bootRun`" in backend_readme
+        and "default H2 datasource" in backend_readme
+        and "in-memory H2 database" in backend_readme,
+        "backend README must preserve direct-local H2 instructions",
+    )
+
+    coordinator_paths = git_names(
+        "diff",
+        "--no-renames",
+        "--name-only",
+        TICKET_BASELINE,
+        PASS_ONE_PARENT,
+        "--",
+    )
+    require(
+        coordinator_paths == COORDINATOR_SCOPE_GATE_CHANGE,
+        "coordinator scope-gate change must remain separate from implementation deliverables",
+    )
+    original_paths = git_names(
+        "diff",
+        "--no-renames",
+        "--name-only",
+        PASS_ONE_PARENT,
+        PASS_ONE_COMMIT,
+        "--",
+    )
+    require(
+        original_paths == IMPLEMENTATION_DELIVERABLES,
+        "pass-one committed paths must equal the eight ticket implementation deliverables",
+    )
+    revision_paths = git_names(
+        "diff",
+        "--no-renames",
+        "--name-only",
+        PASS_ONE_COMMIT,
+        "HEAD",
+        "--",
+    )
+    require(
+        revision_paths == {"scripts/check-startup-config.py"},
+        "pass-two committed paths must contain only the startup checker",
+    )
+    changed_paths = original_paths | revision_paths
+    tracked_paths = git_names("ls-files")
+    require(
+        changed_paths <= tracked_paths,
+        "ticket implementation deliverables must remain tracked",
+    )
+    require(
+        not any(is_generated_or_protected_artifact(path) for path in changed_paths),
+        "ticket implementation changes must not include protected or generated artifacts",
+    )
+    added_paths = git_names(
+        "diff",
+        "--no-renames",
+        "--diff-filter=A",
+        "--name-only",
+        TICKET_BASELINE,
+        "HEAD",
+        "--",
+    )
+    require(
+        not any(is_generated_or_protected_artifact(path) for path in added_paths),
+        "ticket changes must not add protected inputs or generated credential/server-state artifacts",
+    )
+    print(
+        "Ticket README workflow and exact-path/tracked-artifact audit passed "
+        "(eight implementation deliverables; seven-path gate allowance and coordinator gate change separate)."
+    )
 
 
 def compose_service(name: str) -> str:
@@ -901,6 +1144,59 @@ def check_compose_wrapper() -> None:
             )
             require(not marker.exists(), "wrapper executed shell syntax from the environment file")
 
+            default_root = workdir / "default-wrapper-repository"
+            default_scripts = default_root / "scripts"
+            default_scripts.mkdir(parents=True)
+            default_wrapper = default_scripts / "compose.sh"
+            default_wrapper.write_text(compose_wrapper, encoding="utf-8")
+            default_wrapper.chmod(0o755)
+            (default_root / "compose.yaml").write_text(
+                "services: {}\n",
+                encoding="utf-8",
+            )
+            (default_root / ".env").write_text(
+                f"POSTGRES_PASSWORD={synthetic_secret}\n"
+                f"SHOULD_NOT_RUN=$(touch {marker})\n",
+                encoding="utf-8",
+            )
+            default_environment = dict(
+                base_environment,
+                COMPOSE_PROJECT_NAME="bug40-default-wrapper-check",
+            )
+            default_environment.pop("SUBMIT_COMPOSE_ENV_FILE")
+            default_result = subprocess.run(
+                [str(default_wrapper), *startup_args],
+                cwd=workdir,
+                env=default_environment,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            require(
+                default_result.returncode == 0,
+                "default root-.env wrapper call from an external cwd failed",
+            )
+            require(
+                synthetic_secret not in default_result.stdout + default_result.stderr,
+                "default root-.env wrapper call exposed a synthetic credential marker",
+            )
+            default_recorded = json.loads(default_result.stdout)
+            default_prefix = [
+                "compose",
+                "--project-name",
+                "bug40-default-wrapper-check",
+                "--env-file",
+                str(default_root / ".env"),
+                "--file",
+                str(default_root / "compose.yaml"),
+            ]
+            require(
+                default_recorded == default_prefix + startup_args,
+                "unset SUBMIT_COMPOSE_ENV_FILE selected unexpected wrapper arguments "
+                f"(observed: {default_recorded}, expected: {default_prefix + startup_args})",
+            )
+            require(not marker.exists(), "wrapper executed shell syntax from the default .env")
+
             failure_environment = dict(base_environment, FAKE_DOCKER_EXIT="37")
             failure = subprocess.run(
                 [str(COMPOSE_WRAPPER_PATH), "down"],
@@ -1578,6 +1874,7 @@ def check_pgadmin_import_lifecycle() -> None:
     )
 
 
+check_ticket_documentation_and_path_audit()
 check_compose_wrapper()
 check_quiet_compose_configuration()
 check_private_build_context()
