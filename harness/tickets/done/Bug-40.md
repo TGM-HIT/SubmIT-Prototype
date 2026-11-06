@@ -8,7 +8,7 @@ Starting Compose with a custom project and environment file succeeds, but a subs
 
 Owner report on 2026-11-05: `docker compose --project-name submit-dev57-ha --env-file docker.env up --build -d --wait --wait-timeout 240` works, but `docker compose down` reports missing `POSTGRES_*` and `PGADMIN_*` values. The owner accepted the recommendation to provide a convenience command rather than require literal bare `docker compose down` to work.
 
-Follow-up to [Dev-57](done/Dev-57.md); do not amend its completed specification or historical runs. The [official pgAdmin site](https://www.pgadmin.org/) identifies **9.19**, released 2026-10-29, as the current stable release at authoring. The [9.19 container documentation](https://www.pgadmin.org/docs/pgadmin4/9.19/container_deployment.html) documents server-definition import, its first-launch behavior, and the optional replace-on-startup setting.
+Follow-up to [Dev-57](Dev-57.md); do not amend its completed specification or historical runs. The [official pgAdmin site](https://www.pgadmin.org/) identifies **9.19**, released 2026-10-29, as the current stable release at authoring. The [9.19 container documentation](https://www.pgadmin.org/docs/pgadmin4/9.19/container_deployment.html) documents server-definition import, its first-launch behavior, and the optional replace-on-startup setting.
 
 ## Product-owner decision — 2026-11-06
 
