@@ -54,4 +54,22 @@ The backend reads `docs/Projekte_2026_27.xlsx` locally at startup. Keep that own
 
 ## Startup wiring check
 
-Run `make startup-config-check` in a verified private-file-free copy of the repository to check the wrapper, sample administrator/frontend/PostgreSQL/pgAdmin settings, required interpolation, Compose wiring and image pin, SubmIT provisioning and import lifecycle, context exclusions, default H2 datasource, existing backend bindings, and bootstrap guard. The check uses Python's standard library; Docker-backed probes require an available Docker daemon. Validate Compose without printing resolved configuration using `./scripts/compose.sh config --quiet` after setting a valid project and environment file.
+Run `make startup-config-check` from the root of an audited private-free input copy to check the wrapper, sample administrator/frontend/PostgreSQL/pgAdmin settings, required interpolation, Compose wiring and image pin, SubmIT provisioning and import lifecycle, context exclusions, default H2 datasource, existing backend bindings, bootstrap guard, and synthetic safe-context/lifecycle controls. This ordinary startup check is independent of `.git`, Bug-40 ticket or ledger state, archived runs, and commit history; it remains usable in a copy without Git metadata. It does not perform the historical changed-path audit. Docker-backed Compose, build-context, and pgAdmin probes require an available Docker daemon; unavailable Docker is reported as blocked, not passed. Validate Compose without printing resolved configuration using `./scripts/compose.sh config --quiet` after setting an isolated synthetic project and environment file.
+
+### Explicit changed-path audit
+
+For an implementation handoff, run the separate metadata-only scope audit over an explicitly bounded cumulative range. First select and record the required public input manifest, exclude the protected owner files, reject unapproved symlinks, and create `SAFE_COPY` without copying `.git` or private inputs. The copied checker, Make subprocesses, Docker contexts, and verification commands must stay in that private-free copy. `AUDIT_REPO` is used only as the source of Git commit/tree path metadata; no blob/content commands or worktree content reads are used by the audit. Choose full `AUDIT_BASELINE` and `AUDIT_HEAD` commit IDs for the range being evaluated, and set `AUDIT_POLICY` to the run's explicit JSON policy.
+
+The policy JSON shape is `{"implementation_paths":[...],"coordinator_changes":{...}}`. The `implementation_paths` array contains exactly the nine Bug-40 paths (`scripts/compose.sh`, `scripts/pgadmin-entrypoint.sh`, `scripts/check-startup-config.py`, `scripts/check-change-scope.py`, `compose.yaml`, `.env.example`, `.dockerignore`, `README.md`, and `backend/README.md`). The `coordinator_changes` object maps each actually changed coordinator commit's full SHA to only its exact coordinator paths: `harness/gates/commit-scope.java`, `harness/tickets/Bug-40.md`, `harness/tickets/done/Bug-40.md`, and `harness/plan.md`. Use no wildcards or blanket commit exemptions. Record the populated policy and invocation with the evidence; do not freeze a continuation or passing HEAD in the script or ordinary startup check. The audit checks every commit event, both sides of renames and deletions, and protected/generated tracked-path names at head; it fails closed on ambiguous merge coverage.
+
+```sh
+cd "$SAFE_COPY" &&
+python3 scripts/check-change-scope.py \
+  --repo "$AUDIT_REPO" \
+  --baseline "$AUDIT_BASELINE" \
+  --head "$AUDIT_HEAD" \
+  --policy "$AUDIT_POLICY"
+cd "$SAFE_COPY" && python3 scripts/check-change-scope.py --self-test
+```
+
+The self-test uses disposable synthetic repositories to check exact-policy positive and negative controls, coordinator attribution, lifecycle paths, rename/deletion/transient events, protected-name rejection, and fail-closed history handling. These caller-parameterized checks are separate from `make startup-config-check`; use each only for its documented purpose.

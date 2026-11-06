@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-"""Check startup wiring, documentation, and ticket-bounded Compose lifecycle behavior."""
+"""Check durable startup wiring, documentation, and Compose lifecycle behavior."""
 
 from pathlib import Path
+from contextlib import redirect_stdout
 import http.cookiejar
 import fnmatch
+import io
+import inspect
 import json
 import os
 import posixpath
@@ -34,43 +37,47 @@ COMPOSE_WRAPPER_PATH = ROOT / "scripts/compose.sh"
 PGADMIN_ENTRYPOINT_PATH = ROOT / "scripts/pgadmin-entrypoint.sh"
 ROOT_README_PATH = ROOT / "README.md"
 BACKEND_README_PATH = ROOT / "backend/README.md"
-AUDIT_GIT_ROOT = Path(os.environ.get("STARTUP_CONFIG_AUDIT_GIT_ROOT", ROOT)).resolve()
-
-# Keep ticket outputs separate from the Orchestrator's temporary scope-gate
-# allowance. The latter is not an implementation deliverable or an audit input.
-TICKET_BASELINE = "714e15550b747653b2c97f39a488469389dd0231"
-PASS_ONE_COMMIT = "c4808206dff0f800a4e6c0c55521fef1b2093ffb"
-PASS_ONE_PARENT = "62b1be85c8bd127bd49671eb6b021a2b784df5ce"
-IMPLEMENTATION_DELIVERABLES = frozenset(
-    {
-        ".dockerignore",
-        ".env.example",
-        "README.md",
-        "backend/README.md",
-        "compose.yaml",
-        "scripts/check-startup-config.py",
-        "scripts/compose.sh",
-        "scripts/pgadmin-entrypoint.sh",
-    }
-)
-TICKET_SCOPE_GATE_ALLOWANCE = frozenset(
-    {
-        "scripts/compose.sh",
-        "scripts/pgadmin-entrypoint.sh",
-        "scripts/check-startup-config.py",
-        "compose.yaml",
-        ".dockerignore",
-        "README.md",
-        "backend/README.md",
-    }
-)
-COORDINATOR_SCOPE_GATE_CHANGE = frozenset({"harness/gates/commit-scope.java"})
-
-
 def require(condition: bool, message: str) -> None:
     if not condition:
         raise SystemExit(f"Startup configuration check failed: {message}")
 
+
+PROTECTED_INPUT_PATHS = (
+    ".env",
+    "docker.env",
+    "docs/Projekte_2026_27.xlsx",
+    "bugs-and-ideas.md",
+)
+
+
+def assert_private_free_copy(root: Path) -> None:
+    """Check only the supplied safe copy; never inspect the source checkout."""
+    for relative in PROTECTED_INPUT_PATHS:
+        candidate = root / relative
+        require(
+            not candidate.exists() and not candidate.is_symlink(),
+            f"private-free copy unexpectedly contains protected input: {relative}",
+        )
+
+
+def run_copy_command(command: list[str], *, cwd: Path, **options: object) -> subprocess.CompletedProcess[str]:
+    """Run a child only from this checker's audited copy, with Make preconditions."""
+    try:
+        working_directory = cwd.resolve(strict=True)
+        working_directory.relative_to(ROOT.resolve(strict=True))
+    except (OSError, ValueError) as error:
+        raise SystemExit("Startup configuration check refused a subprocess outside its private-free copy.") from error
+    if command and Path(command[0]).name == "make":
+        assert_private_free_copy(ROOT)
+    return subprocess.run(
+        command,
+        cwd=working_directory,
+        check=False,
+        **options,
+    )
+
+
+assert_private_free_copy(ROOT)
 
 sample = SAMPLE_PATH.read_text()
 compose = COMPOSE_PATH.read_text()
@@ -86,86 +93,7 @@ root_readme = ROOT_README_PATH.read_text()
 backend_readme = BACKEND_README_PATH.read_text()
 
 
-def git_names(*arguments: str) -> set[str]:
-    result = subprocess.run(
-        ["git", "-C", str(AUDIT_GIT_ROOT), *arguments],
-        check=False,
-        capture_output=True,
-        text=True,
-    )
-    require(result.returncode == 0, "ticket path audit could not read Git path metadata")
-    return {path for path in result.stdout.splitlines() if path}
-
-
-def is_generated_or_protected_artifact(path: str) -> bool:
-    normalized = path.replace("\\", "/")
-    name = normalized.rsplit("/", 1)[-1].lower()
-    protected_paths = {
-        ".env",
-        "docker.env",
-        "docs/projekte_2026_27.xlsx",
-        "bugs-and-ideas.md",
-    }
-    if normalized.lower() in protected_paths:
-        return True
-    if name == ".env.example":
-        return False
-    if name.startswith(".env") or name in {
-        ".pgpass",
-        "credentials.json",
-        "credential.json",
-        "servers.json",
-        "server.json",
-        "pgadmin4.db",
-    }:
-        return True
-    if name.startswith(("pgadmin4.db", "pgadmin.db")):
-        return True
-    if any(
-        part.lower() in {"postgres-data", "pgadmin-data"}
-        for part in normalized.split("/")
-    ):
-        return True
-    return name.endswith(
-        (
-            ".db",
-            ".db-journal",
-            ".db-shm",
-            ".db-wal",
-            ".sqlite",
-            ".sqlite3",
-            ".pem",
-            ".key",
-            ".p12",
-            ".pfx",
-        )
-    )
-
-
-def check_ticket_documentation_and_path_audit() -> None:
-    require(
-        TICKET_SCOPE_GATE_ALLOWANCE
-        == IMPLEMENTATION_DELIVERABLES - {".env.example"},
-        "ticket scope-gate allowance must remain separate from the eight deliverables",
-    )
-    protected_artifact_examples = (
-        ".env",
-        "docker.env",
-        "docs/Projekte_2026_27.xlsx",
-        "bugs-and-ideas.md",
-        "credentials.json",
-        "servers.json",
-        "pgadmin4.db-wal",
-        "pgadmin-data/pgadmin4.db",
-        "postgres-data/PG_VERSION",
-        "tls/server.key",
-    )
-    require(
-        all(is_generated_or_protected_artifact(path) for path in protected_artifact_examples)
-        and not is_generated_or_protected_artifact(".env.example"),
-        "tracked-artifact audit must reject protected inputs and generated credentials/state",
-    )
-
+def check_startup_documentation() -> None:
     make_rule = re.search(
         r"(?ms)^startup-config-check:[^\n]*\n((?:\t[^\n]*\n?)+)",
         makefile,
@@ -228,70 +156,7 @@ def check_ticket_documentation_and_path_audit() -> None:
         and "in-memory H2 database" in backend_readme,
         "backend README must preserve direct-local H2 instructions",
     )
-
-    coordinator_paths = git_names(
-        "diff",
-        "--no-renames",
-        "--name-only",
-        TICKET_BASELINE,
-        PASS_ONE_PARENT,
-        "--",
-    )
-    require(
-        coordinator_paths == COORDINATOR_SCOPE_GATE_CHANGE,
-        "coordinator scope-gate change must remain separate from implementation deliverables",
-    )
-    original_paths = git_names(
-        "diff",
-        "--no-renames",
-        "--name-only",
-        PASS_ONE_PARENT,
-        PASS_ONE_COMMIT,
-        "--",
-    )
-    require(
-        original_paths == IMPLEMENTATION_DELIVERABLES,
-        "pass-one committed paths must equal the eight ticket implementation deliverables",
-    )
-    revision_paths = git_names(
-        "diff",
-        "--no-renames",
-        "--name-only",
-        PASS_ONE_COMMIT,
-        "HEAD",
-        "--",
-    )
-    require(
-        revision_paths == {"scripts/check-startup-config.py"},
-        "pass-two committed paths must contain only the startup checker",
-    )
-    changed_paths = original_paths | revision_paths
-    tracked_paths = git_names("ls-files")
-    require(
-        changed_paths <= tracked_paths,
-        "ticket implementation deliverables must remain tracked",
-    )
-    require(
-        not any(is_generated_or_protected_artifact(path) for path in changed_paths),
-        "ticket implementation changes must not include protected or generated artifacts",
-    )
-    added_paths = git_names(
-        "diff",
-        "--no-renames",
-        "--diff-filter=A",
-        "--name-only",
-        TICKET_BASELINE,
-        "HEAD",
-        "--",
-    )
-    require(
-        not any(is_generated_or_protected_artifact(path) for path in added_paths),
-        "ticket changes must not add protected inputs or generated credential/server-state artifacts",
-    )
-    print(
-        "Ticket README workflow and exact-path/tracked-artifact audit passed "
-        "(eight implementation deliverables; seven-path gate allowance and coordinator gate change separate)."
-    )
+    print("Startup wrapper, README, H2, and pgAdmin workflow documentation checks passed.")
 
 
 def compose_service(name: str) -> str:
@@ -1011,7 +876,7 @@ for username, password, should_warn in (
     ("", secret, True),
     ("admin", secret, False),
 ):
-    result = subprocess.run(
+    result = run_copy_command(
         [
             "make",
             "--no-print-directory",
@@ -1020,7 +885,6 @@ for username, password, should_warn in (
             f"DADB_BOOTSTRAPADMIN_PASSWORD={password}",
         ],
         cwd=ROOT,
-        check=False,
         capture_output=True,
         text=True,
     )
@@ -1065,7 +929,7 @@ def check_compose_wrapper() -> None:
         "Compose wrapper must not print or embed credentials",
     )
 
-    with tempfile.TemporaryDirectory(prefix="startup-check-wrapper-") as work:
+    with tempfile.TemporaryDirectory(prefix="startup-check-wrapper-", dir=ROOT) as work:
         workdir = Path(work)
         fake_bin = workdir / "fake-bin"
         fake_bin.mkdir()
@@ -1113,11 +977,10 @@ def check_compose_wrapper() -> None:
             shutdown_args = ["down"]
             recorded: list[list[str]] = []
             for forwarded in (startup_args, shutdown_args):
-                result = subprocess.run(
+                result = run_copy_command(
                     [str(COMPOSE_WRAPPER_PATH), *forwarded],
                     cwd=workdir,
                     env=base_environment,
-                    check=False,
                     capture_output=True,
                     text=True,
                 )
@@ -1164,11 +1027,10 @@ def check_compose_wrapper() -> None:
                 COMPOSE_PROJECT_NAME="bug40-default-wrapper-check",
             )
             default_environment.pop("SUBMIT_COMPOSE_ENV_FILE")
-            default_result = subprocess.run(
+            default_result = run_copy_command(
                 [str(default_wrapper), *startup_args],
                 cwd=workdir,
                 env=default_environment,
-                check=False,
                 capture_output=True,
                 text=True,
             )
@@ -1198,11 +1060,10 @@ def check_compose_wrapper() -> None:
             require(not marker.exists(), "wrapper executed shell syntax from the default .env")
 
             failure_environment = dict(base_environment, FAKE_DOCKER_EXIT="37")
-            failure = subprocess.run(
+            failure = run_copy_command(
                 [str(COMPOSE_WRAPPER_PATH), "down"],
                 cwd=workdir,
                 env=failure_environment,
-                check=False,
                 capture_output=True,
                 text=True,
             )
@@ -1251,11 +1112,10 @@ def check_compose_wrapper() -> None:
             )
             calls_before = len(invocations.read_text(encoding="utf-8").splitlines())
             for label, environment, forwarded, diagnostic in invalid_cases:
-                result = subprocess.run(
+                result = run_copy_command(
                     [str(COMPOSE_WRAPPER_PATH), *forwarded],
                     cwd=workdir,
                     env=environment,
-                    check=False,
                     capture_output=True,
                     text=True,
                 )
@@ -1273,6 +1133,252 @@ def check_compose_wrapper() -> None:
         finally:
             relative_env.unlink(missing_ok=True)
             Path(relative_directory).rmdir()
+
+
+def check_safe_context_and_lifecycle_independence() -> None:
+    global ROOT
+    ordinary_documentation_source = inspect.getsource(check_startup_documentation)
+    require(
+        not any(
+            marker in ordinary_documentation_source
+            for marker in (
+                "harness/tickets/",
+                "harness/runs/",
+                "rev-parse",
+                "merge-base",
+            )
+        ),
+        "ordinary startup checks must not depend on ticket, ledger, run, or Git history",
+    )
+
+    with tempfile.TemporaryDirectory(prefix="startup-check-safe-context-", dir=ROOT) as temporary:
+        work = Path(temporary)
+        original_root = work / "synthetic-original-root"
+        safe_copy = work / "manifest-selected-copy"
+        original_root.mkdir()
+        safe_copy.mkdir()
+        (original_root / "scripts").mkdir()
+        (original_root / "docs").mkdir()
+        for relative in PROTECTED_INPUT_PATHS:
+            path = original_root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("SYNTHETIC_PROTECTED_CANARY_ONLY\n", encoding="utf-8")
+
+        selected_inputs = (
+            ".env.example",
+            "Makefile",
+            "compose.yaml",
+            "scripts/compose.sh",
+            "scripts/check-startup-config.py",
+        )
+        for relative in selected_inputs:
+            destination = safe_copy / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(ROOT / relative, destination)
+        require(
+            all((safe_copy / relative).is_file() for relative in selected_inputs),
+            "manifest-selected public inputs, including .env.example, must remain usable",
+        )
+        assert_private_free_copy(safe_copy)
+        (safe_copy / "scripts/default-wrapper-fixture").mkdir()
+        (safe_copy / "scripts/default-wrapper-fixture/.env").write_text(
+            "SYNTHETIC_DEFAULT_FIXTURE=only\n",
+            encoding="utf-8",
+        )
+        require(
+            (safe_copy / "scripts/default-wrapper-fixture/.env").is_file(),
+            "intentional default-wrapper synthetic .env fixture must remain usable",
+        )
+
+        attempted_reads: list[Path] = []
+        preparse_events: list[str] = []
+
+        def mocked_make_parser(cwd: Path) -> None:
+            preparse_events.append("make-parse-before-checker")
+            for relative in PROTECTED_INPUT_PATHS:
+                candidate = cwd / relative
+                if candidate.exists():
+                    attempted_reads.append(candidate)
+                    raise OSError("mocked protected-file access denied")
+
+        # A checker-only guard is too late: model Make's parse-time include before
+        # the Python checker starts. This synthetic forbidden attempt must trip.
+        try:
+            mocked_make_parser(original_root)
+        except OSError:
+            pass
+        else:
+            raise SystemExit("safe-context regression failed to catch synthetic pre-parse .env access")
+        require(
+            attempted_reads == [original_root / ".env"],
+            "pre-parse test must record the attempted synthetic .env access before checker startup",
+        )
+
+        old_root = ROOT
+        real_run = subprocess.run
+        child_workdirs: list[Path] = []
+        docker_contexts: list[Path] = []
+
+        def mock_child(command: list[str], *, cwd: Path, **options: object) -> subprocess.CompletedProcess[str]:
+            working_directory = Path(cwd).resolve()
+            child_workdirs.append(working_directory)
+            if command and Path(command[0]).name == "make":
+                mocked_make_parser(working_directory)
+            elif command and Path(command[0]).name == "docker" and "build" in command:
+                context = Path(command[-1]).resolve()
+                try:
+                    context.relative_to(ROOT.resolve())
+                except ValueError as error:
+                    raise OSError("mocked Docker build context escaped the safe copy") from error
+                assert_private_free_copy(context)
+                docker_contexts.append(context)
+            return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
+
+        try:
+            ROOT = safe_copy.resolve()
+            subprocess.run = mock_child  # type: ignore[assignment]
+            prior_attempts = len(attempted_reads)
+            accepted = run_copy_command(
+                ["make", "startup-config-check"],
+                cwd=safe_copy,
+                capture_output=True,
+                text=True,
+            )
+            require(accepted.returncode == 0, "checker-to-Make subprocess failed in the audited copy")
+            require(
+                len(child_workdirs) == 1
+                and child_workdirs[0] == safe_copy.resolve()
+                and len(attempted_reads) == prior_attempts
+                and preparse_events[-1] == "make-parse-before-checker",
+                "safe checker-to-Make invocation must parse only the copy, before checker execution",
+            )
+            accepted_docker = run_copy_command(
+                ["docker", "build", "--no-cache", str(safe_copy)],
+                cwd=safe_copy,
+                capture_output=True,
+                text=True,
+            )
+            require(
+                accepted_docker.returncode == 0
+                and docker_contexts == [safe_copy.resolve()]
+                and child_workdirs[-1] == safe_copy.resolve(),
+                "mocked Docker context and process working directory must remain in the safe copy",
+            )
+            prior_children = len(child_workdirs)
+            try:
+                run_copy_command(
+                    ["make", "startup-config-check"],
+                    cwd=original_root,
+                    capture_output=True,
+                    text=True,
+                )
+            except SystemExit:
+                pass
+            else:
+                raise SystemExit("checker-to-Make regression accepted an outside-copy working directory")
+            require(
+                len(child_workdirs) == prior_children,
+                "outside-copy Make attempt must be rejected before subprocess/Make parsing",
+            )
+        finally:
+            subprocess.run = real_run  # type: ignore[assignment]
+            ROOT = old_root
+
+    # The documentation check is deliberately run against synthetic lifecycle
+    # variants. A Git/history subprocess or a read of ticket/ledger/run content
+    # would make this matrix fail.
+    cases = (
+        ("active-to-do", "harness/tickets/Bug-40.md", "status: to-do\n"),
+        ("active-failed", "harness/tickets/Bug-40.md", "status: failed\n"),
+        ("active-in-progress", "harness/tickets/Bug-40.md", "status: in-progress\n"),
+        ("moved-to-done", "harness/tickets/done/Bug-40.md", "completed\n"),
+        ("later-unrelated-change", "unrelated.txt", "later synthetic commit\n"),
+        ("no-history", "README.md", "same public inputs; no Git history\n"),
+    )
+    expected_output: str | None = None
+    with tempfile.TemporaryDirectory(prefix="startup-check-lifecycle-", dir=ROOT) as temporary:
+        scenario_root = Path(temporary)
+        scenario_paths: list[tuple[str, Path]] = []
+        for name, relative, contents in cases:
+            root = scenario_root / name
+            target = root / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(contents, encoding="utf-8")
+            scenario_paths.append((name, root))
+        old_root = ROOT
+        real_run = subprocess.run
+        real_read_text = Path.read_text
+        unrelated_root = scenario_root / "later-unrelated-change"
+        environment = dict(
+            os.environ,
+            GIT_AUTHOR_NAME="Synthetic startup-check test",
+            GIT_AUTHOR_EMAIL="synthetic@example.invalid",
+            GIT_COMMITTER_NAME="Synthetic startup-check test",
+            GIT_COMMITTER_EMAIL="synthetic@example.invalid",
+        )
+        for git_args in (
+            ["git", "init", "-q", str(unrelated_root)],
+            ["git", "-C", str(unrelated_root), "add", "unrelated.txt"],
+            ["git", "-C", str(unrelated_root), "commit", "-m", "synthetic unrelated commit"],
+        ):
+            result = real_run(
+                git_args,
+                cwd=ROOT,
+                env=environment,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            require(result.returncode == 0, "could not prepare synthetic later-unrelated Git history")
+        commands: list[list[str]] = []
+        denied_paths: list[Path] = []
+
+        def no_history_command(
+            command: list[str],
+            *,
+            cwd: Path,
+            **options: object,
+        ) -> subprocess.CompletedProcess[str]:
+            commands.append(command)
+            if command and Path(command[0]).name == "git":
+                raise OSError("ordinary startup attempted a Git/history command")
+            return real_run(command, cwd=cwd, **options)
+
+        def no_history_read(path: Path, *args: object, **kwargs: object) -> str:
+            try:
+                relative = path.relative_to(scenario_root)
+            except ValueError:
+                relative = Path()
+            if relative.parts and relative.parts[0] in {"harness", ".git"}:
+                denied_paths.append(path)
+                raise OSError("ordinary startup attempted to read synthetic history")
+            return real_read_text(path, *args, **kwargs)
+
+        try:
+            subprocess.run = no_history_command  # type: ignore[assignment]
+            Path.read_text = no_history_read  # type: ignore[assignment]
+            for name, root in scenario_paths:
+                ROOT = root
+                captured = io.StringIO()
+                with redirect_stdout(captured):
+                    check_startup_documentation()
+                output = captured.getvalue()
+                if expected_output is None:
+                    expected_output = output
+                require(
+                    output == expected_output,
+                    f"ordinary startup documentation result changed for lifecycle case {name}",
+                )
+            require(not commands, "ordinary startup documentation must not spawn commands or query Git")
+            require(not denied_paths, "ordinary startup documentation must not read ticket, ledger, run, or .git data")
+        finally:
+            Path.read_text = real_read_text  # type: ignore[assignment]
+            subprocess.run = real_run  # type: ignore[assignment]
+            ROOT = old_root
+    print(
+        "Safe-context probes passed: selected public inputs, blocked synthetic pre-parse and "
+        "checker-to-Make violations, and lifecycle-independent documentation checks."
+    )
 
 
 def compose_environment(values: dict[str, str], omitted: str | None = None) -> str:
@@ -1304,9 +1410,9 @@ def check_quiet_compose_configuration() -> None:
     if docker is None:
         print("BLOCKED: Docker CLI unavailable; quiet Compose interpolation probes were not run.")
         return
-    daemon = subprocess.run(
+    daemon = run_copy_command(
         [docker, "version", "--format", "{{.Server.Version}}"],
-        check=False,
+        cwd=ROOT,
         capture_output=True,
         text=True,
         timeout=30,
@@ -1330,7 +1436,7 @@ def check_quiet_compose_configuration() -> None:
         "DADB_BOOTSTRAPADMIN_PASSWORD": secrets.token_urlsafe(24),
         "JWT_SECRET": secret_values["JWT_SECRET"],
     }
-    with tempfile.TemporaryDirectory(prefix="startup-check-compose-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="startup-check-compose-", dir=ROOT) as tmp:
         env_file = Path(tmp) / "synthetic variables.env"
         docker_command = [
             docker,
@@ -1356,11 +1462,10 @@ def check_quiet_compose_configuration() -> None:
                 compose_environment(values, omitted=key if mode == "unset" else None),
                 encoding="utf-8",
             )
-            result = subprocess.run(
+            result = run_copy_command(
                 docker_command,
                 cwd=ROOT,
                 env=clean_compose_environment(),
-                check=False,
                 capture_output=True,
                 text=True,
                 timeout=60,
@@ -1378,7 +1483,7 @@ def check_quiet_compose_configuration() -> None:
 
 
 def docker_context_command(docker: str, context: Path, instruction: str) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
+    return run_copy_command(
         [
             docker,
             "build",
@@ -1388,8 +1493,8 @@ def docker_context_command(docker: str, context: Path, instruction: str) -> subp
             "-",
             str(context),
         ],
+        cwd=ROOT,
         input=f"FROM scratch\n{instruction}\n",
-        check=False,
         capture_output=True,
         text=True,
         timeout=60,
@@ -1401,7 +1506,7 @@ def check_private_build_context() -> None:
     if docker is None:
         print("BLOCKED: Docker CLI unavailable; effective private build-context probes were not run.")
         return
-    with tempfile.TemporaryDirectory(prefix="startup-check-context-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="startup-check-context-", dir=ROOT) as tmp:
         context = Path(tmp)
         (context / "scripts").mkdir()
         (context / ".dockerignore").write_text(dockerignore, encoding="utf-8")
@@ -1545,9 +1650,9 @@ def check_pgadmin_import_lifecycle() -> None:
     if docker is None:
         print("BLOCKED: Docker CLI unavailable; pgAdmin image import/persistence scenario was not run.")
         return
-    daemon = subprocess.run(
+    daemon = run_copy_command(
         [docker, "version", "--format", "{{.Server.Version}}"],
-        check=False,
+        cwd=ROOT,
         capture_output=True,
         text=True,
         timeout=30,
@@ -1557,17 +1662,17 @@ def check_pgadmin_import_lifecycle() -> None:
         return
 
     image = "dpage/pgadmin4:9.19"
-    image_check = subprocess.run(
+    image_check = run_copy_command(
         [docker, "image", "inspect", image, "--format", "{{.Id}}"],
-        check=False,
+        cwd=ROOT,
         capture_output=True,
         text=True,
         timeout=30,
     )
     if image_check.returncode != 0:
-        pulled = subprocess.run(
+        pulled = run_copy_command(
             [docker, "pull", image],
-            check=False,
+            cwd=ROOT,
             capture_output=True,
             text=True,
             timeout=300,
@@ -1582,7 +1687,7 @@ def check_pgadmin_import_lifecycle() -> None:
             ["--env", "POSTGRES_DB=synthetic_db", "--env", "POSTGRES_USER=   "],
         ),
     ):
-        rejected = subprocess.run(
+        rejected = run_copy_command(
             [
                 docker,
                 "run",
@@ -1596,7 +1701,7 @@ def check_pgadmin_import_lifecycle() -> None:
                 f"POSTGRES_PASSWORD={invalid_secret}",
                 image,
             ],
-            check=False,
+            cwd=ROOT,
             capture_output=True,
             text=True,
             timeout=60,
@@ -1619,12 +1724,12 @@ def check_pgadmin_import_lifecycle() -> None:
     username = 'synthetic "user" \\\\ snow'
     container_name = f"startup-check-pgadmin-{secrets.token_hex(5)}"
     second_name = container_name + "-recreated"
-    with tempfile.TemporaryDirectory(prefix="startup-check-pgadmin-") as tmp:
+    with tempfile.TemporaryDirectory(prefix="startup-check-pgadmin-", dir=ROOT) as tmp:
         data_dir = Path(tmp) / "pgadmin-data"
         data_dir.mkdir()
 
         def start_container(name: str) -> None:
-            result = subprocess.run(
+            result = run_copy_command(
                 [
                     docker,
                     "run",
@@ -1651,7 +1756,7 @@ def check_pgadmin_import_lifecycle() -> None:
                     f"POSTGRES_PASSWORD={database_password}",
                     image,
                 ],
-                check=False,
+                cwd=ROOT,
                 capture_output=True,
                 text=True,
                 timeout=120,
@@ -1664,7 +1769,7 @@ def check_pgadmin_import_lifecycle() -> None:
             )
 
         def container_url(name: str) -> str:
-            result = subprocess.run(
+            result = run_copy_command(
                 [
                     docker,
                     "inspect",
@@ -1672,7 +1777,7 @@ def check_pgadmin_import_lifecycle() -> None:
                     "{{json .NetworkSettings.Ports}}",
                     name,
                 ],
-                check=False,
+                cwd=ROOT,
                 capture_output=True,
                 text=True,
                 timeout=30,
@@ -1703,16 +1808,16 @@ def check_pgadmin_import_lifecycle() -> None:
                         else type(error).__name__
                     )
                     time.sleep(2)
-            state = subprocess.run(
+            state = run_copy_command(
                 [docker, "inspect", "--format", "{{.State.Status}}", name],
-                check=False,
+                cwd=ROOT,
                 capture_output=True,
                 text=True,
                 timeout=30,
             )
-            logs = subprocess.run(
+            logs = run_copy_command(
                 [docker, "logs", name],
-                check=False,
+                cwd=ROOT,
                 capture_output=True,
                 text=True,
                 timeout=30,
@@ -1733,7 +1838,7 @@ def check_pgadmin_import_lifecycle() -> None:
             active_name = container_name
             base_url = wait_until_ready(container_name)
 
-            generated = subprocess.run(
+            generated = run_copy_command(
                 [
                     docker,
                     "exec",
@@ -1742,7 +1847,7 @@ def check_pgadmin_import_lifecycle() -> None:
                     "-c",
                     "from pathlib import Path; print(Path('/tmp/submit-pgadmin-servers.json').read_text())",
                 ],
-                check=False,
+                cwd=ROOT,
                 capture_output=True,
                 text=True,
                 timeout=30,
@@ -1803,9 +1908,9 @@ def check_pgadmin_import_lifecycle() -> None:
                 expect_unrelated=True,
             )
 
-            restarted = subprocess.run(
+            restarted = run_copy_command(
                 [docker, "restart", container_name],
-                check=False,
+                cwd=ROOT,
                 capture_output=True,
                 text=True,
                 timeout=90,
@@ -1822,18 +1927,18 @@ def check_pgadmin_import_lifecycle() -> None:
                 expect_unrelated=True,
             )
 
-            stopped = subprocess.run(
+            stopped = run_copy_command(
                 [docker, "stop", container_name],
-                check=False,
+                cwd=ROOT,
                 capture_output=True,
                 text=True,
                 timeout=60,
             )
             require(stopped.returncode == 0, "pgAdmin container stop before recreation failed")
             active_name = None
-            removed = subprocess.run(
+            removed = run_copy_command(
                 [docker, "rm", container_name],
-                check=False,
+                cwd=ROOT,
                 capture_output=True,
                 text=True,
                 timeout=30,
@@ -1854,16 +1959,16 @@ def check_pgadmin_import_lifecycle() -> None:
             )
         finally:
             if active_name is not None:
-                subprocess.run(
+                run_copy_command(
                     [docker, "stop", active_name],
-                    check=False,
+                    cwd=ROOT,
                     capture_output=True,
                     text=True,
                     timeout=60,
                 )
-                subprocess.run(
+                run_copy_command(
                     [docker, "rm", active_name],
-                    check=False,
+                    cwd=ROOT,
                     capture_output=True,
                     text=True,
                     timeout=30,
@@ -1874,8 +1979,9 @@ def check_pgadmin_import_lifecycle() -> None:
     )
 
 
-check_ticket_documentation_and_path_audit()
+check_startup_documentation()
 check_compose_wrapper()
+check_safe_context_and_lifecycle_independence()
 check_quiet_compose_configuration()
 check_private_build_context()
 check_pgadmin_import_lifecycle()
