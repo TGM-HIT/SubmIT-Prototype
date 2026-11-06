@@ -2,6 +2,9 @@
 """Audit an explicitly bounded commit range using Git path metadata only."""
 
 import argparse
+import builtins
+from contextlib import contextmanager
+import io
 import json
 import os
 from pathlib import Path
@@ -34,6 +37,9 @@ COORDINATOR_PATHS = frozenset(
     }
 )
 FULL_SHA = re.compile(r"^(?:[0-9a-f]{40}|[0-9a-f]{64})$")
+BASELINE_PRESERVED_PROTECTED_PATHS = frozenset(
+    {"bugs-and-ideas.md", "docs/Projekte_2026_27.xlsx"}
+)
 
 
 class AuditError(Exception):
@@ -95,7 +101,7 @@ def valid_repo_path(path: object) -> bool:
     )
 
 
-def load_policy(policy_path: Path) -> tuple[frozenset[str], dict[str, frozenset[str]]]:
+def load_policy(policy_path: Path) -> tuple[frozenset[str], dict[str, frozenset[str]], frozenset[str]]:
     try:
         data = json.loads(policy_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as error:
@@ -103,8 +109,18 @@ def load_policy(policy_path: Path) -> tuple[frozenset[str], dict[str, frozenset[
     if not isinstance(data, dict) or set(data) != {
         "implementation_paths",
         "coordinator_changes",
+        "baseline_preserved_protected_paths",
     }:
-        raise AuditError("policy must contain only implementation_paths and coordinator_changes")
+        raise AuditError("policy must contain exactly implementation_paths, coordinator_changes, and baseline_preserved_protected_paths")
+
+    preserved = data["baseline_preserved_protected_paths"]
+    if (
+        not isinstance(preserved, list)
+        or any(not isinstance(path, str) for path in preserved)
+        or len(preserved) != 2
+        or frozenset(preserved) != BASELINE_PRESERVED_PROTECTED_PATHS
+    ):
+        raise AuditError("baseline_preserved_protected_paths must contain exactly bugs-and-ideas.md and docs/Projekte_2026_27.xlsx")
 
     implementation = data["implementation_paths"]
     if (
@@ -130,7 +146,7 @@ def load_policy(policy_path: Path) -> tuple[frozenset[str], dict[str, frozenset[
         ):
             raise AuditError("coordinator attribution must contain nonempty exact allowed paths")
         normalized[sha] = frozenset(paths)
-    return frozenset(implementation), normalized
+    return frozenset(implementation), normalized, frozenset(preserved)
 
 
 def is_generated_or_protected_artifact(path: str) -> bool:
@@ -138,6 +154,8 @@ def is_generated_or_protected_artifact(path: str) -> bool:
     lower = normalized.lower()
     parts = lower.split("/")
     name = parts[-1]
+    if any(part in {"postgres-data", "pgadmin-data", "postgres_data", "pgadmin_data"} for part in parts):
+        return True
     if name == ".env.example":
         return False
     if lower in {
@@ -158,8 +176,6 @@ def is_generated_or_protected_artifact(path: str) -> bool:
     if re.search(r"(?:^|[-_.])(?:credential|credentials|server|servers)(?:[-_.].*)?\.json$", name):
         return True
     if name.startswith(("pgadmin4.db", "pgadmin.db")):
-        return True
-    if any(part in {"postgres-data", "pgadmin-data", "postgres_data", "pgadmin_data"} for part in parts):
         return True
     return name.endswith(
         (
@@ -218,7 +234,7 @@ def audit(
     *,
     cwd: Path,
 ) -> tuple[list[tuple[str, str, str]], list[tuple[str, str, str]]]:
-    implementation, coordinator = load_policy(policy_path)
+    implementation, coordinator, preserved = load_policy(policy_path)
     repo = repo.resolve(strict=True)
     if not repo.is_dir():
         raise AuditError("--repo must name a Git working repository")
@@ -233,6 +249,13 @@ def audit(
     )
     if ancestry.returncode != 0:
         raise AuditError("baseline is not an ancestor of head or ancestry is unavailable")
+
+    tracked_baseline = set(parse_paths(
+        git_metadata(repo, cwd, "ls-tree", "-r", "--name-only", "-z", baseline_sha),
+        "baseline tree",
+    ))
+    # Eligibility is path metadata only: no blob IDs, content or endpoint hashes.
+    eligible_preserved = preserved & tracked_baseline
 
     commit_rows = git_metadata(
         repo,
@@ -274,6 +297,8 @@ def audit(
             commit,
         )
         for status, path in parse_change_events(output, commit):
+            if path in preserved:
+                raise AuditError(f"baseline-preserved protected path has a change event: {commit} {status} {path}")
             if path in implementation:
                 implementation_events.append((commit, status, path))
             elif path in coordinator.get(commit, frozenset()):
@@ -295,7 +320,10 @@ def audit(
         git_metadata(repo, cwd, "ls-tree", "-r", "--name-only", "-z", head_sha),
         "head tree",
     )
-    protected = [path for path in tracked_head if is_generated_or_protected_artifact(path)]
+    protected = [
+        path for path in tracked_head
+        if is_generated_or_protected_artifact(path) and path not in eligible_preserved
+    ]
     if protected:
         raise AuditError(f"protected/generated tracked path(s) at head: {sorted(protected)}")
     return implementation_events, coordinator_events
@@ -355,6 +383,7 @@ def _policy_file(path: Path, implementation: list[str] | None = None, coordinato
             {
                 "implementation_paths": list(IMPLEMENTATION_PATHS) if implementation is None else implementation,
                 "coordinator_changes": {} if coordinator is None else coordinator,
+                "baseline_preserved_protected_paths": sorted(BASELINE_PRESERVED_PROTECTED_PATHS),
             }
         ),
         encoding="utf-8",
@@ -362,12 +391,112 @@ def _policy_file(path: Path, implementation: list[str] | None = None, coordinato
     return path
 
 
-def _must_fail(label: str, *arguments: object, **keywords: object) -> None:
+def _must_fail(label: str, *arguments: object, expected: str | None = None, **keywords: object) -> None:
     try:
         audit(*arguments, **keywords)  # type: ignore[arg-type]
-    except AuditError:
+    except AuditError as error:
+        if expected is not None and expected not in str(error):
+            raise AuditError(f"self-test rejected {label} for the wrong reason: {error}") from error
         return
     raise AuditError(f"self-test failed to reject {label}")
+
+
+@contextmanager
+def _deny_fixture_content(repo: Path):
+    """Prove Python audit paths cannot open any synthetic repository content."""
+    originals = builtins.open, io.open, os.open
+
+    def deny_then_open(original):
+        def guarded(file, *args, **kwargs):
+            if not isinstance(file, int):
+                try:
+                    Path(os.fsdecode(file)).resolve().relative_to(repo.resolve())
+                except ValueError:
+                    pass
+                else:
+                    raise PermissionError("synthetic repository content access denied")
+            return original(file, *args, **kwargs)
+        return guarded
+
+    try:
+        builtins.open, io.open, os.open = tuple(deny_then_open(item) for item in originals)
+        yield
+    finally:
+        builtins.open, io.open, os.open = originals
+
+
+def _preservation_self_tests(parent: Path) -> None:
+    policy = _policy_file(parent / "preservation-policy.json")
+    for index, name in enumerate(sorted(BASELINE_PRESERVED_PROTECTED_PATHS)):
+        repo, base = _new_fixture(parent, f"preserved-{index}", (name,))
+        unchanged = _fixture_commit(repo, {"README.md": "allowed change\n"}, "unrelated allowed change")
+        with _deny_fixture_content(repo):
+            # Positive through a nonempty range, and baseline == head.
+            audit(repo, base, unchanged, policy, cwd=ROOT)
+            audit(repo, base, base, policy, cwd=ROOT)
+            try:
+                (repo / name).read_bytes()
+            except PermissionError:
+                pass
+            else:
+                raise AuditError("synthetic content-denial control did not trip")
+
+        changed = _fixture_commit(repo, {name: "synthetic modified canary\n"}, "modify preserved path")
+        restored = _fixture_commit(repo, {name: "synthetic canary only\n"}, "restore endpoint")
+        for head in (changed, restored):
+            with _deny_fixture_content(repo):
+                _must_fail("changed/restored preserved path", repo, base, head, policy,
+                           expected="baseline-preserved protected path has a change event", cwd=ROOT)
+        deleted = _fixture_delete_commit(repo, [name], {}, "delete preserved path")
+        with _deny_fixture_content(repo):
+            _must_fail("deleted preserved path", repo, base, deleted, policy,
+                       expected="baseline-preserved protected path has a change event", cwd=ROOT)
+
+        new_repo, new_base = _new_fixture(parent, f"new-preserved-{index}")
+        added = _fixture_commit(new_repo, {name: "synthetic only\n"}, "new protected path")
+        transient = _fixture_delete_commit(new_repo, [name], {}, "transient protected deletion")
+        for head in (added, transient):
+            with _deny_fixture_content(new_repo):
+                _must_fail("new/transient preserved path absent at baseline",
+                           new_repo, new_base, head, policy,
+                           expected="baseline-preserved protected path has a change event", cwd=ROOT)
+
+        # Both rename sides, including rename-then-delete. --no-renames exposes
+        # deletion/addition metadata even when file bytes are identical.
+        for direction in ("from", "to"):
+            source = name if direction == "from" else "README.md"
+            destination = "README.md" if direction == "from" else name
+            renamed_repo, renamed_base = _new_fixture(
+                parent, f"rename-{direction}-{index}", (source,)
+            )
+            (renamed_repo / destination).parent.mkdir(parents=True, exist_ok=True)
+            _fixture_git(renamed_repo, "mv", "--", source, destination)
+            _fixture_git(renamed_repo, "commit", "-m", "rename involving preserved name")
+            renamed = _fixture_git(renamed_repo, "rev-parse", "HEAD")
+            removed = _fixture_delete_commit(renamed_repo, [destination], {}, "delete renamed path")
+            for head in (renamed, removed):
+                with _deny_fixture_content(renamed_repo):
+                    _must_fail("either preserved rename side", renamed_repo,
+                               renamed_base, head, policy,
+                               expected="baseline-preserved protected path has a change event", cwd=ROOT)
+
+    repo, base = _new_fixture(parent, "preserved-both", tuple(BASELINE_PRESERVED_PROTECTED_PATHS))
+    with _deny_fixture_content(repo):
+        audit(repo, base, base, policy, cwd=ROOT)
+    original = json.loads(policy.read_text(encoding="utf-8"))
+    for value in (None, [], ["bugs-and-ideas.md"], ["*"],
+                  ["bugs-and-ideas.md", "docs/Projekte_2026_27.xlsx", ".env"],
+                  ["bugs-and-ideas.md", "docs/projekte_2026_27.xlsx"]):
+        invalid = dict(original)
+        if value is None:
+            del invalid["baseline_preserved_protected_paths"]
+        else:
+            invalid["baseline_preserved_protected_paths"] = value
+        invalid_path = parent / "invalid-preservation-policy.json"
+        invalid_path.write_text(json.dumps(invalid), encoding="utf-8")
+        with _deny_fixture_content(repo):
+            _must_fail("missing/extra/wildcard/altered preservation policy",
+                       repo, base, base, invalid_path, cwd=ROOT)
 
 
 def run_self_tests() -> None:
@@ -380,6 +509,7 @@ def run_self_tests() -> None:
         "--policy",
         '"implementation_paths"',
         '"coordinator_changes"',
+        '"baseline_preserved_protected_paths"',
         "AUDIT_REPO",
         "AUDIT_BASELINE",
         "AUDIT_HEAD",
@@ -410,6 +540,7 @@ def run_self_tests() -> None:
 
     with tempfile.TemporaryDirectory(prefix="bug40-scope-self-test-", dir=ROOT) as temporary:
         parent = Path(temporary)
+        _preservation_self_tests(parent)
         repo, base = _new_fixture(
             parent,
             "positive",
@@ -502,14 +633,14 @@ def run_self_tests() -> None:
         for protected in (
             ".env",
             "docker.env",
-            "docs/Projekte_2026_27.xlsx",
-            "bugs-and-ideas.md",
             "frontend/.env.local",
             "private/credentials.json",
             "private/servers.json",
             "pgadmin-data/pgadmin4.db",
             "pgadmin-data/pgadmin4.db-wal",
             "postgres-data/PG_VERSION",
+            "pgadmin-data/.env.example",
+            "postgres-data/.env.example",
             "tls/server.key",
         ):
             protected_repo, protected_head = _new_fixture(
@@ -523,6 +654,7 @@ def run_self_tests() -> None:
                 protected_head,
                 protected_head,
                 _policy_file(parent / "protected-policy.json"),
+                expected="protected/generated tracked path(s) at head",
                 cwd=ROOT,
             )
         allowed_repo, allowed_head = _new_fixture(

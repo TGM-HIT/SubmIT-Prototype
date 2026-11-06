@@ -2,15 +2,16 @@
 """Check durable startup wiring, documentation, and Compose lifecycle behavior."""
 
 from pathlib import Path
-from contextlib import redirect_stdout
+from contextlib import contextmanager, redirect_stdout
+import builtins
 import http.cookiejar
 import fnmatch
 import io
-import inspect
 import json
 import os
 import posixpath
 import re
+import runpy
 import secrets
 import shlex
 import shutil
@@ -156,7 +157,39 @@ def check_startup_documentation() -> None:
         and "in-memory H2 database" in backend_readme,
         "backend README must preserve direct-local H2 instructions",
     )
+    check_pgadmin_documentation(root_readme, backend_readme, sample)
     print("Startup wrapper, README, H2, and pgAdmin workflow documentation checks passed.")
+
+
+def check_pgadmin_documentation(root: str, backend: str, guidance: str) -> None:
+    for label, text, terms in (
+        ("root README", root, ("**SubmIT**", "database:5432", "POSTGRES_DB",
+                              "POSTGRES_USER", "POSTGRES_PASSWORD", "prompts", "**9.19**")),
+        ("backend README", backend, ("**SubmIT**", "configured database and username",
+                                    "prompts for the database password", "stable 9.19")),
+        ("sample guidance", guidance, ("9.19", "SubmIT", "POSTGRES_DB",
+                                      "POSTGRES_USER", "prompts for POSTGRES_PASSWORD")),
+    ):
+        require(all(term in text for term in terms),
+                f"{label} must agree on SubmIT connection, password prompting, and pgAdmin 9.19")
+
+
+def check_documentation_regressions() -> None:
+    # Mutate each document independently; another correct document cannot mask it.
+    documents = [root_readme, backend_readme, sample]
+    for index, terms in enumerate((
+        ("**SubmIT**", "database:5432", "POSTGRES_DB", "POSTGRES_USER", "POSTGRES_PASSWORD", "prompts", "**9.19**"),
+        ("**SubmIT**", "configured database and username", "prompts for the database password", "stable 9.19"),
+        ("9.19", "SubmIT", "POSTGRES_DB", "POSTGRES_USER", "prompts for POSTGRES_PASSWORD"),
+    )):
+        for term in terms:
+            changed = documents.copy()
+            changed[index] = changed[index].replace(term, "REMOVED_GUIDANCE")
+            try:
+                check_pgadmin_documentation(*changed)
+            except SystemExit:
+                continue
+            raise SystemExit(f"documentation regression accepted missing guidance: {index} {term}")
 
 
 def compose_service(name: str) -> str:
@@ -567,8 +600,16 @@ def validate_docker_test_stage_boundary(dockerfile_text: str, dockerignore_text:
                     # --from sources are rooted at the source stage's filesystem
                     # root. Clean traversal before checking the build-stage boundary.
                     source_stage_path = posixpath.normpath("/" + source.lstrip("/"))
+                    pattern_parts = source_stage_path.strip("/").split("/")
+                    sentinel_parts = ("workspace", "docs", "Projekte_2026_27.xlsx")
+                    selects_sentinel = len(pattern_parts) <= len(sentinel_parts) and all(
+                        fnmatch.fnmatchcase(part, pattern)
+                        for part, pattern in zip(sentinel_parts, pattern_parts)
+                    )
                     require(
                         not (
+                            selects_sentinel
+                            or
                             source_stage_path in ("/workspace", "/workspace/docs")
                             or source_stage_path.startswith("/workspace/docs/")
                             or source_stage_path in ("/workspace/*", "/workspace/**")
@@ -643,6 +684,24 @@ def check_docker_test_stage_boundary() -> None:
         except SystemExit:
             return
         raise SystemExit(f"Docker test-stage boundary regression failed to reject {label}")
+
+    for stage_name in ("build", "0"):
+        for source in ("/workspace/d*", "/workspace/../workspace/d*",
+                       "workspace/../workspace/d*", "/work*/d?cs",
+                       "/workspace/docs/*"):
+            must_reject(
+                f"normalized runtime glob from stage {stage_name}: {source}",
+                dockerfile.replace(
+                    "FROM eclipse-temurin:23-jre",
+                    f"FROM eclipse-temurin:23-jre\nCOPY --from={stage_name} {source} /app/",
+                ),
+                dockerignore,
+            )
+        validate_docker_test_stage_boundary(
+            dockerfile.replace("COPY --from=build /workspace/backend/build/libs/*.jar",
+                               f"COPY --from={stage_name} /workspace/../workspace/backend/build/libs/*.jar"),
+            dockerignore,
+        )
 
     must_reject(
         "a filtered/replaced full test command",
@@ -1135,21 +1194,45 @@ def check_compose_wrapper() -> None:
             Path(relative_directory).rmdir()
 
 
+@contextmanager
+def synthetic_access_guard(root: Path, forbidden: tuple[str, ...], denied: list[Path]):
+    """Intercept actual read/copy opens, before access, in synthetic trees only."""
+    original_builtin, original_io, original_os = builtins.open, io.open, os.open
+    boundary = root.resolve()
+
+    def check(file: object) -> None:
+        if isinstance(file, int):
+            return
+        path = Path(os.fsdecode(file)).absolute()
+        try:
+            relative = path.resolve().relative_to(boundary).as_posix()
+        except ValueError:
+            return
+        if any(relative == item or relative.startswith(item + "/") for item in forbidden):
+            denied.append(path)
+            raise PermissionError("synthetic protected/history access denied before open")
+
+    def guarded_builtin(file, *args, **kwargs):
+        check(file)
+        return original_builtin(file, *args, **kwargs)
+
+    def guarded_io(file, *args, **kwargs):
+        check(file)
+        return original_io(file, *args, **kwargs)
+
+    def guarded_os(file, *args, **kwargs):
+        check(file)
+        return original_os(file, *args, **kwargs)
+
+    try:
+        builtins.open, io.open, os.open = guarded_builtin, guarded_io, guarded_os
+        yield
+    finally:
+        builtins.open, io.open, os.open = original_builtin, original_io, original_os
+
+
 def check_safe_context_and_lifecycle_independence() -> None:
     global ROOT
-    ordinary_documentation_source = inspect.getsource(check_startup_documentation)
-    require(
-        not any(
-            marker in ordinary_documentation_source
-            for marker in (
-                "harness/tickets/",
-                "harness/runs/",
-                "rev-parse",
-                "merge-base",
-            )
-        ),
-        "ordinary startup checks must not depend on ticket, ledger, run, or Git history",
-    )
 
     with tempfile.TemporaryDirectory(prefix="startup-check-safe-context-", dir=ROOT) as temporary:
         work = Path(temporary)
@@ -1172,9 +1255,33 @@ def check_safe_context_and_lifecycle_independence() -> None:
             "scripts/check-startup-config.py",
         )
         for relative in selected_inputs:
-            destination = safe_copy / relative
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copyfile(ROOT / relative, destination)
+            target = original_root / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(ROOT / relative, target)
+        attempted_reads: list[Path] = []
+        with synthetic_access_guard(original_root, PROTECTED_INPUT_PATHS, attempted_reads):
+            for relative in selected_inputs:
+                destination = safe_copy / relative
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copyfile(original_root / relative, destination)
+            for relative in PROTECTED_INPUT_PATHS:
+                for access in (
+                    lambda path: path.read_bytes(),
+                    lambda path: path.read_text(),
+                    lambda path: builtins.open(path, "rb"),
+                    lambda path: os.open(path, os.O_RDONLY),
+                    lambda path: shutil.copyfile(path, safe_copy / "forbidden-copy"),
+                ):
+                    before = len(attempted_reads)
+                    try:
+                        access(original_root / relative)
+                    except PermissionError:
+                        pass
+                    else:
+                        raise SystemExit("synthetic canary read/copy was not intercepted")
+                    require(len(attempted_reads) == before + 1,
+                            "synthetic read must fail before underlying file access")
+        attempted_reads.clear()
         require(
             all((safe_copy / relative).is_file() for relative in selected_inputs),
             "manifest-selected public inputs, including .env.example, must remain usable",
@@ -1189,8 +1296,13 @@ def check_safe_context_and_lifecycle_independence() -> None:
             (safe_copy / "scripts/default-wrapper-fixture/.env").is_file(),
             "intentional default-wrapper synthetic .env fixture must remain usable",
         )
+        with synthetic_access_guard(original_root, PROTECTED_INPUT_PATHS, attempted_reads):
+            require(bool((safe_copy / ".env.example").read_text()),
+                    "public sample must remain readable under interception")
+            require("SYNTHETIC_DEFAULT_FIXTURE" in
+                    (safe_copy / "scripts/default-wrapper-fixture/.env").read_text(),
+                    "intentional default fixture must remain readable under interception")
 
-        attempted_reads: list[Path] = []
         preparse_events: list[str] = []
 
         def mocked_make_parser(cwd: Path) -> None:
@@ -1198,13 +1310,13 @@ def check_safe_context_and_lifecycle_independence() -> None:
             for relative in PROTECTED_INPUT_PATHS:
                 candidate = cwd / relative
                 if candidate.exists():
-                    attempted_reads.append(candidate)
-                    raise OSError("mocked protected-file access denied")
+                    candidate.read_bytes()
 
         # A checker-only guard is too late: model Make's parse-time include before
         # the Python checker starts. This synthetic forbidden attempt must trip.
         try:
-            mocked_make_parser(original_root)
+            with synthetic_access_guard(original_root, PROTECTED_INPUT_PATHS, attempted_reads):
+                mocked_make_parser(original_root)
         except OSError:
             pass
         else:
@@ -1216,6 +1328,7 @@ def check_safe_context_and_lifecycle_independence() -> None:
 
         old_root = ROOT
         real_run = subprocess.run
+        guard = synthetic_access_guard(original_root, PROTECTED_INPUT_PATHS, attempted_reads)
         child_workdirs: list[Path] = []
         docker_contexts: list[Path] = []
 
@@ -1235,6 +1348,7 @@ def check_safe_context_and_lifecycle_independence() -> None:
             return subprocess.CompletedProcess(command, 0, stdout="", stderr="")
 
         try:
+            guard.__enter__()
             ROOT = safe_copy.resolve()
             subprocess.run = mock_child  # type: ignore[assignment]
             prior_attempts = len(attempted_reads)
@@ -1281,57 +1395,61 @@ def check_safe_context_and_lifecycle_independence() -> None:
                 "outside-copy Make attempt must be rejected before subprocess/Make parsing",
             )
         finally:
+            guard.__exit__(None, None, None)
             subprocess.run = real_run  # type: ignore[assignment]
             ROOT = old_root
 
     # The documentation check is deliberately run against synthetic lifecycle
     # variants. A Git/history subprocess or a read of ticket/ledger/run content
     # would make this matrix fail.
-    cases = (
-        ("active-to-do", "harness/tickets/Bug-40.md", "status: to-do\n"),
-        ("active-failed", "harness/tickets/Bug-40.md", "status: failed\n"),
-        ("active-in-progress", "harness/tickets/Bug-40.md", "status: in-progress\n"),
-        ("moved-to-done", "harness/tickets/done/Bug-40.md", "completed\n"),
-        ("later-unrelated-change", "unrelated.txt", "later synthetic commit\n"),
-        ("no-history", "README.md", "same public inputs; no Git history\n"),
-    )
+    cases = ("to-do", "failed", "in-progress", "done", "later-unrelated-change", "no-history")
     expected_output: str | None = None
     with tempfile.TemporaryDirectory(prefix="startup-check-lifecycle-", dir=ROOT) as temporary:
         scenario_root = Path(temporary)
         scenario_paths: list[tuple[str, Path]] = []
-        for name, relative, contents in cases:
+        public_inputs = (
+            ".env.example", "compose.yaml", "Makefile", ".dockerignore", "README.md",
+            "backend/README.md", "backend/build.gradle", "backend/Dockerfile",
+            "backend/src/main/java/at/ac/tgm/submit/user/BootstrapAdminConfiguration.java",
+            "backend/src/main/resources/application.properties", "scripts/compose.sh",
+            "scripts/pgadmin-entrypoint.sh", "scripts/check-startup-config.py",
+        )
+        for name in cases:
             root = scenario_root / name
-            target = root / relative
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(contents, encoding="utf-8")
+            for relative in public_inputs:
+                target = root / relative
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(ROOT / relative, target)
+            if name != "no-history":
+                ticket = "harness/tickets/" + ("done/" if name == "done" else "") + "Bug-40.md"
+                fixture_files = {
+                    ticket: "Synthetic ticket only\n",
+                    "harness/plan.md":
+                        f"| [Bug-40]({ticket.removeprefix('harness/')}) | "
+                        f"{'in-progress' if name == 'later-unrelated-change' else name} | synthetic |\n",
+                    "harness/gates/commit-scope.java":
+                        'class CommitScope { static final String[] ALLOWED_FILES = {".env.example"'
+                        + ("" if name == "done" else
+                           ', "scripts/compose.sh", "scripts/pgadmin-entrypoint.sh", '
+                           '"scripts/check-startup-config.py", "scripts/check-change-scope.py", '
+                           '"compose.yaml", ".dockerignore", "README.md", "backend/README.md"')
+                        + "}; }\n",
+                    "harness/runs/synthetic/history.md": "synthetic archived history\n",
+                    ".git/SYNTHETIC_METADATA": "synthetic history condition; no real Git required\n",
+                }
+                if name == "later-unrelated-change":
+                    fixture_files[".git/SYNTHETIC_METADATA"] += "later unrelated commit\n"
+                    fixture_files["unrelated.txt"] = "synthetic later change\n"
+                for relative, contents in fixture_files.items():
+                    target = root / relative
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_text(contents, encoding="utf-8")
             scenario_paths.append((name, root))
         old_root = ROOT
         real_run = subprocess.run
-        real_read_text = Path.read_text
-        unrelated_root = scenario_root / "later-unrelated-change"
-        environment = dict(
-            os.environ,
-            GIT_AUTHOR_NAME="Synthetic startup-check test",
-            GIT_AUTHOR_EMAIL="synthetic@example.invalid",
-            GIT_COMMITTER_NAME="Synthetic startup-check test",
-            GIT_COMMITTER_EMAIL="synthetic@example.invalid",
-        )
-        for git_args in (
-            ["git", "init", "-q", str(unrelated_root)],
-            ["git", "-C", str(unrelated_root), "add", "unrelated.txt"],
-            ["git", "-C", str(unrelated_root), "commit", "-m", "synthetic unrelated commit"],
-        ):
-            result = real_run(
-                git_args,
-                cwd=ROOT,
-                env=environment,
-                check=False,
-                capture_output=True,
-                text=True,
-            )
-            require(result.returncode == 0, "could not prepare synthetic later-unrelated Git history")
         commands: list[list[str]] = []
         denied_paths: list[Path] = []
+        active_root = scenario_root
 
         def no_history_command(
             command: list[str],
@@ -1341,27 +1459,30 @@ def check_safe_context_and_lifecycle_independence() -> None:
         ) -> subprocess.CompletedProcess[str]:
             commands.append(command)
             if command and Path(command[0]).name == "git":
-                raise OSError("ordinary startup attempted a Git/history command")
+                raise FileNotFoundError("synthetic unavailable Git")
+            Path(cwd).resolve().relative_to(active_root.resolve())
             return real_run(command, cwd=cwd, **options)
-
-        def no_history_read(path: Path, *args: object, **kwargs: object) -> str:
-            try:
-                relative = path.relative_to(scenario_root)
-            except ValueError:
-                relative = Path()
-            if relative.parts and relative.parts[0] in {"harness", ".git"}:
-                denied_paths.append(path)
-                raise OSError("ordinary startup attempted to read synthetic history")
-            return real_read_text(path, *args, **kwargs)
 
         try:
             subprocess.run = no_history_command  # type: ignore[assignment]
-            Path.read_text = no_history_read  # type: ignore[assignment]
+            try:
+                subprocess.run(["git", "--version"], cwd=scenario_root)
+            except FileNotFoundError:
+                pass
+            else:
+                raise SystemExit("unavailable-Git control did not make Git unavailable")
+            commands.clear()
             for name, root in scenario_paths:
                 ROOT = root
+                active_root = root
                 captured = io.StringIO()
-                with redirect_stdout(captured):
-                    check_startup_documentation()
+                with synthetic_access_guard(root, ("harness", ".git"), denied_paths):
+                    with redirect_stdout(captured):
+                        # Re-run actual input loading, static checks, internal
+                        # Make, docs and wrapper tests. Docker checks run once
+                        # outside this nonrecursive lifecycle matrix.
+                        runpy.run_path(str(root / "scripts/check-startup-config.py"),
+                                       run_name="startup_lifecycle_probe")
                 output = captured.getvalue()
                 if expected_output is None:
                     expected_output = output
@@ -1369,10 +1490,36 @@ def check_safe_context_and_lifecycle_independence() -> None:
                     output == expected_output,
                     f"ordinary startup documentation result changed for lifecycle case {name}",
                 )
-            require(not commands, "ordinary startup documentation must not spawn commands or query Git")
+            # One complete nonrecursive ordinary startup invocation, including
+            # real Docker-backed checks, must also succeed with Git unavailable.
+            active_root = scenario_paths[-1][1]
+            with synthetic_access_guard(active_root, ("harness", ".git"), denied_paths):
+                with redirect_stdout(io.StringIO()):
+                    runpy.run_path(str(active_root / "scripts/check-startup-config.py"),
+                                   run_name="startup_unavailable_git_probe")
+            require(commands and not any(Path(command[0]).name == "git" for command in commands),
+                    "lifecycle startup must execute enduring checks with Git unavailable")
             require(not denied_paths, "ordinary startup documentation must not read ticket, ledger, run, or .git data")
+            active_root = scenario_paths[0][1]
+            ROOT = active_root
+
+            def lifecycle_helper() -> None:
+                (active_root / "harness/tickets/Bug-40.md").read_text()
+
+            def contaminated_documentation() -> None:
+                check_startup_documentation()
+                lifecycle_helper()
+
+            with synthetic_access_guard(active_root, ("harness", ".git"), denied_paths):
+                try:
+                    with redirect_stdout(io.StringIO()):
+                        contaminated_documentation()
+                except PermissionError:
+                    pass
+                else:
+                    raise SystemExit("helper-mediated lifecycle read escaped instrumentation")
+            require(len(denied_paths) == 1, "lifecycle negative must trip the actual read guard")
         finally:
-            Path.read_text = real_read_text  # type: ignore[assignment]
             subprocess.run = real_run  # type: ignore[assignment]
             ROOT = old_root
     print(
@@ -1980,10 +2127,13 @@ def check_pgadmin_import_lifecycle() -> None:
 
 
 check_startup_documentation()
+check_documentation_regressions()
 check_compose_wrapper()
-check_safe_context_and_lifecycle_independence()
-check_quiet_compose_configuration()
-check_private_build_context()
-check_pgadmin_import_lifecycle()
+if __name__ != "startup_lifecycle_probe":
+    if __name__ != "startup_unavailable_git_probe":
+        check_safe_context_and_lifecycle_independence()
+    check_quiet_compose_configuration()
+    check_private_build_context()
+    check_pgadmin_import_lifecycle()
 
 print("Startup configuration and Docker test-stage checks completed; see Docker probe results above.")
