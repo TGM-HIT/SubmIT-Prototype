@@ -138,7 +138,7 @@ def is_generated_or_protected_artifact(path: str) -> bool:
     lower = normalized.lower()
     parts = lower.split("/")
     name = parts[-1]
-    if normalized == ".env.example":
+    if name == ".env.example":
         return False
     if lower in {
         ".env",
@@ -504,6 +504,7 @@ def run_self_tests() -> None:
             "docker.env",
             "docs/Projekte_2026_27.xlsx",
             "bugs-and-ideas.md",
+            "frontend/.env.local",
             "private/credentials.json",
             "private/servers.json",
             "pgadmin-data/pgadmin4.db",
@@ -524,7 +525,11 @@ def run_self_tests() -> None:
                 _policy_file(parent / "protected-policy.json"),
                 cwd=ROOT,
             )
-        allowed_repo, allowed_head = _new_fixture(parent, "sample-control")
+        allowed_repo, allowed_head = _new_fixture(
+            parent,
+            "sample-control",
+            ("frontend/.env.example",),
+        )
         audit(
             allowed_repo,
             allowed_head,
