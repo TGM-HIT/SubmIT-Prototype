@@ -38,3 +38,7 @@ Standard project checks: from `backend/`, `./gradlew test` and `./gradlew checks
 - Checker-fixture tests demonstrate that the check distinguishes valid and invalid controller shapes and reports actionable failures.
 - No external dependency, production code, API contract, or specification is changed. Existing controllers are not excluded to make a failing check pass.
 - Standard (all tickets): existing behavior outside the stated scope is unchanged; no unrelated cleanups; generated artifacts are never hand-edited and are regenerated and reviewed when applicable; commit generated output only when repository conventions require it; no check is claimed that was not performed.
+
+## Product-owner decisions
+
+- 2026-11-07: "A, but please prepare a new Bug ticket that fixes these findings." Bug-41 completed the separately scoped corrections; resume Dev-51 with its original scope and rerun its required checks.
