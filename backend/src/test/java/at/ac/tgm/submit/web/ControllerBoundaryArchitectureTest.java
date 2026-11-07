@@ -6,20 +6,27 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.sun.source.tree.AnnotationTree;
 import com.sun.source.tree.BlockTree;
+import com.sun.source.tree.BinaryTree;
+import com.sun.source.tree.BindingPatternTree;
 import com.sun.source.tree.CatchTree;
 import com.sun.source.tree.ClassTree;
 import com.sun.source.tree.CompilationUnitTree;
+import com.sun.source.tree.ConditionalExpressionTree;
 import com.sun.source.tree.EnhancedForLoopTree;
 import com.sun.source.tree.ExpressionTree;
 import com.sun.source.tree.ForLoopTree;
 import com.sun.source.tree.IdentifierTree;
+import com.sun.source.tree.InstanceOfTree;
 import com.sun.source.tree.LambdaExpressionTree;
 import com.sun.source.tree.MemberSelectTree;
 import com.sun.source.tree.MethodInvocationTree;
 import com.sun.source.tree.MethodTree;
+import com.sun.source.tree.ParenthesizedTree;
 import com.sun.source.tree.Tree;
 import com.sun.source.tree.TryTree;
+import com.sun.source.tree.UnaryTree;
 import com.sun.source.tree.VariableTree;
+import com.sun.source.tree.WhileLoopTree;
 import com.sun.source.util.JavacTask;
 import com.sun.source.util.TreeScanner;
 import java.io.IOException;
@@ -98,6 +105,47 @@ class ControllerBoundaryArchitectureTest {
                 }
                 """), "fixture.FixtureController.handle",
                 "exactly one injected business-service method");
+    }
+
+    @Test
+    void patternVariableInvocationDoesNotCountAsInjectedServiceDelegation() {
+        assertSourcesFailure(Map.of("FixtureController.java", """
+                package fixture;
+                @RestController
+                class FixtureController {
+                    private final FixtureService service;
+                    FixtureController(FixtureService service) { this.service = service; }
+                    @GetMapping Object handle(Object candidate) {
+                        if (candidate instanceof FixtureService service) {
+                            return service.execute();
+                        }
+                        return null;
+                    }
+                }
+                """), "fixture.FixtureController.handle",
+                "exactly one injected business-service method");
+    }
+
+    @Test
+    void injectedFieldIsResolvedAfterInstanceofPatternScopeEnds() {
+        Analysis analysis = analyzeSources(Map.of("FixtureController.java", """
+                package fixture;
+                @RestController
+                class FixtureController {
+                    private final FixtureService service;
+                    FixtureController(FixtureService service) { this.service = service; }
+                    @GetMapping Object handle(Object candidate) {
+                        if (candidate instanceof FixtureService service) {
+                            service.execute();
+                        }
+                        return service.execute();
+                    }
+                }
+                """));
+
+        assertEquals(List.of("fixture.FixtureController.handle"), analysis.handlers());
+        assertTrue(analysis.findings().isEmpty(),
+                () -> String.join("\n", analysis.findings()));
     }
 
     @Test
@@ -908,12 +956,65 @@ class ControllerBoundaryArchitectureTest {
         }
 
         @Override
+        public Void visitInstanceOf(InstanceOfTree instanceOf, Void unused) {
+            scan(instanceOf.getExpression(), unused);
+            return null;
+        }
+
+        @Override
+        public Void visitIf(com.sun.source.tree.IfTree conditional, Void unused) {
+            scan(conditional.getCondition(), unused);
+            scanWithPatternScope(conditional.getThenStatement(),
+                    flowPatternVariables(conditional.getCondition(), true), unused);
+            if (conditional.getElseStatement() != null) {
+                scanWithPatternScope(conditional.getElseStatement(),
+                        flowPatternVariables(conditional.getCondition(), false), unused);
+            }
+            return null;
+        }
+
+        @Override
+        public Void visitBinary(BinaryTree binary, Void unused) {
+            if (binary.getKind() == Tree.Kind.CONDITIONAL_AND
+                    || binary.getKind() == Tree.Kind.CONDITIONAL_OR) {
+                scan(binary.getLeftOperand(), unused);
+                boolean rightOperandCondition = binary.getKind() == Tree.Kind.CONDITIONAL_AND;
+                scanWithPatternScope(binary.getRightOperand(),
+                        flowPatternVariables(binary.getLeftOperand(), rightOperandCondition), unused);
+                return null;
+            }
+            return super.visitBinary(binary, unused);
+        }
+
+        @Override
+        public Void visitConditionalExpression(ConditionalExpressionTree conditional, Void unused) {
+            scan(conditional.getCondition(), unused);
+            scanWithPatternScope(conditional.getTrueExpression(),
+                    flowPatternVariables(conditional.getCondition(), true), unused);
+            scanWithPatternScope(conditional.getFalseExpression(),
+                    flowPatternVariables(conditional.getCondition(), false), unused);
+            return null;
+        }
+
+        @Override
+        public Void visitWhileLoop(WhileLoopTree loop, Void unused) {
+            scan(loop.getCondition(), unused);
+            scanWithPatternScope(loop.getStatement(),
+                    flowPatternVariables(loop.getCondition(), true), unused);
+            return null;
+        }
+
+        @Override
         public Void visitForLoop(ForLoopTree loop, Void unused) {
             enterScope();
             loop.getInitializer().forEach(initializer -> scan(initializer, unused));
             scan(loop.getCondition(), unused);
+            Set<String> patternVariables = flowPatternVariables(loop.getCondition(), true);
+            enterScope();
+            scopes.getLast().addAll(patternVariables);
             loop.getUpdate().forEach(update -> scan(update, unused));
             scan(loop.getStatement(), unused);
+            exitScope();
             exitScope();
             return null;
         }
@@ -987,6 +1088,13 @@ class ControllerBoundaryArchitectureTest {
             scopes.removeLast();
         }
 
+        private void scanWithPatternScope(Tree tree, Set<String> patternVariables, Void unused) {
+            enterScope();
+            scopes.getLast().addAll(patternVariables);
+            scan(tree, unused);
+            exitScope();
+        }
+
         private boolean isShadowed(String name) {
             for (int index = scopes.size() - 1; index >= 0; index--) {
                 if (scopes.get(index).contains(name)) {
@@ -995,6 +1103,46 @@ class ControllerBoundaryArchitectureTest {
             }
             return false;
         }
+    }
+
+    private static Set<String> flowPatternVariables(Tree condition, boolean whenTrue) {
+        if (condition instanceof ParenthesizedTree parenthesized) {
+            return flowPatternVariables(parenthesized.getExpression(), whenTrue);
+        }
+        if (condition instanceof InstanceOfTree instanceOf) {
+            if (whenTrue && instanceOf.getPattern() instanceof BindingPatternTree binding) {
+                return Set.of(binding.getVariable().getName().toString());
+            }
+            return Set.of();
+        }
+        if (condition instanceof UnaryTree unary
+                && unary.getKind() == Tree.Kind.LOGICAL_COMPLEMENT) {
+            return flowPatternVariables(unary.getExpression(), !whenTrue);
+        }
+        if (condition instanceof BinaryTree binary
+                && binary.getKind() == Tree.Kind.CONDITIONAL_AND) {
+            return combinePatternVariables(
+                    flowPatternVariables(binary.getLeftOperand(), whenTrue),
+                    flowPatternVariables(binary.getRightOperand(), whenTrue), whenTrue);
+        }
+        if (condition instanceof BinaryTree binary
+                && binary.getKind() == Tree.Kind.CONDITIONAL_OR) {
+            return combinePatternVariables(
+                    flowPatternVariables(binary.getLeftOperand(), whenTrue),
+                    flowPatternVariables(binary.getRightOperand(), whenTrue), !whenTrue);
+        }
+        return Set.of();
+    }
+
+    private static Set<String> combinePatternVariables(Set<String> left, Set<String> right,
+            boolean union) {
+        Set<String> combined = new HashSet<>(left);
+        if (union) {
+            combined.addAll(right);
+        } else {
+            combined.retainAll(right);
+        }
+        return combined;
     }
 
     private static boolean isMapped(MethodTree method, Map<String, Set<String>> annotationMeta,
