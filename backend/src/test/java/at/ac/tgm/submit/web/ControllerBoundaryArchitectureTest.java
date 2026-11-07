@@ -21,12 +21,14 @@ import com.sun.source.tree.IdentifierTree;
 import com.sun.source.tree.IfTree;
 import com.sun.source.tree.InstanceOfTree;
 import com.sun.source.tree.LambdaExpressionTree;
+import com.sun.source.tree.LiteralTree;
 import com.sun.source.tree.MemberSelectTree;
 import com.sun.source.tree.MethodInvocationTree;
 import com.sun.source.tree.MethodTree;
 import com.sun.source.tree.ParenthesizedTree;
 import com.sun.source.tree.ReturnTree;
 import com.sun.source.tree.StatementTree;
+import com.sun.source.tree.SwitchTree;
 import com.sun.source.tree.ThrowTree;
 import com.sun.source.tree.Tree;
 import com.sun.source.tree.TryTree;
@@ -164,6 +166,63 @@ class ControllerBoundaryArchitectureTest {
                     FixtureController(FixtureService service) { this.service = service; }
                     @GetMapping Object handle(Object candidate) {
                         if (!(candidate instanceof FixtureService service)) return null;
+                        return service.execute();
+                    }
+                }
+                """), "fixture.FixtureController.handle",
+                "exactly one injected business-service method");
+    }
+
+    @Test
+    void negatedPatternNonTerminatingLoopDoesNotCountFlowScopedVariableAsServiceDelegation() {
+        assertSourcesFailure(Map.of("FixtureController.java", """
+                package fixture;
+                @RestController
+                class FixtureController {
+                    private final FixtureService service;
+                    FixtureController(FixtureService service) { this.service = service; }
+                    @GetMapping Object handle(Object candidate) {
+                        if (!(candidate instanceof FixtureService service)) {
+                            while (true) { }
+                        }
+                        return service.execute();
+                    }
+                }
+                """), "fixture.FixtureController.handle",
+                "exactly one injected business-service method");
+    }
+
+    @Test
+    void negatedPatternTryThrowFinallyDoesNotCountFlowScopedVariableAsServiceDelegation() {
+        assertSourcesFailure(Map.of("FixtureController.java", """
+                package fixture;
+                @RestController
+                class FixtureController {
+                    private final FixtureService service;
+                    FixtureController(FixtureService service) { this.service = service; }
+                    @GetMapping Object handle(Object candidate) {
+                        if (!(candidate instanceof FixtureService service)) {
+                            try { throw new IllegalStateException(); } finally { }
+                        }
+                        return service.execute();
+                    }
+                }
+                """), "fixture.FixtureController.handle",
+                "exactly one injected business-service method");
+    }
+
+    @Test
+    void negatedPatternTryReturnFinallyDoesNotCountFlowScopedVariableAsServiceDelegation() {
+        assertSourcesFailure(Map.of("FixtureController.java", """
+                package fixture;
+                @RestController
+                class FixtureController {
+                    private final FixtureService service;
+                    FixtureController(FixtureService service) { this.service = service; }
+                    @GetMapping Object handle(Object candidate) {
+                        if (!(candidate instanceof FixtureService service)) {
+                            try { return null; } finally { }
+                        }
                         return service.execute();
                     }
                 }
@@ -1179,7 +1238,83 @@ class ControllerBoundaryArchitectureTest {
                     && cannotCompleteNormally(conditional.getThenStatement())
                     && cannotCompleteNormally(conditional.getElseStatement());
         }
+        if (statement instanceof WhileLoopTree loop) {
+            return isTrueLiteral(loop.getCondition())
+                    && !hasUnlabeledBreakAtCurrentLoopLevel(loop.getStatement());
+        }
+        if (statement instanceof TryTree tryTree) {
+            if (tryTree.getFinallyBlock() != null
+                    && cannotCompleteNormally(tryTree.getFinallyBlock())) {
+                return true;
+            }
+            return tryTree.getCatches().isEmpty() && cannotCompleteNormally(tryTree.getBlock());
+        }
         return false;
+    }
+
+    private static boolean isTrueLiteral(ExpressionTree expression) {
+        if (expression instanceof ParenthesizedTree parenthesized) {
+            return isTrueLiteral(parenthesized.getExpression());
+        }
+        return expression instanceof LiteralTree literal && Boolean.TRUE.equals(literal.getValue());
+    }
+
+    private static boolean hasUnlabeledBreakAtCurrentLoopLevel(StatementTree body) {
+        class BreakFinder extends TreeScanner<Void, Void> {
+            private int nestedBreakableStatements;
+            private boolean found;
+
+            @Override
+            public Void visitBreak(BreakTree tree, Void unused) {
+                if (tree.getLabel() != null || nestedBreakableStatements == 0) {
+                    found = true;
+                }
+                return null;
+            }
+
+            @Override
+            public Void visitWhileLoop(WhileLoopTree tree, Void unused) {
+                return scanNestedBreakable(tree, unused);
+            }
+
+            @Override
+            public Void visitForLoop(ForLoopTree tree, Void unused) {
+                return scanNestedBreakable(tree, unused);
+            }
+
+            @Override
+            public Void visitEnhancedForLoop(EnhancedForLoopTree tree, Void unused) {
+                return scanNestedBreakable(tree, unused);
+            }
+
+            @Override
+            public Void visitSwitch(SwitchTree tree, Void unused) {
+                return scanNestedBreakable(tree, unused);
+            }
+
+            @Override
+            public Void visitLambdaExpression(LambdaExpressionTree tree, Void unused) {
+                return null;
+            }
+
+            @Override
+            public Void visitClass(ClassTree tree, Void unused) {
+                return null;
+            }
+
+            private Void scanNestedBreakable(Tree tree, Void unused) {
+                nestedBreakableStatements++;
+                try {
+                    return super.scan(tree, unused);
+                } finally {
+                    nestedBreakableStatements--;
+                }
+            }
+        }
+
+        BreakFinder finder = new BreakFinder();
+        finder.scan(body, null);
+        return finder.found;
     }
 
     private static Set<String> flowPatternVariables(Tree condition, boolean whenTrue) {
