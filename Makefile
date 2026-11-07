@@ -14,6 +14,7 @@ FRONTEND := frontend
 FRONTEND_DEV := cd $(FRONTEND) && (npm ci || npm install) && npm run dev
 
 .PHONY: help env install format-markdown build build-backend build-frontend test test-backend test-frontend \
+        verification-tools-test \
         startup-config-check \
         check run run-testing run-testing-minimal run-testing-tgm testing-stack run-backend run-backend-testing \
         run-frontend openapi clean doc
@@ -50,9 +51,12 @@ test-backend: ## Run backend tests
 test-frontend: install ## Typecheck and run frontend tests
 	cd $(FRONTEND) && npm run typecheck && npm test
 
-check: startup-config-check ## Full verification: startup config, backend checkstyle, build, tests
+check: startup-config-check verification-tools-test ## Full verification: startup config, tooling, backend checkstyle, build, tests
 	cd $(BACKEND) && ./gradlew checkstyleMain
 	$(MAKE) build test
+
+verification-tools-test: ## Run dependency-free verification-tool self-tests
+	python3 scripts/test_verify.py
 
 startup-config-check: ## Verify sample, Compose and backend startup configuration wiring
 	python3 scripts/check-startup-config.py
