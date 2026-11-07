@@ -6,7 +6,7 @@ The production controller-boundary check reported nine findings in six handlers:
 
 ## Source
 
-The owner selected option A in [human-acceptance.md](../runs/Dev-51-20261107-1624/human-acceptance.md). The disposition requests: “A, but please prepare a new Bug ticket that fixes these findings.” The nine findings are listed in [handoff-1.md](../runs/Dev-51-20261107-1624/handoff-1.md); the originating controller-boundary requirements are in [Dev-51](Dev-51.md).
+The owner selected option A in [human-acceptance.md](../../runs/Dev-51-20261107-1624/human-acceptance.md). The disposition requests: “A, but please prepare a new Bug ticket that fixes these findings.” The nine findings are listed in [handoff-1.md](../../runs/Dev-51-20261107-1624/handoff-1.md); the originating controller-boundary requirements are in [Dev-51](../Dev-51.md).
 
 ## Scope and contract
 

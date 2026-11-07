@@ -69,7 +69,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Bug-38](tickets/done/Bug-38.md) | done | Document multipart upload size-limit responses accurately |
 | [Bug-39](tickets/done/Bug-39.md) | done | Keep student own-grade history free of peer grades |
 | [Bug-40](tickets/done/Bug-40.md) | done | Provide reliable Compose shutdown and preconfigure an updated pgAdmin |
-| [Bug-41](tickets/Bug-41.md) | to-do | Correct six production controller-boundary findings |
+| [Bug-41](tickets/done/Bug-41.md) | done | Correct six production controller-boundary findings |
 
 ### Development
 
