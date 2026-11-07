@@ -77,6 +77,36 @@ class ControllerBoundaryArchitectureTest {
     }
 
     @Test
+    void mappedOrdinaryControllerIsDiscoveredAndFailsWithActionableDiagnostic() {
+        assertSourcesFailure(Map.of("FixtureController.java", """
+                package fixture;
+                @Controller
+                class FixtureController {
+                    @GetMapping Object handle() { return Utility.normalize("value"); }
+                }
+                """), "fixture.FixtureController.handle",
+                "exactly one injected business-service method");
+    }
+
+    @Test
+    void inheritedMappedHandlerIsCheckedAndNamesConcreteController() {
+        assertSourcesFailure(Map.of(
+                "FixtureController.java", """
+                        package fixture;
+                        @RestController
+                        class FixtureController extends BaseController {
+                        }
+                        """,
+                "BaseController.java", """
+                        package fixture;
+                        class BaseController {
+                            @GetMapping Object handle() { return Utility.normalize("value"); }
+                        }
+                        """), "fixture.FixtureController.handle",
+                "exactly one injected business-service method");
+    }
+
+    @Test
     void handlerWithoutServiceDelegationFailsWithControllerAndMethodDiagnostic() {
         assertFixtureFailure("""
                 @RestController
@@ -85,7 +115,7 @@ class ControllerBoundaryArchitectureTest {
                     FixtureController(FixtureService service) { this.service = service; }
                     @GetMapping Object handle() { return Utility.normalize("value"); }
                 }
-                """, "FixtureController.handle", "exactly one injected business-service method");
+                """, "fixture.FixtureController.handle", "exactly one injected business-service method");
     }
 
     @Test
@@ -100,7 +130,7 @@ class ControllerBoundaryArchitectureTest {
                         return service.execute();
                     }
                 }
-                """, "FixtureController.handle", "found 2");
+                """, "fixture.FixtureController.handle", "found 2");
     }
 
     @Test
@@ -133,8 +163,14 @@ class ControllerBoundaryArchitectureTest {
                 package fixture;
                 %s
                 """.formatted(controllerSource);
-        Analysis analysis = analyzeSources(Map.of("FixtureController.java", source));
+        assertSourcesFailure(Map.of("FixtureController.java", source), diagnosticContext, expectedText);
+    }
 
+    private static void assertSourcesFailure(Map<String, String> sources, String diagnosticContext,
+            String expectedText) {
+        Analysis analysis = analyzeSources(sources);
+        assertTrue(analysis.handlers().contains(diagnosticContext),
+                () -> "Expected discovered handler " + diagnosticContext + ", found " + analysis.handlers());
         assertEquals(1, analysis.findings().size());
         assertTrue(analysis.findings().getFirst().contains(diagnosticContext),
                 analysis.findings().getFirst());
@@ -203,38 +239,102 @@ class ControllerBoundaryArchitectureTest {
             }
         }
 
+        Map<String, ParsedClass> classesByName = new HashMap<>();
+        Map<String, List<ParsedClass>> classesBySimpleName = new HashMap<>();
+        for (ParsedClass parsed : classes) {
+            classesByName.put(parsed.name(), parsed);
+            classesBySimpleName.computeIfAbsent(parsed.tree().getSimpleName().toString(),
+                    ignored -> new ArrayList<>()).add(parsed);
+        }
+
         List<String> findings = new ArrayList<>();
         List<String> handlers = new ArrayList<>();
         for (ParsedClass parsed : classes) {
-            if (!isRestController(parsed.tree(), annotationMeta, new HashSet<>())) {
+            if (!isController(parsed.tree(), annotationMeta, new HashSet<>())) {
                 continue;
             }
-            Set<String> injectedServices = injectedServiceFields(parsed.tree(), serviceTypes);
-            for (Tree member : parsed.tree().getMembers()) {
-                if (!(member instanceof MethodTree method)
-                        || method.getReturnType() == null
-                        || !isMapped(method, annotationMeta, new HashSet<>())) {
-                    continue;
-                }
-                String handler = parsed.name() + "." + method.getName();
-                handlers.add(handler);
-                int serviceCalls = countServiceCalls(method, injectedServices);
-                if (serviceCalls != 1) {
-                    findings.add(handler + ": expected exactly one injected business-service method "
-                            + "delegation, found " + serviceCalls + ".");
-                }
-                for (VariableTree parameter : method.getParameters()) {
-                    Set<String> annotations = annotationNames(parameter.getModifiers().getAnnotations());
-                    String payloadAnnotation = annotations.stream()
-                            .filter(PAYLOAD_ANNOTATIONS::contains).findFirst().orElse(null);
-                    if (payloadAnnotation != null && !annotations.contains("Valid")) {
-                        findings.add(handler + ": payload parameter '" + parameter.getName()
-                                + "' (@" + payloadAnnotation + ") must be annotated @Valid.");
+            List<ParsedClass> hierarchy = classHierarchy(parsed, classesByName, classesBySimpleName);
+            Set<String> injectedServices = new HashSet<>();
+            for (ParsedClass hierarchyClass : hierarchy) {
+                injectedServices.addAll(injectedServiceFields(hierarchyClass.tree(), serviceTypes));
+            }
+            Set<String> visitedSignatures = new HashSet<>();
+            for (ParsedClass hierarchyClass : hierarchy) {
+                for (Tree member : hierarchyClass.tree().getMembers()) {
+                    if (!(member instanceof MethodTree method) || method.getReturnType() == null
+                            || !visitedSignatures.add(methodSignature(method))
+                            || !isMapped(method, annotationMeta, new HashSet<>())) {
+                        continue;
+                    }
+                    String handler = parsed.name() + "." + method.getName();
+                    handlers.add(handler);
+                    int serviceCalls = countServiceCalls(method, injectedServices);
+                    if (serviceCalls != 1) {
+                        findings.add(handler + ": expected exactly one injected business-service method "
+                                + "delegation, found " + serviceCalls + ".");
+                    }
+                    for (VariableTree parameter : method.getParameters()) {
+                        Set<String> annotations = annotationNames(parameter.getModifiers().getAnnotations());
+                        String payloadAnnotation = annotations.stream()
+                                .filter(PAYLOAD_ANNOTATIONS::contains).findFirst().orElse(null);
+                        if (payloadAnnotation != null && !annotations.contains("Valid")) {
+                            findings.add(handler + ": payload parameter '" + parameter.getName()
+                                    + "' (@" + payloadAnnotation + ") must be annotated @Valid.");
+                        }
                     }
                 }
             }
         }
         return new Analysis(List.copyOf(handlers), List.copyOf(findings));
+    }
+
+    private static List<ParsedClass> classHierarchy(ParsedClass controller,
+            Map<String, ParsedClass> classesByName, Map<String, List<ParsedClass>> classesBySimpleName) {
+        List<ParsedClass> hierarchy = new ArrayList<>();
+        Set<String> visited = new HashSet<>();
+        ParsedClass current = controller;
+        while (current != null && visited.add(current.name())) {
+            hierarchy.add(current);
+            current = sourceSuperclass(current, classesByName, classesBySimpleName);
+        }
+        return hierarchy;
+    }
+
+    private static ParsedClass sourceSuperclass(ParsedClass parsed, Map<String, ParsedClass> classesByName,
+            Map<String, List<ParsedClass>> classesBySimpleName) {
+        Tree superclass = parsed.tree().getExtendsClause();
+        if (superclass == null) {
+            return null;
+        }
+        String type = superclass.toString().replaceAll("<.*>", "");
+        ParsedClass exact = classesByName.get(type);
+        if (exact != null) {
+            return exact;
+        }
+        String simple = simpleName(type);
+        int packageSeparator = parsed.name().lastIndexOf('.');
+        String packageName = packageSeparator < 0 ? "" : parsed.name().substring(0, packageSeparator + 1);
+        exact = classesByName.get(packageName + simple);
+        if (exact != null) {
+            return exact;
+        }
+        for (var imported : parsed.unit().getImports()) {
+            String importName = imported.getQualifiedIdentifier().toString();
+            if (!importName.endsWith(".*") && simpleName(importName).equals(simple)) {
+                exact = classesByName.get(importName);
+                if (exact != null) {
+                    return exact;
+                }
+            }
+        }
+        List<ParsedClass> matches = classesBySimpleName.getOrDefault(simple, List.of());
+        return matches.size() == 1 ? matches.getFirst() : null;
+    }
+
+    private static String methodSignature(MethodTree method) {
+        return method.getName() + "(" + method.getParameters().stream()
+                .map(parameter -> parameter.getType().toString())
+                .collect(java.util.stream.Collectors.joining(",")) + ")";
     }
 
     private static Set<String> injectedServiceFields(ClassTree controller, Set<String> serviceTypes) {
@@ -307,23 +407,23 @@ class ControllerBoundaryArchitectureTest {
                 .anyMatch(name -> isMappingAnnotation(name, annotationMeta, visited));
     }
 
-    private static boolean isRestController(ClassTree controller,
+    private static boolean isController(ClassTree controller,
             Map<String, Set<String>> annotationMeta, Set<String> visited) {
         return controller.getModifiers().getAnnotations().stream()
                 .map(ControllerBoundaryArchitectureTest::annotationName)
                 .anyMatch(name -> name.equals("RestController")
-                        || annotationMeta.containsKey(name)
-                        && isRestControllerAnnotation(name, annotationMeta, visited));
+                        || name.equals("Controller")
+                        || isControllerAnnotation(name, annotationMeta, visited));
     }
 
-    private static boolean isRestControllerAnnotation(String name,
+    private static boolean isControllerAnnotation(String name,
             Map<String, Set<String>> annotationMeta, Set<String> visited) {
         if (!visited.add(name)) {
             return false;
         }
         Set<String> meta = annotationMeta.getOrDefault(name, Set.of());
-        return meta.contains("RestController")
-                || meta.stream().anyMatch(next -> isRestControllerAnnotation(next, annotationMeta, visited));
+        return meta.contains("Controller") || meta.contains("RestController")
+                || meta.stream().anyMatch(next -> isControllerAnnotation(next, annotationMeta, visited));
     }
 
     private static boolean isMappingAnnotation(String name, Map<String, Set<String>> annotationMeta,
