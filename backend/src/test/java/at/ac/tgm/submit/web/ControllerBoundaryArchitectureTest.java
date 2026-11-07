@@ -12,16 +12,22 @@ import com.sun.source.tree.CatchTree;
 import com.sun.source.tree.ClassTree;
 import com.sun.source.tree.CompilationUnitTree;
 import com.sun.source.tree.ConditionalExpressionTree;
+import com.sun.source.tree.BreakTree;
+import com.sun.source.tree.ContinueTree;
 import com.sun.source.tree.EnhancedForLoopTree;
 import com.sun.source.tree.ExpressionTree;
 import com.sun.source.tree.ForLoopTree;
 import com.sun.source.tree.IdentifierTree;
+import com.sun.source.tree.IfTree;
 import com.sun.source.tree.InstanceOfTree;
 import com.sun.source.tree.LambdaExpressionTree;
 import com.sun.source.tree.MemberSelectTree;
 import com.sun.source.tree.MethodInvocationTree;
 import com.sun.source.tree.MethodTree;
 import com.sun.source.tree.ParenthesizedTree;
+import com.sun.source.tree.ReturnTree;
+import com.sun.source.tree.StatementTree;
+import com.sun.source.tree.ThrowTree;
 import com.sun.source.tree.Tree;
 import com.sun.source.tree.TryTree;
 import com.sun.source.tree.UnaryTree;
@@ -139,6 +145,43 @@ class ControllerBoundaryArchitectureTest {
                             service.execute();
                         }
                         return service.execute();
+                    }
+                }
+                """));
+
+        assertEquals(List.of("fixture.FixtureController.handle"), analysis.handlers());
+        assertTrue(analysis.findings().isEmpty(),
+                () -> String.join("\n", analysis.findings()));
+    }
+
+    @Test
+    void negatedPatternEarlyReturnDoesNotCountFlowScopedVariableAsServiceDelegation() {
+        assertSourcesFailure(Map.of("FixtureController.java", """
+                package fixture;
+                @RestController
+                class FixtureController {
+                    private final FixtureService service;
+                    FixtureController(FixtureService service) { this.service = service; }
+                    @GetMapping Object handle(Object candidate) {
+                        if (!(candidate instanceof FixtureService service)) return null;
+                        return service.execute();
+                    }
+                }
+                """), "fixture.FixtureController.handle",
+                "exactly one injected business-service method");
+    }
+
+    @Test
+    void explicitThisServiceDelegationWorksAfterNegatedPatternEarlyReturn() {
+        Analysis analysis = analyzeSources(Map.of("FixtureController.java", """
+                package fixture;
+                @RestController
+                class FixtureController {
+                    private final FixtureService service;
+                    FixtureController(FixtureService service) { this.service = service; }
+                    @GetMapping Object handle(Object candidate) {
+                        if (!(candidate instanceof FixtureService service)) return null;
+                        return this.service.execute();
                     }
                 }
                 """));
@@ -943,9 +986,14 @@ class ControllerBoundaryArchitectureTest {
         @Override
         public Void visitBlock(BlockTree block, Void unused) {
             enterScope();
-            Void result = super.visitBlock(block, unused);
+            for (StatementTree statement : block.getStatements()) {
+                scan(statement, unused);
+                if (statement instanceof IfTree conditional) {
+                    scopes.getLast().addAll(patternVariablesAfterIf(conditional));
+                }
+            }
             exitScope();
-            return result;
+            return null;
         }
 
         @Override
@@ -1103,6 +1151,35 @@ class ControllerBoundaryArchitectureTest {
             }
             return false;
         }
+    }
+
+    private static Set<String> patternVariablesAfterIf(IfTree conditional) {
+        Set<String> inThen = flowPatternVariables(conditional.getCondition(), true);
+        Set<String> inElse = flowPatternVariables(conditional.getCondition(), false);
+        boolean thenAbrupt = cannotCompleteNormally(conditional.getThenStatement());
+        boolean elseAbrupt = conditional.getElseStatement() != null
+                && cannotCompleteNormally(conditional.getElseStatement());
+        if (thenAbrupt == elseAbrupt) {
+            return Set.of();
+        }
+        return thenAbrupt ? inElse : inThen;
+    }
+
+    private static boolean cannotCompleteNormally(StatementTree statement) {
+        if (statement instanceof ReturnTree || statement instanceof ThrowTree
+                || statement instanceof BreakTree || statement instanceof ContinueTree) {
+            return true;
+        }
+        if (statement instanceof BlockTree block) {
+            List<? extends StatementTree> statements = block.getStatements();
+            return !statements.isEmpty() && cannotCompleteNormally(statements.getLast());
+        }
+        if (statement instanceof IfTree conditional) {
+            return conditional.getElseStatement() != null
+                    && cannotCompleteNormally(conditional.getThenStatement())
+                    && cannotCompleteNormally(conditional.getElseStatement());
+        }
+        return false;
     }
 
     private static Set<String> flowPatternVariables(Tree condition, boolean whenTrue) {
