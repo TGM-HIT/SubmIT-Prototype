@@ -151,6 +151,173 @@ class ControllerBoundaryArchitectureTest {
     }
 
     @Test
+    void mappedInterfaceMethodsMatchQualifiedAndImportedParameterTypes() {
+        assertSourcesFailures(Map.of(
+                        "FixtureApi.java", """
+                                package fixture;
+                                interface FixtureApi {
+                                    @GetMapping Object handle(@RequestBody java.lang.String request);
+                                }
+                                """,
+                        "FixtureController.java", """
+                                package fixture;
+                                import java.lang.String;
+                                @RestController
+                                class FixtureController implements FixtureApi {
+                                    @Override public Object handle(String request) { return null; }
+                                }
+                                """), "fixture.FixtureController.handle",
+                        List.of("exactly one injected business-service method", "@Valid"));
+    }
+
+    @Test
+    void genericInterfaceMappingMatchesConcreteSubstitutedParameterType() {
+        assertSourcesFailures(Map.of(
+                        "FixtureApi.java", """
+                                package fixture;
+                                interface FixtureApi<T> {
+                                    @GetMapping Object handle(T request);
+                                }
+                                """,
+                        "FixtureController.java", """
+                                package fixture;
+                                import java.lang.String;
+                                @RestController
+                                class FixtureController implements FixtureApi<String> {
+                                    @Override public Object handle(@RequestBody String request) { return null; }
+                                }
+                                """), "fixture.FixtureController.handle",
+                        List.of("exactly one injected business-service method", "@Valid"));
+    }
+
+    @Test
+    void superclassMappingChecksConcreteOverrideRatherThanBaseBodyOrParameters() {
+        assertSourcesFailures(Map.of(
+                        "FixtureController.java", """
+                                package fixture;
+                                import java.lang.String;
+                                @RestController
+                                class FixtureController extends BaseController {
+                                    @Override Object handle(@RequestBody String request) { return null; }
+                                }
+                                """,
+                        "BaseController.java", """
+                                package fixture;
+                                class BaseController {
+                                    private final FixtureService service;
+                                    BaseController(FixtureService service) { this.service = service; }
+                                    @GetMapping Object handle(@Valid @RequestBody java.lang.String request) {
+                                        return service.execute();
+                                    }
+                                }
+                                """), "fixture.FixtureController.handle",
+                        List.of("exactly one injected business-service method", "@Valid"));
+    }
+
+    @Test
+    void compliantConcreteOverrideReplacesInvalidMappedBaseDeclaration() {
+        Analysis analysis = analyzeSources(Map.of(
+                        "FixtureController.java", """
+                                package fixture;
+                                import java.lang.String;
+                                @RestController
+                                class FixtureController extends BaseController {
+                                    @Override Object handle(@Valid @RequestBody String request) {
+                                        return service.execute();
+                                    }
+                                }
+                                """,
+                        "BaseController.java", """
+                                package fixture;
+                                class BaseController {
+                                    protected final FixtureService service;
+                                    BaseController(FixtureService service) { this.service = service; }
+                                    @GetMapping Object handle(@RequestBody java.lang.String request) {
+                                        return null;
+                                    }
+                                }
+                                """));
+
+        assertEquals(List.of("fixture.FixtureController.handle"), analysis.handlers());
+        assertTrue(analysis.findings().isEmpty(),
+                        () -> String.join("\n", analysis.findings()));
+    }
+
+    @Test
+    void inheritedMappedDefaultInterfaceMethodIsDiscoveredAndChecked() {
+        assertSourcesFailure(Map.of(
+                        "FixtureApi.java", """
+                                package fixture;
+                                interface FixtureApi {
+                                    @GetMapping default Object handle() { return null; }
+                                }
+                                """,
+                        "FixtureController.java", """
+                                package fixture;
+                                @RestController
+                                class FixtureController implements FixtureApi { }
+                                """), "fixture.FixtureController.handle",
+                        "exactly one injected business-service method");
+
+        Analysis overridden = analyzeSources(Map.of(
+                        "FixtureApi.java", """
+                                package fixture;
+                                interface FixtureApi {
+                                    @GetMapping default Object handle() { return null; }
+                                }
+                                """,
+                        "FixtureController.java", """
+                                package fixture;
+                                @RestController
+                                class FixtureController implements FixtureApi {
+                                    private final FixtureService service;
+                                    FixtureController(FixtureService service) { this.service = service; }
+                                    @Override public Object handle() { return service.execute(); }
+                                }
+                                """));
+        assertEquals(List.of("fixture.FixtureController.handle"), overridden.handlers());
+        assertTrue(overridden.findings().isEmpty(),
+                        () -> String.join("\n", overridden.findings()));
+    }
+
+    @Test
+    void interfaceInheritedPayloadBindingsRequireValidAndAllowValidControl() {
+        Analysis analysis = analyzeSources(Map.of(
+                        "FixtureApi.java", """
+                                package fixture;
+                                interface FixtureApi {
+                                    @PostMapping Object body(@RequestBody Object value);
+                                    @PostMapping Object model(@ModelAttribute Object value);
+                                    @PostMapping Object part(@RequestPart Object value);
+                                    @PostMapping Object valid(@RequestBody Object value);
+                                }
+                                """,
+                        "FixtureController.java", """
+                                package fixture;
+                                @RestController
+                                class FixtureController implements FixtureApi {
+                                    private final FixtureService service;
+                                    FixtureController(FixtureService service) { this.service = service; }
+                                    public Object body(Object value) { return service.execute(); }
+                                    public Object model(Object value) { return service.execute(); }
+                                    public Object part(Object value) { return service.execute(); }
+                                    public Object valid(@Valid Object value) { return service.execute(); }
+                                }
+                                """));
+
+        assertEquals(4, analysis.handlers().size());
+        assertEquals(3, analysis.findings().size(), () -> String.join("\n", analysis.findings()));
+        for (String method : List.of("body", "model", "part")) {
+            assertTrue(analysis.findings().stream().anyMatch(finding ->
+                                    finding.contains("fixture.FixtureController." + method)
+                                            && finding.contains("@Valid")),
+                            () -> "Missing interface-binding diagnostic for " + method + ": " + analysis.findings());
+        }
+        assertFalse(analysis.findings().stream()
+                        .anyMatch(finding -> finding.contains("fixture.FixtureController.valid")));
+    }
+
+    @Test
     void handlerWithoutServiceDelegationFailsWithControllerAndMethodDiagnostic() {
         assertFixtureFailure("""
                 @RestController
@@ -304,38 +471,48 @@ class ControllerBoundaryArchitectureTest {
             if (!isController(parsed.tree(), annotationMeta, new HashSet<>())) {
                 continue;
             }
-            List<ParsedClass> hierarchy = classHierarchy(parsed, classesByName, classesBySimpleName);
+            List<ResolvedType> hierarchy = classHierarchy(parsed, classesByName, classesBySimpleName);
             Set<String> injectedServices = new HashSet<>();
-            for (ParsedClass hierarchyClass : hierarchy) {
-                injectedServices.addAll(injectedServiceFields(hierarchyClass.tree(), serviceTypes));
+            for (ResolvedType hierarchyClass : hierarchy) {
+                injectedServices.addAll(injectedServiceFields(hierarchyClass.parsed().tree(), serviceTypes));
             }
-            List<ParsedClass> interfaces = sourceInterfaces(hierarchy, classesByName, classesBySimpleName);
-            Map<String, MethodTree> effectiveMethods = new HashMap<>();
+            List<ResolvedType> interfaces = sourceInterfaces(hierarchy, classesByName, classesBySimpleName);
+            Map<String, EffectiveMethod> effectiveMethods = new HashMap<>();
             Set<String> mappedSignatures = new HashSet<>();
-            for (ParsedClass hierarchyClass : hierarchy) {
-                for (Tree member : hierarchyClass.tree().getMembers()) {
+            for (ResolvedType hierarchyClass : hierarchy) {
+                for (Tree member : hierarchyClass.parsed().tree().getMembers()) {
                     if (!(member instanceof MethodTree method) || method.getReturnType() == null) {
                         continue;
                     }
-                    effectiveMethods.putIfAbsent(methodSignature(method), method);
+                    String signature = methodSignature(method, hierarchyClass);
+                    effectiveMethods.putIfAbsent(signature, new EffectiveMethod(method, hierarchyClass));
                     if (isMapped(method, annotationMeta, new HashSet<>())) {
-                        mappedSignatures.add(methodSignature(method));
+                        mappedSignatures.add(signature);
                     }
                 }
             }
-            for (ParsedClass sourceInterface : interfaces) {
-                for (Tree member : sourceInterface.tree().getMembers()) {
+            Map<String, EffectiveMethod> defaultMethods = new HashMap<>();
+            for (ResolvedType sourceInterface : interfaces) {
+                for (Tree member : sourceInterface.parsed().tree().getMembers()) {
                     if (member instanceof MethodTree method && method.getReturnType() != null
                             && isMapped(method, annotationMeta, new HashSet<>())) {
-                        mappedSignatures.add(methodSignature(method));
+                        String signature = methodSignature(method, sourceInterface);
+                        mappedSignatures.add(signature);
+                        if (method.getBody() != null) {
+                            defaultMethods.putIfAbsent(signature, new EffectiveMethod(method, sourceInterface));
+                        }
                     }
                 }
             }
-            for (Map.Entry<String, MethodTree> entry : effectiveMethods.entrySet()) {
-                MethodTree method = entry.getValue();
-                if (!mappedSignatures.contains(entry.getKey())) {
+            for (String signature : mappedSignatures) {
+                EffectiveMethod effective = effectiveMethods.get(signature);
+                if (effective == null) {
+                    effective = defaultMethods.get(signature);
+                }
+                if (effective == null) {
                     continue;
                 }
+                MethodTree method = effective.method();
                 String handler = parsed.name() + "." + method.getName();
                 handlers.add(handler);
                 int serviceCalls = countServiceCalls(method, injectedServices);
@@ -343,11 +520,14 @@ class ControllerBoundaryArchitectureTest {
                     findings.add(handler + ": expected exactly one injected business-service method "
                             + "delegation, found " + serviceCalls + ".");
                 }
-                for (VariableTree parameter : method.getParameters()) {
-                    Set<String> annotations = annotationNames(parameter.getModifiers().getAnnotations());
-                    String payloadAnnotation = annotations.stream()
-                            .filter(PAYLOAD_ANNOTATIONS::contains).findFirst().orElse(null);
-                    if (payloadAnnotation != null && !annotations.contains("Valid")) {
+                List<EffectiveMethod> declarations = new ArrayList<>();
+                declarations.add(effective);
+                declarations.addAll(matchingDeclarations(signature, hierarchy, interfaces));
+                for (int parameterIndex = 0; parameterIndex < method.getParameters().size(); parameterIndex++) {
+                    VariableTree parameter = method.getParameters().get(parameterIndex);
+                    String payloadAnnotation = effectivePayloadAnnotation(parameterIndex, declarations);
+                    if (payloadAnnotation != null
+                            && !hasAnnotation(parameter.getModifiers().getAnnotations(), "Valid")) {
                         findings.add(handler + ": payload parameter '" + parameter.getName()
                                 + "' (@" + payloadAnnotation + ") must be annotated @Valid.");
                     }
@@ -357,50 +537,107 @@ class ControllerBoundaryArchitectureTest {
         return new Analysis(List.copyOf(handlers), List.copyOf(findings));
     }
 
-    private static List<ParsedClass> sourceInterfaces(List<ParsedClass> hierarchy,
+    private static List<EffectiveMethod> matchingDeclarations(String signature, List<ResolvedType> hierarchy,
+            List<ResolvedType> interfaces) {
+        List<EffectiveMethod> declarations = new ArrayList<>();
+        for (ResolvedType type : hierarchy) {
+            addMatchingDeclarations(signature, type, declarations);
+        }
+        for (ResolvedType type : interfaces) {
+            addMatchingDeclarations(signature, type, declarations);
+        }
+        return declarations;
+    }
+
+    private static void addMatchingDeclarations(String signature, ResolvedType type,
+            List<EffectiveMethod> declarations) {
+        for (Tree member : type.parsed().tree().getMembers()) {
+            if (member instanceof MethodTree method && method.getReturnType() != null
+                    && methodSignature(method, type).equals(signature)) {
+                declarations.add(new EffectiveMethod(method, type));
+            }
+        }
+    }
+
+    private static String effectivePayloadAnnotation(int parameterIndex, List<EffectiveMethod> declarations) {
+        for (EffectiveMethod declaration : declarations) {
+            if (parameterIndex >= declaration.method().getParameters().size()) {
+                continue;
+            }
+            Set<String> annotations = annotationNames(declaration.method().getParameters()
+                    .get(parameterIndex).getModifiers().getAnnotations());
+            String binding = annotations.stream().filter(PAYLOAD_ANNOTATIONS::contains).findFirst().orElse(null);
+            if (binding != null) {
+                return binding;
+            }
+        }
+        return null;
+    }
+
+    private static List<ResolvedType> sourceInterfaces(List<ResolvedType> hierarchy,
             Map<String, ParsedClass> classesByName, Map<String, List<ParsedClass>> classesBySimpleName) {
-        List<ParsedClass> interfaces = new ArrayList<>();
+        List<ResolvedType> interfaces = new ArrayList<>();
         Set<String> visited = new HashSet<>();
-        for (ParsedClass parsed : hierarchy) {
-            for (Tree interfaceType : parsed.tree().getImplementsClause()) {
-                addSourceInterface(parsed, interfaceType, classesByName, classesBySimpleName,
+        for (ResolvedType type : hierarchy) {
+            for (Tree interfaceType : type.parsed().tree().getImplementsClause()) {
+                addSourceInterface(type, interfaceType, classesByName, classesBySimpleName,
                         interfaces, visited);
             }
         }
         return interfaces;
     }
 
-    private static void addSourceInterface(ParsedClass context, Tree interfaceType,
+    private static void addSourceInterface(ResolvedType context, Tree interfaceType,
             Map<String, ParsedClass> classesByName, Map<String, List<ParsedClass>> classesBySimpleName,
-            List<ParsedClass> interfaces, Set<String> visited) {
-        ParsedClass sourceInterface = sourceType(context, interfaceType, classesByName, classesBySimpleName);
-        if (sourceInterface == null || !visited.add(sourceInterface.name())) {
+            List<ResolvedType> interfaces, Set<String> visited) {
+        ResolvedType sourceInterface = resolveType(context, interfaceType, classesByName, classesBySimpleName);
+        if (sourceInterface == null || !visited.add(typeIdentity(sourceInterface))) {
             return;
         }
         interfaces.add(sourceInterface);
-        for (Tree parentInterface : sourceInterface.tree().getImplementsClause()) {
+        for (Tree parentInterface : sourceInterface.parsed().tree().getImplementsClause()) {
             addSourceInterface(sourceInterface, parentInterface, classesByName, classesBySimpleName,
                     interfaces, visited);
         }
     }
 
-    private static List<ParsedClass> classHierarchy(ParsedClass controller,
+    private static List<ResolvedType> classHierarchy(ParsedClass controller,
             Map<String, ParsedClass> classesByName, Map<String, List<ParsedClass>> classesBySimpleName) {
-        List<ParsedClass> hierarchy = new ArrayList<>();
+        List<ResolvedType> hierarchy = new ArrayList<>();
         Set<String> visited = new HashSet<>();
-        ParsedClass current = controller;
-        while (current != null && visited.add(current.name())) {
+        ResolvedType current = new ResolvedType(controller, Map.of());
+        while (current != null && visited.add(typeIdentity(current))) {
             hierarchy.add(current);
-            Tree superclass = current.tree().getExtendsClause();
+            Tree superclass = current.parsed().tree().getExtendsClause();
             current = superclass == null ? null
-                    : sourceType(current, superclass, classesByName, classesBySimpleName);
+                    : resolveType(current, superclass, classesByName, classesBySimpleName);
         }
         return hierarchy;
     }
 
-    private static ParsedClass sourceType(ParsedClass parsed, Tree typeTree, Map<String, ParsedClass> classesByName,
-            Map<String, List<ParsedClass>> classesBySimpleName) {
-        String type = typeTree.toString().replaceAll("<.*>", "");
+    private static ResolvedType resolveType(ResolvedType context, Tree typeTree,
+            Map<String, ParsedClass> classesByName, Map<String, List<ParsedClass>> classesBySimpleName) {
+        String type = typeTree.toString().trim();
+        int genericStart = type.indexOf('<');
+        String rawType = genericStart < 0 ? type : type.substring(0, genericStart).trim();
+        ParsedClass parsed = resolveSourceClass(context.parsed(), rawType, classesByName, classesBySimpleName);
+        if (parsed == null) {
+            return null;
+        }
+        Map<String, String> substitutions = new HashMap<>();
+        List<? extends Tree> typeParameters = parsed.tree().getTypeParameters();
+        List<String> arguments = genericStart < 0 ? List.of()
+                : splitTypeArguments(type.substring(genericStart + 1, type.lastIndexOf('>')));
+        for (int index = 0; index < Math.min(typeParameters.size(), arguments.size()); index++) {
+            String name = typeParameters.get(index).toString();
+            substitutions.put(name, normalizeType(arguments.get(index), context));
+        }
+        return new ResolvedType(parsed, Map.copyOf(substitutions));
+    }
+
+    private static ParsedClass resolveSourceClass(ParsedClass parsed, String sourceName,
+            Map<String, ParsedClass> classesByName, Map<String, List<ParsedClass>> classesBySimpleName) {
+        String type = sourceName.trim();
         ParsedClass exact = classesByName.get(type);
         if (exact != null) {
             return exact;
@@ -425,10 +662,93 @@ class ControllerBoundaryArchitectureTest {
         return matches.size() == 1 ? matches.getFirst() : null;
     }
 
-    private static String methodSignature(MethodTree method) {
+    private static String methodSignature(MethodTree method, ResolvedType context) {
         return method.getName() + "(" + method.getParameters().stream()
-                .map(parameter -> parameter.getType().toString())
+                .map(parameter -> normalizeType(parameter.getType().toString(), context))
                 .collect(java.util.stream.Collectors.joining(",")) + ")";
+    }
+
+    private static String normalizeType(String type, ResolvedType context) {
+        String normalized = type.trim().replace("...", "[]");
+        while (normalized.startsWith("@")) {
+            int space = normalized.indexOf(' ');
+            if (space < 0) {
+                break;
+            }
+            normalized = normalized.substring(space + 1).trim();
+        }
+        String replacement = context.substitutions().get(normalized);
+        if (replacement != null) {
+            return replacement;
+        }
+        int genericStart = normalized.indexOf('<');
+        if (genericStart >= 0 && normalized.endsWith(">")) {
+            String raw = normalized.substring(0, genericStart).trim();
+            List<String> arguments = splitTypeArguments(
+                    normalized.substring(genericStart + 1, normalized.length() - 1));
+            return normalizeName(raw, context.parsed()) + "<"
+                    + arguments.stream().map(argument -> normalizeType(argument, context))
+                            .collect(java.util.stream.Collectors.joining(","))
+                    + ">";
+        }
+        if (normalized.endsWith("[]")) {
+            return normalizeType(normalized.substring(0, normalized.length() - 2), context) + "[]";
+        }
+        if (normalized.startsWith("? extends ")) {
+            return "? extends " + normalizeType(normalized.substring("? extends ".length()), context);
+        }
+        if (normalized.startsWith("? super ")) {
+            return "? super " + normalizeType(normalized.substring("? super ".length()), context);
+        }
+        return normalizeName(normalized, context.parsed());
+    }
+
+    private static String normalizeName(String name, ParsedClass context) {
+        if (name.indexOf('.') >= 0 || Set.of("byte", "short", "int", "long", "float", "double",
+                "boolean", "char", "void", "?").contains(name)) {
+            return name;
+        }
+        for (var imported : context.unit().getImports()) {
+            String importedName = imported.getQualifiedIdentifier().toString();
+            if (!imported.isStatic() && !importedName.endsWith(".*")
+                    && simpleName(importedName).equals(name)) {
+                return importedName;
+            }
+        }
+        int packageSeparator = context.name().lastIndexOf('.');
+        String packageName = packageSeparator < 0 ? "" : context.name().substring(0, packageSeparator + 1);
+        if (Set.of("String", "Object", "Boolean", "Byte", "Short", "Integer", "Long", "Float",
+                "Double", "Character", "Number", "Void", "Class", "Enum", "Record", "Throwable",
+                "Exception", "RuntimeException").contains(name)) {
+            return "java.lang." + name;
+        }
+        return packageName + name;
+    }
+
+    private static List<String> splitTypeArguments(String arguments) {
+        if (arguments.isBlank()) {
+            return List.of();
+        }
+        List<String> result = new ArrayList<>();
+        int nesting = 0;
+        int start = 0;
+        for (int index = 0; index < arguments.length(); index++) {
+            char current = arguments.charAt(index);
+            if (current == '<') {
+                nesting++;
+            } else if (current == '>') {
+                nesting--;
+            } else if (current == ',' && nesting == 0) {
+                result.add(arguments.substring(start, index).trim());
+                start = index + 1;
+            }
+        }
+        result.add(arguments.substring(start).trim());
+        return result;
+    }
+
+    private static String typeIdentity(ResolvedType type) {
+        return type.parsed().name() + type.substitutions();
     }
 
     private static Set<String> injectedServiceFields(ClassTree controller, Set<String> serviceTypes) {
@@ -591,6 +911,12 @@ class ControllerBoundaryArchitectureTest {
     }
 
     private record ParsedClass(CompilationUnitTree unit, ClassTree tree, String name) {
+    }
+
+    private record ResolvedType(ParsedClass parsed, Map<String, String> substitutions) {
+    }
+
+    private record EffectiveMethod(MethodTree method, ResolvedType declaringType) {
     }
 
     private static final class InMemorySource extends SimpleJavaFileObject {
