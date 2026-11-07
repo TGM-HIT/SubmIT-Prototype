@@ -30,7 +30,8 @@ Standard project checks (keep only the blocks matching the ticket's scope; all m
 - Backend changes (backend-only or full-stack), from `backend/`: `./gradlew test` and `./gradlew checkstyleMain`.
 - Frontend changes (frontend-only or full-stack), from `frontend/`: `npm run typecheck`, `npm test`, and `npm run build`.
 - Backend API annotation, request/response model, or validation changes: from `backend/` run `./gradlew generateOpenApi`, review the `contracts/openapi.yaml` diff, then from `frontend/` run `npm run api:types` if the frontend consumes the change.
-- Documentation-only or harness-only changes: no checks required; say so explicitly.
+- Documentation-only or harness-only changes: no project build/test checks are required; say so explicitly.
+- Before a commit containing Markdown files, confirm the repository-local Prettier executable at `frontend/node_modules/.bin/prettier` is available, then run `make -o install format-markdown FILES="<exact repo-relative Markdown paths in the commit>"`. Do not trigger dependency installation just to format. If the formatter or another required tool is missing, restore dependencies or use the installing target only after that failure, and report the restoration separately from formatting. Review the exact changed-file list and run `git diff --check`.
 
 <Backend-only tickets omit the frontend block; frontend-only tickets omit the backend and API-generation blocks. Delete this section's tests only if no automated tests apply, and explain why.>
 
