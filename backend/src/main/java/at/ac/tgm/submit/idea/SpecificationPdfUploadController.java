@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import jakarta.servlet.http.HttpServletRequest;
 import java.util.UUID;
 import org.springframework.http.MediaType;
@@ -57,7 +58,7 @@ class SpecificationPdfUploadController {
             + "either limit is not rejected by that limit.", content = @Content)
     SpecificationResponse savePdf(@AuthenticationPrincipal AuthenticatedUser caller, @PathVariable UUID id,
             @Parameter(description = "Non-empty PDF document, maximum 10 MiB; `.pdf` filename and `%PDF-` signature required.")
-            @RequestPart("file") MultipartFile file, HttpServletRequest request) {
+            @Valid @RequestPart("file") MultipartFile file, HttpServletRequest request) {
         requestValidator.fileOnly(request);
         return pdfService.saveSpecification(caller, id, file);
     }

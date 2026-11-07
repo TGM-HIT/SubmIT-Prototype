@@ -18,11 +18,11 @@ import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.access.prepost.PreAuthorize;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /** Performs access checks and exact phase/version filtering for the student assessment history. */
-@Component
+@Service
 class GradeHistoryReader {
     private final RecordStore store;
     private final ProjectAccess access;

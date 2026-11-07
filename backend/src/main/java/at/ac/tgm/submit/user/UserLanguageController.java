@@ -5,6 +5,7 @@ import at.ac.tgm.submit.web.ApiDtos.ApiErrorResponse;
 import at.ac.tgm.submit.web.ApiDtos.LanguageRequest;
 import at.ac.tgm.submit.web.ApiDtos.UserResponse;
 import tools.jackson.databind.JsonNode;
+import jakarta.validation.Valid;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -43,7 +44,7 @@ public class UserLanguageController {
             @PathVariable UUID id,
             @io.swagger.v3.oas.annotations.parameters.RequestBody(required = true, content = @Content(
                     mediaType = "application/json", schema = @Schema(implementation = LanguageRequest.class)))
-            @RequestBody JsonNode body) {
+            @Valid @RequestBody JsonNode body) {
         if (body == null || !body.isObject() || !body.has("language") || !body.path("language").isString()) {
             throw new at.ac.tgm.submit.web.ApiException(HttpStatus.BAD_REQUEST,
                     "Language must be the string 'en' or 'de'.");

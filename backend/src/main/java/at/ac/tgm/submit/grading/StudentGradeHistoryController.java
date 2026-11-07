@@ -7,6 +7,7 @@ import at.ac.tgm.submit.web.ApiDtos.PageResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import java.util.UUID;
 import org.springdoc.core.annotations.ParameterObject;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -35,7 +36,7 @@ public class StudentGradeHistoryController {
     @GradingApiResponses.StudentGradesList
     public PageResponse<GradeResponse> listStudentGrades(@AuthenticationPrincipal AuthenticatedUser caller,
             @Parameter(description = "Project identifier.") @PathVariable UUID projectId,
-            @ParameterObject @ModelAttribute StudentGradeQuery query) {
+            @Valid @ParameterObject @ModelAttribute StudentGradeQuery query) {
         return historyReader.read(caller, projectId, query);
     }
 }

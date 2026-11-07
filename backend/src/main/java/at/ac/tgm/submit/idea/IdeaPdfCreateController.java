@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -55,9 +56,9 @@ class IdeaPdfCreateController {
                     schema = @Schema(implementation = ApiErrorResponse.class)))
     IdeaResponse createWithPdf(@AuthenticationPrincipal AuthenticatedUser caller,
             @Parameter(schema = @Schema(implementation = IdeaPdfMetadataRequest.class))
-            @RequestPart("metadata") String metadata,
+            @Valid @RequestPart("metadata") String metadata,
             @Parameter(description = "Non-empty PDF document, maximum 10 MiB; `.pdf` filename and `%PDF-` signature required.")
-            @RequestPart("file") MultipartFile file, HttpServletRequest request) {
+            @Valid @RequestPart("file") MultipartFile file, HttpServletRequest request) {
         return pdfService.create(caller, requestValidator.ideaMetadata(metadata, request), file);
     }
 }

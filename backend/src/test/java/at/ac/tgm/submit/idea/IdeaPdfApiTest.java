@@ -199,6 +199,29 @@ class IdeaPdfApiTest {
     }
 
     @Test
+    void invalidReplacementPdfPreservesExistingIdeaBytesAndAuditState() throws Exception {
+        String ideaId = createPdfIdea("Invalid replacement file baseline").path("id").asText();
+        JsonNode initialDetail = ideaDetail(ideaId);
+        List<String> initialRecords = recordSnapshot();
+        List<String> initialState = pdfMetadataStateSnapshot();
+        assertArrayEquals(PDF, readIdeaPdf(ideaId));
+
+        MockMultipartFile invalid = new MockMultipartFile(
+                "file", "invalid.pdf", "application/pdf", "not pdf".getBytes(StandardCharsets.US_ASCII));
+        mockMvc.perform(pdfUpdateRequest(ideaId, student, invalid.getBytes()))
+                .andExpect(status().isBadRequest());
+
+        assertEquals(initialRecords, recordSnapshot(),
+                "Rejected replacement must preserve idea data and all audit records.");
+        assertEquals(initialState, pdfMetadataStateSnapshot(),
+                "Rejected replacement must preserve idea state and audit history.");
+        assertEquals(initialDetail, ideaDetail(ideaId),
+                "Rejected replacement must preserve the authorized idea detail.");
+        assertArrayEquals(PDF, readIdeaPdf(ideaId),
+                "Rejected replacement must preserve the existing PDF bytes.");
+    }
+
+    @Test
     void pdfMetadataValidBoundariesAndTrimmingWorkOnBothWriteRoutes() throws Exception {
         List<PdfMetadataBoundary> boundaries = List.of(
                 new PdfMetadataBoundary("title minimum", "x", "2026/2027", "x", "2026/2027"),
