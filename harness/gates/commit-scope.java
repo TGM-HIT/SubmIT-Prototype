@@ -17,6 +17,11 @@ class CommitScope {
         "frontend/DEV-GUIDELINES.md",
         "backend/DEV-GUIDELINES.md",
         "frontend/public/favicon.ico",
+        "README.md",
+        "scripts/verify.py",
+        "scripts/test_verify.py",
+        "scripts/README.md",
+        "scripts/verification-inventory.md",
         "harness/gates/commit-scope.java"
     };
     static final String[] SPEC_FILES = { "docs/SPEC.md", "backend/SPEC.md", "frontend/SPEC.md" };
