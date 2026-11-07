@@ -2,7 +2,7 @@
 
 ## Intent
 
-[Dev-70](done/Dev-70.md) established reusable, read-only report and JSON comparison helpers, with their commands and limitations documented in `scripts/README.md`. A repository search found no references to that guide or its helpers in the backend and frontend developer guidelines or the Implementor and Evaluator role contracts. Developers and agents may therefore miss the existing helpers or apply them without understanding their limits.
+[Dev-70](Dev-70.md) established reusable, read-only report and JSON comparison helpers, with their commands and limitations documented in `scripts/README.md`. A repository search found no references to that guide or its helpers in the backend and frontend developer guidelines or the Implementor and Evaluator role contracts. Developers and agents may therefore miss the existing helpers or apply them without understanding their limits.
 
 ## Scope and contract
 

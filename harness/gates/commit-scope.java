@@ -17,8 +17,6 @@ class CommitScope {
         "frontend/DEV-GUIDELINES.md",
         "backend/DEV-GUIDELINES.md",
         "frontend/public/favicon.ico",
-        "harness/roles/implementor.md",
-        "harness/roles/evaluator.md",
         "harness/gates/commit-scope.java"
     };
     static final String[] SPEC_FILES = { "docs/SPEC.md", "backend/SPEC.md", "frontend/SPEC.md" };

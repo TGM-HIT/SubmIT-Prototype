@@ -144,7 +144,7 @@ Use the [Ticket Author role](roles/ticket-author.md) to create or refine ticket 
 | [Dev-68](tickets/done/Dev-68.md) | done | Document teacher supervision preferences in both guide locales |
 | [Dev-69](tickets/done/Dev-69.md) | done | Add actionable period and allocation instructions to the English admin guide |
 | [Dev-70](tickets/done/Dev-70.md) | done | Promote reusable archived verification scripts into documented shared tooling |
-| [Dev-71](tickets/Dev-71.md) | to-do | Link shared verification helpers from guides and agent roles |
+| [Dev-71](tickets/done/Dev-71.md) | done | Link shared verification helpers from guides and agent roles |
 
 ### Agents
 
