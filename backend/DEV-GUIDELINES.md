@@ -49,6 +49,8 @@ The optimizer retains the established subset traversal for small viable-project 
 
 From `backend/`, run `./gradlew compileJava compileTestJava --rerun-tasks`, `./gradlew test`, and `./gradlew checkstyleMain` after backend code changes. Both Java source sets compile with detailed deprecation and removal diagnostics, and deprecated API use fails compilation. `./gradlew test` also compiles isolated deprecated/removal probes against the same compiler options for both source sets. Do not suppress or filter these diagnostics; replace owned usage with a supported API. Run `./gradlew generateOpenApi` whenever endpoint annotations, models, or validation rules change, and review `contracts/openapi.yaml`.
 
+For repeated JUnit report summaries or structural JSON comparisons, the optional helpers in the [shared verification guide](../scripts/README.md) may be useful when their documented behavior matches the check. JUnit summaries validate supplied counts but do not establish report provenance; JSON comparison ignores object-key order, preserves array order, and does not print values. These helpers do not replace required checks or direct test execution.
+
 ### Local workflow accounts
 
 #### Dedicated local TGM workbook testing profile

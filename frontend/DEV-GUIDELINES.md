@@ -44,6 +44,8 @@ Run the scripts defined in `frontend/package.json` after frontend code changes:
 
 `npm run typecheck` and `npm run build` run the deprecation check before Vue/TypeScript checking; the root `make check` reaches it through the frontend build. Run the deprecation check and relevant tests before integrating frontend changes. Documentation-only changes do not require these commands unless their Node tooling changes.
 
+For repeated JUnit report summaries or structural JSON comparisons, the optional helpers in the [shared verification guide](../scripts/README.md) may be useful when their documented behavior matches the check. JUnit summaries validate supplied counts but do not establish report provenance; JSON comparison ignores object-key order, preserves array order, and does not print values. These helpers do not replace required checks or direct test execution.
+
 ## Full-lifecycle local documentation
 
 The public entry point is the **repository-root** `make doc LANGUAGE=en` or `make doc LANGUAGE=de`, not a frontend-local npm command. No credential setup is required: the runner defaults to the existing public testing-profile fixture password described in `backend/DEV-GUIDELINES.md` for its isolated local backend. `PREVIEW_PASSWORD` is an optional environment override; an empty value uses the default. Never supply production credentials or put passwords in templates or generated guides. Requires Make, the existing Java/Gradle setup, installed frontend dependencies (`make install`), the preview tool's supported Node version and Chrome/Chromium (`CHROME_BIN` may select an executable).
