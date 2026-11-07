@@ -89,6 +89,32 @@ class ControllerBoundaryArchitectureTest {
     }
 
     @Test
+    void nestedComposedControllerAndRouteAreDiscoveredAndFailWithActionableDiagnostic() {
+        assertSourcesFailure(Map.of("FixtureController.java", """
+                package fixture;
+                import org.springframework.stereotype.Controller;
+                import org.springframework.web.bind.annotation.GetMapping;
+
+                @Controller
+                @interface IntermediateController { }
+                @IntermediateController
+                @interface FixtureControllerStereotype { }
+
+                @GetMapping
+                @interface IntermediateGetMapping { }
+                @IntermediateGetMapping
+                @interface FixtureGetMapping { }
+
+                @FixtureControllerStereotype
+                class FixtureController {
+                    @FixtureGetMapping
+                    Object handle() { return Utility.normalize("value"); }
+                }
+                """), "fixture.FixtureController.handle",
+                "exactly one injected business-service method");
+    }
+
+    @Test
     void inheritedMappedHandlerIsCheckedAndNamesConcreteController() {
         assertSourcesFailure(Map.of(
                 "FixtureController.java", """
