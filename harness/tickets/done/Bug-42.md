@@ -6,7 +6,7 @@ Dev-51's full backend test suite passed, but its final independent evaluation fo
 
 ## Source
 
-The final independent findings and reproductions are recorded in [evaluation-4.md](../runs/Dev-51-20261107-1624/evaluation-4.md) (F1–F3). The authoritative controller-boundary requirements are in [Dev-51](Dev-51.md).
+The final independent findings and reproductions are recorded in [evaluation-4.md](../../runs/Dev-51-20261107-1624/evaluation-4.md) (F1–F3). The authoritative controller-boundary requirements are in [Dev-51](../Dev-51.md).
 
 ## Scope and contract
 
