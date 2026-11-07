@@ -18,6 +18,8 @@ The Orchestrator prepopulates one observation row per independently testable unr
 
 For each row, identify the criterion, why human verification is needed, the specific observation, and suitable evidence. State the exact trigger for any conditional diagnostic; use `not applicable` with a reason only when that trigger did not occur. A still screenshot can establish a visible state, not a key sequence; request the actual interaction/focus observation for keyboard checks. The human fills in the observed result, evidence, and status. A broad verified result does not establish unrecorded subchecks.
 
+For automated test checks, include the exact full command and configuration, identify the known test-report location or how to find the result, and explain how to match the named test and distinguish passed, failed, errored, or skipped outcomes. Request only the sanitized test name and outcome metadata needed to establish the check; do not ask for raw XML or logs that may contain credentials, private data, or unrelated diagnostics. If the report location or format is unknown, say so and record that limitation rather than implying a specific artifact is available.
+
 Shared setup (prefilled; include route, role/account, profile/data, and prerequisites):
 
 {{shared-setup}}
