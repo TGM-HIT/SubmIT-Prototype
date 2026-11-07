@@ -5,14 +5,20 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.sun.source.tree.AnnotationTree;
+import com.sun.source.tree.BlockTree;
+import com.sun.source.tree.CatchTree;
 import com.sun.source.tree.ClassTree;
 import com.sun.source.tree.CompilationUnitTree;
+import com.sun.source.tree.EnhancedForLoopTree;
 import com.sun.source.tree.ExpressionTree;
+import com.sun.source.tree.ForLoopTree;
 import com.sun.source.tree.IdentifierTree;
+import com.sun.source.tree.LambdaExpressionTree;
 import com.sun.source.tree.MemberSelectTree;
 import com.sun.source.tree.MethodInvocationTree;
 import com.sun.source.tree.MethodTree;
 import com.sun.source.tree.Tree;
+import com.sun.source.tree.TryTree;
 import com.sun.source.tree.VariableTree;
 import com.sun.source.util.JavacTask;
 import com.sun.source.util.TreeScanner;
@@ -44,6 +50,7 @@ class ControllerBoundaryArchitectureTest {
     private static final Set<String> MAPPING_ANNOTATIONS =
             Set.of("RequestMapping", "GetMapping", "PostMapping", "PutMapping",
                     "PatchMapping", "DeleteMapping");
+    private static final Set<String> INJECTION_ANNOTATIONS = Set.of("Autowired", "Resource");
 
     @Test
     void everyProductionHandlerDelegatesOnceAndValidatesPayloads() throws IOException {
@@ -72,6 +79,39 @@ class ControllerBoundaryArchitectureTest {
                 """));
 
         assertEquals(1, analysis.handlers().size());
+        assertTrue(analysis.findings().isEmpty(),
+                () -> String.join("\n", analysis.findings()));
+    }
+
+    @Test
+    void localVariableShadowingInjectedServiceDoesNotCountAsDelegation() {
+        assertSourcesFailure(Map.of("FixtureController.java", """
+                package fixture;
+                @RestController
+                class FixtureController {
+                    private final FixtureService service;
+                    FixtureController(FixtureService service) { this.service = service; }
+                    @GetMapping Object handle() {
+                        FixtureService service = new FixtureService();
+                        return service.execute();
+                    }
+                }
+                """), "fixture.FixtureController.handle",
+                "exactly one injected business-service method");
+    }
+
+    @Test
+    void resourceInjectedServiceDelegationIsCompliant() {
+        Analysis analysis = analyzeSources(Map.of("FixtureController.java", """
+                package fixture;
+                @RestController
+                class FixtureController {
+                    @Resource private FixtureService service;
+                    @GetMapping Object handle() { return service.execute(); }
+                }
+                """));
+
+        assertEquals(List.of("fixture.FixtureController.handle"), analysis.handlers());
         assertTrue(analysis.findings().isEmpty(),
                 () -> String.join("\n", analysis.findings()));
     }
@@ -786,7 +826,9 @@ class ControllerBoundaryArchitectureTest {
         }
         Set<String> injected = new HashSet<>();
         for (Map.Entry<String, VariableTree> entry : fields.entrySet()) {
-            if (hasAnnotation(entry.getValue().getModifiers().getAnnotations(), "Autowired")
+            if (entry.getValue().getModifiers().getAnnotations().stream()
+                            .map(ControllerBoundaryArchitectureTest::annotationName)
+                            .anyMatch(INJECTION_ANNOTATIONS::contains)
                     && isServiceType(entry.getValue().getType().toString(), serviceTypes)) {
                 injected.add(entry.getKey());
             }
@@ -826,18 +868,133 @@ class ControllerBoundaryArchitectureTest {
         if (method.getBody() == null) {
             return 0;
         }
-        int[] count = {0};
-        new TreeScanner<Void, Void>() {
-            @Override
-            public Void visitMethodInvocation(MethodInvocationTree invocation, Void unused) {
-                if (invocation.getMethodSelect() instanceof MemberSelectTree selection
-                        && injectedServices.contains(receiverFieldName(selection.getExpression()))) {
-                    count[0]++;
+        return new ServiceCallCounter(method, injectedServices).count();
+    }
+
+    private static final class ServiceCallCounter extends TreeScanner<Void, Void> {
+        private final Set<String> injectedServices;
+        private final List<Set<String>> scopes = new ArrayList<>();
+        private final MethodTree method;
+        private int count;
+
+        private ServiceCallCounter(MethodTree method, Set<String> injectedServices) {
+            this.method = method;
+            this.injectedServices = injectedServices;
+            Set<String> parameters = new HashSet<>();
+            method.getParameters().stream()
+                    .map(parameter -> parameter.getName().toString())
+                    .forEach(parameters::add);
+            scopes.add(parameters);
+        }
+
+        private int count() {
+            scan(method.getBody(), null);
+            return count;
+        }
+
+        @Override
+        public Void visitBlock(BlockTree block, Void unused) {
+            enterScope();
+            Void result = super.visitBlock(block, unused);
+            exitScope();
+            return result;
+        }
+
+        @Override
+        public Void visitVariable(VariableTree variable, Void unused) {
+            Void result = super.visitVariable(variable, unused);
+            scopes.getLast().add(variable.getName().toString());
+            return result;
+        }
+
+        @Override
+        public Void visitForLoop(ForLoopTree loop, Void unused) {
+            enterScope();
+            loop.getInitializer().forEach(initializer -> scan(initializer, unused));
+            scan(loop.getCondition(), unused);
+            loop.getUpdate().forEach(update -> scan(update, unused));
+            scan(loop.getStatement(), unused);
+            exitScope();
+            return null;
+        }
+
+        @Override
+        public Void visitEnhancedForLoop(EnhancedForLoopTree loop, Void unused) {
+            scan(loop.getExpression(), unused);
+            enterScope();
+            scan(loop.getVariable(), unused);
+            scan(loop.getStatement(), unused);
+            exitScope();
+            return null;
+        }
+
+        @Override
+        public Void visitCatch(CatchTree catcher, Void unused) {
+            enterScope();
+            scan(catcher.getParameter(), unused);
+            scan(catcher.getBlock(), unused);
+            exitScope();
+            return null;
+        }
+
+        @Override
+        public Void visitLambdaExpression(LambdaExpressionTree lambda, Void unused) {
+            enterScope();
+            lambda.getParameters().stream()
+                    .map(parameter -> parameter.getName().toString())
+                    .forEach(scopes.getLast()::add);
+            scan(lambda.getBody(), unused);
+            exitScope();
+            return null;
+        }
+
+        @Override
+        public Void visitTry(TryTree tryTree, Void unused) {
+            enterScope();
+            tryTree.getResources().forEach(resource -> scan(resource, unused));
+            scan(tryTree.getBlock(), unused);
+            exitScope();
+            tryTree.getCatches().forEach(catcher -> scan(catcher, unused));
+            scan(tryTree.getFinallyBlock(), unused);
+            return null;
+        }
+
+        @Override
+        public Void visitClass(ClassTree tree, Void unused) {
+            return null;
+        }
+
+        @Override
+        public Void visitMethodInvocation(MethodInvocationTree invocation, Void unused) {
+            if (invocation.getMethodSelect() instanceof MemberSelectTree selection) {
+                ExpressionTree receiver = selection.getExpression();
+                String fieldName = receiverFieldName(receiver);
+                boolean explicitThis = receiver instanceof MemberSelectTree thisSelection
+                        && thisSelection.getExpression() instanceof IdentifierTree identifier
+                        && identifier.getName().contentEquals("this");
+                if (injectedServices.contains(fieldName) && (explicitThis || !isShadowed(fieldName))) {
+                    count++;
                 }
-                return super.visitMethodInvocation(invocation, unused);
             }
-        }.scan(method.getBody(), null);
-        return count[0];
+            return super.visitMethodInvocation(invocation, unused);
+        }
+
+        private void enterScope() {
+            scopes.add(new HashSet<>());
+        }
+
+        private void exitScope() {
+            scopes.removeLast();
+        }
+
+        private boolean isShadowed(String name) {
+            for (int index = scopes.size() - 1; index >= 0; index--) {
+                if (scopes.get(index).contains(name)) {
+                    return true;
+                }
+            }
+            return false;
+        }
     }
 
     private static boolean isMapped(MethodTree method, Map<String, Set<String>> annotationMeta,
